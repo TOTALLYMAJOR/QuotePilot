@@ -38,6 +38,14 @@ const workflowAdapters = require("../functions/workflowPackAdapters.js");
 const ALLOWED_PROJECTS = new Set(["quotepilot-staging-20260804", "tonicatering"]);
 const WORKFLOW_KINDS = ["quote_review", "final_guest_count", "event_execution", "closeout_follow_up"];
 const ASSET_DIRECTORY = fileURLToPath(STAFF_ASSET_DIRECTORY);
+export const OPERATIONS_CUSTOMER_EMAIL_CLAIM_SOURCE = "trusted_quote_projection";
+
+export function buildOperationsCustomerEmailClaim(input = {}) {
+  return quoteCreation.buildCustomerEmailClaim({
+    ...input,
+    claimSource: OPERATIONS_CUSTOMER_EMAIL_CLAIM_SOURCE
+  });
+}
 
 class OperationsPopulationError extends Error {
   constructor(message) {
@@ -470,7 +478,12 @@ async function buildEventDocuments({ db, organizationId, actor, event, offerDocu
     }
   };
   const customer = { customerId, organizationId, name: event.customer, nameKey: event.customer.toLowerCase(), email: sanitized.form.email, emailKey: sanitized.form.email, phone: sanitized.form.phone, company: event.company, createdAtISO: nowISO, updatedAtISO: nowISO, lastQuoteId: event.id, lastQuoteNumber: quote.quoteNumber, lastEventName: event.name, lastEventDate: event.date, fixtureProvenance };
-  const emailClaim = quoteCreation.buildCustomerEmailClaim({ organizationId, customerId, customerEmail: sanitized.form.email, nowISO, claimSource: OPERATIONS_FIXTURE_SOURCE });
+  const emailClaim = buildOperationsCustomerEmailClaim({
+    organizationId,
+    customerId,
+    customerEmail: sanitized.form.email,
+    nowISO
+  });
   return { quote, portal, version, customer, customerId, emailClaim, acceptanceReceipt };
 }
 
@@ -494,7 +507,11 @@ async function prepareEvents({ db, organizationId, actor, nowISO, settings, cata
     batch.create(quoteRef.collection("versions").doc(documents.version.versionId), documents.version);
     batch.create(db.collection("customerPortalQuotes").doc(documents.quote.portalKey), documents.portal);
     batch.set(organizationRef.collection("customers").doc(documents.customerId), documents.customer, { merge: true });
-    batch.set(organizationRef.collection("customerEmailClaims").doc(quoteCreation.customerEmailClaimDocumentId(documents.customer.email)), documents.emailClaim, { merge: true });
+    batch.set(
+      organizationRef.collection("customerEmailClaims").doc(quoteCreation.customerEmailClaimDocumentId(documents.customer.email)),
+      documents.emailClaim.patch,
+      { merge: true }
+    );
     if (documents.acceptanceReceipt) batch.create(organizationRef.collection("proposalAcceptanceReceipts").doc(documents.acceptanceReceipt.receiptId), documents.acceptanceReceipt);
     await batch.commit();
     created += 1;

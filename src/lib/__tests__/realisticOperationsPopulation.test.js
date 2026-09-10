@@ -1,7 +1,11 @@
 import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { parseOperationsPopulationArgs } from "../../../scripts/populate-ragnakok-operations.mjs";
+import {
+  OPERATIONS_CUSTOMER_EMAIL_CLAIM_SOURCE,
+  buildOperationsCustomerEmailClaim,
+  parseOperationsPopulationArgs
+} from "../../../scripts/populate-ragnakok-operations.mjs";
 import {
   OPERATIONS_POPULATION_VERSION,
   REALISTIC_ADDONS,
@@ -14,6 +18,21 @@ import {
 } from "../../../scripts/realistic-ragnakok-operations-data.mjs";
 
 describe("realistic organization and operations population fixture", () => {
+  it("uses the canonical quote projection provenance for customer email claims", () => {
+    expect(OPERATIONS_CUSTOMER_EMAIL_CLAIM_SOURCE).toBe("trusted_quote_projection");
+    expect(buildOperationsCustomerEmailClaim({
+      organizationId: "mm05366-sandbox",
+      customerId: "rko-customer-fixture",
+      customerEmail: "fixture@example.invalid",
+      nowISO: "2026-09-10T21:32:00.000Z"
+    })).toMatchObject({
+      patch: {
+        recordSource: "trusted_customer_email_claim",
+        createdBySource: "trusted_quote_projection"
+      }
+    });
+  });
+
   it("is dry-run-first and restricts writes to the exact targets and typed confirmation", () => {
     expect(parseOperationsPopulationArgs([
       "--project", "tonicatering", "--organization", "mm05366-sandbox"

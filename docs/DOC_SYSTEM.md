@@ -1,6 +1,6 @@
 # Documentation System
 
-Last updated: 2026-09-10 15:18:10 CDT
+Last updated: 2026-09-10 16:34:02 CDT
 
 ## Purpose
 This repository uses a layered canonical documentation model.
@@ -111,6 +111,12 @@ that evidence fail closed and recover through an approved resend or truthful
 provider reconciliation. Release docs must also keep local validation, hosted
 verification, provider evidence, production deployment, and human acceptance
 as separate claims.
+
+Privileged synthetic population scripts must keep fixture provenance separate
+from authority-owned record provenance. A customer-email claim derived from a
+canonical quote uses the existing trusted quote-projection source; the fixture
+marker may label the surrounding record synthetic but may not invent a new
+trusted claim source or expand the authority allowlist.
 
 ## Data Ownership Matrix
 | Topic | Canonical Doc | Notes |
