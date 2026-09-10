@@ -1,6 +1,6 @@
 # Version Control Playbook
 
-Last updated: 2026-09-09 18:17:25 CDT
+Last updated: 2026-09-10 17:15:07 CDT
 
 ## Goals
 - Keep `main` stable and deployable.
@@ -107,6 +107,12 @@ explicit owner promotion after real-run review.
   planner rule, skill, or check; one-off friction should stay as evidence.
 
 ## Release Workflow
+
+The latest target-specific deployment and tenant-population receipts belong in
+`PROJECT_STATUS.md` and historical outcomes in `CHANGELOG.md`; this playbook
+retains the process contract and must not become a competing current-state
+ledger.
+
 1. Create `release/<version>` from `main`.
 2. Finalize `CHANGELOG.md` and `PROJECT_STATUS.md`.
 3. Run release checks (CI must be green):
