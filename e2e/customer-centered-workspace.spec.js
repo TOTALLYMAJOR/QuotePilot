@@ -77,6 +77,7 @@ async function seedPilotQuote(page) {
       latestVersionNumber: 1,
       createdAtISO: "2026-08-10T14:00:00.000Z",
       updatedAtISO: "2026-08-10T15:00:00.000Z",
+      expiresAtISO: "2099-08-24T14:00:00.000Z",
       customer: {
         name: "Pilot Customer",
         email: "pilot@example.test",
