@@ -1,6 +1,6 @@
 # Ingredient Inventory and Menu-Costing Authority
 
-Last updated: 2026-09-09 18:17:25 CDT
+Last updated: 2026-09-09 20:50:56 CDT
 
 Status: Accepted scope correction; corrected Phases 2 through 8 complete as default-off local source candidates
 Date: September 8, 2026
@@ -493,6 +493,15 @@ Every runtime surface and callable remains independently default off behind:
 - `INVENTORY_AUTHORITY_ENABLED=true` in Functions;
 - `organizations/{orgId}/settings/config.inventoryAuthorityEnabled=true`; and
 - `VITE_INVENTORY_AUTHORITY_ENABLED=true` in the browser.
+
+Callable App Check follows the platform promotion sequence independently from
+those Inventory gates. While the approved production browsers have no reviewed
+App Check provider registration, Inventory callables explicitly monitor App
+Check and continue to enforce verified Firebase identity, exact organization,
+role, runtime, tenant setting, and server-only persistence. Hard enforcement
+may be promoted only with the corresponding browser provider and hosted token
+evidence; enabling it earlier makes valid administrators fail before Inventory
+authority is evaluated.
 
 ## Corrected delivery sequence
 

@@ -1,8 +1,21 @@
 # Project Status
 
-Last updated: 2026-09-09 18:17:25 CDT
+Last updated: 2026-09-09 20:50:56 CDT
 
 ## Complete operations production candidate
+
+The first production stock-location command on September 9 reached
+`applyInventoryCommand` with a valid Firebase identity but without an App Check
+token. The deployed callable had hard enforcement enabled even though the
+canonical production browser policy still keeps its provider off pending
+registration, so the platform returned HTTP 401 before Inventory's admin and
+tenant authority could run. The active hotfix candidate moves all three
+Inventory callables to explicit App Check monitoring. Verified email, admin or
+staff role as appropriate, exact organization, runtime and tenant settings,
+revision fences, idempotency, immutable receipts, and server-only writes remain
+enforced. Source and focused-test completion do not establish the required
+fresh exact-SHA CI, Functions deployment, provider readback, successful
+production command, or human acceptance.
 
 The current `v0.18.0` candidate now includes a governed production path for the
 RagnaKoK founder-pilot organization (`mm05366-sandbox`). The explicit

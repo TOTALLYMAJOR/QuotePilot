@@ -52,6 +52,7 @@ const VERCEL_STUB = path.join(ROOT, "scripts", "deploy-vercel-production.mjs");
 const CUSTOMER_DEPLOY_SCRIPT = path.join(ROOT, "scripts", "deploy-hosting-customer.mjs");
 const CI_LANE_CLASSIFIER = path.join(ROOT, "scripts", "ci-lane-classifier.mjs");
 const VERCEL_CONFIG = path.join(ROOT, "vercel.json");
+const FUNCTIONS_ENTRYPOINT = path.join(ROOT, "functions", "index.js");
 
 describe("direct production deployment safety", () => {
   test.each([
@@ -210,6 +211,30 @@ describe("direct production deployment safety", () => {
     );
   });
 
+  test("keeps Inventory App Check in monitoring until the production browser provider is promoted", () => {
+    const functionsSource = fs.readFileSync(FUNCTIONS_ENTRYPOINT, "utf8");
+
+    for (const [functionName, nextFunctionName] of [
+      ["getInventoryWorkspace", "applyInventoryCommand"],
+      ["applyInventoryCommand", "previewEventInventory"],
+      ["previewEventInventory", "invalidateEventIngredientsOnQuoteChange"]
+    ]) {
+      const start = functionsSource.indexOf(`exports.${functionName} = functions`);
+      const end = functionsSource.indexOf(`exports.${nextFunctionName} = functions`, start);
+      const declaration = functionsSource.slice(start, end);
+
+      expect(start).toBeGreaterThanOrEqual(0);
+      expect(end).toBeGreaterThan(start);
+      expect(declaration).toContain(".runWith({ enforceAppCheck: false })");
+      expect(declaration).not.toContain("enforceAppCheck: true");
+    }
+
+    for (const workflow of [FIREBASE_WORKFLOW, VERCEL_WORKFLOW]) {
+      const workflowSource = fs.readFileSync(workflow, "utf8");
+      expect(workflowSource).not.toMatch(/VITE_FIREBASE_APP_CHECK_ENABLED:\s*["']?true["']?/);
+    }
+  });
+
   test("keeps staffing and inventory server authority restricted to the explicit operations profile", () => {
     const firebaseWorkflow = fs.readFileSync(FIREBASE_WORKFLOW, "utf8");
     const vercelWorkflow = fs.readFileSync(VERCEL_WORKFLOW, "utf8");
@@ -268,7 +293,7 @@ describe("direct production deployment safety", () => {
 
   test("keeps each Functions deployment below the production write-quota ceiling", () => {
     const ids = listExpectedFunctionIds(
-      fs.readFileSync(path.join(ROOT, "functions", "index.js"), "utf8")
+      fs.readFileSync(FUNCTIONS_ENTRYPOINT, "utf8")
     );
     const batches = planFunctionDeployBatches(ids);
 

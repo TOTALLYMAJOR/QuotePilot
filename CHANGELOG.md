@@ -1,12 +1,24 @@
 # Changelog
 
-Last updated: 2026-09-09 18:17:25 CDT
+Last updated: 2026-09-09 20:50:56 CDT
 
 All notable project changes are documented in this file.
 
 This changelog is backfilled from git history and will be maintained going forward.
 
-## Unreleased — v0.18.0 capability-realization candidate
+## Unreleased — v0.18.1 Inventory callable hotfix
+
+- Correct the Inventory callable transport policy exposed by the first
+  production stock-location attempt. `getInventoryWorkspace`,
+  `applyInventoryCommand`, and `previewEventInventory` now explicitly monitor
+  App Check instead of enforcing it while both approved production browser
+  builds still leave their App Check provider off pending registration. The
+  verified-email, same-tenant staff/admin, runtime, tenant-setting, revision,
+  idempotency, immutable-receipt, and direct-browser-write boundaries are
+  unchanged. A deployment-safety test prevents hard enforcement from returning
+  before the browser can issue the required token.
+
+## v0.18.0 — Capability realization
 
 - Add the explicit `ragnakok-operations` Firebase production profile and
   protected tenant operators needed to promote the complete operating model

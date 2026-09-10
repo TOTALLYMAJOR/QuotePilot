@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "catalogVersion": 82,
+  "catalogVersion": 83,
   "contracts": [
     {
       "id": "bounded-security-operations-audit",
@@ -9255,7 +9255,7 @@
     },
     {
       "id": "ingredient-inventory-workspace",
-      "reviewRevision": 4,
+      "reviewRevision": 5,
       "status": "active",
       "deliveryType": "user_relevant",
       "capabilityKind": "mixed_surface",
@@ -9334,6 +9334,10 @@
         {
           "path": "src/lib/__tests__/aiui01CompatibilityBaseline.test.js",
           "locator": "keeps admin-only Catalog, Imports, Inventory, and Staff absent for sales"
+        },
+        {
+          "path": "src/lib/__tests__/deploymentSafety.test.js",
+          "locator": "keeps Inventory App Check in monitoring until the production browser provider is promoted"
         }
       ],
       "documentationPaths": [
@@ -9355,8 +9359,8 @@
           "locator": "## Ingredient inventory"
         }
       ],
-      "surfaceReview": "changed",
-      "surfaceReviewNote": "The Operations route uses the established workspace shell and exact tenant route, renders physical stock, active commitment, available-to-allocate, and purchase cost as separate evidence axes, adds contextual receiving and explicit-pack controls, disables mutation on cached or pending snapshots, retains uncertain request identity for reconciliation, and makes the 200-row source-candidate bound explicit.",
+      "surfaceReview": "verified_existing",
+      "surfaceReviewNote": "The Operations route uses the established workspace shell and exact tenant route, renders physical stock, active commitment, available-to-allocate, and purchase cost as separate evidence axes, adds contextual receiving and explicit-pack controls, disables mutation on cached or pending snapshots, retains uncertain request identity for reconciliation, and makes the 200-row source-candidate bound explicit. Its callable wrapper now matches the platform App Check promotion sequence: monitoring while the production browser provider remains off, with verified identity, role, tenant, feature gates, receipts, and server-only persistence unchanged.",
       "stateEvidence": [
         {
           "state": "loading",
@@ -9436,7 +9440,7 @@
     },
     {
       "id": "ingredient-menu-recipe-costing",
-      "reviewRevision": 1,
+      "reviewRevision": 2,
       "status": "active",
       "deliveryType": "user_relevant",
       "capabilityKind": "mixed_surface",
@@ -9478,6 +9482,7 @@
         "scripts/inventory-ingredient-emulator-acceptance.mjs",
         "src/components/__tests__/ambientLibraryRoute.test.jsx",
         "src/components/__tests__/inventoryRecipeEditor.test.jsx",
+        "src/lib/__tests__/deploymentSafety.test.js",
         "src/lib/__tests__/inventoryAuthorityClient.test.js",
         "src/lib/__tests__/inventoryAuthorityRuntime.server.test.js",
         "src/lib/__tests__/inventoryProductionRoute.test.js",
@@ -9504,6 +9509,10 @@
         {
           "path": "src/rules/__tests__/firestore.rules.test.js",
           "locator": "menu cost projections are staff-readable, server-owned, and query bounded"
+        },
+        {
+          "path": "src/lib/__tests__/deploymentSafety.test.js",
+          "locator": "keeps Inventory App Check in monitoring until the production browser provider is promoted"
         }
       ],
       "documentationPaths": [
@@ -9525,8 +9534,8 @@
           "locator": "To cost an existing menu item:"
         }
       ],
-      "surfaceReview": "changed",
-      "surfaceReviewNote": "Recipe composition is embedded in the existing Library menu-item editor in both production app graphs. The tenant-wide cost summary remains bounded, while the active editor subscribes to its exact projection document so truncation can never masquerade as no recipe. Pending, uncertain, committed, and definitively rejected attempts lock the visible inputs until reconciliation, projection refresh, or explicit reset.",
+      "surfaceReview": "verified_existing",
+      "surfaceReviewNote": "Recipe composition is embedded in the existing Library menu-item editor in both production app graphs. The tenant-wide cost summary remains bounded, while the active editor subscribes to its exact projection document so truncation can never masquerade as no recipe. Pending, uncertain, committed, and definitively rejected attempts lock the visible inputs until reconciliation, projection refresh, or explicit reset. Recipe publication shares the explicitly monitored Inventory callable wrapper until the production browser App Check provider is promoted.",
       "stateEvidence": [
         {
           "state": "loading",
@@ -9606,7 +9615,7 @@
     },
     {
       "id": "event-ingredient-demand-consequence",
-      "reviewRevision": 5,
+      "reviewRevision": 6,
       "status": "active",
       "deliveryType": "user_relevant",
       "capabilityKind": "mixed_surface",
@@ -9690,6 +9699,7 @@
         "src/hooks/__tests__/useEventIngredientProjection.test.jsx",
         "src/hooks/__tests__/useEventIngredientExecutionProjection.test.jsx",
         "src/lib/__tests__/inventoryAuthorityClient.test.js",
+        "src/lib/__tests__/deploymentSafety.test.js",
         "src/lib/__tests__/inventoryAuthorityRuntime.server.test.js",
         "src/lib/__tests__/commercialInventoryConsequences.test.js",
         "src/lib/__tests__/eventIngredientOperationalPresentation.test.js",
@@ -9740,6 +9750,10 @@
         {
           "path": "src/rules/__tests__/firestore.rules.test.js",
           "locator": "event ingredient projections are exact-document staff reads and server-owned"
+        },
+        {
+          "path": "src/lib/__tests__/deploymentSafety.test.js",
+          "locator": "keeps Inventory App Check in monitoring until the production browser provider is promoted"
         },
         {
           "path": "src/lib/__tests__/inventoryIngredientExecutionCore.server.test.js",
@@ -9797,7 +9811,7 @@
           "locator": "To evaluate an event, open the saved quote in **Quote Edit**"
         }
       ],
-      "surfaceReview": "changed",
+      "surfaceReview": "verified_existing",
       "surfaceReviewNote": "Quote Edit and Commercial Change preserve their commercial-consequence boundary. The accepted/booked event Control Room adds a separate ingredient-actuals surface behind the inventory gates, uses exact plan and execution listeners with snapshot metadata, requires complete explicit fractional totals and acknowledgement, and offers mutation only to administrators. Event Preflight and only the currently selected Operations event reuse those exact reads to present physical allocation, menu-cost completeness, and execution as separate facts. A saved availability observation never passes as commitment, cost gaps do not invalidate a current hold, unlike units are never totaled together, and Calendar rows do not each create listeners. Allocation settlement, physical depletion, correction, receipt readback, cached or pending evidence, and uncertain recovery remain visibly distinct; saved-planning-basis comparison is never labeled authoritative actual COGS.",
       "stateEvidence": [
         {
