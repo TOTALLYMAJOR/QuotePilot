@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-09-10 21:00:49 CDT
+Last updated: 2026-09-10 22:06:26 CDT
 
 All notable project changes are documented in this file.
 
@@ -31,6 +31,10 @@ All notable project changes are documented in this file.
   selectors so native anchors retain the established desktop rail and mobile
   bottom-bar geometry. Local browser evidence covers 390, 768, and 1440 widths
   plus a modified-click new tab that leaves the source dirty draft intact.
+- Pin the active temporary bundle exception to the literal full-profile
+  remediation graphs: 3,503,139 compatibility bytes and 4,758,294 Ambient
+  bytes. This adds no discretionary headroom and leaves both largest-chunk
+  ceilings unchanged.
 - This remains a source/local release candidate. Pricing-preview v2 parity,
   durable incomplete working drafts, exact PR/main CI, immutable candidate
   UAT, semantic tagging, production deployment, hosted verification, and human

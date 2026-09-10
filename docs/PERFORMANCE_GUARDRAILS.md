@@ -1,6 +1,6 @@
 # Performance Guardrails
 
-Last updated: 2026-09-05 13:22:00 CDT
+Last updated: 2026-09-10 17:22:48 CDT
 
 ## Objectives
 Keep delivery speed high while protecting end-user experience and predictable performance.
@@ -144,6 +144,15 @@ Threshold policy:
   ceilings, retaining only the already observed profile-specific runner
   differences: 3,478,714 / 399,665 for compatibility and 4,444,836 / 435,565
   for Ambient. This is not percentage or future-growth headroom.
+  Before the v0.18.3 remediation, the exact CI-flag graphs on current main
+  measured 3,499,917 / 385,181 bytes for compatibility and 4,755,673 /
+  444,111 bytes for Ambient. The audited interaction repairs measure
+  3,503,139 / 385,181 and 4,758,294 / 444,957 respectively: exact aggregate
+  deltas of 3,222 and 2,621 bytes, with no compatibility largest-chunk growth
+  and an 846-byte Ambient largest-chunk increase that remains below the
+  existing limit. The active aggregate ceilings are pinned to those literal
+  candidate graphs with no discretionary headroom; the largest-chunk ceilings
+  remain unchanged.
   Searchable-PDF inspection additionally emits 1,667,684 raw runtime bytes in
   `dist/vendor/pdfjs-5.7.284`, with a 1,232,303-byte worker as its largest file.
   These assets are same-origin and load only after PDF inspection begins; they

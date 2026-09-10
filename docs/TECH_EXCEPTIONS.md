@@ -1,6 +1,6 @@
 # Technology Exceptions
 
-Last updated: 2026-09-05 13:22:00 CDT
+Last updated: 2026-09-10 17:22:48 CDT
 
 Use this log when a change intentionally departs from stable-first policy or requires temporary governance/performance exception handling.
 
@@ -54,7 +54,7 @@ Use this log when a change intentionally departs from stable-first policy or req
   `33242537210` also passed the unchanged CWV gate under this graph.
 
 - Date: August 13, 2026 (supersedes the August 11 single-profile record;
-  Library profile recalibration reviewed September 4, 2026)
+  latest exact-profile recalibration reviewed September 10, 2026)
 - Owner: QuotePilot maintainers
 - Change: Enforce separate, detected bundle profiles for the compatibility and
   production-equivalent Ambient graphs. The Proposal Composer quote-builder
@@ -125,6 +125,12 @@ Use this log when a change intentionally departs from stable-first policy or req
   435,494 bytes for Ambient. The new ceilings are 3,478,714 / 399,665 and
   4,444,836 / 435,565 respectively: each preceding exact-CI ceiling plus only
   the corresponding observed local source delta.
+  The v0.18.3 audit remediation then adds 3,222 aggregate compatibility bytes
+  and 2,621 aggregate Ambient bytes to the exact current-main CI-flag graphs.
+  The candidate measures 3,503,139 / 385,181 bytes for compatibility and
+  4,758,294 / 444,957 bytes for Ambient. Both aggregate ceilings are pinned to
+  those literal measurements with no future-growth headroom, and the existing
+  399,665 / 445,000 largest-chunk ceilings remain unchanged.
 - Exception type: `perf-threshold-temp`
 - Rationale: The strangler architecture intentionally emits materially
   different authenticated workspace graphs. A single ceiling either blocks the

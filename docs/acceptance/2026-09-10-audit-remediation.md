@@ -1,6 +1,6 @@
 # Audit Remediation Current-Head Reconciliation
 
-Last updated: 2026-09-10 16:49:18 CDT
+Last updated: 2026-09-10 22:06:26 CDT
 
 ## Review binding and evidence boundary
 
@@ -43,7 +43,8 @@ Last updated: 2026-09-10 16:49:18 CDT
 
 | Check | Result |
 |---|---|
-| `npm run lane:core` | Pass: capability and field-state contracts; 487 unit files passed, 3 skipped; 5,697 tests passed, 99 skipped; compatibility build; docs governance; bundle budget; 136 Truthloop tests. |
+| `npm run lane:core` | Pass: capability and field-state contracts; 487 unit files passed, 3 skipped; 5,699 tests passed, 99 skipped; compatibility build; docs governance; bundle budget; 136 Truthloop tests. |
+| Exact CI-flag bundle profiles | Compatibility 3,503,139 / 385,181 bytes; Ambient 4,758,294 / 444,957 bytes. Aggregate exception ceilings are pinned to the literal graphs; largest-chunk ceilings are unchanged. |
 | `npm run test:rules:firestore` | Pass: 93/93 against the local Firestore emulator. Expected denied-operation emulator warnings were observed; the command exited 0. |
 | Focused affected integration set | Pass: 10 files, 116 tests. |
 | Feature-enabled affected browser matrix | Pass: 17/17 across Operations, Ambient Now, Workbench, Calm Four, modal return focus, reduced motion, 390/768/1440 layouts, and native modified-click/new-tab behavior. |

@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-09-10 21:00:49 CDT
+Last updated: 2026-09-10 22:06:26 CDT
 
 ## Audit remediation — v0.18.3 release candidate
 
@@ -12,7 +12,7 @@ Inventory entry behavior. It changes no Functions, Firestore rules, tenant
 settings, payment behavior, quote-revision authority, or production data.
 
 The current-main reconciliation passes the local core lane: 487 unit files,
-5,697 tests, compatibility build, capability/field-state/doc governance,
+5,699 tests, compatibility build, capability/field-state/doc governance,
 bundle budget, and 136 Truthloop tests. The original remediation qualification
 also passed Firestore rules 93/93, the affected feature-enabled browser matrix
 17/17, and the standalone Proposal Composer profile 14/14. `check:env` remains
@@ -21,6 +21,11 @@ secret values were copied or inspected. Exact release-branch CI, hosted,
 deployment, assistive-technology, and human evidence remain separate.
 Pricing-preview v2 parity and durable incomplete working drafts are not
 repaired by this candidate.
+
+The exact CI-flag bundle graphs measure 3,503,139 / 385,181 bytes for
+compatibility and 4,758,294 / 444,957 bytes for Ambient. Their active temporary
+aggregate ceilings are pinned to those literal values with no discretionary
+headroom; the existing largest-chunk ceilings remain unchanged.
 
 The Ambient accessibility fixture-expiry correction and its changelog entry
 are already present on current main and remain unchanged. The previous
