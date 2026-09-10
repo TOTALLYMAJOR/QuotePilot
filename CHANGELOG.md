@@ -1,12 +1,12 @@
 # Changelog
 
-Last updated: 2026-09-09 20:50:56 CDT
+Last updated: 2026-09-09 22:25:04 CDT
 
 All notable project changes are documented in this file.
 
 This changelog is backfilled from git history and will be maintained going forward.
 
-## Unreleased — v0.18.1 Inventory callable hotfix
+## v0.18.1 — Inventory callable hotfix
 
 - Correct the Inventory callable transport policy exposed by the first
   production stock-location attempt. `getInventoryWorkspace`,
@@ -16,7 +16,11 @@ This changelog is backfilled from git history and will be maintained going forwa
   verified-email, same-tenant staff/admin, runtime, tenant-setting, revision,
   idempotency, immutable-receipt, and direct-browser-write boundaries are
   unchanged. A deployment-safety test prevents hard enforcement from returning
-  before the browser can issue the required token.
+  before the browser can issue the required token. Exact-main CI run
+  `34430375712` passed, and Firebase production deployment run `34431964494`
+  deployed release SHA `8bada8d16300a9f897df5f7a640e07b4830ab7ce`
+  and verified all 128 active Functions on the `ragnakok-operations` profile.
+  A successful operator retry and human acceptance remain separate evidence.
 
 ## v0.18.0 — Capability realization
 
