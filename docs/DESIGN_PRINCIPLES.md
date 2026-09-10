@@ -2,7 +2,7 @@
 
 **Status:** Living document. Every design, copy, and feature decision gets checked against these five commitments.
 **Owner:** Michael Major
-Last updated: 2026-09-10 12:09:03 CDT
+Last updated: 2026-09-10 15:09:08 CDT
 
 ## Purpose
 

@@ -1,6 +1,6 @@
 # CWF-16 Event Workspace UI Specification
 
-Last updated: 2026-09-10 12:09:03 CDT
+Last updated: 2026-09-10 15:09:08 CDT
 
 Status: Historical CWF-16 implementation contract. Current ordinary
 Ambient-enabled quote detail follows the Living Opportunity contract.

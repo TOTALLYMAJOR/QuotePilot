@@ -1,6 +1,6 @@
 # Claim and Evidence Register
 
-Last updated: 2026-09-10 12:09:03 CDT
+Last updated: 2026-09-10 15:09:08 CDT
 
 Missing evidence is `UNVERIFIED`. Source, test, CI, deployment, provider,
 recipient, tenant readback, human acceptance, usage, and commercial evidence do

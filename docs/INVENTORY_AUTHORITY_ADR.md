@@ -1,6 +1,6 @@
 # Ingredient Inventory and Menu-Costing Authority
 
-Last updated: 2026-09-10 12:09:03 CDT
+Last updated: 2026-09-10 15:09:08 CDT
 
 Status: Accepted scope correction; corrected Phases 2 through 8 are merged in
 the v0.18 source line, the Inventory backend is deployed and exact-tenant

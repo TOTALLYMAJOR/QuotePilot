@@ -1,6 +1,6 @@
 # QuotePilot Staff Workspace Design System
 
-Last updated: 2026-09-10 12:09:03 CDT
+Last updated: 2026-09-10 15:09:08 CDT
 
 Status: living canonical staff-workspace design system. Its v0.5.0 foundation
 has been extended by the Ambient, UX-convergence, commercial, Staffing, and

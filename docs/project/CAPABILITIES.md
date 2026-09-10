@@ -1,6 +1,6 @@
 # Capability State Index
 
-Last updated: 2026-09-10 12:09:03 CDT
+Last updated: 2026-09-10 15:09:08 CDT
 
 [`docs/FEATURE_MATRIX.md`](../FEATURE_MATRIX.md) is the complete capability
 inventory. [`.project/state.json`](../../.project/state.json) is the smaller
