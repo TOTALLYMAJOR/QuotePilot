@@ -1,6 +1,6 @@
 # Documentation System
 
-Last updated: 2026-09-10 16:34:02 CDT
+Last updated: 2026-09-10 16:53:10 CDT
 
 ## Purpose
 This repository uses a layered canonical documentation model.
@@ -117,6 +117,9 @@ from authority-owned record provenance. A customer-email claim derived from a
 canonical quote uses the existing trusted quote-projection source; the fixture
 marker may label the surrounding record synthetic but may not invent a new
 trusted claim source or expand the authority allowlist.
+Idempotent retries may skip only a complete fixture-owned record pair with both
+authority receipts present; incomplete or non-fixture state must fail closed
+for operator review.
 
 ## Data Ownership Matrix
 | Topic | Canonical Doc | Notes |

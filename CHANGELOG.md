@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-09-10 16:32:59 CDT
+Last updated: 2026-09-10 16:52:25 CDT
 
 All notable project changes are documented in this file.
 
@@ -10,7 +10,9 @@ All notable project changes are documented in this file.
   quote-projection provenance for its derived customer-email claim while
   retaining separate synthetic fixture provenance on every populated record.
   The loader persists only the authority-owned claim patch. Quote claim
-  validation remains unchanged and fail-closed.
+  validation remains unchanged and fail-closed. Complete receipt-backed
+  synthetic staff pairs are now replay-safe after an interrupted population;
+  incomplete or non-fixture pairs still fail closed.
 
 ## Ambient staffing release-fixture lifecycle - 2026-09-10
 

@@ -4,9 +4,11 @@ import { describe, expect, it } from "vitest";
 import {
   OPERATIONS_CUSTOMER_EMAIL_CLAIM_SOURCE,
   buildOperationsCustomerEmailClaim,
+  isCompleteOwnedStaffFixturePair,
   parseOperationsPopulationArgs
 } from "../../../scripts/populate-ragnakok-operations.mjs";
 import {
+  OPERATIONS_FIXTURE_SOURCE,
   OPERATIONS_POPULATION_VERSION,
   REALISTIC_ADDONS,
   REALISTIC_EVENTS,
@@ -31,6 +33,28 @@ describe("realistic organization and operations population fixture", () => {
         createdBySource: "trusted_quote_projection"
       }
     });
+  });
+
+  it("recognizes only a complete receipt-backed synthetic staff pair as replay-safe", () => {
+    const owned = { fixtureProvenance: { source: OPERATIONS_FIXTURE_SOURCE } };
+    expect(isCompleteOwnedStaffFixturePair({
+      profile: owned,
+      record: owned,
+      profileReceiptExists: true,
+      recordReceiptExists: true
+    })).toBe(true);
+    expect(isCompleteOwnedStaffFixturePair({
+      profile: owned,
+      record: {},
+      profileReceiptExists: true,
+      recordReceiptExists: true
+    })).toBe(false);
+    expect(isCompleteOwnedStaffFixturePair({
+      profile: owned,
+      record: owned,
+      profileReceiptExists: true,
+      recordReceiptExists: false
+    })).toBe(false);
   });
 
   it("is dry-run-first and restricts writes to the exact targets and typed confirmation", () => {

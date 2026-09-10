@@ -59,6 +59,18 @@ const slug = (value) => text(value).toLowerCase().replace(/[^a-z0-9]+/gu, "-").r
 const digest = (value) => createHash("sha256").update(typeof value === "string" ? value : JSON.stringify(value)).digest("hex");
 const fixture = (value = {}) => value?.fixtureProvenance?.source === OPERATIONS_FIXTURE_SOURCE;
 
+export function isCompleteOwnedStaffFixturePair({
+  profile,
+  record,
+  profileReceiptExists = false,
+  recordReceiptExists = false
+} = {}) {
+  return fixture(profile)
+    && fixture(record)
+    && profileReceiptExists === true
+    && recordReceiptExists === true;
+}
+
 function takeValue(argv, index, flag) {
   const value = text(argv[index + 1]);
   if (!value || value.startsWith("--")) throw new OperationsPopulationError(`${flag} requires a value.`);
@@ -326,6 +338,22 @@ async function prepareStaff({ db, projectId, organizationId, actor, nowISO, appl
       ]);
       if (profileSnapshot.exists && !profileReceiptSnapshot.exists) throw new OperationsPopulationError(`Staff profile ${member.id} exists without fixture receipt ownership.`);
       if (recordSnapshot.exists && !recordReceiptSnapshot.exists) throw new OperationsPopulationError(`Staff record ${member.id} exists without fixture receipt ownership.`);
+      if (
+        profileSnapshot.exists
+        && recordSnapshot.exists
+        && profileReceiptSnapshot.exists
+        && recordReceiptSnapshot.exists
+      ) {
+        if (!isCompleteOwnedStaffFixturePair({
+          profile: profileSnapshot.data(),
+          record: recordSnapshot.data(),
+          profileReceiptExists: true,
+          recordReceiptExists: true
+        })) {
+          throw new OperationsPopulationError(`Staff pair ${member.id} is not owned by this fixture.`);
+        }
+        return;
+      }
       const profilePlan = staffingAuthority.planOperationalStaffProfileCommand({ request: profileRequest, currentProfile: profileSnapshot.exists ? profileSnapshot.data() : null, actor, serverTimeISO: nowISO, existingReceipt: profileReceiptSnapshot.exists ? profileReceiptSnapshot.data()?.receipt : null });
       const recordPlan = staffDirectory.planStaffRecordCommand({ request: recordRequest, currentRecord: recordSnapshot.exists ? recordSnapshot.data() : null, actor, serverTimeISO: nowISO, existingReceipt: recordReceiptSnapshot.exists ? recordReceiptSnapshot.data()?.receipt : null });
       if (profilePlan.kind !== recordPlan.kind) throw new OperationsPopulationError(`Paired staff authorities disagree for ${member.id}.`);
