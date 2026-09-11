@@ -99,6 +99,7 @@ describe("Firebase Functions env materializer", { timeout: 30_000 }, () => {
     expect(output).toContain("NOTIFICATIONS_SMS_PROVIDER=none");
     expect(output).toContain("STRIPE_MODE=live");
     expect(output).toContain("COMMERCIAL_CHANGE_AUTHORITY_ENABLED=false");
+    expect(output).toContain("EVENT_OPERATING_SPINE_ENABLED=false");
     expect(output).toContain("OPERATIONAL_STAFFING_AUTHORITY_ENABLED=false");
     expect(output).toContain("INVENTORY_AUTHORITY_ENABLED=false");
     expect(output).toContain("REVENUE_AUTOPILOT_ENABLED=false");
@@ -141,21 +142,33 @@ describe("Firebase Functions env materializer", { timeout: 30_000 }, () => {
     expect(testMode.stderr).toMatch(/requires STRIPE_MODE=live/i);
   });
 
-  test("keeps Commercial Change Authority enforcement explicit and fail closed", () => {
+  test("keeps coupled Commercial Change and Event Spine authority explicit and fail closed", () => {
     const enabled = runMaterializer({
-      COMMERCIAL_CHANGE_AUTHORITY_ENABLED: "true"
+      TENANT_WORKFLOW_ORGANIZATION_ID: "mm05366-sandbox",
+      COMMERCIAL_CHANGE_AUTHORITY_ENABLED: "true",
+      EVENT_OPERATING_SPINE_ENABLED: "true",
+      OPERATIONAL_STAFFING_AUTHORITY_ENABLED: "true",
+      INVENTORY_AUTHORITY_ENABLED: "true"
     });
     expect(enabled.result.status).toBe(0);
-    expect(fs.readFileSync(
+    const output = fs.readFileSync(
       path.join(enabled.cwd, "functions", ".env.tonicatering"),
       "utf8"
-    )).toContain("COMMERCIAL_CHANGE_AUTHORITY_ENABLED=true");
+    );
+    expect(output).toContain("COMMERCIAL_CHANGE_AUTHORITY_ENABLED=true");
+    expect(output).toContain("EVENT_OPERATING_SPINE_ENABLED=true");
 
     const invalid = runMaterializer({
       COMMERCIAL_CHANGE_AUTHORITY_ENABLED: "enabled"
     }).result;
     expect(invalid.status).not.toBe(0);
     expect(invalid.stderr).toMatch(/COMMERCIAL_CHANGE_AUTHORITY_ENABLED must be true or false/i);
+
+    const invalidEvent = runMaterializer({
+      EVENT_OPERATING_SPINE_ENABLED: "enabled"
+    }).result;
+    expect(invalidEvent.status).not.toBe(0);
+    expect(invalidEvent.stderr).toMatch(/EVENT_OPERATING_SPINE_ENABLED must be true or false/i);
   });
 
   test("keeps operational staffing authority explicit and fail closed", () => {
@@ -540,7 +553,7 @@ describe("Firebase Functions env materializer", { timeout: 30_000 }, () => {
 });
 
 
-test("materializes only the approved tenant runtime with global workflow authority off", () => {
+test("materializes only the approved tenant runtime and couples the complete operations authority", () => {
   const result = runMaterializer({ TENANT_WORKFLOW_ORGANIZATION_ID: "mm05366-sandbox" });
   expect(result.result.status).toBe(0);
   expect(fs.readFileSync(path.join(result.cwd, "functions/.env.tonicatering"), "utf8")).toContain("TENANT_WORKFLOW_ORGANIZATION_ID=mm05366-sandbox");
@@ -549,4 +562,25 @@ test("materializes only the approved tenant runtime with global workflow authori
   expect(runMaterializer({ TENANT_WORKFLOW_ORGANIZATION_ID: "other" }).result.status).not.toBe(0);
   expect(runMaterializer({ TENANT_WORKFLOW_ORGANIZATION_ID: "mm05366-sandbox", COMMERCIAL_CHANGE_AUTHORITY_ENABLED: "true" }).result.status).not.toBe(0);
   expect(runMaterializer({ EVENT_OPERATING_SPINE_ENABLED: "true" }).result.status).not.toBe(0);
+
+  const completeOperations = runMaterializer({
+    TENANT_WORKFLOW_ORGANIZATION_ID: "mm05366-sandbox",
+    COMMERCIAL_CHANGE_AUTHORITY_ENABLED: "true",
+    EVENT_OPERATING_SPINE_ENABLED: "true",
+    OPERATIONAL_STAFFING_AUTHORITY_ENABLED: "true",
+    INVENTORY_AUTHORITY_ENABLED: "true"
+  });
+  expect(completeOperations.result.status).toBe(0);
+  const completeEnvironment = fs.readFileSync(
+    path.join(completeOperations.cwd, "functions/.env.tonicatering"),
+    "utf8"
+  );
+  expect(completeEnvironment).toContain("COMMERCIAL_CHANGE_AUTHORITY_ENABLED=true");
+  expect(completeEnvironment).toContain("EVENT_OPERATING_SPINE_ENABLED=true");
+  expect(runMaterializer({
+    TENANT_WORKFLOW_ORGANIZATION_ID: "mm05366-sandbox",
+    COMMERCIAL_CHANGE_AUTHORITY_ENABLED: "true",
+    EVENT_OPERATING_SPINE_ENABLED: "true",
+    OPERATIONAL_STAFFING_AUTHORITY_ENABLED: "true"
+  }).result.stderr).toMatch(/requires Staffing and Inventory server authority/i);
 });

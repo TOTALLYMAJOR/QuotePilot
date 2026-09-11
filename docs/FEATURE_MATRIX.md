@@ -1,6 +1,6 @@
 # Feature Matrix
 
-Last updated: 2026-09-10 15:09:08 CDT
+Last updated: 2026-09-11 00:36:51 CDT
 
 This matrix maps the master feature checklist to current implementation and source locations.
 It is an inventory and chronology index, not the canonical detailed history or
@@ -13,7 +13,7 @@ release, deployment, provider, risk, and acceptance state.
 | Evidence surface | Current state |
 |---|---|
 | Merged source | Commercial-platform and corrected Inventory Phases 2–8 are contained in the v0.18 source line. |
-| Firebase backend | `v0.18.1` at `8bada8d1` is deployed; provider readback found 128 active Functions on the exact `ragnakok-operations` profile. |
+| Firebase backend | `v0.18.1` at `8bada8d1` is deployed with 128 active Functions, but current provider readback found both Commercial Change and Event Spine runtime authority false. The exact tenant settings are true; a protected `ragnakok-operations` profile correction is source-qualified but not yet deployed. |
 | Public browser | Vercel remains `v0.16.6`; Firebase Hosting remains `v0.16.3`. Current v0.18 frontend exposure is not established. |
 | Tenant data | `ragnakok-realistic-v1` Inventory/menu-cost data is applied and read back in both live targets; the larger `ragnakok-operations-v1` twin remains local source/test work. |
 | Acceptance | Hosted role journeys, successful Inventory operator retry, assistive-technology review, and human acceptance remain open. |
@@ -21,6 +21,9 @@ release, deployment, provider, risk, and acceptance state.
 Rows 85–90 preserve their slice-level technical boundaries while recording the
 current merged/backend delivery state. Neither that state nor the historical
 slice evidence establishes public-browser availability or human acceptance.
+Commercial Change and Event Spine are not end-to-end active until a protected
+Functions deployment and provider readback prove both runtime gates true on
+the exact tenant-restricted profile.
 
 ## Commercial platform and pricing-v2 candidate (September 4, 2026)
 

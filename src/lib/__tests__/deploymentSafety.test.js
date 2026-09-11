@@ -260,7 +260,6 @@ describe("direct production deployment safety", () => {
     for (const binding of [
       'NOTIFICATIONS_SMS_PROVIDER: none',
       'STRIPE_MODE: live',
-      'COMMERCIAL_CHANGE_AUTHORITY_ENABLED: "false"',
       'REVENUE_AUTOPILOT_ENABLED: "false"',
       'REVENUE_AUTOPILOT_SENDS_ENABLED: "false"',
       'BUYER_ACCESS_ENABLED: "false"',
@@ -270,6 +269,12 @@ describe("direct production deployment safety", () => {
     }
     expect(source).toContain("- email-active");
     expect(source).toContain("- ragnakok-operations");
+    expect(source).toContain(
+      "COMMERCIAL_CHANGE_AUTHORITY_ENABLED: ${{ inputs.release_profile == 'ragnakok-operations' && 'true' || 'false' }}"
+    );
+    expect(source).toContain(
+      "EVENT_OPERATING_SPINE_ENABLED: ${{ inputs.release_profile == 'ragnakok-operations' && 'true' || 'false' }}"
+    );
     expect(source).toMatch(
       /NOTIFICATIONS_EMAIL_PROVIDER:\s*\$\{\{ \(inputs\.release_profile == 'email-active' \|\| inputs\.release_profile == 'ragnakok-workflows' \|\| inputs\.release_profile == 'ragnakok-operations'\) && 'resend' \|\| 'none' \}\}/
     );
@@ -381,6 +386,8 @@ describe("direct production deployment safety", () => {
       ...runtime,
       NOTIFICATIONS_EMAIL_PROVIDER: "resend",
       TENANT_WORKFLOW_ORGANIZATION_ID: "mm05366-sandbox",
+      COMMERCIAL_CHANGE_AUTHORITY_ENABLED: "true",
+      EVENT_OPERATING_SPINE_ENABLED: "true",
       OPERATIONAL_STAFFING_AUTHORITY_ENABLED: "true",
       INVENTORY_AUTHORITY_ENABLED: "true"
     })) };

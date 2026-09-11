@@ -157,8 +157,8 @@ jobs:
           EMAIL_FROM_EMAIL: ${{ vars.EMAIL_FROM_EMAIL }}
           NOTIFICATIONS_SMS_PROVIDER: none
           STRIPE_MODE: live
-          COMMERCIAL_CHANGE_AUTHORITY_ENABLED: "false"
-          EVENT_OPERATING_SPINE_ENABLED: "false"
+          COMMERCIAL_CHANGE_AUTHORITY_ENABLED: ${{ inputs.release_profile == 'ragnakok-operations' && 'true' || 'false' }}
+          EVENT_OPERATING_SPINE_ENABLED: ${{ inputs.release_profile == 'ragnakok-operations' && 'true' || 'false' }}
           TENANT_WORKFLOW_ORGANIZATION_ID: ${{ (inputs.release_profile == 'ragnakok-workflows' || inputs.release_profile == 'ragnakok-operations') && 'mm05366-sandbox' || '' }}
           OPERATIONAL_STAFFING_AUTHORITY_ENABLED: ${{ inputs.release_profile == 'ragnakok-operations' && 'true' || 'false' }}
           INVENTORY_AUTHORITY_ENABLED: ${{ inputs.release_profile == 'ragnakok-operations' && 'true' || 'false' }}
