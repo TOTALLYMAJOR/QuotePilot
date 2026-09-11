@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-09-10 21:00:49 CDT
+Last updated: 2026-09-11 00:36:51 CDT
 
 ## Current evidence boundary
 
@@ -11,10 +11,10 @@ evidence receipts and must not be described as one artifact.
 | Surface | Current recorded evidence | Boundary |
 |---|---|---|
 | Public Vercel edge | `v0.18.2`, exact SHA `3fb1443bb6e394133340ede3716548c92b24beea`, exact-main CI `34530609347`, production workflow `34532297958`, immutable deployment `quoteflow-c8t2j8jk0-mbmapps.vercel.app` | The protected workflow verified `https://quotepilot.mbmapps.com`, and an independent staff-portrait request returned HTTP 200 `image/png`. Authenticated role journeys and human acceptance remain open. |
-| Firebase Functions | `v0.18.1`, exact SHA `8bada8d16300a9f897df5f7a640e07b4830ab7ce`, CI `34430375712`, production deployment `34431964494` | Provider readback found 128 active Functions on the `ragnakok-operations` profile. This does not prove browser reachability or operator success. |
+| Firebase Functions | `v0.18.1`, exact SHA `8bada8d16300a9f897df5f7a640e07b4830ab7ce`, CI `34430375712`, production deployment `34431964494` | Current provider readback at `2026-09-11T05:31Z` found the Commercial Change and Event Spine runtime gates false despite both exact tenant settings being true. A source correction now binds both gates to the protected `ragnakok-operations` profile; deployment and post-deploy readback remain required. |
 | Firebase Hosting fallback | `v0.16.3` static release | It is an origin/fallback, not the current public edge or backend version. |
 | Production tenant authority | Protected workflow `34551712371` on main merge `2f4246846496f066e909d16fb46886cd0cc193fc` verified the exact current Firebase backend and Vercel browser receipts, then read back both `commercialChangeAuthorityEnabled` and `eventOperatingSpineEnabled` as `true` for `mm05366-sandbox` | Both fields were already true at the verified operation, so the run rebound the activation to current split-surface evidence without changing tenant data. It did not execute a commercial amendment, event command, provider send, payment, or automatic transition. |
-| Isolated staging Event/Commercial profile | Exact SHA `2f5d123d9ba06153823def6f44b3f5ff89183023`, CI `34420973414`, Firebase Hosting version `31a0bcbf39d65ec2`, profile `staging-event-operating-spine` | The deployment command recorded a partial receipt after its post-deploy Functions listing failed. Independent recovery readback verified the exact live Hosting version and manifest plus 128 active Functions with both runtime gates true. A bounded transaction then changed only the two `mm05366-sandbox` tenant fields from false to true and read them back at `2026-09-11T01:59:59.609Z`. |
+| Isolated staging Event/Commercial profile | Exact SHA `2f5d123d9ba06153823def6f44b3f5ff89183023`, CI `34420973414`, Firebase Hosting version `31a0bcbf39d65ec2`, profile `staging-event-operating-spine` | The original deployment and recovery readback proved both runtime gates true, but a later Functions deployment replaced that runtime. Current readback at `2026-09-11T05:31Z` found Commercial Change false; the tenant fields remain true. Staging must be redeployed and read back before it is described as active. |
 | Repository `origin/main` | Contains the v0.18.2 release source, protected PR `#137` customer-claim provenance, PR `#138` receipt-safe staff-retry corrections, and PR `#141` split-receipt activation correction | Repository state is not runtime state; production and staging remain separately evidenced surfaces. |
 
 The first production Inventory request exposed an App Check rollout mismatch:
@@ -103,10 +103,12 @@ BEO currentness.
   acceptance, and founder acceptance are not recorded for v0.18.2.
 - App Check hard enforcement remains blocked until reviewed browser provider
   registration and hosted token evidence exist.
-- Commercial Change and Event Spine are enabled only for the exact
-  `mm05366-sandbox` tenant. Their gates expose governed, role-checked commands;
-  activation itself did not amend a quote, advance an event, send a message,
-  charge a payment, or establish operator acceptance.
+- Commercial Change and Event Spine tenant settings are enabled only for the
+  exact `mm05366-sandbox` tenant, but the current Functions runtime readback is
+  false. They are therefore not presently end-to-end active. The protected
+  runtime correction preserves role-checked commands; deployment itself will
+  not amend a quote, advance an event, send a message, charge a payment, or
+  establish operator acceptance.
 - The isolated staging candidate's original receipt remains `partial` because
   the deploy process failed during its post-deploy Functions listing. Exact
   Hosting and Functions provider state was recovered through independent
