@@ -1,6 +1,6 @@
 # User Manual
 
-Last updated: 2026-09-11 00:36:51 CDT
+Last updated: 2026-09-10 15:09:08 CDT
 
 ## Purpose
 This guide explains day-to-day usage of QuotePilot for staff users and admins.
@@ -1330,13 +1330,6 @@ operational records, ten example opportunities/events, Staffing plans,
 approvals, and workflow/event ledgers. Use these records to exercise Library,
 Opportunities, Operations, Staff, Workflow, approvals, pricing, and margin
 presentation as one connected system.
-
-The production `ragnakok-operations` deployment profile is also the only
-profile allowed to expose the coupled Commercial Change and Event Spine server
-authorities. Those runtime gates do not bypass the exact tenant settings,
-verified staff identity, role checks, current quote revision, approvals,
-idempotency, or immutable receipts. Enabling the profile does not itself amend
-a quote or advance an event.
 
 The operating-twin loader is a privileged exact-tenant fixture migration. It
 may enable Inventory and Staffing settings and reconfirm the exact current

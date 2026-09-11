@@ -1,6 +1,6 @@
 # QuotePilot by MBMApps
 
-Last updated: 2026-09-11 00:36:51 CDT
+Last updated: 2026-09-10 15:09:08 CDT
 
 Multi-tenant catering quote application built with React, Vite, Firebase, and jsPDF.
 
@@ -713,7 +713,6 @@ server-owned gates:
 
 ```dotenv
 COMMERCIAL_CHANGE_AUTHORITY_ENABLED=false
-EVENT_OPERATING_SPINE_ENABLED=false
 OPERATIONAL_STAFFING_AUTHORITY_ENABLED=false
 REVENUE_AUTOPILOT_ENABLED=false
 REVENUE_AUTOPILOT_SENDS_ENABLED=false
@@ -722,10 +721,6 @@ NOTIFICATIONS_EMAIL_PROVIDER=none
 
 Commercial Change additionally requires the trusted tenant setting
 `commercialChangeAuthorityEnabled=true`; browser principals cannot enable it.
-Event Spine additionally requires `eventOperatingSpineEnabled=true`. In
-production, only the exact-tenant `ragnakok-operations` deployment profile may
-set both server gates true, and it couples them with enabled Staffing and
-Inventory authority; every other profile retains the false defaults above.
 Operational staffing independently requires the trusted tenant setting
 `operationalStaffingAuthorityEnabled=true`; administrators alone manage staff
 profiles, full private staff records, operator-recorded availability and staff

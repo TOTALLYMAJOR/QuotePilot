@@ -1,6 +1,6 @@
 # Version Control Playbook
 
-Last updated: 2026-09-11 00:36:51 CDT
+Last updated: 2026-09-10 20:25:10 CDT
 
 ## Goals
 - Keep `main` stable and deployable.
@@ -46,12 +46,10 @@ explicit owner promotion after real-run review.
   It preserves `STRIPE_MODE=live` solely for the established quote-payment
   rail; the separate buyer-invoice rail remains disabled with test mode bound.
 - The `ragnakok-operations` profile is the only production profile that may
-  enable the coupled Commercial Change and Event Spine gates together with
-  `OPERATIONAL_STAFFING_AUTHORITY_ENABLED` and
+  enable both `OPERATIONAL_STAFFING_AUTHORITY_ENABLED` and
   `INVENTORY_AUTHORITY_ENABLED`. It is restricted to a Functions-bearing
   Firebase deployment and binds `TENANT_WORKFLOW_ORGANIZATION_ID` to the exact
-  founder-pilot organization. Every other profile keeps all four authorities
-  off. After the successful tagged all-surface deploy,
+  founder-pilot organization. After the successful tagged all-surface deploy,
   the Staffing, Inventory, and coupled Event/Commercial tenant workflows must
   each verify that deploy receipt, update only their declared setting fields,
   and prove provider readback. Do not substitute a console edit or direct
@@ -62,7 +60,7 @@ explicit owner promotion after real-run review.
   batches, and rejects Firebase's textual create/update failure even if the CLI
   exits zero. A backend/all workflow succeeds only after `functions:list`
   proves the exact inventory active in `us-central1` with every function bound
-  to the exact selected runtime profile and no disabled-provider residue.
+  to the expected safe-off runtime values and no disabled-provider residue.
   The dedicated deployer also requires `roles/iam.serviceAccountUser` on the
   exact Functions runtime service account and project-scoped
   `roles/cloudscheduler.admin` for scheduled-function lifecycle. Cloud

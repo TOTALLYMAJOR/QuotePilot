@@ -208,21 +208,11 @@ const tenantWorkflowOrganizationId = optional("TENANT_WORKFLOW_ORGANIZATION_ID",
 if (tenantWorkflowOrganizationId && tenantWorkflowOrganizationId !== "mm05366-sandbox") {
   throw new Error("TENANT_WORKFLOW_ORGANIZATION_ID must be the approved RagnaKoK organization.");
 }
-const eventOperatingSpineEnabled = optional(
-  "EVENT_OPERATING_SPINE_ENABLED",
-  "false"
-).toLowerCase();
-if (!["true", "false"].includes(eventOperatingSpineEnabled)) {
-  throw new Error("EVENT_OPERATING_SPINE_ENABLED must be true or false.");
+if (tenantWorkflowOrganizationId && commercialChangeAuthorityEnabled !== "false") {
+  throw new Error("Tenant-scoped workflow activation requires global Commercial Change authority off.");
 }
-if (commercialChangeAuthorityEnabled !== eventOperatingSpineEnabled) {
-  throw new Error("Commercial Change and Event Operating Spine production authority must be enabled or disabled together.");
-}
-if (
-  commercialChangeAuthorityEnabled === "true"
-  && tenantWorkflowOrganizationId !== "mm05366-sandbox"
-) {
-  throw new Error("Commercial Change and Event Operating Spine production authority requires the exact RagnaKoK organization fence.");
+if (optional("EVENT_OPERATING_SPINE_ENABLED", "false") !== "false") {
+  throw new Error("Production event workflow runtime requires tenant-scoped activation, with its global flag off.");
 }
 
 const operationalStaffingAuthorityEnabled = optional(
@@ -239,15 +229,6 @@ const inventoryAuthorityEnabled = optional(
 ).toLowerCase();
 if (!["true", "false"].includes(inventoryAuthorityEnabled)) {
   throw new Error("INVENTORY_AUTHORITY_ENABLED must be true or false.");
-}
-if (
-  eventOperatingSpineEnabled === "true"
-  && (
-    operationalStaffingAuthorityEnabled !== "true"
-    || inventoryAuthorityEnabled !== "true"
-  )
-) {
-  throw new Error("The RagnaKoK Event Operating Spine profile requires Staffing and Inventory server authority.");
 }
 
 const revenueAutopilotEnabled = optional(
@@ -353,7 +334,7 @@ const values = {
   } : {}),
   STRIPE_MODE: stripeMode,
   COMMERCIAL_CHANGE_AUTHORITY_ENABLED: commercialChangeAuthorityEnabled,
-  EVENT_OPERATING_SPINE_ENABLED: eventOperatingSpineEnabled,
+  EVENT_OPERATING_SPINE_ENABLED: "false",
   ...(tenantWorkflowOrganizationId ? { TENANT_WORKFLOW_ORGANIZATION_ID: tenantWorkflowOrganizationId } : {}),
   OPERATIONAL_STAFFING_AUTHORITY_ENABLED: operationalStaffingAuthorityEnabled,
   INVENTORY_AUTHORITY_ENABLED: inventoryAuthorityEnabled,

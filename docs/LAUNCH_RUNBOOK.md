@@ -1,18 +1,12 @@
 # Launch Runbook
 
-Last updated: 2026-09-11 00:36:51 CDT
+Last updated: 2026-09-10 20:25:10 CDT
 
 ## RagnaKoK complete-operations activation
 
 For the exact `mm05366-sandbox` founder-pilot tenant, deploy Firebase with the
 `ragnakok-operations` profile and `firebase_scope=backend` or `all`, and deploy
 the Event Spine-enabled browser through the protected safe-off Vercel profile.
-That Firebase profile is the sole production profile that couples
-`COMMERCIAL_CHANGE_AUTHORITY_ENABLED=true` and
-`EVENT_OPERATING_SPINE_ENABLED=true` with the existing Staffing and Inventory
-server gates. The materializer rejects either gate on its own, either gate
-without the exact tenant runtime fence, or Event Spine without both operational
-authorities. Every other production profile keeps these server gates false.
 After those workflows prove the tagged releases, exact-main CI, runtime
 configuration, complete Function inventory, public browser gate, and provider
 state, dispatch these protected workflows against the exact Firebase and
@@ -296,7 +290,6 @@ validation environment. It is not the current QuotePilot production snapshot:
 NOTIFICATIONS_SMS_PROVIDER=none
 NOTIFICATIONS_EMAIL_PROVIDER=none
 COMMERCIAL_CHANGE_AUTHORITY_ENABLED=false
-EVENT_OPERATING_SPINE_ENABLED=false
 REVENUE_AUTOPILOT_ENABLED=false
 REVENUE_AUTOPILOT_SENDS_ENABLED=false
 STRIPE_MODE=live
@@ -1128,19 +1121,11 @@ npm run release:candidate:deploy -- \
 
 The Firebase candidate requires a git-ignored, mode-`0600`
 `functions/.env.quotepilot-staging-20260804` whose provider/send/buyer gates are
-off and `STRIPE_MODE=test`. Revenue Autopilot preparation and send authority
-remain explicitly `false`; Commercial Change remains `false` except in the
-exact `staging-event-operating-spine` profile described below.
+off, `STRIPE_MODE=test`, and Commercial Change, Revenue Autopilot preparation,
+and Revenue Autopilot send authority gates explicitly set to `false`.
 `OPERATIONAL_STAFFING_AUTHORITY_ENABLED` must exactly match the selected
 candidate profile: `false` for `staging-safe-off`, `true` for
-`staging-staffing-authority`, `staging-provider-acceptance`, and
-`staging-event-operating-spine`. The Event Spine profile is the exact
-RagnaKoK operational envelope: it additionally requires
-`INVENTORY_AUTHORITY_ENABLED=true`,
-`COMMERCIAL_CHANGE_AUTHORITY_ENABLED=true`,
-`EVENT_OPERATING_SPINE_ENABLED=true`, and
-`TENANT_WORKFLOW_ORGANIZATION_ID=mm05366-sandbox`. This preserves Staffing and
-Inventory while constraining all workflow authority to that organization.
+`staging-staffing-authority` and `staging-provider-acceptance`.
 `staging-provider-acceptance` additionally requires
 `NOTIFICATIONS_EMAIL_PROVIDER=resend`, `STRIPE_MODE=test`,
 `BUYER_ACCESS_ENABLED=true`,
