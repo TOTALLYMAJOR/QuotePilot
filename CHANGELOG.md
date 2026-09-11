@@ -1,8 +1,16 @@
 # Changelog
 
-Last updated: 2026-09-10 17:15:07 CDT
+Last updated: 2026-09-10 20:25:10 CDT
 
 All notable project changes are documented in this file.
+
+## Unreleased — Event and Commercial activation receipt correction
+
+- Bind the protected founder-tenant activation to the exact current
+  `ragnakok-operations` Firebase backend receipt and the exact safe-off Vercel
+  browser receipt. This supports the intentionally split production surfaces
+  without weakening the tenant, tag, workflow, profile, or provider-readback
+  checks and without treating an older all-surface deployment as current.
 
 ## v0.18.2 public release and operating-twin population - 2026-09-10
 

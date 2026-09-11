@@ -1,5 +1,5 @@
 name: Set Event and Commercial Tenant
-run-name: event-commercial-tenant/v1/${{ inputs.organization_id }}/${{ inputs.enabled }}/${{ inputs.deployed_release_sha }}/${{ inputs.firebase_deploy_run_id }}/${{ github.sha }}
+run-name: event-commercial-tenant/v2/${{ inputs.organization_id }}/${{ inputs.enabled }}/${{ inputs.deployed_release_sha }}/${{ inputs.firebase_deploy_run_id }}/${{ inputs.browser_release_sha }}/${{ inputs.vercel_deploy_run_id }}/${{ github.sha }}
 
 on:
   workflow_dispatch:
@@ -9,7 +9,15 @@ on:
         required: true
         type: string
       firebase_deploy_run_id:
-        description: Successful ragnakok-operations Firebase all-scope deployment run id
+        description: Successful ragnakok-operations Firebase backend or all-scope deployment run id
+        required: true
+        type: string
+      browser_release_sha:
+        description: Full tagged commit SHA currently deployed to the public Vercel edge
+        required: true
+        type: string
+      vercel_deploy_run_id:
+        description: Successful safe-off Vercel production deployment run id for browser_release_sha
         required: true
         type: string
       organization_id:
@@ -58,40 +66,61 @@ jobs:
           WORKFLOW_SHA: ${{ github.sha }}
           DEPLOYED_RELEASE_SHA: ${{ inputs.deployed_release_sha }}
           FIREBASE_DEPLOY_RUN_ID: ${{ inputs.firebase_deploy_run_id }}
+          BROWSER_RELEASE_SHA: ${{ inputs.browser_release_sha }}
+          VERCEL_DEPLOY_RUN_ID: ${{ inputs.vercel_deploy_run_id }}
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "${WORKFLOW_SHA}"
           git cat-file -e "${DEPLOYED_RELEASE_SHA}^{commit}"
           git tag --points-at "${DEPLOYED_RELEASE_SHA}" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$'
+          git cat-file -e "${BROWSER_RELEASE_SHA}^{commit}"
+          git tag --points-at "${BROWSER_RELEASE_SHA}" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$'
           git show "${DEPLOYED_RELEASE_SHA}:.github/workflows/deploy-firebase-hosting.yml" \
             > "${RUNNER_TEMP}/deployed-firebase-workflow.yml"
+          git show "${BROWSER_RELEASE_SHA}:.github/workflows/deploy-vercel-production.yml" \
+            > "${RUNNER_TEMP}/deployed-vercel-workflow.yml"
           node --input-type=module -e '
             import fs from "node:fs";
-            const source = fs.readFileSync(process.argv[1], "utf8");
-            const scopedTenant = source.split("\n").filter((line) =>
+            const firebaseSource = fs.readFileSync(process.argv[1], "utf8");
+            const vercelSource = fs.readFileSync(process.argv[2], "utf8");
+            const scopedTenant = firebaseSource.split("\n").filter((line) =>
               line.includes("TENANT_WORKFLOW_ORGANIZATION_ID:")
               && line.includes("ragnakok-operations")
               && line.includes("mm05366-sandbox")
             ).length;
-            const browserGate = (source.match(/VITE_EVENT_OPERATING_SPINE_ENABLED: "true"/g) || []).length;
+            const browserGate = (vercelSource.match(/VITE_EVENT_OPERATING_SPINE_ENABLED: "true"/g) || []).length;
             if (scopedTenant !== 1 || browserGate !== 1) {
               throw new Error("The deployed workflow does not bind the tenant-scoped Event and Commercial Change runtime.");
             }
-          ' "${RUNNER_TEMP}/deployed-firebase-workflow.yml"
+          ' "${RUNNER_TEMP}/deployed-firebase-workflow.yml" "${RUNNER_TEMP}/deployed-vercel-workflow.yml"
           gh run view "${FIREBASE_DEPLOY_RUN_ID}" \
             --json conclusion,event,headSha,workflowName,displayTitle \
             > "${RUNNER_TEMP}/firebase-deploy.json"
+          gh run view "${VERCEL_DEPLOY_RUN_ID}" \
+            --json conclusion,event,headSha,workflowName,displayTitle \
+            > "${RUNNER_TEMP}/vercel-deploy.json"
           node --input-type=module -e '
             import fs from "node:fs";
-            const evidence = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
-            const release = process.env.DEPLOYED_RELEASE_SHA;
-            const valid = evidence.conclusion === "success"
-              && evidence.event === "workflow_dispatch"
-              && evidence.headSha === release
-              && evidence.workflowName === "Deploy Firebase Production"
-              && evidence.displayTitle.includes(`/ragnakok-operations/firebase-all/${release}/`);
-            if (!valid) throw new Error("The supplied run is not the successful ragnakok-operations Firebase all-scope deployment for this release.");
-          ' "${RUNNER_TEMP}/firebase-deploy.json"
+            const firebase = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+            const vercel = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
+            const backendRelease = process.env.DEPLOYED_RELEASE_SHA;
+            const browserRelease = process.env.BROWSER_RELEASE_SHA;
+            const firebaseScope = ["backend", "all"].some((scope) =>
+              firebase.displayTitle.includes(`/ragnakok-operations/firebase-${scope}/${backendRelease}/`)
+            );
+            const firebaseValid = firebase.conclusion === "success"
+              && firebase.event === "workflow_dispatch"
+              && firebase.headSha === backendRelease
+              && firebase.workflowName === "Deploy Firebase Production"
+              && firebaseScope;
+            if (!firebaseValid) throw new Error("The supplied Firebase run is not a successful ragnakok-operations backend deployment for this release.");
+            const vercelValid = vercel.conclusion === "success"
+              && vercel.event === "workflow_dispatch"
+              && vercel.headSha === browserRelease
+              && vercel.workflowName === "Deploy Vercel Production"
+              && vercel.displayTitle.includes(`/safe-off/vercel/${browserRelease}/`);
+            if (!vercelValid) throw new Error("The supplied Vercel run is not the successful safe-off public-browser deployment for this release.");
+          ' "${RUNNER_TEMP}/firebase-deploy.json" "${RUNNER_TEMP}/vercel-deploy.json"
 
       - name: Setup Node
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
@@ -140,6 +169,8 @@ jobs:
           WORKFLOW_SHA: ${{ github.sha }}
           DEPLOYED_RELEASE_SHA: ${{ inputs.deployed_release_sha }}
           FIREBASE_DEPLOY_RUN_ID: ${{ inputs.firebase_deploy_run_id }}
+          BROWSER_RELEASE_SHA: ${{ inputs.browser_release_sha }}
+          VERCEL_DEPLOY_RUN_ID: ${{ inputs.vercel_deploy_run_id }}
         run: |
           {
             echo "### Event and Commercial Change tenant state verified"
@@ -148,4 +179,6 @@ jobs:
             echo "- Operator workflow SHA: ${WORKFLOW_SHA}"
             echo "- Deployed release SHA: ${DEPLOYED_RELEASE_SHA}"
             echo "- Firebase deploy run: ${FIREBASE_DEPLOY_RUN_ID}"
+            echo "- Browser release SHA: ${BROWSER_RELEASE_SHA}"
+            echo "- Vercel deploy run: ${VERCEL_DEPLOY_RUN_ID}"
           } >> "${GITHUB_STEP_SUMMARY}"

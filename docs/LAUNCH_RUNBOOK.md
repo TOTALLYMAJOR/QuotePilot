@@ -1,14 +1,16 @@
 # Launch Runbook
 
-Last updated: 2026-09-09 18:17:25 CDT
+Last updated: 2026-09-10 20:25:10 CDT
 
 ## RagnaKoK complete-operations activation
 
 For the exact `mm05366-sandbox` founder-pilot tenant, deploy Firebase with the
-`ragnakok-operations` profile and `firebase_scope=all`. After the workflow
-proves the tagged release, exact-main CI, runtime configuration, complete
-Function inventory, and provider state, dispatch these protected workflows
-against that same release SHA and Firebase run ID:
+`ragnakok-operations` profile and `firebase_scope=backend` or `all`, and deploy
+the Event Spine-enabled browser through the protected safe-off Vercel profile.
+After those workflows prove the tagged releases, exact-main CI, runtime
+configuration, complete Function inventory, public browser gate, and provider
+state, dispatch these protected workflows against the exact Firebase and
+Vercel release SHAs and run IDs:
 
 1. **Set Event and Commercial Tenant** with the exact true-state confirmation.
 2. **Set Operational Staffing Tenant** with the exact true-state confirmation.
