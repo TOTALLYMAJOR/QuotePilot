@@ -1,6 +1,6 @@
 # Version Control Playbook
 
-Last updated: 2026-09-10 17:15:07 CDT
+Last updated: 2026-09-10 20:25:10 CDT
 
 ## Goals
 - Keep `main` stable and deployable.
@@ -112,6 +112,12 @@ The latest target-specific deployment and tenant-population receipts belong in
 `PROJECT_STATUS.md` and historical outcomes in `CHANGELOG.md`; this playbook
 retains the process contract and must not become a competing current-state
 ledger.
+
+Tenant authority activation may bind separate tagged Firebase backend and
+Vercel browser releases when those are the current deployed surfaces. The
+protected operator must verify both exact workflow receipts, release profiles,
+and compiled/runtime gates before changing the tenant setting; an older
+all-surface receipt cannot stand in for a newer backend deployment.
 
 1. Create `release/<version>` from `main`.
 2. Finalize `CHANGELOG.md` and `PROJECT_STATUS.md`.

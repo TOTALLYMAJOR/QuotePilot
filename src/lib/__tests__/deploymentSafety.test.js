@@ -475,6 +475,20 @@ describe("direct production deployment safety", () => {
     expect(source).not.toContain("secrets.FIREBASE_TOKEN");
   });
 
+  test("binds Event and Commercial activation to exact Firebase backend and Vercel browser receipts", () => {
+    const source = fs.readFileSync(EVENT_COMMERCIAL_TENANT_WORKFLOW, "utf8");
+    expect(source).toContain("BROWSER_RELEASE_SHA: ${{ inputs.browser_release_sha }}");
+    expect(source).toContain("VERCEL_DEPLOY_RUN_ID: ${{ inputs.vercel_deploy_run_id }}");
+    expect(source).toContain('git tag --points-at "${BROWSER_RELEASE_SHA}"');
+    expect(source).toContain('firebase.workflowName === "Deploy Firebase Production"');
+    expect(source).toContain('["backend", "all"]');
+    expect(source).toContain('/ragnakok-operations/firebase-${scope}/${backendRelease}/');
+    expect(source).toContain('vercel.workflowName === "Deploy Vercel Production"');
+    expect(source).toContain('/safe-off/vercel/${browserRelease}/');
+    expect(source).toContain('git show "${BROWSER_RELEASE_SHA}:.github/workflows/deploy-vercel-production.yml"');
+    expect(source).toContain('VITE_EVENT_OPERATING_SPINE_ENABLED: "true"');
+  });
+
   test("keeps one canonical deploy command per production target", () => {
     const rootPackage = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8"));
     const functionsPackage = JSON.parse(
