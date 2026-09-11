@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-09-10 17:15:07 CDT
+Last updated: 2026-09-10 21:00:49 CDT
 
 ## Current evidence boundary
 
@@ -13,7 +13,9 @@ evidence receipts and must not be described as one artifact.
 | Public Vercel edge | `v0.18.2`, exact SHA `3fb1443bb6e394133340ede3716548c92b24beea`, exact-main CI `34530609347`, production workflow `34532297958`, immutable deployment `quoteflow-c8t2j8jk0-mbmapps.vercel.app` | The protected workflow verified `https://quotepilot.mbmapps.com`, and an independent staff-portrait request returned HTTP 200 `image/png`. Authenticated role journeys and human acceptance remain open. |
 | Firebase Functions | `v0.18.1`, exact SHA `8bada8d16300a9f897df5f7a640e07b4830ab7ce`, CI `34430375712`, production deployment `34431964494` | Provider readback found 128 active Functions on the `ragnakok-operations` profile. This does not prove browser reachability or operator success. |
 | Firebase Hosting fallback | `v0.16.3` static release | It is an origin/fallback, not the current public edge or backend version. |
-| Repository `origin/main` | Contains the v0.18.2 release source plus protected PR `#137` customer-claim provenance and PR `#138` receipt-safe staff-retry corrections | Repository state is not runtime state; the two post-release corrections affect the privileged population script, not the deployed browser runtime. |
+| Production tenant authority | Protected workflow `34551712371` on main merge `2f4246846496f066e909d16fb46886cd0cc193fc` verified the exact current Firebase backend and Vercel browser receipts, then read back both `commercialChangeAuthorityEnabled` and `eventOperatingSpineEnabled` as `true` for `mm05366-sandbox` | Both fields were already true at the verified operation, so the run rebound the activation to current split-surface evidence without changing tenant data. It did not execute a commercial amendment, event command, provider send, payment, or automatic transition. |
+| Isolated staging Event/Commercial profile | Exact SHA `2f5d123d9ba06153823def6f44b3f5ff89183023`, CI `34420973414`, Firebase Hosting version `31a0bcbf39d65ec2`, profile `staging-event-operating-spine` | The deployment command recorded a partial receipt after its post-deploy Functions listing failed. Independent recovery readback verified the exact live Hosting version and manifest plus 128 active Functions with both runtime gates true. A bounded transaction then changed only the two `mm05366-sandbox` tenant fields from false to true and read them back at `2026-09-11T01:59:59.609Z`. |
+| Repository `origin/main` | Contains the v0.18.2 release source, protected PR `#137` customer-claim provenance, PR `#138` receipt-safe staff-retry corrections, and PR `#141` split-receipt activation correction | Repository state is not runtime state; production and staging remain separately evidenced surfaces. |
 
 The first production Inventory request exposed an App Check rollout mismatch:
 the browser had no reviewed provider registration while the callable enforced a
@@ -50,8 +52,10 @@ and PR `#138` made complete receipt-backed fixture staff pairs replay-safe.
   16 quotes, eight Staffing plans, four workflow definitions, six workflow
   instances, and six event-operating ledgers.
 - Both targets read back current catalog-pricing confirmation and enabled
-  Inventory and operational Staffing tenant settings. A post-apply dry run in
-  each target reported zero event quotes left to create.
+  Inventory and operational Staffing tenant settings. Commercial Change and
+  Event Spine tenant settings are now also enabled for the exact founder-pilot
+  tenant in both targets. A post-apply dry run in each target reported zero
+  event quotes left to create.
 - Twenty generated staff portraits are published under
   `/fixtures/ragnakok-staff/`; the fixture contributes eight Offers, eight
   add-ons, five rentals, eight Event Templates, four Configuration Rules, 20
@@ -99,8 +103,15 @@ BEO currentness.
   acceptance, and founder acceptance are not recorded for v0.18.2.
 - App Check hard enforcement remains blocked until reviewed browser provider
   registration and hosted token evidence exist.
-- Commercial Change and Event Spine mutation gates remain independent and off;
-  neither the Vercel release nor either fixture population activated them.
+- Commercial Change and Event Spine are enabled only for the exact
+  `mm05366-sandbox` tenant. Their gates expose governed, role-checked commands;
+  activation itself did not amend a quote, advance an event, send a message,
+  charge a payment, or establish operator acceptance.
+- The isolated staging candidate's original receipt remains `partial` because
+  the deploy process failed during its post-deploy Functions listing. Exact
+  Hosting and Functions provider state was recovered through independent
+  readback before the tenant transaction, but the original artifact was not
+  rewritten as a completed receipt.
 - Provider delivery, recipient behavior, payment settlement, usage, revenue,
   retention, and business outcomes remain separate and unverified where no
   corresponding receipt exists.
@@ -109,11 +120,12 @@ BEO currentness.
 
 Complete an authenticated `mm05366-sandbox` administrator journey on v0.18.2
 across Living Opportunity, Quote administration, Operations, Inventory,
-Library pricing review, and exact readback. The receipt must identify the source
-SHA and deployment, exercise role and cross-tenant denial, show the Inventory
-App Check outcome, and keep provider, human, usage, and commercial evidence
-separate. No further fixture population or tenant-setting mutation is
-authorized by this document.
+Library pricing review, one governed Commercial Change simulation/authorization
+path, one explicit Event Spine command, and exact readback. The receipt must
+identify the source SHA and deployment, exercise role and cross-tenant denial,
+show the Inventory App Check outcome, and keep provider, human, usage, and
+commercial evidence separate. No further fixture population or tenant-setting
+mutation is authorized by this document.
 
 Historical release narrative belongs in [`CHANGELOG.md`](CHANGELOG.md). Open
 work belongs in [`DEV_TASKS.md`](DEV_TASKS.md), and complete source capability
