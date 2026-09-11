@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-09-10 20:25:10 CDT
+Last updated: 2026-09-10 21:00:49 CDT
 
 All notable project changes are documented in this file.
 
@@ -11,6 +11,23 @@ All notable project changes are documented in this file.
   browser receipt. This supports the intentionally split production surfaces
   without weakening the tenant, tag, workflow, profile, or provider-readback
   checks and without treating an older all-surface deployment as current.
+- Protected production workflow `34551712371` verified those exact split
+  receipts and read back both Commercial Change and Event Spine tenant settings
+  as true for the sole approved founder-pilot organization
+  `mm05366-sandbox`. The values were already true, so the successful run changed
+  no tenant data and instead established the current evidence binding.
+- Deploy the isolated staging `staging-event-operating-spine` profile at exact
+  SHA `2f5d123d9ba06153823def6f44b3f5ff89183023` and CI `34420973414`. The
+  deploy process published Firebase Hosting version `31a0bcbf39d65ec2` but
+  recorded a partial receipt after its Functions-list readback failed.
+  Independent recovery readback verified that exact live Hosting version, the
+  release manifest, and all 128 active Functions with both runtime gates true;
+  a bounded transaction then changed only the two exact staging-tenant fields
+  from false to true and verified them at `2026-09-11T01:59:59.609Z`.
+- Keep outbound email, buyer access, Revenue Autopilot, Revenue Autopilot sends,
+  and automatic Event transitions unchanged. Gate activation alone is not an
+  amendment, event mutation, provider outcome, payment, or human-acceptance
+  receipt.
 
 ## v0.18.2 public release and operating-twin population - 2026-09-10
 
