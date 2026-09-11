@@ -324,7 +324,7 @@ test("honors Calendar and Reporting capability gates across navigation and direc
   await page.goto("/app");
   const primaryNavigation = page.getByRole("navigation", { name: "Primary workspace" });
   await expect(primaryNavigation).toBeVisible();
-  await expect(primaryNavigation.getByRole("button", { name: "Operations", exact: true })).toHaveCount(0);
+  await expect(primaryNavigation.getByRole("link", { name: "Operations", exact: true })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Open in Calendar", exact: true })).toHaveCount(0);
 
   await page.goto("/app/quotes/operations-event-a");
@@ -378,19 +378,19 @@ test("keeps daily Operations concise and preserves secondary tool reachability",
   await page.goto("/app/operations");
 
   const primary = page.getByRole("navigation", { name: "Primary workspace" });
-  await expect(primary.getByRole("button")).toHaveText([
+  await expect(primary.getByRole("link")).toHaveText([
     "Now",
     "Opportunities",
     "Operations",
     "Clients",
     "Library"
   ]);
-  const primaryOperations = primary.getByRole("button", { name: "Operations", exact: true });
+  const primaryOperations = primary.getByRole("link", { name: "Operations", exact: true });
   await expect(primaryOperations).toHaveAttribute("aria-current", "page");
   await expect(primaryOperations).not.toHaveAttribute("aria-haspopup", "menu");
 
   const header = page.locator("header.site-header");
-  await expect(header.getByRole("button", { name: "Operations", exact: true })).toHaveCount(1);
+  await expect(header.getByRole("button", { name: "Operations", exact: true })).toHaveCount(0);
   await expect(page.getByRole("menu", { name: "Operations", exact: true })).toHaveCount(0);
 
   await header.getByRole("button", { name: "Workspace and tools", exact: true }).click();
@@ -509,15 +509,15 @@ test("keeps the Schedule compatibility route on the same Calendar capability", a
 test("promotes Operations into the five primary destinations without a duplicate menu", async ({ page }) => {
   await page.goto("/app/operations");
   const primary = page.getByRole("navigation", { name: "Primary workspace" });
-  await expect(primary.getByRole("button")).toHaveCount(5);
-  await expect(primary.getByRole("button").allTextContents()).resolves.toEqual([
+  await expect(primary.getByRole("link")).toHaveCount(5);
+  await expect(primary.getByRole("link").allTextContents()).resolves.toEqual([
     "Now",
     "Opportunities",
     "Operations",
     "Clients",
     "Library"
   ]);
-  await expect(primary.getByRole("button", { name: "Operations", exact: true }))
+  await expect(primary.getByRole("link", { name: "Operations", exact: true }))
     .toHaveAttribute("aria-current", "page");
   await expect(page.getByRole("menu", { name: "Operations", exact: true })).toHaveCount(0);
 });

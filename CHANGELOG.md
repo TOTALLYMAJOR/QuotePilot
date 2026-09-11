@@ -1,11 +1,44 @@
 # Changelog
 
-Last updated: 2026-09-10 21:00:49 CDT
+Last updated: 2026-09-10 22:06:26 CDT
 
 All notable project changes are documented in this file.
 
-## Unreleased — Event and Commercial activation receipt correction
+## v0.18.3 release candidate — current-head audit remediation
 
+- Reconcile the September 10 audit candidate onto a release branch cut from
+  current `origin/main` at `4b46518677969c621293e55a15d61dbd0dace2a4`,
+  while preserving the Ambient staffing fixture-expiry, trusted population
+  claim provenance, receipt-safe staff retry corrections, split-receipt
+  activation correction, and activation evidence already merged there.
+  Inventory command confirmation now reaches the same fixed point whether the
+  exact current projection or receipt arrives first, while cached, pending,
+  and mismatched projections remain unconfirmed.
+- Preserve the canonical trusted quote-projection provenance for derived
+  customer-email claims and the fail-closed handling of incomplete or
+  non-fixture staff pairs. Complete receipt-backed synthetic staff pairs remain
+  replay-safe after an interrupted population.
+- Reuse shared modal focus/background containment for Client Preview, make
+  repeated blocker review focusable under StrictMode, schedule anniversary
+  Attention against the tenant calendar across daylight-saving boundaries,
+  and give true primary destinations native link behavior without bypassing
+  existing route guards.
+- Generate optional stable Inventory references with the existing safe request
+  identity primitive, rotate them only after confirmed completion, disclose
+  source detail progressively, and explain the existing 200-identity boundary
+  without changing server limits or stock/cost authority.
+- Correct the historical candidate's button-only primary-navigation CSS
+  selectors so native anchors retain the established desktop rail and mobile
+  bottom-bar geometry. Local browser evidence covers 390, 768, and 1440 widths
+  plus a modified-click new tab that leaves the source dirty draft intact.
+- Pin the active temporary bundle exception to the literal full-profile
+  remediation graphs: 3,503,139 compatibility bytes and 4,758,294 Ambient
+  bytes. This adds no discretionary headroom and leaves both largest-chunk
+  ceilings unchanged.
+- This remains a source/local release candidate. Pricing-preview v2 parity,
+  durable incomplete working drafts, exact PR/main CI, immutable candidate
+  UAT, semantic tagging, production deployment, hosted verification, and human
+  acceptance remain separate and open.
 - Bind the protected founder-tenant activation to the exact current
   `ragnakok-operations` Firebase backend receipt and the exact safe-off Vercel
   browser receipt. This supports the intentionally split production surfaces
@@ -54,9 +87,7 @@ All notable project changes are documented in this file.
   quote-projection provenance for its derived customer-email claim while
   retaining separate synthetic fixture provenance on every populated record.
   The loader persists only the authority-owned claim patch. Quote claim
-  validation remains unchanged and fail-closed. Complete receipt-backed
-  synthetic staff pairs are now replay-safe after an interrupted population;
-  incomplete or non-fixture pairs still fail closed.
+  validation remains unchanged and fail-closed.
 
 ## Ambient staffing release-fixture lifecycle - 2026-09-10
 

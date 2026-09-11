@@ -1,6 +1,36 @@
 # Project Status
 
-Last updated: 2026-09-10 21:00:49 CDT
+Last updated: 2026-09-10 22:06:26 CDT
+
+## Audit remediation — v0.18.3 release candidate
+
+An isolated `release/v0.18.3` branch based on current `origin/main`
+`4b46518677969c621293e55a15d61dbd0dace2a4` reconciles Inventory
+receipt/projection ordering, modal containment, repeatable blocker focus,
+tenant-calendar Attention refresh, native primary destinations, and bounded
+Inventory entry behavior. It changes no Functions, Firestore rules, tenant
+settings, payment behavior, quote-revision authority, or production data.
+
+The current-main reconciliation passes the local core lane: 487 unit files,
+5,699 tests, compatibility build, capability/field-state/doc governance,
+bundle budget, and 136 Truthloop tests. The original remediation qualification
+also passed Firestore rules 93/93, the affected feature-enabled browser matrix
+17/17, and the standalone Proposal Composer profile 14/14. `check:env` remains
+blocked by six absent local Firebase browser configuration variables; no local
+secret values were copied or inspected. Exact release-branch CI, hosted,
+deployment, assistive-technology, and human evidence remain separate.
+Pricing-preview v2 parity and durable incomplete working drafts are not
+repaired by this candidate.
+
+The exact CI-flag bundle graphs measure 3,503,139 / 385,181 bytes for
+compatibility and 4,758,294 / 444,957 bytes for Ambient. Their active temporary
+aggregate ceilings are pinned to those literal values with no discretionary
+headroom; the existing largest-chunk ceilings remain unchanged.
+
+The Ambient accessibility fixture-expiry correction and its changelog entry
+are already present on current main and remain unchanged. The previous
+captured-base changelog collision is therefore resolved in this release
+candidate.
 
 ## Current evidence boundary
 
@@ -15,7 +45,8 @@ evidence receipts and must not be described as one artifact.
 | Firebase Hosting fallback | `v0.16.3` static release | It is an origin/fallback, not the current public edge or backend version. |
 | Production tenant authority | Protected workflow `34551712371` on main merge `2f4246846496f066e909d16fb46886cd0cc193fc` verified the exact current Firebase backend and Vercel browser receipts, then read back both `commercialChangeAuthorityEnabled` and `eventOperatingSpineEnabled` as `true` for `mm05366-sandbox` | Both fields were already true at the verified operation, so the run rebound the activation to current split-surface evidence without changing tenant data. It did not execute a commercial amendment, event command, provider send, payment, or automatic transition. |
 | Isolated staging Event/Commercial profile | Exact SHA `2f5d123d9ba06153823def6f44b3f5ff89183023`, CI `34420973414`, Firebase Hosting version `31a0bcbf39d65ec2`, profile `staging-event-operating-spine` | The deployment command recorded a partial receipt after its post-deploy Functions listing failed. Independent recovery readback verified the exact live Hosting version and manifest plus 128 active Functions with both runtime gates true. A bounded transaction then changed only the two `mm05366-sandbox` tenant fields from false to true and read them back at `2026-09-11T01:59:59.609Z`. |
-| Repository `origin/main` | Contains the v0.18.2 release source, protected PR `#137` customer-claim provenance, PR `#138` receipt-safe staff-retry corrections, and PR `#141` split-receipt activation correction | Repository state is not runtime state; production and staging remain separately evidenced surfaces. |
+| Repository `origin/main` | exact SHA `4b46518677969c621293e55a15d61dbd0dace2a4`, preserving the `v0.18.2` release receipts plus protected PR `#141` split-deployment activation correction and PR `#142` activation evidence | Repository state is not runtime state; production and staging remain separately evidenced surfaces. |
+| v0.18.3 release candidate | isolated `release/v0.18.3` based on `4b465186` | The remediation is current-main source/local evidence pending exact CI, candidate UAT, tag, and production promotion. |
 
 The first production Inventory request exposed an App Check rollout mismatch:
 the browser had no reviewed provider registration while the callable enforced a

@@ -494,15 +494,15 @@ test.describe("QuotePilot v0.16 Calm Four release acceptance", () => {
     await gotoWorkspace(page, "/app");
 
     const primary = page.getByRole("navigation", { name: "Primary workspace" });
-    await expect(primary.getByRole("button")).toHaveCount(5);
-    await expect(primary.getByRole("button").allTextContents()).resolves.toEqual([
+    await expect(primary.getByRole("link")).toHaveCount(5);
+    await expect(primary.getByRole("link").allTextContents()).resolves.toEqual([
       "Now",
       "Opportunities",
       "Operations",
       "Clients",
       "Library"
     ]);
-    await expect(primary.getByRole("button", { name: "Now", exact: true }))
+    await expect(primary.getByRole("link", { name: "Now", exact: true }))
       .toHaveAttribute("aria-current", "page");
     const now = page.locator(".ambient-now");
     await expect(now).toBeVisible({ timeout: 30_000 });
@@ -520,26 +520,26 @@ test.describe("QuotePilot v0.16 Calm Four release acceptance", () => {
     await expect(primary.locator('[data-ambient-utility="new-quote"]')).toHaveCount(0);
     await expectNewQuoteVisualIntegrity(page);
 
-    await primary.getByRole("button", { name: "Opportunities", exact: true }).click();
+    await primary.getByRole("link", { name: "Opportunities", exact: true }).click();
     await expect(page).toHaveURL(/\/app\/quotes$/u);
-    await expect(primary.getByRole("button", { name: "Opportunities", exact: true }))
+    await expect(primary.getByRole("link", { name: "Opportunities", exact: true }))
       .toHaveAttribute("aria-current", "page");
     await expectNewQuoteVisualIntegrity(page);
-    await primary.getByRole("button", { name: "Operations", exact: true }).click();
+    await primary.getByRole("link", { name: "Operations", exact: true }).click();
     await expect(page).toHaveURL(/\/app\/operations$/u);
-    await expect(primary.getByRole("button", { name: "Operations", exact: true }))
+    await expect(primary.getByRole("link", { name: "Operations", exact: true }))
       .toHaveAttribute("aria-current", "page");
     await expect(page.getByTestId("operations-calendar")).toBeVisible();
     await expectNewQuoteVisualIntegrity(page);
-    await primary.getByRole("button", { name: "Clients", exact: true }).click();
+    await primary.getByRole("link", { name: "Clients", exact: true }).click();
     await expect(page).toHaveURL(/\/app\/customers$/u);
     await expectNewQuoteVisualIntegrity(page);
-    await primary.getByRole("button", { name: "Library", exact: true }).click();
+    await primary.getByRole("link", { name: "Library", exact: true }).click();
     await expect(page).toHaveURL(/\/app\/catalog$/u);
     await expectNewQuoteVisualIntegrity(page);
     await page.goBack();
     await expect(page).toHaveURL(/\/app\/customers$/u);
-    await expect(primary.getByRole("button", { name: "Clients", exact: true }))
+    await expect(primary.getByRole("link", { name: "Clients", exact: true }))
       .toHaveAttribute("aria-current", "page");
     await page.goForward();
     await expect(page).toHaveURL(/\/app\/catalog$/u);
@@ -547,7 +547,7 @@ test.describe("QuotePilot v0.16 Calm Four release acceptance", () => {
 
     const header = page.locator(".site-header");
     await expect(header.getByRole("button", { name: "Search", exact: true })).toBeVisible();
-    await expect(header.getByRole("button", { name: "Operations", exact: true })).toHaveCount(1);
+    await expect(header.getByRole("button", { name: "Operations", exact: true })).toHaveCount(0);
     await expect(page.getByRole("menu", { name: "Operations", exact: true })).toHaveCount(0);
     const desktopToolsTrigger = header.getByRole("button", {
       name: "Workspace and tools",
@@ -608,10 +608,10 @@ test.describe("QuotePilot v0.16 Calm Four release acceptance", () => {
     await expectNewQuoteVisualIntegrity(page);
 
     await page.setViewportSize({ width: 390, height: 844 });
-    await primary.getByRole("button", { name: "Now", exact: true }).click();
+    await primary.getByRole("link", { name: "Now", exact: true }).click();
     await expect(page).toHaveURL(/\/app$/u);
     await expect(page.locator(".ambient-now")).toBeVisible({ timeout: 30_000 });
-    await expect(primary.getByRole("button")).toHaveCount(5);
+    await expect(primary.getByRole("link")).toHaveCount(5);
     await expectNoHorizontalOverflow(page);
     await captureV16Proof(page, "13-mobile-now.png");
     const mobileDestinations = [
@@ -622,7 +622,7 @@ test.describe("QuotePilot v0.16 Calm Four release acceptance", () => {
       ["Library", /\/app\/catalog$/u]
     ];
     for (const [label, expectedPath] of mobileDestinations) {
-      await primary.getByRole("button", { name: label, exact: true }).click();
+      await primary.getByRole("link", { name: label, exact: true }).click();
       await expect(page).toHaveURL(expectedPath);
       await expect(header.getByRole("button", {
         name: "Workspace and tools",
@@ -631,7 +631,7 @@ test.describe("QuotePilot v0.16 Calm Four release acceptance", () => {
       await expectNewQuoteVisualIntegrity(page);
       await expectNoHorizontalOverflow(page);
     }
-    await primary.getByRole("button", { name: "Now", exact: true }).click();
+    await primary.getByRole("link", { name: "Now", exact: true }).click();
     await expect(page).toHaveURL(/\/app$/u);
     const toolsTrigger = header.getByRole("button", {
       name: "Workspace and tools",
@@ -691,6 +691,30 @@ test.describe("QuotePilot v0.16 Calm Four release acceptance", () => {
     await page.setViewportSize({ width: 1440, height: 1000 });
     await gotoWorkspace(page, "/app/quotes");
     await expectNewQuoteVisualIntegrity(page);
+  });
+
+  test("primary destinations preserve native modified-click navigation without abandoning a dirty quote draft", async ({ page, context }) => {
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await gotoWorkspace(page, "/app/quotes/new");
+
+    await page.getByRole("button", { name: "Change Event name" }).click();
+    await page.getByLabel("Event name").fill("Native link draft remains here");
+    await page.getByRole("button", { name: "Apply change" }).click();
+    const eventName = page.getByRole("button", { name: "Change Event name" });
+    await expect(eventName).toContainText("Native link draft remains here");
+    const primary = page.getByRole("navigation", { name: "Primary workspace" });
+    const operations = primary.getByRole("link", { name: "Operations", exact: true });
+    await expect(operations).toHaveAttribute("href", "/app/operations");
+
+    const newPagePromise = context.waitForEvent("page");
+    await operations.click({ modifiers: ["Control"] });
+    const newPage = await newPagePromise;
+    await newPage.waitForLoadState("domcontentloaded");
+
+    await expect(newPage).toHaveURL(/\/app\/operations$/u);
+    await expect(page).toHaveURL(/\/app\/quotes\/new$/u);
+    await expect(eventName).toContainText("Native link draft remains here");
+    await newPage.close();
   });
 
   test("2. Opportunities index preserves ordering, object identity, history context, and a mobile landing", async ({ page }) => {
@@ -993,7 +1017,7 @@ test.describe("QuotePilot v0.16 Calm Four release acceptance", () => {
 
     await test.step("Calm Four navigation", async () => {
       const { before, panel, style } = await reset();
-      const now = page.locator('button[data-ambient-orientation="now"]');
+      const now = page.locator('a[data-ambient-orientation="now"]');
       // The modal correctly blocks pointer interaction with the background.
       // Programmatic activation represents an app/navigation attempt reaching
       // the shared router while the drawer is dirty.
@@ -1134,7 +1158,7 @@ test.describe("QuotePilot v0.16 Calm Four release acceptance", () => {
     await expect(page.locator(`[data-quote-id="${RIVERA_QUOTE_ID}"]`)).toContainText("Rivera Wedding");
 
     await page.getByRole("navigation", { name: "Primary workspace" })
-      .getByRole("button", { name: "Library", exact: true }).click();
+      .getByRole("link", { name: "Library", exact: true }).click();
     await expect(library).toHaveAttribute("data-library-context", "standalone");
     await expect(library).not.toContainText("Working with Rivera Wedding");
 
@@ -1143,9 +1167,10 @@ test.describe("QuotePilot v0.16 Calm Four release acceptance", () => {
     await reopened.panel.getByRole("button", { name: "Open full Library" }).click();
     await expect(library).toHaveAttribute("data-library-context", "opportunity");
     await page.getByRole("navigation", { name: "Primary workspace" })
-      .getByRole("button", { name: "Now", exact: true }).click();
-    await page.getByRole("button", { name: "Operations", exact: true }).click();
-    await page.getByRole("button", { name: "Library", exact: true }).click();
+      .getByRole("link", { name: "Now", exact: true }).click();
+    const primary = page.getByRole("navigation", { name: "Primary workspace" });
+    await primary.getByRole("link", { name: "Operations", exact: true }).click();
+    await primary.getByRole("link", { name: "Library", exact: true }).click();
     await expect(library).toHaveAttribute("data-library-context", "standalone");
     await expect(library).not.toContainText("Working with Rivera Wedding");
   });
@@ -1190,7 +1215,7 @@ test.describe("QuotePilot v0.16 Calm Four release acceptance", () => {
     }
 
     await page.getByRole("navigation", { name: "Primary workspace" })
-      .getByRole("button", { name: "Clients", exact: true }).click();
+      .getByRole("link", { name: "Clients", exact: true }).click();
     await expect(page).toHaveURL(/\/app\/customers$/u);
     await clients.getByPlaceholder("Search clients").fill("lena@example.test");
     await clients.getByRole("button", { name: "Search", exact: true }).click();
@@ -1204,9 +1229,9 @@ test.describe("QuotePilot v0.16 Calm Four release acceptance", () => {
       localStorage.setItem(quotesKey, "[]");
     }, { quotesKey: QUOTES_KEY });
     const primary = page.getByRole("navigation", { name: "Primary workspace" });
-    await primary.getByRole("button", { name: "Now", exact: true }).click();
+    await primary.getByRole("link", { name: "Now", exact: true }).click();
     await expect(page).toHaveURL(/\/app$/u);
-    await primary.getByRole("button", { name: "Clients", exact: true }).click();
+    await primary.getByRole("link", { name: "Clients", exact: true }).click();
     await expect(page).toHaveURL(/\/app\/customers$/u);
     await expect(clients).toHaveAttribute("data-ambient-clients-state", "empty");
     await expect(clients.getByRole("heading", { name: "Your first client story starts here" })).toBeVisible();
@@ -1238,8 +1263,8 @@ test.describe("QuotePilot v0.16 Calm Four release acceptance", () => {
       await gotoWorkspace(page, "/app/quotes");
       await expect(page.locator(".ambient-opportunities")).toBeVisible({ timeout: 30_000 });
       await expectNoHorizontalOverflow(page);
-      const navTargets = await page.getByRole("navigation", { name: "Primary workspace" })
-        .getByRole("button")
+    const navTargets = await page.getByRole("navigation", { name: "Primary workspace" })
+        .getByRole("link")
         .evaluateAll((buttons) => buttons.filter((button) => {
           const style = getComputedStyle(button);
           const rect = button.getBoundingClientRect();

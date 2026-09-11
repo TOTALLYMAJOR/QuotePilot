@@ -13402,7 +13402,7 @@ hr {
     min-height: 0;
   }
 
-  .app-shell-ambient-navigation .site-header .ambient-primary-navigation > button {
+  .app-shell-ambient-navigation .site-header .ambient-primary-navigation > .ambient-orientation-action {
     width: 100%;
   }
 
@@ -13706,7 +13706,7 @@ hr {
 
   .app-shell-neutral .site-header .header-actions > button,
   .app-shell-neutral .site-header .ambient-primary-navigation,
-  .app-shell-neutral .site-header .ambient-primary-navigation > button,
+  .app-shell-neutral .site-header .ambient-primary-navigation > .ambient-orientation-action,
   .app-shell-neutral .site-header .header-menu,
   .app-shell-neutral .site-header .header-menu-trigger {
     width: 72px;
@@ -14057,14 +14057,14 @@ hr {
     gap: 0.35rem;
   }
 
-  .app-shell-neutral.app-shell-ambient-navigation .site-header .ambient-primary-navigation > button,
+  .app-shell-neutral.app-shell-ambient-navigation .site-header .ambient-primary-navigation > .ambient-orientation-action,
   .app-shell-neutral.app-shell-ambient-navigation .site-header .ambient-secondary-search,
   .app-shell-neutral.app-shell-ambient-navigation .site-header .header-menu,
   .app-shell-neutral.app-shell-ambient-navigation .site-header .header-menu-trigger {
     width: 100%;
   }
 
-  .app-shell-neutral.app-shell-ambient-navigation .site-header .ambient-primary-navigation > button,
+  .app-shell-neutral.app-shell-ambient-navigation .site-header .ambient-primary-navigation > .ambient-orientation-action,
   .app-shell-neutral.app-shell-ambient-navigation .site-header .ambient-secondary-search,
   .app-shell-neutral.app-shell-ambient-navigation .site-header .header-menu-trigger {
     min-height: 54px;
@@ -14082,7 +14082,7 @@ hr {
     max-width: none;
   }
 
-  .app-shell-neutral.app-shell-ambient-navigation .site-header .ambient-primary-navigation > button.nav-view-active {
+  .app-shell-neutral.app-shell-ambient-navigation .site-header .ambient-primary-navigation > .ambient-orientation-action.nav-view-active {
     background: linear-gradient(90deg, #7f5a20, #6f4d1d);
     color: #ffffff;
     box-shadow: inset 0 0 0 1px rgb(218 163 67 / 16%);
@@ -14363,7 +14363,7 @@ hr {
     box-shadow: 0 -8px 24px rgb(18 20 23 / 12%);
   }
 
-  .app-shell-ambient-navigation .site-header .ambient-primary-navigation > button {
+  .app-shell-ambient-navigation .site-header .ambient-primary-navigation > .ambient-orientation-action {
     width: 100%;
     min-width: 0;
     min-height: 52px;
@@ -14381,13 +14381,13 @@ hr {
     line-height: 1.05;
   }
 
-  .app-shell-ambient-navigation .site-header .ambient-primary-navigation > button.nav-view-active {
+  .app-shell-ambient-navigation .site-header .ambient-primary-navigation > .ambient-orientation-action.nav-view-active {
     background: #272b30;
     color: #ffffff;
     box-shadow: inset 0 2px 0 #b7842c;
   }
 
-  .app-shell-ambient-navigation .site-header .ambient-primary-navigation > button:focus-visible {
+  .app-shell-ambient-navigation .site-header .ambient-primary-navigation > .ambient-orientation-action:focus-visible {
     outline: 2px solid #d6a13d;
     outline-offset: -3px;
   }

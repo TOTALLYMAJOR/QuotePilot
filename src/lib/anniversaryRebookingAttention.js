@@ -117,6 +117,31 @@ export function resolveAnniversaryAttentionCalendar({
   });
 }
 
+// Calendar-day refresh uses the same effective zone as the attention model.
+// Search for the next observed date rather than adding 24 hours: DST days,
+// half-hour offsets, and zones that skip local midnight are all supported.
+export function nextAnniversaryAttentionBoundaryMs({
+  instant = new Date(),
+  tenantTimeZone = ""
+} = {}) {
+  const parsed = instant instanceof Date ? instant : new Date(instant);
+  const nowMs = parsed.getTime();
+  if (!Number.isFinite(nowMs)) throw new TypeError("A valid refresh instant is required.");
+  const calendar = resolveAnniversaryAttentionCalendar({ instant: parsed, tenantTimeZone });
+  let low = nowMs;
+  let high = nowMs + 48 * 60 * 60 * 1000;
+  if (!Number.isFinite(new Date(high).getTime())
+    || dateInTimeZone(new Date(high), calendar.timeZone) === calendar.date) {
+    throw new RangeError("The next attention calendar boundary is unavailable.");
+  }
+  while (high - low > 1) {
+    const middle = low + Math.floor((high - low) / 2);
+    if (dateInTimeZone(new Date(middle), calendar.timeZone) === calendar.date) low = middle;
+    else high = middle;
+  }
+  return high;
+}
+
 function safeLimit(value) {
   const parsed = Number(value);
   if (!Number.isFinite(parsed)) return ANNIVERSARY_REBOOKING_ATTENTION_LIMIT;

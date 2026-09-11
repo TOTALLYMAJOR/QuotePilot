@@ -6,6 +6,7 @@ import {
 } from "../lib/quoteWorkflow";
 import {
   mergeAnniversaryRebookingAttention,
+  nextAnniversaryAttentionBoundaryMs,
   resolveAnniversaryAttentionCalendar
 } from "../lib/anniversaryRebookingAttention";
 
@@ -361,12 +362,14 @@ export function useCommercialWorkspaceSnapshot({
     let midnightTimer = 0;
     const scheduleMidnightRefresh = () => {
       const now = new Date();
-      const nextMidnight = new Date(now);
-      nextMidnight.setHours(24, 0, 0, 100);
+      const nextBoundaryMs = nextAnniversaryAttentionBoundaryMs({
+        instant: now,
+        tenantTimeZone
+      });
       midnightTimer = window.setTimeout(() => {
         refresh({ force: true });
         scheduleMidnightRefresh();
-      }, Math.max(1_000, nextMidnight.getTime() - now.getTime()));
+      }, Math.max(1_000, nextBoundaryMs + 100 - now.getTime()));
     };
     scheduleMidnightRefresh();
     window.addEventListener("focus", requestRefresh);
@@ -378,7 +381,7 @@ export function useCommercialWorkspaceSnapshot({
       window.removeEventListener("storage", handleStorage);
       document.removeEventListener("visibilitychange", handleVisibility);
     };
-  }, [enabled, normalizedOrganizationId, refresh]);
+  }, [enabled, normalizedOrganizationId, refresh, tenantTimeZone]);
 
   return { ...state, refresh };
 }

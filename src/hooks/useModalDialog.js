@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { isolateModalBackground } from "../lib/modalBackgroundIsolation";
 
 export const MODAL_FOCUSABLE_SELECTOR = [
   "a[href]",
@@ -68,7 +69,8 @@ export function useModalDialog({
   canClose = true,
   onCloseBlocked,
   initialFocusRef = null,
-  returnFocusRef = null
+  returnFocusRef = null,
+  isolateBackground = false
 } = {}) {
   const dialogRef = useRef(null);
   const onRequestCloseRef = useRef(onRequestClose);
@@ -91,6 +93,11 @@ export function useModalDialog({
     activeModalTokens.push(modalToken);
     const returnTarget = resolveConfiguredReturnFocus(returnFocusRef);
     const releaseBodyScrollLock = acquireModalBodyScrollLock();
+    // Move focus before hiding the branch that contained the invoking control.
+    if (isolateBackground) dialog?.focus?.({ preventScroll: true });
+    const releaseBackground = isolateBackground
+      ? isolateModalBackground(dialog)
+      : () => {};
     const focusFrame = window.requestAnimationFrame(() => {
       if (activeModalTokens.at(-1) !== modalToken) return;
       const focusable = visibleFocusableElements(dialog);
@@ -142,6 +149,7 @@ export function useModalDialog({
       document.removeEventListener("keydown", handleKeyDown);
       const stackIndex = activeModalTokens.lastIndexOf(modalToken);
       if (stackIndex >= 0) activeModalTokens.splice(stackIndex, 1);
+      releaseBackground();
       releaseBodyScrollLock();
       window.requestAnimationFrame(() => {
         if (
@@ -151,7 +159,7 @@ export function useModalDialog({
         if (returnTarget?.isConnected) returnTarget.focus({ preventScroll: true });
       });
     };
-  }, [initialFocusRef, open, returnFocusRef]);
+  }, [initialFocusRef, isolateBackground, open, returnFocusRef]);
 
   return { dialogRef };
 }

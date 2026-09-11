@@ -1,9 +1,36 @@
 # User Manual
 
-Last updated: 2026-09-10 15:09:08 CDT
+Last updated: 2026-09-10 16:05:00 CDT
 
 ## Purpose
 This guide explains day-to-day usage of QuotePilot for staff users and admins.
+
+## Audit-remediation candidate behavior
+
+- In Inventory, **Reference (optional)** may be left blank for locations and
+  ingredients. QuotePilot generates a stable identity using the existing safe
+  request-ID primitive. During rejection, uncertainty, or receipt-only waiting,
+  retry/reconciliation retains that identity; a new generated ingredient
+  identity is prepared only after the current projection confirms completion.
+- Reaching the current 200-ingredient projection boundary disables new
+  ingredient identity creation and explains the limit. Existing current stock,
+  receiving, and cost actions remain independent and available when their own
+  gates permit them. Pagination does not increase this server policy.
+- Inventory connection and verification detail is available under disclosure.
+  A receipt alone, cached data, local pending writes, or a mismatched projection
+  never means the command is confirmed.
+- Primary workspace destinations support ordinary browser link behavior such
+  as copying or opening a destination in a new tab. A normal click still passes
+  through QuotePilot's existing dirty-draft and route guards. Contextual actions
+  and menus remain buttons.
+- Client Preview uses the same focus-contained modal behavior as other shared
+  dialogs. Escape closes it, Tab stays contained, and focus returns to the
+  invoking control. **Review blockers** can be activated repeatedly to focus
+  the same current readiness explanation.
+
+These behaviors are an isolated source/local candidate, not a deployed or
+human-accepted release. Browser preview pricing still has unresolved shared-v2
+parity, and incomplete working drafts are not yet durable across devices.
 
 ## Offers, templates, pricing, and rules
 
