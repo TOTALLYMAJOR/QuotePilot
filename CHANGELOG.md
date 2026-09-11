@@ -6,6 +6,11 @@ All notable project changes are documented in this file.
 
 ## Unreleased — Event and Commercial activation receipt correction
 
+- Correct the `staging-event-operating-spine` candidate envelope so enabling
+  Commercial Change and Event Spine preserves Staffing and Inventory and binds
+  all workflow authority to the exact RagnaKoK organization instead of
+  deploying an unscoped partial operational profile.
+
 - Correct the protected `ragnakok-operations` runtime profile so the server
   gates required by the already-enabled exact-tenant Commercial Change and
   Event Spine settings are actually true. The production materializer couples
