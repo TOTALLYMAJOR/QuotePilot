@@ -3,13 +3,14 @@ import {
   PORTAL_CONVERSATION_BODY_MAX_LENGTH,
   buildPortalConversationClientRequestId,
   loadQuotePortalConversation,
-  sendQuotePortalConversationMessage
+  readConversationMemory,
+  sendQuotePortalConversationMessage,
+  writeConversationMemory
 } from "../lib/portalConversationClient";
 import {
   isConversationSignalNewer,
   subscribeToConversationSignal
 } from "../lib/conversationSignalClient";
-import { readConversationMemory, writeConversationMemory } from "../lib/conversationMemoryCache";
 import { auth } from "../lib/firebase";
 
 const pendingConversationAttempts = new Map();
@@ -332,11 +333,6 @@ function conversationMessageFocusRecovery({ code, quoteId, messageId, reason, ne
   });
 }
 
-/**
- * Resolves an exact customer-message focus only against the canonical bodies
- * returned for the currently loaded quote thread. The result contains opaque
- * identity and semantic context only—never the message body or customer data.
- */
 export function buildConversationMessageFocusResolution({
   expectedQuoteId = "",
   loadedQuoteId = "",
@@ -745,12 +741,6 @@ function QuoteConversationPanelInstance({
     setStatus("");
   };
 
-  // A prefill request opens the panel and seeds the composer with starter
-  // text (e.g. "Question about Pricing: "). It is presentation-only sugar
-  // over the existing send path — the text lands in the ordinary message
-  // body, verbatim — and it must never disturb stronger state: an
-  // unresolved send attempt keeps its exact reconciliation body, and a
-  // draft the user already typed is never overwritten.
   useEffect(() => {
     const text = String(prefill?.text || "");
     if (!prefill?.id || !text) return;
