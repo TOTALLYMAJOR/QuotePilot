@@ -3,33 +3,21 @@ import { beforeEach, describe, expect, test, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   callable: vi.fn(),
   httpsCallable: vi.fn(),
-  cloudFunctions: { id: "functions" },
-  auth: { currentUser: { uid: "staff-1" } }
+  cloudFunctions: { id: "functions" }
 }));
 
 vi.mock("firebase/functions", () => ({ httpsCallable: mocks.httpsCallable }));
 vi.mock("../firebase", () => ({
-  auth: mocks.auth,
   cloudFunctions: mocks.cloudFunctions,
   firebaseReady: true
 }));
 
 import {
-  clearAllConversationMemory,
-  conversationMemoryPolicy,
   loadQuotePortalConversation,
-  readConversationMemory,
-  sendQuotePortalConversationMessage,
-  warmConversationMemory,
-  writeConversationMemory
+  sendQuotePortalConversationMessage
 } from "../portalConversationClient";
 
 const PORTAL_KEY = "portal-conversation-token-1234567890";
-const STAFF_ACCESS = {
-  accessMode: "staff",
-  organizationId: "org-a",
-  quoteId: "quote-a"
-};
 const RESPONSE = {
   ok: true,
   organizationId: "org-a",
@@ -39,29 +27,12 @@ const RESPONSE = {
   messages: [],
   limits: {}
 };
-const CACHED_RESULT = {
-  organizationId: "org-a",
-  quoteId: "quote-a",
-  portalIssuedAtISO: "2026-08-06T17:00:00.000Z",
-  readOnly: false,
-  readOnlyReason: "",
-  messages: [{
-    messageId: "message-1",
-    actorType: "customer",
-    actorName: "Jordan Customer",
-    body: "Hello",
-    createdAtISO: "2026-08-06T18:00:00.000Z"
-  }],
-  limits: {}
-};
 
 describe("portal conversation callable client", () => {
   beforeEach(() => {
-    clearAllConversationMemory();
     mocks.callable.mockReset();
     mocks.httpsCallable.mockReset();
     mocks.httpsCallable.mockReturnValue(mocks.callable);
-    mocks.auth.currentUser = { uid: "staff-1" };
   });
 
   test("loads customer history using only the bearer portal token", async () => {
@@ -82,86 +53,16 @@ describe("portal conversation callable client", () => {
 
   test("loads staff history with exact tenant and quote scope", async () => {
     mocks.callable.mockResolvedValue({ data: RESPONSE });
-    await loadQuotePortalConversation(STAFF_ACCESS);
-    expect(mocks.callable).toHaveBeenCalledWith(STAFF_ACCESS);
-  });
-
-  test("coalesces concurrent reads for the same authenticated conversation", async () => {
-    let release;
-    mocks.callable.mockImplementation(() => new Promise((resolve) => {
-      release = () => resolve({ data: RESPONSE });
-    }));
-
-    const first = loadQuotePortalConversation(STAFF_ACCESS);
-    const second = loadQuotePortalConversation({ ...STAFF_ACCESS });
-    expect(mocks.callable).toHaveBeenCalledTimes(1);
-
-    release();
-    await expect(Promise.all([first, second])).resolves.toHaveLength(2);
-
-    mocks.callable.mockResolvedValue({ data: RESPONSE });
-    await loadQuotePortalConversation(STAFF_ACCESS);
-    expect(mocks.callable).toHaveBeenCalledTimes(2);
-  });
-
-  test("does not coalesce staff reads across authenticated principals", async () => {
-    let resolveFirst;
-    mocks.callable.mockImplementationOnce(() => new Promise((resolve) => {
-      resolveFirst = resolve;
-    }));
-    mocks.callable.mockResolvedValueOnce({ data: RESPONSE });
-
-    const first = loadQuotePortalConversation(STAFF_ACCESS);
-    mocks.auth.currentUser = { uid: "staff-2" };
-    const second = loadQuotePortalConversation(STAFF_ACCESS);
-    await second;
-    expect(mocks.callable).toHaveBeenCalledTimes(2);
-
-    resolveFirst({ data: RESPONSE });
-    await first;
-  });
-
-  test("keeps recent staff conversation bodies in bounded memory only", () => {
-    expect(writeConversationMemory(STAFF_ACCESS, CACHED_RESULT, { nowMs: 1000 })).toBe(true);
-    expect(readConversationMemory(STAFF_ACCESS, { nowMs: 1001 })).toMatchObject({
-      quoteId: "quote-a",
-      messages: [{ body: "Hello" }]
+    await loadQuotePortalConversation({
+      accessMode: "staff",
+      organizationId: "org-a",
+      quoteId: "quote-a"
     });
-    expect(conversationMemoryPolicy).toMatchObject({
-      maxEntries: 12,
-      persistence: "memory-only"
+    expect(mocks.callable).toHaveBeenCalledWith({
+      accessMode: "staff",
+      organizationId: "org-a",
+      quoteId: "quote-a"
     });
-  });
-
-  test("does not expose cached staff bodies after authenticated principal changes", () => {
-    writeConversationMemory(STAFF_ACCESS, CACHED_RESULT, { nowMs: 1000 });
-    mocks.auth.currentUser = { uid: "staff-2" };
-    expect(readConversationMemory(STAFF_ACCESS, { nowMs: 1001 })).toBeNull();
-  });
-
-  test("expires retained bodies without extending ttl on reads", () => {
-    writeConversationMemory(STAFF_ACCESS, CACHED_RESULT, { nowMs: 1000 });
-    expect(readConversationMemory(STAFF_ACCESS, { nowMs: 1001 })).not.toBeNull();
-    expect(readConversationMemory(STAFF_ACCESS, {
-      nowMs: 1000 + conversationMemoryPolicy.ttlMs + 1
-    })).toBeNull();
-  });
-
-  test("returns defensive message copies from memory", () => {
-    writeConversationMemory(STAFF_ACCESS, CACHED_RESULT, { nowMs: 1000 });
-    const first = readConversationMemory(STAFF_ACCESS, { nowMs: 1001 });
-    first.messages[0].body = "Changed locally";
-    first.messages.push({ messageId: "fake" });
-    const second = readConversationMemory(STAFF_ACCESS, { nowMs: 1002 });
-    expect(second.messages).toHaveLength(1);
-    expect(second.messages[0].body).toBe("Hello");
-  });
-
-  test("warms a missing conversation once and reuses the session snapshot", async () => {
-    mocks.callable.mockResolvedValue({ data: { ...RESPONSE, messages: CACHED_RESULT.messages } });
-    await expect(warmConversationMemory(STAFF_ACCESS)).resolves.toMatchObject({ quoteId: "quote-a" });
-    await expect(warmConversationMemory(STAFF_ACCESS)).resolves.toMatchObject({ quoteId: "quote-a" });
-    expect(mocks.callable).toHaveBeenCalledTimes(1);
   });
 
   test("sends body and retry id without client-owned actor, timestamp, or message identity", async () => {
