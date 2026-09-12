@@ -33,6 +33,7 @@ vi.mock("../../lib/conversationSignalClient", async () => {
   };
 });
 
+import { clearAllConversationMemory } from "../../lib/conversationMemoryCache";
 import QuoteConversationPanel, {
   beginConversationPendingAttempt,
   clearConversationPendingAttempt,
@@ -88,6 +89,7 @@ function enterTextareaValue(textarea, value) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  clearAllConversationMemory();
   clients.subscribe.mockReturnValue(clients.unsubscribe);
   clients.load.mockResolvedValue(emptyResult());
   container = document.createElement("div");
