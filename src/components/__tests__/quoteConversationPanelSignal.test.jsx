@@ -22,7 +22,10 @@ vi.mock("../../lib/portalConversationClient", () => ({
   PORTAL_CONVERSATION_BODY_MAX_LENGTH: 1200,
   buildPortalConversationClientRequestId: clients.buildRequestId,
   loadQuotePortalConversation: clients.load,
-  sendQuotePortalConversationMessage: clients.send
+  sendQuotePortalConversationMessage: clients.send,
+  readConversationMemory: vi.fn(() => null),
+  writeConversationMemory: vi.fn(() => true),
+  clearAllConversationMemory: vi.fn()
 }));
 
 vi.mock("../../lib/conversationSignalClient", async () => {
@@ -33,7 +36,7 @@ vi.mock("../../lib/conversationSignalClient", async () => {
   };
 });
 
-import { clearAllConversationMemory } from "../../lib/conversationMemoryCache";
+import { clearAllConversationMemory } from "../../lib/portalConversationClient";
 import QuoteConversationPanel, {
   shouldReloadConversationForSignal
 } from "../QuoteConversationPanel";
