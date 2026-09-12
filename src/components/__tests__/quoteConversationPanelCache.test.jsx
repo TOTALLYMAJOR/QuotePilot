@@ -20,14 +20,17 @@ vi.mock("../../lib/firebase", () => ({
 vi.mock("../../lib/portalConversationClient", () => ({
   PORTAL_CONVERSATION_BODY_MAX_LENGTH: 1200,
   buildPortalConversationClientRequestId: vi.fn(() => "conversation:cache-test"),
-  loadQuotePortalConversation: clients.load,
-  sendQuotePortalConversationMessage: clients.send,
-  readConversationMemory: vi.fn((access) => clients.memory.get(access?.quoteId) || null),
-  writeConversationMemory: vi.fn((access, value) => {
+  sendQuotePortalConversationMessage: clients.send
+}));
+
+vi.mock("../conversationSessionCache", () => ({
+  loadConversationAuthoritatively: clients.load,
+  readConversationSession: vi.fn((access) => clients.memory.get(access?.quoteId) || null),
+  writeConversationSession: vi.fn((access, value) => {
     clients.memory.set(access?.quoteId, structuredClone(value));
     return true;
   }),
-  clearAllConversationMemory: vi.fn(() => clients.memory.clear())
+  clearAllConversationSessions: vi.fn(() => clients.memory.clear())
 }));
 
 vi.mock("../../lib/conversationSignalClient", async () => {
@@ -36,9 +39,9 @@ vi.mock("../../lib/conversationSignalClient", async () => {
 });
 
 import {
-  clearAllConversationMemory,
-  writeConversationMemory
-} from "../../lib/portalConversationClient";
+  clearAllConversationSessions,
+  writeConversationSession
+} from "../conversationSessionCache";
 import QuoteConversationPanel from "../QuoteConversationPanel";
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
@@ -91,7 +94,7 @@ async function settle() {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  clearAllConversationMemory();
+  clearAllConversationSessions();
   clients.subscribe.mockReturnValue(vi.fn());
   container = document.createElement("div");
   document.body.appendChild(container);
@@ -101,7 +104,7 @@ beforeEach(() => {
 afterEach(() => {
   act(() => root.unmount());
   container.remove();
-  clearAllConversationMemory();
+  clearAllConversationSessions();
 });
 
 describe("QuoteConversationPanel memory-backed revisit", () => {
@@ -111,7 +114,7 @@ describe("QuoteConversationPanel memory-backed revisit", () => {
       "This message should be visible immediately.",
       "2026-09-12T04:05:00.000Z"
     );
-    writeConversationMemory(ACCESS, result([cached]));
+    writeConversationSession(ACCESS, result([cached]));
 
     const authoritative = deferred();
     clients.load.mockReturnValue(authoritative.promise);
