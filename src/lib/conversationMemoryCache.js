@@ -66,12 +66,12 @@ export function readConversationMemory(access, {
   if (!key) return null;
   const entry = conversationMemory.get(key);
   if (!entry) return null;
+  // Read remains side-effect free so React can safely use it while deriving
+  // initial state. TTL is anchored to the last authoritative write, not to
+  // repeated viewing of potentially stale bodies.
   if (!Number.isFinite(entry.cachedAtMs) || nowMs - entry.cachedAtMs > ttlMs) {
-    conversationMemory.delete(key);
     return null;
   }
-  conversationMemory.delete(key);
-  conversationMemory.set(key, entry);
   return cloneConversation(entry.result);
 }
 
