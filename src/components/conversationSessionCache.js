@@ -10,7 +10,7 @@ function text(value, maxLength = 240) {
   return String(value ?? "").trim().slice(0, maxLength);
 }
 
-function conversationIdentity(access = {}) {
+function conversationIdentity(access = {}, principalUid = "") {
   const accessMode = text(access?.accessMode, 16).toLowerCase();
   // Session reuse is intentionally limited to authenticated staff. Customer
   // portal message bodies keep the existing callable-only load behavior so an
@@ -18,7 +18,7 @@ function conversationIdentity(access = {}) {
   if (accessMode !== "staff") return "";
   const organizationId = text(access?.organizationId, 160).toLowerCase();
   const quoteId = text(access?.quoteId, 160);
-  const uid = text(auth?.currentUser?.uid, 160);
+  const uid = text(principalUid || auth?.currentUser?.uid, 160);
   if (!organizationId || !quoteId || !uid) return "";
   return `staff:${uid}:${organizationId}:${quoteId}`;
 }
@@ -98,8 +98,11 @@ export function readConversationSession(access, {
   return cloneConversation(entry.result);
 }
 
-export function writeConversationSession(access, result, { nowMs = Date.now() } = {}) {
-  const key = conversationIdentity(access);
+export function writeConversationSession(access, result, {
+  nowMs = Date.now(),
+  principalUid = ""
+} = {}) {
+  const key = conversationIdentity(access, principalUid);
   if (!key) return false;
   assertConversationResultScope(access, result);
   return writeConversationSessionAtKey(key, result, nowMs);
