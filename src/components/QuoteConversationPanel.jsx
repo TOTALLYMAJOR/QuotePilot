@@ -2,11 +2,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   PORTAL_CONVERSATION_BODY_MAX_LENGTH,
   buildPortalConversationClientRequestId,
-  loadQuotePortalConversation,
-  readConversationMemory,
-  sendQuotePortalConversationMessage,
-  writeConversationMemory
+  sendQuotePortalConversationMessage
 } from "../lib/portalConversationClient";
+import {
+  loadConversationAuthoritatively as loadQuotePortalConversation,
+  readConversationSession as readConversationMemory,
+  writeConversationSession as writeConversationMemory
+} from "./conversationSessionCache";
 import {
   isConversationSignalNewer,
   subscribeToConversationSignal
