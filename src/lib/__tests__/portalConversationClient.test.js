@@ -3,11 +3,13 @@ import { beforeEach, describe, expect, test, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   callable: vi.fn(),
   httpsCallable: vi.fn(),
-  cloudFunctions: { id: "functions" }
+  cloudFunctions: { id: "functions" },
+  auth: { currentUser: { uid: "staff-1" } }
 }));
 
 vi.mock("firebase/functions", () => ({ httpsCallable: mocks.httpsCallable }));
 vi.mock("../firebase", () => ({
+  auth: mocks.auth,
   cloudFunctions: mocks.cloudFunctions,
   firebaseReady: true
 }));
@@ -33,6 +35,7 @@ describe("portal conversation callable client", () => {
     mocks.callable.mockReset();
     mocks.httpsCallable.mockReset();
     mocks.httpsCallable.mockReturnValue(mocks.callable);
+    mocks.auth.currentUser = { uid: "staff-1" };
   });
 
   test("loads customer history using only the bearer portal token", async () => {
@@ -63,6 +66,51 @@ describe("portal conversation callable client", () => {
       organizationId: "org-a",
       quoteId: "quote-a"
     });
+  });
+
+  test("coalesces concurrent reads for the same authenticated conversation", async () => {
+    let release;
+    mocks.callable.mockImplementation(() => new Promise((resolve) => {
+      release = () => resolve({ data: RESPONSE });
+    }));
+    const access = {
+      accessMode: "staff",
+      organizationId: "org-a",
+      quoteId: "quote-a"
+    };
+
+    const first = loadQuotePortalConversation(access);
+    const second = loadQuotePortalConversation({ ...access });
+    expect(mocks.callable).toHaveBeenCalledTimes(1);
+
+    release();
+    await expect(Promise.all([first, second])).resolves.toHaveLength(2);
+
+    mocks.callable.mockResolvedValue({ data: RESPONSE });
+    await loadQuotePortalConversation(access);
+    expect(mocks.callable).toHaveBeenCalledTimes(2);
+  });
+
+  test("does not coalesce staff reads across authenticated principals", async () => {
+    let resolveFirst;
+    mocks.callable.mockImplementationOnce(() => new Promise((resolve) => {
+      resolveFirst = resolve;
+    }));
+    mocks.callable.mockResolvedValueOnce({ data: RESPONSE });
+    const access = {
+      accessMode: "staff",
+      organizationId: "org-a",
+      quoteId: "quote-a"
+    };
+
+    const first = loadQuotePortalConversation(access);
+    mocks.auth.currentUser = { uid: "staff-2" };
+    const second = loadQuotePortalConversation(access);
+    await second;
+    expect(mocks.callable).toHaveBeenCalledTimes(2);
+
+    resolveFirst({ data: RESPONSE });
+    await first;
   });
 
   test("sends body and retry id without client-owned actor, timestamp, or message identity", async () => {
