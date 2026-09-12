@@ -98,21 +98,52 @@ describe("conversation presentation session cache", () => {
     expect(readConversationSession(ACCESS)).toMatchObject({ quoteId: "quote-a" });
   });
 
-  test("does not coalesce staff loads across authenticated principals", async () => {
-    let resolveFirst;
+  test("keeps in-flight staff results bound to the principal that started each request", async () => {
+    const staffOneResult = {
+      ...RESULT,
+      messages: [{ ...RESULT.messages[0], body: "Staff one conversation" }]
+    };
+    const staffTwoResult = {
+      ...RESULT,
+      messages: [{ ...RESULT.messages[0], body: "Staff two conversation" }]
+    };
+    let resolveStaffOne;
     mocks.loadQuotePortalConversation.mockImplementationOnce(() => new Promise((resolve) => {
-      resolveFirst = resolve;
+      resolveStaffOne = resolve;
     }));
-    mocks.loadQuotePortalConversation.mockResolvedValueOnce(RESULT);
+    mocks.loadQuotePortalConversation.mockResolvedValueOnce(staffTwoResult);
 
-    const first = loadConversationAuthoritatively(ACCESS);
+    const staffOneLoad = loadConversationAuthoritatively(ACCESS);
     mocks.auth.currentUser = { uid: "staff-2" };
-    const second = loadConversationAuthoritatively(ACCESS);
-    await second;
+    const staffTwoLoad = loadConversationAuthoritatively(ACCESS);
+    await staffTwoLoad;
     expect(mocks.loadQuotePortalConversation).toHaveBeenCalledTimes(2);
+    expect(readConversationSession(ACCESS)).toMatchObject({
+      messages: [{ body: "Staff two conversation" }]
+    });
 
-    resolveFirst(RESULT);
-    await first;
+    resolveStaffOne(staffOneResult);
+    await staffOneLoad;
+    expect(readConversationSession(ACCESS)).toMatchObject({
+      messages: [{ body: "Staff two conversation" }]
+    });
+
+    mocks.auth.currentUser = { uid: "staff-1" };
+    expect(readConversationSession(ACCESS)).toMatchObject({
+      messages: [{ body: "Staff one conversation" }]
+    });
+  });
+
+  test("rejects a staff result outside the requested organization and quote scope", async () => {
+    mocks.loadQuotePortalConversation.mockResolvedValue({
+      ...RESULT,
+      organizationId: "org-other",
+      quoteId: "quote-other"
+    });
+
+    await expect(loadConversationAuthoritatively(ACCESS))
+      .rejects.toThrow(/does not match the requested quote-scoped thread/i);
+    expect(readConversationSession(ACCESS)).toBeNull();
   });
 
   test("warms a missing conversation once and reuses the session snapshot", async () => {
