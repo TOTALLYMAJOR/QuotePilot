@@ -33,6 +33,7 @@ vi.mock("../../lib/conversationSignalClient", async () => {
   };
 });
 
+import { clearAllConversationMemory } from "../../lib/conversationMemoryCache";
 import QuoteConversationPanel, {
   shouldReloadConversationForSignal
 } from "../QuoteConversationPanel";
@@ -131,6 +132,7 @@ async function renderPanel(props = {}) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  clearAllConversationMemory();
   clients.subscribe.mockReturnValue(clients.unsubscribe);
   container = document.createElement("div");
   document.body.appendChild(container);
