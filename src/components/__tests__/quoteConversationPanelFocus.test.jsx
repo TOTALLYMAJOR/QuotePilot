@@ -19,11 +19,14 @@ vi.mock("../../lib/firebase", () => ({
 vi.mock("../../lib/portalConversationClient", () => ({
   PORTAL_CONVERSATION_BODY_MAX_LENGTH: 1200,
   buildPortalConversationClientRequestId: vi.fn(() => "conversation:focus-test"),
-  loadQuotePortalConversation: clients.load,
-  sendQuotePortalConversationMessage: clients.send,
-  readConversationMemory: vi.fn(() => null),
-  writeConversationMemory: vi.fn(() => true),
-  clearAllConversationMemory: vi.fn()
+  sendQuotePortalConversationMessage: clients.send
+}));
+
+vi.mock("../conversationSessionCache", () => ({
+  loadConversationAuthoritatively: clients.load,
+  readConversationSession: vi.fn(() => null),
+  writeConversationSession: vi.fn(() => true),
+  clearAllConversationSessions: vi.fn()
 }));
 
 vi.mock("../../lib/conversationSignalClient", async () => {
@@ -31,7 +34,7 @@ vi.mock("../../lib/conversationSignalClient", async () => {
   return { ...actual, subscribeToConversationSignal: clients.subscribe };
 });
 
-import { clearAllConversationMemory } from "../../lib/portalConversationClient";
+import { clearAllConversationSessions } from "../conversationSessionCache";
 import QuoteConversationPanel, {
   buildConversationMessageFocusResolution
 } from "../QuoteConversationPanel";
@@ -95,7 +98,7 @@ async function renderPanel(props = {}) {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  clearAllConversationMemory();
+  clearAllConversationSessions();
   clients.subscribe.mockReturnValue(vi.fn());
   originalScrollIntoView = HTMLElement.prototype.scrollIntoView;
   scrollIntoViewMock = vi.fn();
