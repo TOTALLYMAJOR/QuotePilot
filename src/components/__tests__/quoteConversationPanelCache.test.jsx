@@ -7,7 +7,8 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 const clients = vi.hoisted(() => ({
   load: vi.fn(),
   send: vi.fn(),
-  subscribe: vi.fn(() => vi.fn())
+  subscribe: vi.fn(() => vi.fn()),
+  memory: new Map()
 }));
 
 vi.mock("../../lib/firebase", () => ({
@@ -20,7 +21,13 @@ vi.mock("../../lib/portalConversationClient", () => ({
   PORTAL_CONVERSATION_BODY_MAX_LENGTH: 1200,
   buildPortalConversationClientRequestId: vi.fn(() => "conversation:cache-test"),
   loadQuotePortalConversation: clients.load,
-  sendQuotePortalConversationMessage: clients.send
+  sendQuotePortalConversationMessage: clients.send,
+  readConversationMemory: vi.fn((access) => clients.memory.get(access?.quoteId) || null),
+  writeConversationMemory: vi.fn((access, value) => {
+    clients.memory.set(access?.quoteId, structuredClone(value));
+    return true;
+  }),
+  clearAllConversationMemory: vi.fn(() => clients.memory.clear())
 }));
 
 vi.mock("../../lib/conversationSignalClient", async () => {
@@ -31,7 +38,7 @@ vi.mock("../../lib/conversationSignalClient", async () => {
 import {
   clearAllConversationMemory,
   writeConversationMemory
-} from "../../lib/conversationMemoryCache";
+} from "../../lib/portalConversationClient";
 import QuoteConversationPanel from "../QuoteConversationPanel";
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
