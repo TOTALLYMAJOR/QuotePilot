@@ -11,6 +11,7 @@ import {
 import { useConversationInbox } from "../hooks/useConversationInbox";
 import { useWorkspaceRouteHeadingFocus } from "../hooks/useWorkspaceRouteHeadingFocus";
 import { filterConversationThreads, groupConversationThreads } from "../lib/conversationInbox";
+import { warmConversationMemory } from "../lib/conversationMemoryCache";
 import {
   formatWorkspaceDate,
   formatWorkspaceDateTime,
@@ -112,7 +113,7 @@ export function resolveMessagingArrivalConsumption({
     : { status: "pending" };
 }
 
-function ThreadRow({ thread, selected, onSelect, buttonRef }) {
+function ThreadRow({ thread, selected, onSelect, onWarm, buttonRef }) {
   return (
     <li>
       <button
@@ -120,6 +121,8 @@ function ThreadRow({ thread, selected, onSelect, buttonRef }) {
         type="button"
         className={`messaging-thread-row${selected ? " is-selected" : ""}`}
         aria-current={selected ? "page" : undefined}
+        onPointerEnter={() => onWarm?.(thread.quoteId)}
+        onFocus={() => onWarm?.(thread.quoteId)}
         onClick={() => onSelect(thread.quoteId)}
       >
         <span className="messaging-thread-row-head">
@@ -214,6 +217,16 @@ export default function MessagingStation({
     arrivalReportRef.current = signature;
     onArrivalResolution(next);
   }, [arrivalContext?.focus, exactArrivalActive, initialQuoteId, onArrivalResolution]);
+
+  const warmThread = useCallback((quoteId) => {
+    const thread = eligibleThreads.find((candidate) => candidate.quoteId === quoteId);
+    if (!thread?.conversationAvailable || quoteId === selectedQuoteId) return;
+    void warmConversationMemory({
+      accessMode: "staff",
+      organizationId,
+      quoteId
+    }).catch(() => {});
+  }, [eligibleThreads, organizationId, selectedQuoteId]);
 
   useEffect(() => {
     if (exactArrivalActive) {
@@ -463,6 +476,7 @@ export default function MessagingStation({
                         thread={thread}
                         selected={thread.quoteId === selectedQuoteId}
                         onSelect={selectThread}
+                        onWarm={warmThread}
                         buttonRef={(node) => {
                           if (node) threadRowRefs.current.set(thread.quoteId, node);
                           else threadRowRefs.current.delete(thread.quoteId);
