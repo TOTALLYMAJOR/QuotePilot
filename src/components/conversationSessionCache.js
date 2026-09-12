@@ -59,6 +59,33 @@ function evictOverflow() {
   }
 }
 
+function writeConversationSessionAtKey(key, result, nowMs = Date.now()) {
+  if (!key || !result?.quoteId) return false;
+  conversationMemory.delete(key);
+  conversationMemory.set(key, {
+    cachedAtMs: Number(nowMs),
+    result: cloneConversation(result)
+  });
+  evictOverflow();
+  return true;
+}
+
+function assertConversationResultScope(access = {}, result = {}) {
+  if (text(access?.accessMode, 16).toLowerCase() !== "staff") return;
+  const expectedOrganizationId = text(access?.organizationId, 160).toLowerCase();
+  const expectedQuoteId = text(access?.quoteId, 160);
+  const returnedOrganizationId = text(result?.organizationId, 160).toLowerCase();
+  const returnedQuoteId = text(result?.quoteId, 160);
+  if (
+    !expectedOrganizationId
+    || !expectedQuoteId
+    || returnedOrganizationId !== expectedOrganizationId
+    || returnedQuoteId !== expectedQuoteId
+  ) {
+    throw new Error("The loaded conversation does not match the requested quote-scoped thread.");
+  }
+}
+
 export function readConversationSession(access, {
   nowMs = Date.now(),
   ttlMs = DEFAULT_CACHE_TTL_MS
@@ -77,14 +104,9 @@ export function readConversationSession(access, {
 
 export function writeConversationSession(access, result, { nowMs = Date.now() } = {}) {
   const key = conversationIdentity(access);
-  if (!key || !result?.quoteId) return false;
-  conversationMemory.delete(key);
-  conversationMemory.set(key, {
-    cachedAtMs: Number(nowMs),
-    result: cloneConversation(result)
-  });
-  evictOverflow();
-  return true;
+  if (!key) return false;
+  assertConversationResultScope(access, result);
+  return writeConversationSessionAtKey(key, result, nowMs);
 }
 
 export function clearConversationSession(access) {
@@ -109,7 +131,11 @@ export async function loadConversationAuthoritatively(access) {
 
   const loadPromise = (async () => {
     const result = await loadQuotePortalConversation(access);
-    writeConversationSession(access, result);
+    assertConversationResultScope(access, result);
+    // Use the identity captured when the request began. If Firebase Auth changes
+    // before this request settles, its message bodies must not move into the
+    // newly authenticated principal's cache entry.
+    writeConversationSessionAtKey(key, result);
     return cloneConversation(result);
   })();
   inFlightConversationLoads.set(key, loadPromise);
