@@ -28,6 +28,7 @@ vi.mock("../../lib/conversationSignalClient", async () => {
   return { ...actual, subscribeToConversationSignal: clients.subscribe };
 });
 
+import { clearAllConversationMemory } from "../../lib/conversationMemoryCache";
 import QuoteConversationPanel, {
   buildConversationMessageFocusResolution
 } from "../QuoteConversationPanel";
@@ -91,6 +92,7 @@ async function renderPanel(props = {}) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  clearAllConversationMemory();
   clients.subscribe.mockReturnValue(vi.fn());
   originalScrollIntoView = HTMLElement.prototype.scrollIntoView;
   scrollIntoViewMock = vi.fn();
