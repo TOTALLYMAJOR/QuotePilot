@@ -11,7 +11,7 @@ import {
 import { useConversationInbox } from "../hooks/useConversationInbox";
 import { useWorkspaceRouteHeadingFocus } from "../hooks/useWorkspaceRouteHeadingFocus";
 import { filterConversationThreads, groupConversationThreads } from "../lib/conversationInbox";
-import { warmConversationMemory } from "../lib/conversationMemoryCache";
+import { warmConversationMemory } from "../lib/portalConversationClient";
 import {
   formatWorkspaceDate,
   formatWorkspaceDateTime,
@@ -280,10 +280,6 @@ export default function MessagingStation({
       reportArrivalResolution(consumption);
       return;
     }
-    // Exact-message arrivals have a single focus and acknowledgement owner:
-    // QuoteConversationPanel verifies the canonical quote-scoped bodies and
-    // focuses the requested message. The station must not race it by focusing
-    // or resolving the surrounding thread heading.
     if (exactMessageArrivalActive) return;
     if (
       conversationLoadResolution?.status === "recovery"
