@@ -12,19 +12,15 @@ function text(value, maxLength = 240) {
 
 function conversationIdentity(access = {}) {
   const accessMode = text(access?.accessMode, 16).toLowerCase();
-  if (accessMode === "staff") {
-    const organizationId = text(access?.organizationId, 160).toLowerCase();
-    const quoteId = text(access?.quoteId, 160);
-    const uid = text(auth?.currentUser?.uid, 160);
-    if (!organizationId || !quoteId || !uid) return "";
-    return `staff:${uid}:${organizationId}:${quoteId}`;
-  }
-  if (accessMode === "portal") {
-    const portalKey = text(access?.portalKey, 128);
-    if (!portalKey) return "";
-    return `portal:${portalKey}`;
-  }
-  return "";
+  // Session reuse is intentionally limited to authenticated staff. Customer
+  // portal message bodies keep the existing callable-only load behavior so an
+  // exact bearer link never gains a new retained-body lifecycle in this patch.
+  if (accessMode !== "staff") return "";
+  const organizationId = text(access?.organizationId, 160).toLowerCase();
+  const quoteId = text(access?.quoteId, 160);
+  const uid = text(auth?.currentUser?.uid, 160);
+  if (!organizationId || !quoteId || !uid) return "";
+  return `staff:${uid}:${organizationId}:${quoteId}`;
 }
 
 function cloneMessage(message = {}) {
@@ -122,8 +118,8 @@ export function clearAllConversationSessions() {
 
 export async function loadConversationAuthoritatively(access) {
   const key = conversationIdentity(access);
-  // Staff without a current authenticated principal should stay on the
-  // existing callable path and let server authority reject or resolve access.
+  // Portal access and staff without a current authenticated principal stay on
+  // the existing callable path and receive no session reuse or coalescing.
   if (!key) return loadQuotePortalConversation(access);
 
   const existing = inFlightConversationLoads.get(key);
@@ -158,5 +154,6 @@ export async function warmConversationSession(access) {
 export const conversationSessionPolicy = Object.freeze({
   ttlMs: DEFAULT_CACHE_TTL_MS,
   maxEntries: MAX_CACHE_ENTRIES,
-  persistence: "memory-only"
+  persistence: "memory-only",
+  accessMode: "staff-only"
 });
