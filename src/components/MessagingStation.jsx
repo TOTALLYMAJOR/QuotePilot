@@ -11,7 +11,7 @@ import {
 import { useConversationInbox } from "../hooks/useConversationInbox";
 import { useWorkspaceRouteHeadingFocus } from "../hooks/useWorkspaceRouteHeadingFocus";
 import { filterConversationThreads, groupConversationThreads } from "../lib/conversationInbox";
-import { warmConversationMemory } from "../lib/portalConversationClient";
+import { warmConversationSession } from "./conversationSessionCache";
 import {
   formatWorkspaceDate,
   formatWorkspaceDateTime,
@@ -221,7 +221,7 @@ export default function MessagingStation({
   const warmThread = useCallback((quoteId) => {
     const thread = eligibleThreads.find((candidate) => candidate.quoteId === quoteId);
     if (!thread?.conversationAvailable || quoteId === selectedQuoteId) return;
-    void warmConversationMemory({
+    void warmConversationSession({
       accessMode: "staff",
       organizationId,
       quoteId
