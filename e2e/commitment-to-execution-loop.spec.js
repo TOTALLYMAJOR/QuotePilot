@@ -28,7 +28,7 @@ async function seedCommittedEvent(page) {
       customer: { name: "Maya Bennett", email: "maya@example.test" },
       event: {
         name: "Bennett Garden Wedding",
-        date: "2027-09-12",
+        date: "2026-09-10",
         time: "18:00",
         hours: 5,
         venue: "Magnolia House",
@@ -77,6 +77,43 @@ async function seedCommittedEvent(page) {
           completedAtISO: "2026-09-07T17:30:00.000Z",
           completedByEmail: "ops@example.test"
         }]
+      },
+      workflow: {
+        postEventCloseout: {
+          schemaVersion: 1,
+          closeoutId: "closeout-uxr004-event",
+          organizationId: "e2e-org",
+          quoteId: "uxr004-event",
+          eventDate: "2026-09-10",
+          sourceVersionId: "version-uxr004-3",
+          acceptanceReceiptId: "acceptance-uxr004",
+          dueDate: "2026-09-11",
+          policy: {
+            state: "configured",
+            timeZone: "America/Chicago",
+            blockedReason: ""
+          },
+          state: "completed",
+          completedAtISO: "2026-09-11T15:00:00.000Z",
+          completedBy: {
+            email: "ops@example.test",
+            role: "admin"
+          },
+          actualAttendance: {
+            schemaVersion: 1,
+            revision: 1,
+            count: 97,
+            sourceType: "staff_observed",
+            note: "Count reconciled from the service captain's closeout sheet.",
+            sourceReferenceId: "closeout_attendance_111111111111111111111111111111111111111111111111",
+            recordedAtISO: "2026-09-11T15:30:00.000Z",
+            recordedBy: {
+              email: "ops@example.test",
+              role: "admin"
+            },
+            lastReceiptId: "closeout_attendance_111111111111111111111111111111111111111111111111"
+          }
+        }
       }
     }]));
   });
@@ -119,6 +156,11 @@ test.describe("QP-UXR-004 commitment-to-execution loop", () => {
 
   for (const viewport of VIEWPORTS) {
     test(`${viewport.width}px preserves commitment, coordination, evidence boundary, and focus`, async ({ page }) => {
+      const browserErrors = [];
+      page.on("pageerror", (error) => browserErrors.push(error.message));
+      page.on("console", (message) => {
+        if (message.type() === "error") browserErrors.push(message.text());
+      });
       await page.setViewportSize(viewport);
       await seedCommittedEvent(page);
       await openWorkspace(page, "/app/events");
@@ -147,6 +189,8 @@ test.describe("QP-UXR-004 commitment-to-execution loop", () => {
       await expect(focus).toContainText("The day as currently recorded");
       await expect(focus).toContainText("Version 3");
       await expect(focus).toContainText("24 Garden Lane");
+      await expect(focus).toContainText("97 actual guests recorded");
+      await expect(focus).toContainText("96 priced guests · revision version-uxr004-3");
       results = await new AxeBuilder({ page }).include("main").analyze();
       expect(results.violations).toEqual([]);
       await page.screenshot({
@@ -162,7 +206,9 @@ test.describe("QP-UXR-004 commitment-to-execution loop", () => {
       await expect(control).toContainText("Planning view only");
       await expect(control).toContainText("Planned sequence");
       await expect(control).toContainText("Recorded checklist");
-      await expect(control).toContainText("Live actuals are not recorded");
+      await expect(control).toContainText("97 actual guests recorded");
+      await expect(control).toContainText("Staff observed");
+      await expect(control).toContainText("does not establish live phase");
       await expect(control.getByLabel("Next valid action")).toContainText("Open exact event in Schedule");
       await expect(control).toContainText("Operational staffing coverage is unavailable");
       await expect(control).toContainText("Kitchen BEO freshness is unavailable");
@@ -204,6 +250,7 @@ test.describe("QP-UXR-004 commitment-to-execution loop", () => {
       await expect(replay.getByText("Supporting record evidence", { exact: true })).toBeVisible();
       await expect(replay).toContainText("not a complete or immutable execution chronology");
       await expectResponsiveContract(page);
+      expect(browserErrors).toEqual([]);
     });
   }
 });

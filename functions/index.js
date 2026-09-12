@@ -73,9 +73,11 @@ const {
   assertPostEventCloseoutMatchesSource,
   buildPostEventCloseoutPolicySnapshot,
   buildPostEventCloseoutRecord,
+  normalizePostEventActualAttendanceRequest,
   normalizePostEventCloseoutActionRequest,
   normalizePostEventCloseoutPolicyRefreshRequest,
   planPostEventCloseoutAction,
+  planPostEventActualAttendance,
   planPostEventCloseoutPolicyRefresh,
   resolvePostEventCloseoutSource
 } = require("./postEventCloseout");
@@ -17202,6 +17204,41 @@ function projectPostEventCloseoutToQuote(record = {}) {
   const reviewItems = record?.reviewItems && typeof record.reviewItems === "object"
     ? record.reviewItems
     : {};
+  const actual = record?.actualAttendance && typeof record.actualAttendance === "object"
+    ? record.actualAttendance
+    : null;
+  const actualAttendance = (
+    Number.isSafeInteger(actual?.revision)
+    && actual.revision > 0
+    && Number.isSafeInteger(actual?.count)
+    && actual.count >= 1
+    && actual.count <= 400
+    && new Set([
+      "staff_observed",
+      "customer_reported",
+      "venue_reported",
+      "imported_record"
+    ]).has(normalizeText(actual?.sourceType))
+    && normalizeText(actual?.note)
+    && normalizeText(actual?.recordedAtISO)
+    && /^closeout_attendance_[a-f0-9]{48}$/.test(normalizeText(actual?.sourceReferenceId))
+    && normalizeText(actual?.sourceReferenceId) === normalizeText(actual?.lastReceiptId)
+  ) ? {
+      schemaVersion: Number(actual.schemaVersion || 0),
+      revision: actual.revision,
+      count: actual.count,
+      sourceType: normalizeText(actual.sourceType),
+      note: normalizeText(actual.note).slice(0, 240),
+      sourceReferenceId: normalizeText(actual.sourceReferenceId),
+      recordedAtISO: normalizeText(actual.recordedAtISO),
+      recordedBy: actual.recordedBy && typeof actual.recordedBy === "object"
+        ? {
+            email: normalizeEmail(actual.recordedBy.email),
+            role: normalizeText(actual.recordedBy.role)
+          }
+        : null,
+      lastReceiptId: normalizeText(actual.lastReceiptId)
+    } : null;
   return {
     schemaVersion: Number(record.schemaVersion || 0),
     closeoutId: normalizeText(record.closeoutId),
@@ -17222,6 +17259,7 @@ function projectPostEventCloseoutToQuote(record = {}) {
       blockedReason: normalizeText(record.policy?.blockedReason)
     },
     state: normalizeText(record.state),
+    actualAttendance,
     reviewItems: Object.fromEntries(Object.entries(reviewItems).map(([code, item]) => [
       code,
       {
@@ -18100,6 +18138,166 @@ exports.recordPostEventCloseoutReview = functions.region(REGION).https.onCall(as
     throw new functions.https.HttpsError(
       "internal",
       "Failed to record the post-event closeout review."
+    );
+  }
+});
+
+exports.recordPostEventActualAttendance = functions.region(REGION).https.onCall(async (data, context) => {
+  let request;
+  try {
+    request = normalizePostEventActualAttendanceRequest(data);
+  } catch (error) {
+    if (error instanceof PostEventCloseoutError) {
+      throw new functions.https.HttpsError(error.code, error.message);
+    }
+    throw error;
+  }
+  const staff = await assertStaff(context, {
+    expectedOrganizationId: request.organizationId
+  });
+  if (normalizeOrganizationId(staff.principalOrganizationId) !== request.organizationId) {
+    throw new functions.https.HttpsError(
+      "permission-denied",
+      "Actual attendance requires same-organization staff authority."
+    );
+  }
+
+  try {
+    const nowISO = new Date().toISOString();
+    const organizationRef = db
+      .collection(ORGANIZATIONS_COLLECTION)
+      .doc(request.organizationId);
+    const quoteRef = organizationRef.collection(QUOTES_COLLECTION).doc(request.quoteId);
+    const closeoutRef = organizationRef
+      .collection(POST_EVENT_CLOSEOUTS_COLLECTION)
+      .doc(request.closeoutId);
+    const receiptRef = closeoutRef
+      .collection("attendanceReceipts")
+      .doc(request.receiptId);
+    const result = await db.runTransaction(async (tx) => {
+      const [quoteSnap, closeoutSnap, receiptSnap] = await Promise.all([
+        tx.get(quoteRef),
+        tx.get(closeoutRef),
+        tx.get(receiptRef)
+      ]);
+      if (!quoteSnap.exists || !closeoutSnap.exists) {
+        throw new PostEventCloseoutError(
+          "not-found",
+          "The authoritative booked quote or closeout record is unavailable."
+        );
+      }
+      const quote = quoteSnap.data() || {};
+      const closeout = closeoutSnap.data() || {};
+      if (
+        normalizeOrganizationId(quote.organizationId) !== request.organizationId
+        || normalizeText(closeout.organizationId) !== request.organizationId
+        || normalizeText(closeout.quoteId) !== request.quoteId
+      ) {
+        throw new PostEventCloseoutError(
+          "permission-denied",
+          "The closeout record is outside this organization or quote scope."
+        );
+      }
+      const sourceVersionId = normalizeText(closeout.sourceVersionId);
+      const acceptanceReceiptDocumentId = normalizeText(closeout.acceptanceReceiptId);
+      if (!sourceVersionId || !acceptanceReceiptDocumentId) {
+        throw new PostEventCloseoutError(
+          "failed-precondition",
+          "The closeout record is missing its accepted proposal source or receipt."
+        );
+      }
+      const [sourceVersionSnap, acceptanceReceiptDocumentSnap] = await Promise.all([
+        tx.get(quoteRef.collection("versions").doc(sourceVersionId)),
+        tx.get(
+          organizationRef
+            .collection(PROPOSAL_ACCEPTANCE_RECEIPTS_COLLECTION)
+            .doc(acceptanceReceiptDocumentId)
+        )
+      ]);
+      if (!sourceVersionSnap.exists || !acceptanceReceiptDocumentSnap.exists) {
+        throw new PostEventCloseoutError(
+          "failed-precondition",
+          "The closeout accepted proposal source or private receipt is unavailable."
+        );
+      }
+      const source = resolvePostEventCloseoutSource({
+        organizationId: request.organizationId,
+        quoteId: request.quoteId,
+        sourceQuote: { id: quoteSnap.id, ...quote },
+        sourceVersion: {
+          id: sourceVersionSnap.id,
+          ...(sourceVersionSnap.data() || {})
+        },
+        acceptanceReceiptDocument: acceptanceReceiptDocumentSnap.data() || {}
+      });
+      const planned = planPostEventActualAttendance({
+        request: data,
+        record: closeout,
+        source,
+        actor: staff,
+        nowISO,
+        existingReceipt: receiptSnap.exists ? receiptSnap.data() || {} : null
+      });
+      const nextRecord = planned.nextRecord || closeout;
+      const quoteProjection = projectPostEventCloseoutToQuote(nextRecord);
+
+      if (!receiptSnap.exists) {
+        tx.create(receiptRef, {
+          ...planned.receipt,
+          createdAt: FieldValue.serverTimestamp()
+        });
+      }
+      if (planned.nextRecord) {
+        tx.set(closeoutRef, {
+          ...planned.nextRecord,
+          updatedAt: FieldValue.serverTimestamp()
+        }, { merge: true });
+        tx.update(quoteRef, {
+          "workflow.postEventCloseout": quoteProjection,
+          updatedAtISO: nowISO,
+          updatedAt: FieldValue.serverTimestamp()
+        });
+      }
+      return {
+        kind: planned.kind,
+        idempotent: planned.idempotent,
+        postEventCloseout: quoteProjection,
+        receipt: {
+          receiptId: normalizeText(planned.receipt.receiptId),
+          requestId: normalizeText(planned.receipt.requestId),
+          action: normalizeText(planned.receipt.action),
+          priorRevision: Number(planned.receipt.priorRevision),
+          resultRevision: Number(planned.receipt.resultRevision),
+          count: Number(planned.receipt.count),
+          sourceType: normalizeText(planned.receipt.sourceType),
+          recordedAtISO: normalizeText(planned.receipt.recordedAtISO),
+          recordedByEmail: normalizeEmail(planned.receipt.recordedBy?.email)
+        }
+      };
+    });
+    return {
+      ok: true,
+      storage: "firebase",
+      organizationId: request.organizationId,
+      quoteId: request.quoteId,
+      closeoutId: request.closeoutId,
+      ...result
+    };
+  } catch (error) {
+    if (error instanceof functions.https.HttpsError) throw error;
+    if (error instanceof PostEventCloseoutError) {
+      throw new functions.https.HttpsError(error.code, error.message);
+    }
+    functions.logger.error("Actual attendance recording failed", {
+      organizationId: request.organizationId,
+      quoteId: request.quoteId,
+      closeoutId: request.closeoutId,
+      actorUid: staff.uid,
+      error: normalizeText(error?.message)
+    });
+    throw new functions.https.HttpsError(
+      "internal",
+      "Failed to record actual attendance."
     );
   }
 });

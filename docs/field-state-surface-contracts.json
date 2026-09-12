@@ -151,6 +151,15 @@
       "testPath": "src/components/__tests__/QuickUpdatesPanel.test.jsx"
     },
     {
+      "id": "post-event-actual-attendance-source-states",
+      "path": "src/components/PostEventCloseoutReviewAction.jsx",
+      "markers": [
+        "data-choice-field=\"post-event-actual-attendance-source\"",
+        "AdaptiveChoiceField"
+      ],
+      "testPath": "src/components/__tests__/postEventCloseoutReviewAction.test.jsx"
+    },
+    {
       "id": "sales-workflow-authoritative-quote-states",
       "path": "src/components/SalesWorkflowModal.jsx",
       "markers": [

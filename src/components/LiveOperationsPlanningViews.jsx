@@ -25,11 +25,19 @@ import { useEventIngredientExecutionProjection } from "../hooks/useEventIngredie
 import { buildScheduleConflictAssessment, buildScheduledEvents } from "./EventScheduleModal";
 import {
   formatWorkspaceDate,
+  formatWorkspaceDateTime,
   formatWorkspaceInteger,
   formatWorkspaceMoney,
   formatWorkspaceText,
   hasWorkspaceNumber
 } from "../lib/workspacePresentation";
+
+const ACTUAL_ATTENDANCE_SOURCE_LABELS = Object.freeze({
+  staff_observed: "Staff observed",
+  customer_reported: "Customer reported",
+  venue_reported: "Venue reported",
+  imported_record: "Imported record"
+});
 
 function acceptedEvents(quotes = []) {
   return (Array.isArray(quotes) ? quotes : [])
@@ -39,6 +47,71 @@ function acceptedEvents(quotes = []) {
 
 function eventTitle(quote = {}) {
   return formatWorkspaceText(quote.event?.name || quote.quoteNumber, { emptyLabel: "Untitled event" });
+}
+
+function operationalAttendanceEvidence(quote = {}) {
+  const currentRevisionId = String(
+    quote.activeVersionId || quote.versionMeta?.versionId || ""
+  ).trim();
+  const acceptanceReceiptId = String(quote.acceptanceReceipt?.receiptId || "").trim();
+  const closeout = quote.workflow?.postEventCloseout;
+  const actual = closeout?.actualAttendance;
+  const pricedCount = Number(quote.event?.guests);
+  const basis = Number.isSafeInteger(pricedCount) && pricedCount > 0
+    ? `${pricedCount} priced guests · revision ${currentRevisionId || "not recorded"}`
+    : `Priced guest count unavailable · revision ${currentRevisionId || "not recorded"}`;
+  if (!actual) {
+    return {
+      state: "not_recorded",
+      basis,
+      label: "Actual attendance not recorded",
+      detail: "No post-event closeout receipt establishes a served headcount."
+    };
+  }
+  if (
+    String(closeout.sourceVersionId || "").trim() !== currentRevisionId
+    || String(closeout.acceptanceReceiptId || "").trim() !== acceptanceReceiptId
+  ) {
+    return {
+      state: "stale",
+      basis,
+      label: "Actual attendance source needs review",
+      detail: `The retained closeout is bound to accepted revision ${String(closeout.sourceVersionId || "").trim() || "not recorded"}, not the current accepted source.`
+    };
+  }
+  const count = Number(actual.count);
+  const revision = Number(actual.revision);
+  const sourceType = String(actual.sourceType || "").trim();
+  const sourceReferenceId = String(actual.sourceReferenceId || "").trim();
+  const recordedAtISO = String(actual.recordedAtISO || "").trim();
+  if (
+    Number(actual.schemaVersion) !== 1
+    || !Number.isSafeInteger(count)
+    || count < 1
+    || count > 400
+    || !Number.isSafeInteger(revision)
+    || revision < 1
+    || !ACTUAL_ATTENDANCE_SOURCE_LABELS[sourceType]
+    || !/^closeout_attendance_[a-f0-9]{48}$/u.test(sourceReferenceId)
+    || sourceReferenceId !== String(actual.lastReceiptId || "").trim()
+    || !Number.isFinite(Date.parse(recordedAtISO))
+  ) {
+    return {
+      state: "invalid",
+      basis,
+      label: "Actual attendance evidence needs review",
+      detail: "The closeout projection is incomplete or malformed, so no served headcount is shown."
+    };
+  }
+  return {
+    state: "recorded",
+    basis,
+    count,
+    revision,
+    sourceReferenceId,
+    label: `${count} actual guests recorded`,
+    detail: `${ACTUAL_ATTENDANCE_SOURCE_LABELS[sourceType]} · ${formatWorkspaceDateTime(recordedAtISO)} · attendance revision ${revision}.`
+  };
 }
 
 function findEvent(quotes = [], quoteId = "") {
@@ -243,6 +316,9 @@ export function EventPlanningView({
         scheduleAvailable
       })
     : null;
+  const attendanceEvidence = selected
+    ? operationalAttendanceEvidence(selected)
+    : null;
   const currentRevisionId = String(selected?.activeVersionId || selected?.versionMeta?.versionId || "").trim();
   const authorityIdentity = `${organizationId}:${selected?.id || ""}:${currentRevisionId}:${state.loadedAt || ""}`;
   const [authorityReads, setAuthorityReads] = useState({
@@ -419,7 +495,7 @@ export function EventPlanningView({
               </div>
               <StatusChip {...execution.workspace.status} />
               <dl className="execution-fact-strip">
-                <div><dt>Guests</dt><dd>{execution.workspace.guests}</dd></div>
+                <div><dt>Priced guests</dt><dd>{execution.workspace.guests}</dd></div>
                 <div><dt>Saved total</dt><dd>{execution.workspace.total}</dd></div>
                 <div><dt>Commitment</dt><dd>{execution.runOfShow.quoteStatus === "booked" ? "Booked" : "Accepted"}</dd></div>
                 <div><dt>Payment context</dt><dd>{execution.commercialEvidence.deposit}</dd></div>
@@ -443,6 +519,8 @@ export function EventPlanningView({
                   <div><dt>Production</dt><dd>{execution.runOfShow.productionChecklist.completedCount} of {execution.runOfShow.productionChecklist.totalCount} checklist items recorded complete</dd></div>
                   <div><dt>Final balance</dt><dd>{execution.commercialEvidence.finalBalance}</dd></div>
                   <div><dt>Acceptance</dt><dd>{execution.commitment.acceptance}</dd></div>
+                  <div><dt>Guest-count source</dt><dd>{attendanceEvidence.basis}</dd></div>
+                  <div><dt>Actual attendance</dt><dd>{attendanceEvidence.label}</dd></div>
                 </dl>
               </section>
               <section className="execution-card execution-attention" aria-labelledby="handoff-title">
@@ -538,10 +616,35 @@ export function EventPlanningView({
                   </details>
                 ))}
               </section>
-              <section className="execution-card execution-unavailable" aria-labelledby="actuals-title">
+              <section
+                className={`execution-card${attendanceEvidence.state === "recorded" ? "" : " execution-unavailable"}`}
+                aria-labelledby="actuals-title"
+                data-actual-attendance-state={attendanceEvidence.state}
+              >
                 <p className="eyebrow">Actuals</p>
-                <h2 id="actuals-title">{execution.actuals.title}</h2>
-                <p>{execution.actuals.detail}</p>
+                <h2 id="actuals-title">
+                  {attendanceEvidence.state === "recorded"
+                    ? attendanceEvidence.label
+                    : attendanceEvidence.state === "not_recorded"
+                      ? execution.actuals.title
+                      : attendanceEvidence.label}
+                </h2>
+                <p>
+                  {attendanceEvidence.state === "not_recorded"
+                    ? execution.actuals.detail
+                    : attendanceEvidence.detail}
+                </p>
+                <p className="source-note">{attendanceEvidence.basis}</p>
+                {attendanceEvidence.state === "recorded" ? (
+                  <details className="execution-supporting-evidence">
+                    <summary>Actual-attendance receipt</summary>
+                    <p className="source-note">
+                      {attendanceEvidence.sourceReferenceId}. This closeout fact does not
+                      establish live phase, staffing attendance, payment settlement, or
+                      execution replay.
+                    </p>
+                  </details>
+                ) : null}
               </section>
               {ingredientExecution.access.readEnabled && (
                 <EventIngredientUsagePanel

@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "catalogVersion": 83,
+  "catalogVersion": 84,
   "contracts": [
     {
       "id": "bounded-security-operations-audit",
@@ -2307,14 +2307,14 @@
     },
     {
       "id": "authoritative-post-event-closeout",
-      "reviewRevision": 6,
+      "reviewRevision": 7,
       "status": "active",
       "deliveryType": "user_relevant",
       "capabilityKind": "mutation_surface",
       "audiences": [
         "staff"
       ],
-      "summary": "Governed booking creates one deterministic private post-event closeout bound to the exact accepted immutable proposal version and stable customer; the client overview and Workflow expose its bounded state and an exact callable-owned internal review/reopen receipt flow.",
+      "summary": "Governed booking creates one deterministic private post-event closeout bound to the exact accepted immutable proposal version and stable customer; Customer 360 and Workflow expose its bounded state and exact callable-owned internal review/reopen receipts, while Attendance Slice F adds a source-required compare-and-set actual-attendance record/correction journal and exact-source read-only operational projection.",
       "backendPaths": [
         "firestore.rules",
         "functions/index.js",
@@ -2332,11 +2332,13 @@
       ],
       "backendExports": [
         "functions/index.js#recordPostEventCloseoutReview",
+        "functions/index.js#recordPostEventActualAttendance",
         "functions/index.js#refreshPostEventCloseoutConfiguration"
       ],
       "affectedBackendExports": [
         "functions/index.js#convertQuoteToContract",
         "functions/index.js#recordPostEventCloseoutReview",
+        "functions/index.js#recordPostEventActualAttendance",
         "functions/index.js#refreshPostEventCloseoutConfiguration",
         "functions/index.js#getWorkflowPackSnapshot",
         "functions/index.js#previewWorkflowPackMigration",
@@ -2347,6 +2349,8 @@
         "src/components/CommandCenterHome.jsx",
         "src/components/CustomerRevenueOpportunities.jsx",
         "src/components/CustomerWorkspaceView.jsx",
+        "src/components/AmbientLivingOpportunity.jsx",
+        "src/components/LiveOperationsPlanningViews.jsx",
         "src/components/PostEventCloseoutReviewAction.jsx",
         "src/components/SalesWorkflowModal.jsx",
         "src/lib/workspaceRoutes.js",
@@ -2363,13 +2367,20 @@
           "locator": "data-capability-id=\"cwf-11-authoritative-post-event-closeout\""
         },
         {
+          "path": "src/components/PostEventCloseoutReviewAction.jsx",
+          "locator": "data-attendance-record-state={actualAttendance ? \"confirmed\" : \"not_recorded\"}"
+        },
+        {
           "path": "src/components/SalesWorkflowModal.jsx",
           "locator": "Open client overview\" : \"Open quote\"} for post-event closeout"
         }
       ],
       "testPaths": [
+        "e2e/commitment-to-execution-loop.spec.js",
         "scripts/provisioning-emulator-acceptance.mjs",
         "src/components/__tests__/customerRevenueOpportunities.test.jsx",
+        "src/components/__tests__/ambientLivingOpportunity.test.jsx",
+        "src/components/__tests__/liveOperationsPlanningViews.test.jsx",
         "src/components/__tests__/postEventCloseoutReviewAction.test.jsx",
         "src/lib/__tests__/postEventCloseout.server.test.js",
         "src/lib/__tests__/postEventCloseoutClient.test.js",
@@ -2382,12 +2393,36 @@
       ],
       "testLocators": [
         {
+          "path": "e2e/commitment-to-execution-loop.spec.js",
+          "locator": "preserves commitment, coordination, evidence boundary, and focus"
+        },
+        {
           "path": "src/lib/__tests__/postEventCloseout.server.test.js",
           "locator": "builds a future-due pending record with all four review decisions"
         },
         {
           "path": "src/lib/__tests__/postEventCloseout.server.test.js",
           "locator": "reconciles an exact retry without planning a second mutation"
+        },
+        {
+          "path": "src/lib/__tests__/postEventCloseout.server.test.js",
+          "locator": "records one exact-source fact and immutable actor/time receipt without changing closeout completion"
+        },
+        {
+          "path": "src/lib/__tests__/postEventCloseoutClient.test.js",
+          "locator": "records actual attendance through the exact closeout callable and verifies the receipt projection"
+        },
+        {
+          "path": "src/components/__tests__/postEventCloseoutReviewAction.test.jsx",
+          "locator": "records a sourced count and renders the exact server-confirmed receipt projection"
+        },
+        {
+          "path": "src/components/__tests__/liveOperationsPlanningViews.test.jsx",
+          "locator": "withholds an actual count when the retained closeout belongs to another accepted source"
+        },
+        {
+          "path": "src/components/__tests__/ambientLivingOpportunity.test.jsx",
+          "locator": "uses only exact-source closeout attendance and keeps staffing tied to the priced revision"
         },
         {
           "path": "src/lib/__tests__/postEventCloseoutClient.test.js",
@@ -2399,7 +2434,7 @@
         },
         {
           "path": "src/rules/__tests__/firestore.rules.test.js",
-          "locator": "post-event closeout records and action receipts are callable-only"
+          "locator": "post-event closeout records and action or attendance receipts are callable-only"
         },
         {
           "path": "src/lib/__tests__/workspaceRoutes.test.js",
@@ -2411,10 +2446,15 @@
         }
       ],
       "documentationPaths": [
+        "docs/ATTENDANCE_STATE_ADR.md",
         "docs/FEATURE_MATRIX.md",
         "docs/USER_MANUAL.md"
       ],
       "documentationLocators": [
+        {
+          "path": "docs/ATTENDANCE_STATE_ADR.md",
+          "locator": "Slice F — Operational and actual attendance (implemented source/local)"
+        },
         {
           "path": "docs/FEATURE_MATRIX.md",
           "locator": "CWF-11 authoritative post-event closeout:"
@@ -2425,7 +2465,7 @@
         }
       ],
       "surfaceReview": "changed",
-      "surfaceReviewNote": "Governed booking, exact source binding, tenant-calendar configuration blocking, private receipt authority, client-overview and Workflow entry points, responsive review controls, and all mutation/reconciliation states were reviewed together. Revision 3 changes the visible destination label only; callable authority and receipts are unchanged. Slice D preserves the safe accepted-version and acceptance-receipt identifiers already present on the authoritative closeout projection in the browser review action. Missing references remain empty and never use current-quote fallbacks; old closeout sources remain distinct. Rebook, directory, delivery and closeout mutation authority are unchanged. Phase 4 review preserves existing domain authority while adding exact immutable tenant pack pins and private source proofs. Reviewed planning remains distinct from customer response and commercial application; accepted-count amendment requires renewed acceptance and preserves payment and contract history.",
+      "surfaceReviewNote": "Revision 7 preserves the deployed booking/closeout and internal-review authority while adding source/local Attendance Slice F. Actual attendance records or corrects only after the tenant-local closeout date, binds the exact accepted version and acceptance receipt, requires a bounded count plus source type and note, compare-and-set revision, actor/time evidence, idempotent request identity, and immutable prior/result receipt. Customer 360 owns mutation and reconciliation; Event Focus and Control Room consume only the matching bounded projection and visibly withhold stale-source counts. The accepted quote, pricing, invoice, refund, settlement, staffing, BEO, event phase, closeout completion, communication, and Replay authorities do not change.",
       "stateEvidence": [
         {
           "state": "ready",
@@ -2471,7 +2511,7 @@
         }
       ],
       "stateExceptions": {},
-      "safeOutcome": "Same-tenant staff can review or reopen one exact due closeout item and reconcile an uncertain attempt from a server receipt; this proves internal review only and never claims that outbound email was accepted, delivered, opened, answered, or that revenue was recovered."
+      "safeOutcome": "Same-tenant staff can review or reopen one exact due closeout item and record or correct one source-backed actual-attendance fact through immutable server receipts, reconciling uncertain requests without duplication. Operational surfaces show that count only for the same accepted version and receipt. This proves internal review and retained attendance evidence only; it never changes commercial history or claims repricing, invoice, refund, settlement, staffing, BEO, live phase, event completion, outbound delivery, customer response, Replay, or recovered revenue."
     },
     {
       "id": "commercial-change-impact-preview",

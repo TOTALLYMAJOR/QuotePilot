@@ -1,6 +1,6 @@
 # Documentation System
 
-Last updated: 2026-09-10 16:53:10 CDT
+Last updated: 2026-09-12 14:51:07 CDT
 
 ## Purpose
 This repository uses a layered canonical documentation model.
@@ -89,6 +89,14 @@ deposit and final-balance evidence separate, verify replay deduplication and
 customer-safe portal projection, and exercise a late provider settlement after
 a failed or expired observation. These emulator results are local evidence and
 must not be described as hosted or Stripe-provider acceptance.
+
+The same matrix owns end-to-end local acceptance for the post-event closeout
+actual-attendance callable. It must bind the exact booked quote, accepted
+version, acceptance receipt, closeout, tenant calendar policy, actor, request,
+revision, and immutable attendance receipt; prove idempotent record and explicit
+correction; and verify that quote version and commercial total do not change.
+This is disposable emulator evidence, not deployment, a production attendance
+record, or human acceptance.
 
 ## Proof-Sensitive Delivery Language
 Documentation about customer quote delivery must keep these states separate:

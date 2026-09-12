@@ -1070,6 +1070,10 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    match /organizations/{orgId}/postEventCloseouts/{closeoutId}/attendanceReceipts/{receiptId} {
+      allow read, write: if false;
+    }
+
     // Event phase ledgers and immutable command receipts are server-private.
     // Staff receive only bounded callable snapshots; no browser role owns these records.
     match /organizations/{orgId}/eventOperatingLedgers/{ledgerId} {

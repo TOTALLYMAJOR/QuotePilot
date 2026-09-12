@@ -2815,9 +2815,10 @@ rulesDescribe("firestore rules - org scoped access controls", () => {
     await assertFails(setDoc(settingsRef, { inventoryAuthorityEnabled: true }));
   });
 
-  test("post-event closeout records and action receipts are callable-only", async () => {
+  test("post-event closeout records and action or attendance receipts are callable-only", async () => {
     const closeoutId = `closeout_${"a".repeat(48)}`;
     const receiptId = `closeout_action_${"b".repeat(48)}`;
+    const attendanceReceiptId = `closeout_attendance_${"c".repeat(48)}`;
     await testEnv.withSecurityRulesDisabled(async (context) => {
       const db = context.firestore();
       await setDoc(
@@ -2828,6 +2829,23 @@ rulesDescribe("firestore rules - org scoped access controls", () => {
           customerId: "customer-a",
           closeoutId,
           state: "pending"
+        }
+      );
+      await setDoc(
+        doc(
+          db,
+          "organizations",
+          "org-a",
+          "postEventCloseouts",
+          closeoutId,
+          "attendanceReceipts",
+          attendanceReceiptId
+        ),
+        {
+          organizationId: "org-a",
+          quoteId: "q1",
+          closeoutId,
+          receiptId: attendanceReceiptId
         }
       );
       await setDoc(
@@ -2873,12 +2891,19 @@ rulesDescribe("firestore rules - org scoped access controls", () => {
       const db = context.firestore();
       const closeoutRef = doc(db, "organizations", "org-a", "postEventCloseouts", closeoutId);
       const receiptRef = doc(closeoutRef, "actionReceipts", receiptId);
+      const attendanceReceiptRef = doc(
+        closeoutRef,
+        "attendanceReceipts",
+        attendanceReceiptId
+      );
       await assertFails(getDoc(closeoutRef));
       await assertFails(getDoc(receiptRef));
+      await assertFails(getDoc(attendanceReceiptRef));
       await assertFails(setDoc(closeoutRef, { organizationId: "org-a", state: "completed" }));
       await assertFails(updateDoc(closeoutRef, { state: "completed" }));
       await assertFails(deleteDoc(closeoutRef));
       await assertFails(setDoc(receiptRef, { forged: true }));
+      await assertFails(setDoc(attendanceReceiptRef, { forged: true }));
     }
   });
 

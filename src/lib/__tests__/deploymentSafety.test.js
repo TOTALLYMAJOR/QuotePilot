@@ -297,10 +297,10 @@ describe("direct production deployment safety", () => {
     );
     const batches = planFunctionDeployBatches(ids);
 
-    expect(ids).toHaveLength(128);
-    expect(new Set(ids).size).toBe(128);
+    expect(ids).toHaveLength(129);
+    expect(new Set(ids).size).toBe(129);
     expect(ids).toEqual(expect.arrayContaining([
-      "getEventOperatingSnapshot", "applyEventOperatingCommand", "getWorkflowConfiguration",
+      "getEventOperatingSnapshot", "applyEventOperatingCommand", "recordPostEventActualAttendance", "getWorkflowConfiguration",
       "applyWorkflowDefinitionCommand", "getQuoteAttendance", "submitQuoteAttendanceResponse",
       "getWorkflowPackSnapshot", "applyWorkflowPackCommand",
       "getInventoryWorkspace", "applyInventoryCommand", "previewEventInventory",
@@ -308,7 +308,7 @@ describe("direct production deployment safety", () => {
       "invalidateEventIngredientsOnMenuCostChange"
     ]));
     expect(FUNCTIONS_DEPLOY_BATCH_SIZE).toBe(35);
-    expect(batches.map((batch) => batch.length)).toEqual([35, 35, 35, 23]);
+    expect(batches.map((batch) => batch.length)).toEqual([35, 35, 35, 24]);
     expect(batches.flat()).toEqual(ids);
     expect(Math.max(...batches.map((batch) => batch.length))).toBeLessThan(50);
     expect(fs.readFileSync(FIREBASE_STUB, "utf8")).toContain(

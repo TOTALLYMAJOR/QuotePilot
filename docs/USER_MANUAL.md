@@ -1,6 +1,6 @@
 # User Manual
 
-Last updated: 2026-09-10 15:09:08 CDT
+Last updated: 2026-09-12 14:51:07 CDT
 
 ## Purpose
 This guide explains day-to-day usage of QuotePilot for staff users and admins.
@@ -718,6 +718,16 @@ code.
   a revised request. These controls record internal staff review only. They do
   not send email, prove provider delivery or opening, record a customer reply,
   or establish a lead, booking, payment, or revenue result.
+- When that exact closeout reaches its tenant-local due date, use **Attendance
+  after service** to record the whole attended count, select who supplied the
+  count, and enter a concise source note. If a retained count is wrong, use
+  **Correct attendance record**; the correction advances the evidence revision
+  and preserves the prior fact in its immutable receipt. Wait for the exact
+  server receipt. If the outcome is uncertain, reconcile the unchanged request;
+  after a definitive rejection, reset it before starting a revised command.
+  Priced guests and actual guests remain separate. This action does not change
+  the accepted quote, reprice, invoice, refund, settle, change staffing or BEO,
+  mark the event complete, or send a customer message.
 - `Quotes, bookings, and payments` on `Overview` reports quoted, exact-state accepted and
   booked amounts, source-bounded deposit and final-balance measures, and a
   recorded repeat-event signal. Deposit or final-balance value is labeled
@@ -3003,13 +3013,21 @@ receipts for those actions and evidence.
   staff attendance, operational readiness, actual labor, or completion. The
   single next action continues to the exact Workflow, Schedule event, or quote
   record that owns the work.
+- After service, **Actuals** may show a closeout-recorded attendance count only
+  when its accepted version and acceptance receipt still match this event. It
+  stays beside, not in place of, the priced guest count. A mismatched source is
+  labeled for review and the count is withheld. The attendance receipt does not
+  establish live phase, staff attendance, labor or purchasing actuals, payment,
+  settlement, or complete Replay.
 - QP-UXR-005 **Event Preflight** appears inside selected Control Room and keeps
   **Ready / satisfied facts**, **Needs attention**, and **Unknown /
   unavailable** separate. It may confirm only narrow facts from the current
   commercial record, acceptance receipt, payment projection, final-count
   checklist, BEO, staffing, Workflow, and complete bounded Schedule evidence.
   It never calculates a readiness score. Missing or stale reads never pass;
-  inventory, actual attendance, live phase, and live issues remain unavailable.
+  inventory, actual attendance, live phase, and live issues remain unavailable
+  to the Preflight conclusion itself; separately governed actual attendance may
+  appear only in the adjacent post-event Actuals boundary.
   Its one **Next** follows the first supported attention or resolvable unknown
   into the exact existing authority; otherwise it opens the exact event in
   Schedule.

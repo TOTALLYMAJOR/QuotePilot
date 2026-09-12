@@ -1,11 +1,25 @@
 # Changelog
 
-Last updated: 2026-09-10 20:25:10 CDT
+Last updated: 2026-09-12 14:51:07 CDT
 
 All notable project changes are documented in this file.
 
 ## Unreleased — Event and Commercial activation receipt correction
 
+- Complete Attendance Slice F through the existing post-event closeout
+  authority. Same-tenant staff can record or correct one 1–400 actual count
+  after the tenant-local closeout date with a required source type/note,
+  compare-and-set revision, idempotent request identity, server actor/time, and
+  immutable prior/result receipt. The server revalidates the exact accepted
+  version and acceptance receipt transactionally; Firestore keeps the journal
+  and receipts callable-only.
+- Expose the bounded exact-source attendance projection in Customer 360, Event
+  Focus, and the Control Room Actuals boundary. Priced guests remain separate;
+  mismatched accepted-source evidence is labeled stale and withholds the count.
+  The record never reprices, invoices, refunds, settles, changes staffing/BEO,
+  advances event phase, completes closeout, sends a message, or establishes
+  Replay. This is source/local evidence only; deployment, hosted authenticated
+  use, production records, provider outcomes, and human acceptance remain open.
 - Bind the protected founder-tenant activation to the exact current
   `ragnakok-operations` Firebase backend receipt and the exact safe-off Vercel
   browser receipt. This supports the intentionally split production surfaces

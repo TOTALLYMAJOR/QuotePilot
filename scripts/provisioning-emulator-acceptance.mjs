@@ -1316,18 +1316,87 @@ assert.equal(
   (await orgRef.collection("quotes").doc(acceptanceQuoteId).get()).data()?.updatedAtISO,
   quoteUpdatedAtAfterRefresh
 );
-await expectCallableError(
-  () => callFunction("recordPostEventCloseoutReview", bootstrapToken, {
+const acceptedTotalBeforeAttendance = (await orgRef
+  .collection("quotes")
+  .doc(acceptanceQuoteId)
+  .get()).data()?.totals?.total;
+const attendanceRecordRequest = {
+  organizationId,
+  quoteId: acceptanceQuoteId,
+  closeoutId: closeoutProjection.closeoutId,
+  action: "record",
+  requestId: `attendance_${"a".repeat(32)}`,
+  expectedRevision: 0,
+  count: 98,
+  sourceType: "staff_observed",
+  note: "Event lead reconciled the served headcount after service."
+};
+const attendanceRecorded = await callFunction(
+  "recordPostEventActualAttendance",
+  bootstrapToken,
+  attendanceRecordRequest
+);
+assert.equal(attendanceRecorded.ok, true);
+assert.equal(attendanceRecorded.kind, "record");
+assert.equal(attendanceRecorded.idempotent, false);
+assert.equal(attendanceRecorded.receipt?.action, "record");
+assert.equal(attendanceRecorded.receipt?.priorRevision, 0);
+assert.equal(attendanceRecorded.receipt?.resultRevision, 1);
+assert.equal(attendanceRecorded.receipt?.count, 98);
+assert.equal(attendanceRecorded.receipt?.sourceType, "staff_observed");
+assert.equal(attendanceRecorded.postEventCloseout?.actualAttendance?.revision, 1);
+assert.equal(attendanceRecorded.postEventCloseout?.actualAttendance?.count, 98);
+assert.equal(
+  attendanceRecorded.postEventCloseout?.actualAttendance?.sourceReferenceId,
+  attendanceRecorded.receipt?.receiptId
+);
+const [attendanceCloseoutSnap, attendanceQuoteSnap, attendanceReceiptSnap] = await Promise.all([
+  orgRef.collection("postEventCloseouts").doc(closeoutProjection.closeoutId).get(),
+  orgRef.collection("quotes").doc(acceptanceQuoteId).get(),
+  orgRef.collection("postEventCloseouts")
+    .doc(closeoutProjection.closeoutId)
+    .collection("attendanceReceipts")
+    .doc(attendanceRecorded.receipt.receiptId)
+    .get()
+]);
+assert.equal(attendanceReceiptSnap.exists, true);
+assert.equal(attendanceReceiptSnap.data()?.sourceVersionId, closeoutProjection.sourceVersionId);
+assert.equal(
+  attendanceReceiptSnap.data()?.acceptanceReceiptId,
+  closeoutProjection.acceptanceReceiptId
+);
+assert.equal(attendanceCloseoutSnap.data()?.actualAttendance?.count, 98);
+assert.equal(attendanceCloseoutSnap.data()?.state, "pending");
+assert.equal(attendanceQuoteSnap.data()?.workflow?.postEventCloseout?.actualAttendance?.count, 98);
+assert.equal(attendanceQuoteSnap.data()?.activeVersionId, closeoutProjection.sourceVersionId);
+assert.equal(attendanceQuoteSnap.data()?.totals?.total, acceptedTotalBeforeAttendance);
+const repeatedAttendanceRecord = await callFunction(
+  "recordPostEventActualAttendance",
+  bootstrapToken,
+  attendanceRecordRequest
+);
+assert.equal(repeatedAttendanceRecord.idempotent, true);
+assert.equal(repeatedAttendanceRecord.receipt?.receiptId, attendanceRecorded.receipt?.receiptId);
+const attendanceCorrected = await callFunction(
+  "recordPostEventActualAttendance",
+  bootstrapToken,
+  {
     organizationId,
     quoteId: acceptanceQuoteId,
     closeoutId: closeoutProjection.closeoutId,
-    itemCode: "internal_closeout",
-    action: "review",
-    requestId: `closeout_${"e".repeat(32)}`,
-    note: "The event has not reached its tenant-local closeout due date."
-  }),
-  "FAILED_PRECONDITION"
+    action: "correct",
+    requestId: `attendance_${"b".repeat(32)}`,
+    expectedRevision: 1,
+    count: 97,
+    sourceType: "venue_reported",
+    note: "Venue captain reconciled the final door count."
+  }
 );
+assert.equal(attendanceCorrected.kind, "correct");
+assert.equal(attendanceCorrected.receipt?.priorRevision, 1);
+assert.equal(attendanceCorrected.receipt?.resultRevision, 2);
+assert.equal(attendanceCorrected.postEventCloseout?.actualAttendance?.count, 97);
+assert.equal(attendanceCorrected.postEventCloseout?.actualAttendance?.sourceType, "venue_reported");
 await settingsRef.set({ businessTimeZone: "" }, { merge: true });
 const repeatedContractConversion = await callFunction(
   "convertQuoteToContract",
