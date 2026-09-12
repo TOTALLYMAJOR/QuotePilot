@@ -24,6 +24,10 @@ const ACCESS = {
   organizationId: "org-a",
   quoteId: "quote-a"
 };
+const PORTAL_ACCESS = {
+  accessMode: "portal",
+  portalKey: "portal-conversation-token-1234567890"
+};
 const RESULT = {
   organizationId: "org-a",
   quoteId: "quote-a",
@@ -47,7 +51,7 @@ describe("conversation presentation session cache", () => {
     mocks.auth.currentUser = { uid: "staff-1" };
   });
 
-  test("retains a bounded recent conversation snapshot in memory only", () => {
+  test("retains a bounded recent staff conversation snapshot in memory only", () => {
     expect(writeConversationSession(ACCESS, RESULT, { nowMs: 1000 })).toBe(true);
     expect(readConversationSession(ACCESS, { nowMs: 1001 })).toMatchObject({
       quoteId: "quote-a",
@@ -55,8 +59,21 @@ describe("conversation presentation session cache", () => {
     });
     expect(conversationSessionPolicy).toMatchObject({
       maxEntries: 12,
-      persistence: "memory-only"
+      persistence: "memory-only",
+      accessMode: "staff-only"
     });
+  });
+
+  test("does not retain or coalesce customer portal bodies", async () => {
+    mocks.loadQuotePortalConversation.mockResolvedValue(RESULT);
+    expect(writeConversationSession(PORTAL_ACCESS, RESULT)).toBe(false);
+    expect(readConversationSession(PORTAL_ACCESS)).toBeNull();
+
+    await loadConversationAuthoritatively(PORTAL_ACCESS);
+    await loadConversationAuthoritatively(PORTAL_ACCESS);
+
+    expect(mocks.loadQuotePortalConversation).toHaveBeenCalledTimes(2);
+    expect(readConversationSession(PORTAL_ACCESS)).toBeNull();
   });
 
   test("does not expose a cached staff conversation after the authenticated principal changes", () => {
@@ -146,7 +163,7 @@ describe("conversation presentation session cache", () => {
     expect(readConversationSession(ACCESS)).toBeNull();
   });
 
-  test("warms a missing conversation once and reuses the session snapshot", async () => {
+  test("warms a missing staff conversation once and reuses the session snapshot", async () => {
     mocks.loadQuotePortalConversation.mockResolvedValue(RESULT);
     await expect(warmConversationSession(ACCESS)).resolves.toMatchObject({ quoteId: "quote-a" });
     await expect(warmConversationSession(ACCESS)).resolves.toMatchObject({ quoteId: "quote-a" });
