@@ -1,9 +1,10 @@
 import { httpsCallable } from "firebase/functions";
-import { cloudFunctions, firebaseReady } from "./firebase";
+import { auth, cloudFunctions, firebaseReady } from "./firebase";
 
 export const PORTAL_CONVERSATION_BODY_MAX_LENGTH = 1200;
 const GET_CONVERSATION_CALLABLE = "getQuotePortalConversation";
 const SEND_MESSAGE_CALLABLE = "sendQuotePortalConversationMessage";
+const inFlightConversationLoads = new Map();
 
 function text(value, maxLength = 500) {
   return String(value ?? "").trim().slice(0, maxLength);
@@ -41,6 +42,19 @@ function normalizeAccess(access = {}) {
     return { accessMode, organizationId, quoteId };
   }
   throw new Error("Conversation access mode is invalid.");
+}
+
+function conversationLoadKey(payload = {}) {
+  const principal = payload.accessMode === "staff"
+    ? text(auth?.currentUser?.uid, 160)
+    : "portal";
+  return [
+    payload.accessMode,
+    payload.organizationId || "",
+    payload.quoteId || "",
+    payload.portalKey || "",
+    principal
+  ].join(":");
 }
 
 function normalizeMessage(message = {}) {
@@ -95,9 +109,24 @@ export function buildPortalConversationClientRequestId() {
 export async function loadQuotePortalConversation(access) {
   requireConnectedConversation();
   const payload = normalizeAccess(access);
-  const call = httpsCallable(cloudFunctions, GET_CONVERSATION_CALLABLE);
-  const response = await call(payload);
-  return normalizeConversationResponse(response?.data || {});
+  const loadKey = conversationLoadKey(payload);
+  const existing = inFlightConversationLoads.get(loadKey);
+  if (existing) return existing;
+
+  const loadPromise = (async () => {
+    const call = httpsCallable(cloudFunctions, GET_CONVERSATION_CALLABLE);
+    const response = await call(payload);
+    return normalizeConversationResponse(response?.data || {});
+  })();
+  inFlightConversationLoads.set(loadKey, loadPromise);
+
+  try {
+    return await loadPromise;
+  } finally {
+    if (inFlightConversationLoads.get(loadKey) === loadPromise) {
+      inFlightConversationLoads.delete(loadKey);
+    }
+  }
 }
 
 export async function sendQuotePortalConversationMessage({
