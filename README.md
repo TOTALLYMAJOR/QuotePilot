@@ -1,6 +1,6 @@
 # QuotePilot by MBMApps
 
-Last updated: 2026-09-11 00:36:51 CDT
+Last updated: 2026-09-13 15:44:41 CDT
 
 Multi-tenant catering quote application built with React, Vite, Firebase, and jsPDF.
 
@@ -81,6 +81,12 @@ evidence paths, freshness, blocker references, and the single next proof event.
   Workspace. Existing bookmarks continue to work, but new exact-quote
   navigation uses `/app/quotes/:quoteId`; neither alias grants mutation or
   provider authority.
+- `/inquire/:slug`: share-only, `noindex` Guided Inquiry Page backed by an
+  immutable Inquiry Showcase publication. It collects event preferences
+  without prices or availability claims and creates only a server-owned
+  inquiry receipt. Administrators publish from **Library → Inquiry page**;
+  staff acknowledge, review catalog/identity drift, and convert from
+  **Opportunities** through the existing authoritative quote-creation path.
 - `/app/messages`: temporary-flagged staff Event Messaging Station. Each
   conversation remains segregated by its canonical quote/event, the inbox
   watches up to 50 same-tenant quote documents ordered by their body-free
@@ -378,6 +384,14 @@ Optional:
   guided-selling/AI-assist gates, apply behavior, and autopilot semantics
   are unchanged. Purely presentational; not a deployment or acceptance
   decision.)
+- `VITE_INQUIRY_SHOWCASE_ENABLED` (default off. Exposes the Library Inquiry
+  Showcase, Opportunities inquiry queue, and `/inquire/:slug` browser
+  surfaces; the server `INQUIRY_SHOWCASE_ENABLED` gate and tenant publication
+  gate must also be enabled.)
+- `VITE_INQUIRY_TURNSTILE_SITE_KEY` (public site key used only for the
+  `public_inquiry_submit` action). The Functions runtime separately requires
+  `INQUIRY_TURNSTILE_SECRET`, `INQUIRY_TURNSTILE_HOSTNAMES`, and
+  `INQUIRY_RATE_LIMIT_SECRET`; do not reuse Buyer Access credentials.
 - `VITE_PILOT_CREATE_ENABLED` (default off. Renders the CREATE intake
   canvas above the new-quote builder: free text is structured by a
   deterministic browser-only extractor — no provider, no I/O, no invention;

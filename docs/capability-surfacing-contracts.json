@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "catalogVersion": 83,
+  "catalogVersion": 84,
   "contracts": [
     {
       "id": "bounded-security-operations-audit",
@@ -9889,6 +9889,199 @@
       ],
       "stateExceptions": {},
       "safeOutcome": "With all inventory gates enabled, same-tenant administrators and sales can preview exact saved-quote demand, projected ingredient cost, consumable availability, allocation freshness, Commercial Change deltas, event usage evidence, and exact-event Preflight and Operations summaries. Only administrators can record requirements, change accepted/booked allocations, or submit complete consumption/waste totals and corrections. Shared fences prevent over-allocation; settlement removes the event hold and changes physical stock exactly once; immutable revisions preserve prior evidence; cached or pending reads are not current; cost completeness never manufactures or invalidates a physical commitment; and the capability never mutates selling price, invents inbound supply or valuation policy, claims authoritative actual COGS, or establishes deployment or human acceptance."
+    },
+    {
+      "id": "guided-inquiry-showcase",
+      "reviewRevision": 3,
+      "status": "active",
+      "deliveryType": "user_relevant",
+      "capabilityKind": "mixed_surface",
+      "audiences": [
+        "public_customers",
+        "organization_admins",
+        "organization_staff"
+      ],
+      "summary": "Administrators publish one immutable, customer-safe Inquiry Showcase over canonical Library references; customers submit version-pinned event preferences; staff acknowledge, resolve current-catalog and identity drift, and convert through the existing atomic authoritative quote path.",
+      "backendPaths": [
+        "firestore.rules",
+        "functions/index.js",
+        "functions/inquiryShowcase.js",
+        "functions/quoteCreation.js",
+        "functions/tenantWorkflowRuntime.js",
+        "src/lib/inquiryShowcaseClient.js"
+      ],
+      "backendExports": [
+        "functions/index.js#getPublishedInquiryShowcase",
+        "functions/index.js#submitPublicInquiry",
+        "functions/index.js#resolveInquirySubmission",
+        "functions/index.js#getInquiryShowcaseAdminState",
+        "functions/index.js#saveInquiryShowcaseDraft",
+        "functions/index.js#publishInquiryShowcase",
+        "functions/index.js#pauseInquiryShowcase",
+        "functions/index.js#republishInquiryShowcaseVersion",
+        "functions/index.js#getInquiryQueue",
+        "functions/index.js#acknowledgeInquiry",
+        "functions/index.js#previewInquiryConversion",
+        "functions/index.js#convertInquiryToQuoteDraft",
+        "functions/index.js#dismissInquiry",
+        "functions/index.js#purgeExpiredInquiries",
+        "functions/index.js#hardDeleteQuote"
+      ],
+      "affectedBackendExports": [
+        "functions/index.js#createQuoteDraft",
+        "functions/index.js#hardDeleteQuote"
+      ],
+      "frontendPaths": [
+        "src/main.jsx",
+        "src/components/PublicInquiryPage.jsx",
+        "src/components/InquiryShowcaseAdmin.jsx",
+        "src/components/InquiryQueue.jsx",
+        "src/components/AmbientLibraryRoute.jsx",
+        "src/components/AmbientOpportunitiesStream.jsx",
+        "src/lib/inquiryShowcaseClient.js"
+      ],
+      "entryPointLocators": [
+        {
+          "path": "src/components/PublicInquiryPage.jsx",
+          "locator": "data-inquiry-step"
+        },
+        {
+          "path": "src/components/InquiryShowcaseAdmin.jsx",
+          "locator": "id=\"inquiry-admin-title\""
+        },
+        {
+          "path": "src/components/InquiryQueue.jsx",
+          "locator": "data-capability-id=\"inquiry-operations-queue\""
+        }
+      ],
+      "testPaths": [
+        "src/lib/__tests__/inquiryShowcase.server.test.js",
+        "src/components/__tests__/publicInquiryPage.test.jsx",
+        "src/components/__tests__/inquiryShowcaseAdmin.test.jsx",
+        "src/components/__tests__/inquiryQueue.test.jsx",
+        "src/lib/__tests__/tenantWorkflowRuntime.test.js",
+        "src/rules/__tests__/firestore.rules.test.js"
+      ],
+      "testLocators": [
+        {
+          "path": "src/lib/__tests__/inquiryShowcase.server.test.js",
+          "locator": "publishes only customer-safe presentation and pinned reference evidence"
+        },
+        {
+          "path": "src/lib/__tests__/inquiryShowcase.server.test.js",
+          "locator": "enforces lifecycle transitions and content-free retention receipts"
+        },
+        {
+          "path": "src/components/__tests__/publicInquiryPage.test.jsx",
+          "locator": "restores validation focus and presents an exact review before submission"
+        },
+        {
+          "path": "src/components/__tests__/inquiryQueue.test.jsx",
+          "locator": "requires explicit drift and identity choices in conversion review"
+        },
+        {
+          "path": "src/rules/__tests__/firestore.rules.test.js",
+          "locator": "enumerates every Inquiry Showcase private path for browser denial coverage"
+        }
+      ],
+      "documentationPaths": [
+        "docs/COMMERCIAL_PLATFORM_PROGRAM.md",
+        "docs/FEATURE_MATRIX.md",
+        "docs/USER_MANUAL.md",
+        "README.md"
+      ],
+      "documentationLocators": [
+        {
+          "path": "docs/FEATURE_MATRIX.md",
+          "locator": "Guided Inquiry Page and Inquiry Showcase"
+        },
+        {
+          "path": "docs/USER_MANUAL.md",
+          "locator": "Publish and operate a guided inquiry page"
+        },
+        {
+          "path": "docs/COMMERCIAL_PLATFORM_PROGRAM.md",
+          "locator": "Inquiry Showcase boundary"
+        }
+      ],
+      "surfaceReview": "changed",
+      "surfaceReviewNote": "The source candidate adds a share-only noindex public route, an administrator-only Library publisher, and a same-tenant staff Opportunities queue. The public projection is allowlisted and price-free; stale publications and unresolved recovery fail visibly; staff notification failure cannot roll back the durable inquiry; conversion requires acknowledgement plus explicit catalog-drift and customer-identity choices before the existing pricing and quote transaction writes the quote and Converted receipt together. Global and tenant gates default off and no tenant is automatically published.",
+      "stateEvidence": [
+        {
+          "state": "loading",
+          "path": "src/components/__tests__/inquiryQueue.test.jsx",
+          "locator": "registers every canonical mixed-surface state",
+          "assertionLocator": "data-capability-state=\"loading\""
+        },
+        {
+          "state": "empty",
+          "path": "src/components/__tests__/inquiryQueue.test.jsx",
+          "locator": "registers every canonical mixed-surface state",
+          "assertionLocator": "data-capability-state=\"empty\""
+        },
+        {
+          "state": "success",
+          "path": "src/components/__tests__/inquiryQueue.test.jsx",
+          "locator": "registers every canonical mixed-surface state",
+          "assertionLocator": "data-capability-state=\"success\""
+        },
+        {
+          "state": "stale",
+          "path": "src/components/__tests__/inquiryQueue.test.jsx",
+          "locator": "registers every canonical mixed-surface state",
+          "assertionLocator": "data-capability-state=\"stale\""
+        },
+        {
+          "state": "partial",
+          "path": "src/components/__tests__/inquiryQueue.test.jsx",
+          "locator": "registers every canonical mixed-surface state",
+          "assertionLocator": "data-capability-state=\"partial\""
+        },
+        {
+          "state": "error",
+          "path": "src/components/__tests__/inquiryQueue.test.jsx",
+          "locator": "registers every canonical mixed-surface state",
+          "assertionLocator": "data-capability-state=\"error\""
+        },
+        {
+          "state": "recovery",
+          "path": "src/components/__tests__/inquiryQueue.test.jsx",
+          "locator": "registers every canonical mixed-surface state",
+          "assertionLocator": "data-capability-state=\"recovery\""
+        },
+        {
+          "state": "ready",
+          "path": "src/components/__tests__/inquiryQueue.test.jsx",
+          "locator": "registers every canonical mixed-surface state",
+          "assertionLocator": "data-capability-state=\"ready\""
+        },
+        {
+          "state": "submitting",
+          "path": "src/components/__tests__/inquiryQueue.test.jsx",
+          "locator": "registers every canonical mixed-surface state",
+          "assertionLocator": "data-capability-state=\"submitting\""
+        },
+        {
+          "state": "uncertain",
+          "path": "src/components/__tests__/inquiryQueue.test.jsx",
+          "locator": "registers every canonical mixed-surface state",
+          "assertionLocator": "data-capability-state=\"uncertain\""
+        },
+        {
+          "state": "reconciliation",
+          "path": "src/components/__tests__/inquiryQueue.test.jsx",
+          "locator": "registers every canonical mixed-surface state",
+          "assertionLocator": "data-capability-state=\"reconciliation\""
+        },
+        {
+          "state": "receipt",
+          "path": "src/components/__tests__/inquiryQueue.test.jsx",
+          "locator": "registers every canonical mixed-surface state",
+          "assertionLocator": "data-capability-state=\"receipt\""
+        }
+      ],
+      "stateExceptions": {},
+      "safeOutcome": "With the separate global and tenant gates enabled and one version deliberately published, a customer can submit only version-pinned event preferences and receive a content-free outcome receipt. Same-tenant staff can acknowledge and review the durable inquiry, explicitly resolve current-catalog and customer-email identity drift, and create one authoritative quote draft whose quote, customer binding, portal, first version, inquiry transition, and conversion receipt commit atomically. No submission prices, books, reserves, accepts, schedules, charges, markets to, or confirms allergen safety for the customer."
     }
   ]
 }

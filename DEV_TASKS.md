@@ -47,6 +47,17 @@ This file contains open work only. Completed delivery belongs in
   separate evidence.
 - [ ] Keep buyer access closed until restricted test credentials, webhook
   checks, Turnstile checks, and a bounded hosted acceptance plan pass.
+- [ ] Qualify Guided Inquiry without auto-publication: deploy one exact source
+  revision, bind the distinct Inquiry Turnstile and rate-limit secrets, verify
+  the hostname allowlist and scheduled deletion function, enable one consenting
+  tenant, publish one reviewed slug, and preserve source/local, CI, hosted,
+  provider, production-data, accessibility, human, and commercial-outcome
+  receipts separately.
+- [ ] Add emulator acceptance for anonymous direct-Firestore denial, tenant
+  isolation, exact-slug lookup, IP/tenant quotas, replay/recovery, stale
+  publication rejection, concurrent duplicate conversion, and atomic
+  quote/customer/portal/version/Converted-receipt creation before production
+  tenant activation.
 
 ## P1 — Operational coherence
 

@@ -7,7 +7,7 @@ const require = createRequire(import.meta.url);
 const { tenantWorkflowRuntimeEnabled } = require("../../../functions/tenantWorkflowRuntime.js");
 
 describe("deployment-scoped tenant workflow runtime", () => {
-  test.each(["EVENT_OPERATING_SPINE_ENABLED", "COMMERCIAL_CHANGE_AUTHORITY_ENABLED", "OPERATIONAL_STAFFING_AUTHORITY_ENABLED", "INVENTORY_AUTHORITY_ENABLED", "REVENUE_AUTOPILOT_ENABLED"])("restricts %s to the approved tenant even when another tenant enables settings", (flag) => {
+  test.each(["EVENT_OPERATING_SPINE_ENABLED", "COMMERCIAL_CHANGE_AUTHORITY_ENABLED", "OPERATIONAL_STAFFING_AUTHORITY_ENABLED", "INVENTORY_AUTHORITY_ENABLED", "REVENUE_AUTOPILOT_ENABLED", "INQUIRY_SHOWCASE_ENABLED"])("restricts %s to the approved tenant even when another tenant enables settings", (flag) => {
     const env = { [flag]: "false", TENANT_WORKFLOW_ORGANIZATION_ID: "mm05366-sandbox" };
     expect(tenantWorkflowRuntimeEnabled(flag, "mm05366-sandbox", env)).toBe(true);
     for (const org of ["other", "", "mm05366-sandbox ", undefined]) {

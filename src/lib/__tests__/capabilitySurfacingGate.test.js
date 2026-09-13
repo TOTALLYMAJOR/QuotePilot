@@ -299,7 +299,9 @@ describe("capability surfacing delivery gate", () => {
 
   test("inventories every explicit Functions export without swallowing later declarations", () => {
     const currentExports = parseFunctionExports(functionsEntrypointSource);
-    expect(currentExports).toHaveLength(128);
+    expect(currentExports).toHaveLength(142);
+    expect(currentExports).toContain("functions/index.js#getEventOperationalNotesSnapshot");
+    expect(currentExports).toContain("functions/index.js#applyEventOperationalNoteCommand");
     expect(currentExports).toContain("functions/index.js#getInventoryWorkspace");
     expect(currentExports).toContain("functions/index.js#applyInventoryCommand");
     expect(currentExports).toContain("functions/index.js#previewEventInventory");
@@ -325,6 +327,15 @@ describe("capability surfacing delivery gate", () => {
     expect(currentExports).toContain("functions/index.js#getWorkflowPackSnapshot");
     expect(currentExports).toContain("functions/index.js#previewWorkflowPackMigration");
     expect(currentExports).toContain("functions/index.js#applyWorkflowPackCommand");
+    for (const exportName of [
+      "getPublishedInquiryShowcase", "submitPublicInquiry", "resolveInquirySubmission",
+      "getInquiryShowcaseAdminState", "saveInquiryShowcaseDraft", "publishInquiryShowcase",
+      "pauseInquiryShowcase", "republishInquiryShowcaseVersion", "getInquiryQueue",
+      "acknowledgeInquiry", "previewInquiryConversion", "convertInquiryToQuoteDraft",
+      "dismissInquiry", "purgeExpiredInquiries"
+    ]) {
+      expect(currentExports).toContain(`functions/index.js#${exportName}`);
+    }
 
     const source = [
       "exports.first = onCall(async () => {",

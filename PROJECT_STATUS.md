@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-09-11 00:36:51 CDT
+Last updated: 2026-09-13 15:44:41 CDT
 
 ## Current evidence boundary
 
@@ -88,6 +88,11 @@ human acceptance.
 - Library owns Offers, components, Event Templates, Configuration Rules,
   versioned recipes, and menu-cost projections. It does not own physical stock
   or quote lifecycle.
+- Current source adds an off-by-default **Library → Inquiry page** Showcase,
+  public `/inquire/:slug` request, and callable-owned Opportunities inquiry
+  queue. The Showcase is a presentation/reference layer over the existing
+  catalog, not a second commercial catalog. Conversion reuses the existing
+  server-pricing and atomic quote/customer/portal/version path.
 - `/app/staff` owns people profiles; exact event Staffing plans and assignments
   remain their separate authority. Customer 360 remains `/app/customers/:id`.
 
@@ -117,6 +122,12 @@ BEO currentness.
 - Provider delivery, recipient behavior, payment settlement, usage, revenue,
   retention, and business outcomes remain separate and unverified where no
   corresponding receipt exists.
+- Guided Inquiry is source/local candidate work only. No deployment, global or
+  tenant gate activation, unique production slug, Inquiry-specific Turnstile
+  secret/hostname, notification-provider outcome, scheduled 90-day deletion,
+  authenticated hosted conversion, cross-tenant emulator acceptance,
+  accessibility scan, assistive-technology review, customer/staff human
+  acceptance, or commercial outcome is recorded.
 
 ## Next proof event
 

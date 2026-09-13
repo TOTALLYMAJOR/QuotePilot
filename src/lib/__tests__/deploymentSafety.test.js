@@ -135,6 +135,8 @@ describe("direct production deployment safety", () => {
     expect(source).toMatch(/^\s+VITE_CUSTOMER_CENTERED_WORKSPACE_ENABLED:\s*"true"\s*$/m);
     expect(source).toMatch(/^\s+VITE_BUYER_ACCESS_ENABLED:\s*"false"\s*$/m);
     expect(source).toMatch(/^\s+VITE_BUYER_ACCESS_PUBLIC_CTA_ENABLED:\s*"false"\s*$/m);
+    expect(source).toMatch(/^\s+VITE_INQUIRY_SHOWCASE_ENABLED:\s*"false"\s*$/m);
+    expect(source).toMatch(/^\s+VITE_INQUIRY_TURNSTILE_SITE_KEY:\s*""\s*$/m);
     expect(source).not.toContain("VITE_BUYER_ACCESS_TURNSTILE_SITE_KEY");
     expect(source).not.toMatch(/vars\.VITE_BUYER_ACCESS_(?:ENABLED|PUBLIC_CTA_ENABLED)/);
     expect(source).not.toMatch(/BUYER_ACCESS_TURNSTILE_SECRET/);
@@ -302,18 +304,23 @@ describe("direct production deployment safety", () => {
     );
     const batches = planFunctionDeployBatches(ids);
 
-    expect(ids).toHaveLength(128);
-    expect(new Set(ids).size).toBe(128);
+    expect(ids).toHaveLength(142);
+    expect(new Set(ids).size).toBe(142);
     expect(ids).toEqual(expect.arrayContaining([
       "getEventOperatingSnapshot", "applyEventOperatingCommand", "getWorkflowConfiguration",
       "applyWorkflowDefinitionCommand", "getQuoteAttendance", "submitQuoteAttendanceResponse",
       "getWorkflowPackSnapshot", "applyWorkflowPackCommand",
       "getInventoryWorkspace", "applyInventoryCommand", "previewEventInventory",
       "invalidateEventIngredientsOnQuoteChange", "invalidateEventIngredientsOnRecipeChange",
-      "invalidateEventIngredientsOnMenuCostChange"
+      "invalidateEventIngredientsOnMenuCostChange",
+      "getPublishedInquiryShowcase", "submitPublicInquiry", "resolveInquirySubmission",
+      "getInquiryShowcaseAdminState", "saveInquiryShowcaseDraft", "publishInquiryShowcase",
+      "pauseInquiryShowcase", "republishInquiryShowcaseVersion", "getInquiryQueue",
+      "acknowledgeInquiry", "previewInquiryConversion", "convertInquiryToQuoteDraft",
+      "dismissInquiry", "purgeExpiredInquiries"
     ]));
     expect(FUNCTIONS_DEPLOY_BATCH_SIZE).toBe(35);
-    expect(batches.map((batch) => batch.length)).toEqual([35, 35, 35, 23]);
+    expect(batches.map((batch) => batch.length)).toEqual([35, 35, 35, 35, 2]);
     expect(batches.flat()).toEqual(ids);
     expect(Math.max(...batches.map((batch) => batch.length))).toBeLessThan(50);
     expect(fs.readFileSync(FIREBASE_STUB, "utf8")).toContain(
@@ -341,7 +348,8 @@ describe("direct production deployment safety", () => {
       REVENUE_AUTOPILOT_ENABLED: "false",
       REVENUE_AUTOPILOT_SENDS_ENABLED: "false",
       BUYER_ACCESS_ENABLED: "false",
-      BUYER_ACCESS_STRIPE_MODE: "test"
+      BUYER_ACCESS_STRIPE_MODE: "test",
+      INQUIRY_SHOWCASE_ENABLED: "false"
     };
     const entry = (id, environmentVariables = runtime) => ({
       id,
@@ -419,6 +427,13 @@ describe("direct production deployment safety", () => {
         entry(expectedIds[1], { ...runtime, BUYER_ACCESS_TURNSTILE_HOSTNAMES: "example.invalid" })
       ]
     }, expectedIds)).toThrow(/disabled runtime residue BUYER_ACCESS_TURNSTILE_HOSTNAMES/i);
+    expect(() => validateProductionFunctionsReadback({
+      ...response,
+      result: [
+        entry(expectedIds[0]),
+        entry(expectedIds[1], { ...runtime, INQUIRY_TURNSTILE_HOSTNAMES: "example.invalid" })
+      ]
+    }, expectedIds)).toThrow(/disabled runtime residue INQUIRY_TURNSTILE_HOSTNAMES/i);
   });
 
   test("requires ephemeral workload identity credentials for Firebase production", () => {

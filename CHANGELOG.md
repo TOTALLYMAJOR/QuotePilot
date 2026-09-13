@@ -1,10 +1,31 @@
 # Changelog
 
-Last updated: 2026-09-11 00:36:51 CDT
+Last updated: 2026-09-13 15:44:41 CDT
 
 All notable project changes are documented in this file.
 
 ## Unreleased — Event and Commercial activation receipt correction
+
+- Add an off-by-default Guided Inquiry Page backed by one immutable Inquiry
+  Showcase rather than a second commercial catalog. Administrators curate and
+  preview customer-safe references in Library, publish/pause/republish exact
+  versions with slug and receipt fences, and never copy pricing, cost, margin,
+  inclusion, rule, staffing, inventory, or availability authority. Customers
+  use `/inquire/:slug` to review and submit event preferences through distinct
+  Turnstile and bounded abuse controls; stale publications fail closed,
+  uncertain outcomes resolve with an opaque session recovery secret, and the
+  on-screen receipt explicitly creates no customer, quote, portal, Calendar
+  event, payment, availability claim, proposal, or booking. Opportunities owns
+  the Received/Acknowledged/Converted/Dismissed queue, notification failure is
+  isolated after durable recording, current-catalog and customer-identity
+  drift require explicit staff resolution, and the existing authoritative
+  quote transaction commits quote/customer/portal/version plus the Converted
+  receipt atomically. Unconverted content receives a 90-day deletion time;
+  scheduled cleanup retains only a content-free receipt. Direct browser access
+  to all Showcase, inquiry, abuse, recovery, analytics, and receipt records is
+  denied. This is source/local candidate evidence only; deployment, secrets,
+  gates, hosted/provider behavior, production data, accessibility, human
+  acceptance, and commercial outcomes remain open.
 
 - Correct the `staging-event-operating-spine` candidate envelope so enabling
   Commercial Change and Event Spine preserves Staffing and Inventory and binds
