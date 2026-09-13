@@ -1,6 +1,6 @@
 # User Manual
 
-Last updated: 2026-09-12 14:51:07 CDT
+Last updated: 2026-09-13 01:37:10 CDT
 
 ## Purpose
 This guide explains day-to-day usage of QuotePilot for staff users and admins.
@@ -1395,10 +1395,14 @@ QuotePilot does not copy the guest count or the billing quantity into this
 field. On an unchanged saved quote, the disclosure retains **Preview ingredient
 impact** so the existing read-only evaluation remains reachable. Once a working
 guest-count scenario exists, that standalone action hides and the nearby
-Commercial Scenario Workbench requests the same read-only ingredient scenario
-after the input settles. The request remains separate from the authoritative
-Commercial Change simulation and is accepted only for the active scenario ID,
-generation, input digest, and saved base revision. Physical demand, projected
+Commercial Scenario Workbench includes the read-only ingredient evaluation in
+the same reviewed Commercial Change request after the input settles. The server
+builds the prospective immutable quote revision privately, rechecks the saved
+base revision, and lets Inventory evaluate that proposed revision without a
+second browser race. The returned observation stays separate from commercial
+pricing and authorization and is accepted only when its commercial receipt,
+prospective revision, Inventory input digest, and projection revision agree.
+Physical demand, projected
 ingredient cost, and stock availability remain separate results. A valid
 projected cost remains visible during a shortage; a valid shortage remains
 visible when cost evidence is incomplete.
@@ -1569,8 +1573,9 @@ reporting remain unavailable until their own bounded evidence authorities exist.
   the active scenario, dominant action, evidence state, or recovery.
 - The workbench itself owns no network, provider, persistence, pricing,
   staffing, inventory, BEO, or apply authority. Its host requests the existing
-  read-only preview providers for the exact active scenario. Commercial pricing
-  and dependency evidence remain server-authoritative. Inventory joins only
+  read-only evidence for the exact active scenario. Commercial pricing
+  and dependency evidence remain server-authoritative. Inventory joins the same
+  server simulation round trip only
   for a guest-count-only scenario when its independently gated explicit
   recipe-output quantities and portion basis are complete. Mixed and non-guest
   edits are explicitly outside this inventory slice; they are not labeled as

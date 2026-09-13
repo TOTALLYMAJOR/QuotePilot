@@ -13800,7 +13800,7 @@ function throwCommercialChangeFailure(error, operation, context = {}) {
 }
 
 exports.simulateCommercialQuoteChange = functions.region(REGION).https.onCall(async (data, context) => {
-  if (!data || Object.keys(data).some((key) => !["organizationId", "quoteId", "expectedActiveVersionId", "requestId", "form", "attendanceSubmissionReceiptId"].includes(key))) throw new functions.https.HttpsError("invalid-argument", "Unsupported commercial simulation fields.");
+  if (!data || Object.keys(data).some((key) => !["organizationId", "quoteId", "expectedActiveVersionId", "requestId", "form", "attendanceSubmissionReceiptId", "eventIngredientOutputs"].includes(key))) throw new functions.https.HttpsError("invalid-argument", "Unsupported commercial simulation fields.");
   const organizationId = normalizeOrganizationId(data?.organizationId);
   const quoteId = normalizeText(data?.quoteId);
   const expectedActiveVersionId = normalizeText(data?.expectedActiveVersionId);
@@ -13916,6 +13916,7 @@ exports.simulateCommercialQuoteChange = functions.region(REGION).https.onCall(as
       return {
         planned,
         evaluatedImpact,
+        projectedVersion: projectedEditDocuments.version,
         persistedEffects: projectCommercialChangePersistedEffects({
           receipt: planned.receipt,
           quote,
@@ -13924,6 +13925,54 @@ exports.simulateCommercialQuoteChange = functions.region(REGION).https.onCall(as
         enforcement: commercialChangeEnforcementState(settingsSnap.data() || {}, staff.organizationId)
       };
     });
+    const inventoryObservationBase = {
+      schemaVersion: "commercial-change-inventory-observation-v1",
+      authority: "inventory_read_only_observation",
+      organizationId,
+      quoteId,
+      baseQuoteRevisionId: expectedActiveVersionId,
+      proposedQuoteRevisionId: normalizeText(result.projectedVersion?.versionId),
+      commercialSimulationReceiptId: normalizeText(result.planned.receipt?.receiptId),
+      commercialSimulationReceiptDigest: normalizeText(result.planned.receipt?.receiptDigest),
+      commercialPreviewRevisionId: normalizeText(result.planned.receipt?.proposedRevisionId),
+      observedAtISO: nowISO,
+      boundary: "Read-only Inventory evidence only; no stock, allocation, ordering, pricing, authorization, or quote mutation."
+    };
+    let inventoryObservation;
+    if (!Array.isArray(data.eventIngredientOutputs) || data.eventIngredientOutputs.length === 0) {
+      inventoryObservation = {
+        ...inventoryObservationBase,
+        state: "not_requested",
+        reasonCode: "explicit_output_quantities_required"
+      };
+    } else {
+      try {
+        const preview = await inventoryAuthorityRuntime.previewProjectedEventInventory({
+          organizationId,
+          quoteId,
+          expectedBaseQuoteRevisionId: expectedActiveVersionId,
+          projectedVersion: result.projectedVersion,
+          outputRows: data.eventIngredientOutputs
+        }, context);
+        inventoryObservation = {
+          ...inventoryObservationBase,
+          state: "available",
+          inputDigest: normalizeText(preview?.inputDigest),
+          preview
+        };
+      } catch (error) {
+        functions.logger.warn("Commercial Inventory observation unavailable", {
+          organizationId,
+          quoteId,
+          code: normalizeText(error?.code).slice(0, 80)
+        });
+        inventoryObservation = {
+          ...inventoryObservationBase,
+          state: "unavailable",
+          reasonCode: "inventory_observation_unavailable"
+        };
+      }
+    }
     return {
       ok: true,
       storage: "firebase",
@@ -13936,6 +13985,7 @@ exports.simulateCommercialQuoteChange = functions.region(REGION).https.onCall(as
         result.planned.receipt,
         result.evaluatedImpact
       ),
+      inventoryObservation,
       persistedEffects: result.persistedEffects
     };
   } catch (error) {

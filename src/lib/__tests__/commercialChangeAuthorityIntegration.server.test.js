@@ -56,8 +56,22 @@ describe("Commercial Change Authority callable integration", () => {
     expect(simulation).toContain("buildTrustedQuoteEditDocuments({");
     expect(simulation).toContain("commercialChangeAuthority.simulate({");
     expect(simulation).toContain("tx.create(receiptRef");
+    expect(simulation).toContain("inventoryAuthorityRuntime.previewProjectedEventInventory({");
+    expect(simulation).toContain("projectedVersion: result.projectedVersion");
+    expect(simulation).toContain("outputRows: data.eventIngredientOutputs");
+    expect(simulation).toContain('authority: "inventory_read_only_observation"');
+    expect(simulation).toContain('state: "not_requested"');
+    expect(simulation).toContain('state: "unavailable"');
+    expect(simulation).toContain("inventoryObservation,");
     expect(simulation).toContain("simulation: projectCommercialChangeSimulation");
     expect(simulation).toContain("persistedEffects: projectCommercialChangePersistedEffects({");
+    expect(simulation.indexOf("inventoryAuthorityRuntime.previewProjectedEventInventory({"))
+      .toBeGreaterThan(simulation.indexOf("await db.runTransaction(async (tx) =>"));
+    const receiptWrite = simulation.slice(
+      simulation.indexOf("tx.create(receiptRef"),
+      simulation.indexOf("coordinator?.commit()")
+    );
+    expect(receiptWrite).not.toContain("inventoryObservation");
 
     const approvalRequest = sourceBetween(
       "exports.requestCommercialQuoteChangeAuthorization =",

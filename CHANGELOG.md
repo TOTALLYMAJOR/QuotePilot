@@ -1,11 +1,17 @@
 # Changelog
 
-Last updated: 2026-09-13 00:31:30 CDT
+Last updated: 2026-09-13 01:37:10 CDT
 
 All notable project changes are documented in this file.
 
 ## Unreleased — Event and Commercial activation receipt correction
 
+- Coordinate eligible Quote Edit Inventory evidence with the authoritative
+  Commercial Change simulation. Inventory now evaluates the private
+  server-built prospective quote revision in a read-only transaction, accepts
+  only explicit kitchen output quantities, and returns a separately receipt-
+  bound observation. Missing or failed Inventory evidence stays visible and
+  cannot alter pricing, authorization, allocation, ordering, or quote state.
 - Turn stale Kitchen BEO and production-plan invalidations into exact recovery
   actions. Operators can open the current quote's Kitchen BEO or event
   production checklist directly from Commercial Change Intelligence; neither

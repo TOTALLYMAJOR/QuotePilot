@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "catalogVersion": 84,
+  "catalogVersion": 86,
   "contracts": [
     {
       "id": "bounded-security-operations-audit",
@@ -2926,7 +2926,7 @@
     },
     {
       "id": "commercial-change-authority",
-      "reviewRevision": 8,
+      "reviewRevision": 9,
       "status": "active",
       "deliveryType": "user_relevant",
       "capabilityKind": "mutation_surface",
@@ -2934,7 +2934,7 @@
         "staff",
         "administrators"
       ],
-      "summary": "QP-UXR-001 composes receipt-bound commercial change simulation, approval handoff, authorization, atomic application, preserved historical evidence, named invalidation, exact transport-ambiguous outcome reconciliation, and the next valid action into trusted Quote Edit. Dormant review, enforced no-impact review, and authorized changes all carry the exact simulation envelope through the existing write authority; success remains on the amendment surface long enough to present Changed, Preserved, Needs attention, and Next. Living Opportunity Quick Updates and guest-count simulation retain their narrower contracts and create no second commercial rule.",
+      "summary": "QP-UXR-001 composes receipt-bound commercial change simulation, approval handoff, authorization, atomic application, preserved historical evidence, named invalidation, exact transport-ambiguous outcome reconciliation, and the next valid action into trusted Quote Edit. Eligible simulations also return a separately bound, read-only Inventory observation for the private prospective quote revision; that evidence never enters pricing, approval, authorization, or apply receipts. Dormant review, enforced no-impact review, and authorized changes all carry the exact simulation envelope through the existing write authority; success remains on the amendment surface long enough to present Changed, Preserved, Needs attention, and Next. Living Opportunity Quick Updates and guest-count simulation retain their narrower contracts and create no second commercial rule.",
       "backendPaths": [
         "firestore.rules",
         "functions/index.js",
@@ -9655,7 +9655,7 @@
     },
     {
       "id": "event-ingredient-demand-consequence",
-      "reviewRevision": 6,
+      "reviewRevision": 7,
       "status": "active",
       "deliveryType": "user_relevant",
       "capabilityKind": "mixed_surface",
@@ -9663,7 +9663,7 @@
         "organization_admins",
         "organization_sales"
       ],
-      "summary": "Quote Edit compiles exact saved menu selections and explicit recipe-output quantities into immutable event ingredient demand, projected ingredient cost, and consumable stock availability; accepted/booked commitments reconcile through shared date-independent Firestore fences, Commercial Change shows independent read-only cost and stock consequences, the exact event Control Room records consumption, waste, and correction evidence, and Event Preflight plus the selected Operations event compose the same exact projections without collapsing physical, cost, or execution truth.",
+      "summary": "Quote Edit compiles exact saved menu selections and explicit recipe-output quantities into immutable event ingredient demand, projected ingredient cost, and consumable stock availability; eligible Commercial Change simulation evaluates those quantities against its private server-built prospective immutable revision and returns a separately receipt-bound read-only Inventory observation; accepted/booked commitments reconcile through shared date-independent Firestore fences, the exact event Control Room records consumption, waste, and correction evidence, and Event Preflight plus the selected Operations event compose the same exact projections without collapsing physical, cost, or execution truth.",
       "backendPaths": [
         "firestore.rules",
         "functions/index.js",
@@ -9686,7 +9686,8 @@
         "functions/index.js#invalidateEventIngredientsOnMenuCostChange"
       ],
       "affectedBackendExports": [
-        "functions/index.js#applyInventoryCommand"
+        "functions/index.js#applyInventoryCommand",
+        "functions/index.js#simulateCommercialQuoteChange"
       ],
       "frontendPaths": [
         "src/App.jsx",
@@ -9739,6 +9740,9 @@
         "src/hooks/__tests__/useEventIngredientProjection.test.jsx",
         "src/hooks/__tests__/useEventIngredientExecutionProjection.test.jsx",
         "src/lib/__tests__/inventoryAuthorityClient.test.js",
+        "src/lib/__tests__/commercialChangeAuthorityClient.test.js",
+        "src/lib/__tests__/commercialChangeAuthorityIntegration.server.test.js",
+        "src/components/__tests__/governedCommercialAmendment.test.jsx",
         "src/lib/__tests__/deploymentSafety.test.js",
         "src/lib/__tests__/inventoryAuthorityRuntime.server.test.js",
         "src/lib/__tests__/commercialInventoryConsequences.test.js",

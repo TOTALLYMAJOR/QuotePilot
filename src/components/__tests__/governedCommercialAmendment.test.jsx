@@ -88,16 +88,16 @@ describe("Governed Commercial Amendment Experience", () => {
     ];
     for (const [source, endMarker] of variants) {
       const handler = sourceSlice(source, "const handlePreviewChangeImpact", endMarker);
-      expect(occurrenceCount(handler, "eventIngredientProjection.previewCurrent({")).toBe(1);
+      expect(occurrenceCount(handler, "eventIngredientProjection.previewCurrent({")).toBe(0);
       expect(occurrenceCount(handler, "simulateCommercialQuoteChange({")).toBe(1);
       expect(handler).toContain("candidateForm = form");
       expect(handler).toContain("const formKey = JSON.stringify(candidateForm)");
       expect(handler).toContain("proposedForm: candidateForm");
       expect(handler).toContain("formKey === currentChangeImpactFormKey");
       expect(handler).toContain("form: candidateForm");
-      expect(handler).toContain("selections: eventIngredientPreviewInput.selections");
-      expect(handler).toContain("void eventIngredientProjection.previewCurrent({");
-      expect(handler).toContain("}).catch((error) => {");
+      expect(handler).toContain("eventIngredientOutputs: eventIngredientPreviewInput.selections.map");
+      expect(handler).toContain("inventoryObservation: result.inventoryObservation");
+      expect(handler).not.toContain("void eventIngredientProjection.previewCurrent({");
       expect(handler).toContain("const pending = pendingLivingTwinConsequenceRequest");
       expect(handler).toContain("pending.baseQuoteRevisionId !== livingTwinBaseQuoteRevisionId");
       expect(handler).toContain("pending.scopeKey !== livingTwinScopeKey");

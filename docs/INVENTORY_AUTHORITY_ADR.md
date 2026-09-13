@@ -1,6 +1,6 @@
 # Ingredient Inventory and Menu-Costing Authority
 
-Last updated: 2026-09-10 15:09:08 CDT
+Last updated: 2026-09-13 01:37:10 CDT
 
 Status: Accepted scope correction; corrected Phases 2 through 8 are merged in
 the v0.18 source line, the Inventory backend is deployed and exact-tenant
@@ -612,7 +612,14 @@ up without release; every allocation revision is preserved, and exact event and
 ingredient projections update atomically. Phase 6 adds bounded reverse event
 dependencies, source-fenced invalidation, independent freshness axes, explicit
 retained-hold reconciliation, and non-governing Commercial Change ingredient-
-cost and availability intelligence. Phase 7 records full replacement
+cost and availability intelligence. The Quote Edit simulation now requests
+eligible ingredient evidence through that same server round trip: Inventory
+compiles against the private server-built prospective immutable quote version,
+rechecks the saved base revision, derives proposed menu/date/time and recipe
+provenance from authority records, and accepts only operator-entered output
+quantities. The resulting observation is separately bound to the commercial
+receipt but never becomes part of its pricing, authorization, or apply evidence;
+missing or unavailable Inventory remains an explicit partial result. Phase 7 records full replacement
 consumption and waste totals against the pinned immutable plan, settles the
 active hold without double subtraction, preserves corrections as immutable
 evidence, and publishes a separate exact realtime execution projection in the

@@ -16,7 +16,9 @@ vi.mock("firebase/functions", () => ({
 }));
 
 vi.mock("../firebase", () => ({
+  auth: null,
   cloudFunctions: mockState.cloudFunctions,
+  db: null,
   firebaseReady: true
 }));
 
@@ -260,6 +262,99 @@ function persistedEffects(overrides = {}) {
   };
 }
 
+function inventoryPreview(overrides = {}) {
+  const eventRequirementRevisionId = `eir_${"a".repeat(48)}`;
+  const coreProjection = {
+    authorityVersion: "inventory-ingredient-authority-v2",
+    schemaVersion: 1,
+    projectionVersion: "ingredient-event-projection-v1",
+    organizationId: SCOPE.organizationId,
+    quoteId: SCOPE.quoteId,
+    quoteRevisionId: TARGET_REVISION_ID,
+    eventRequirementRevisionId,
+    requirementDigest: DIGEST,
+    requiredByISO: "2026-09-01T17:00:00.000Z",
+    demandState: "complete",
+    costState: "complete",
+    availabilityState: "available",
+    selections: [],
+    ingredients: [],
+    coverage: {
+      selectedMenuItemCount: 0,
+      compiledMenuItemCount: 0,
+      ingredientCount: 0,
+      costedIngredientCount: 0,
+      knownCostIngredientCount: 0,
+      stockKnownIngredientCount: 0,
+      availableIngredientCount: 0,
+      shortageIngredientCount: 0
+    },
+    sourceRevisions: {
+      recipeRevisionIds: [],
+      recipeCostResultDigests: [],
+      stockRevisions: [],
+      allocationRevisions: []
+    },
+    issues: [],
+    projectionDigest: DIGEST
+  };
+  const requirementRevision = {
+    authorityVersion: coreProjection.authorityVersion,
+    schemaVersion: 1,
+    requirementVersion: "ingredient-event-requirement-v1",
+    organizationId: SCOPE.organizationId,
+    quoteId: SCOPE.quoteId,
+    quoteRevisionId: TARGET_REVISION_ID,
+    requiredByISO: coreProjection.requiredByISO,
+    demandState: coreProjection.demandState,
+    costState: coreProjection.costState,
+    selections: [],
+    ingredients: [],
+    coverage: {
+      selectedMenuItemCount: 0,
+      compiledMenuItemCount: 0,
+      ingredientCount: 0,
+      costedIngredientCount: 0,
+      knownCostIngredientCount: 0
+    },
+    issues: [],
+    eventRequirementRevisionId,
+    requirementDigest: DIGEST
+  };
+  return {
+    ok: true,
+    schemaVersion: 2,
+    organizationId: SCOPE.organizationId,
+    quoteId: SCOPE.quoteId,
+    quoteRevisionId: TARGET_REVISION_ID,
+    preview: true,
+    requirementRevision,
+    ingredientLabels: [],
+    projection: coreProjection,
+    ...overrides
+  };
+}
+
+function inventoryObservation(state = "not_requested", overrides = {}) {
+  const common = {
+    schemaVersion: "commercial-change-inventory-observation-v1",
+    authority: "inventory_read_only_observation",
+    state,
+    organizationId: SCOPE.organizationId,
+    quoteId: SCOPE.quoteId,
+    baseQuoteRevisionId: BASE_REVISION_ID,
+    proposedQuoteRevisionId: TARGET_REVISION_ID,
+    commercialSimulationReceiptId: SIMULATION_RECEIPT_ID,
+    commercialSimulationReceiptDigest: DIGEST,
+    commercialPreviewRevisionId: "preview-v0015",
+    observedAtISO: SIMULATED_AT,
+    boundary: "Read-only Inventory observation; no requirement, allocation, movement, or order was written."
+  };
+  return state === "available"
+    ? { ...common, inputDigest: DIGEST, preview: inventoryPreview(), ...overrides }
+    : { ...common, reasonCode: state === "not_requested" ? "explicit_outputs_not_provided" : "inventory_unavailable", ...overrides };
+}
+
 function simulationResponse(overrides = {}) {
   return {
     ok: true,
@@ -269,6 +364,7 @@ function simulationResponse(overrides = {}) {
     authorityState: "dormant",
     simulationReceipt: simulationReceipt(),
     simulation: simulationProjection(),
+    inventoryObservation: inventoryObservation(),
     persistedEffects: persistedEffects(),
     ...overrides
   };
@@ -500,6 +596,12 @@ describe("Commercial Change Authority simulation client", () => {
         receiptId: SIMULATION_RECEIPT_ID,
         impact: { counts: { total: 1, stale: 1 } }
       },
+      inventoryObservation: {
+        state: "not_requested",
+        baseQuoteRevisionId: BASE_REVISION_ID,
+        proposedQuoteRevisionId: TARGET_REVISION_ID,
+        reasonCode: "explicit_outputs_not_provided"
+      },
       persistedEffects: {
         identity: {
           baseRevisionId: BASE_REVISION_ID,
@@ -518,6 +620,118 @@ describe("Commercial Change Authority simulation client", () => {
     });
     expect(Object.isFrozen(result)).toBe(true);
     expect(Object.isFrozen(result.simulation.impact.dependentNodes)).toBe(true);
+  });
+
+  test("sends only exact output quantities and validates a separately bound Inventory observation", async () => {
+    mockState.callable.mockResolvedValue({
+      data: simulationResponse({ inventoryObservation: inventoryObservation("available") })
+    });
+    const eventIngredientOutputs = [
+      { menuItemId: "chicken-pasta", requiredOutputQuantity: "175" },
+      { menuItemId: "vegetable-pasta", requiredOutputQuantity: "25.5" }
+    ];
+
+    const result = await simulateCommercialQuoteChange({
+      ...SCOPE,
+      expectedActiveVersionId: BASE_REVISION_ID,
+      requestId: SIMULATION_REQUEST_ID,
+      form: { guests: 200 },
+      eventIngredientOutputs,
+      localScenarioFingerprint: "must-not-cross"
+    });
+
+    expect(mockState.callable).toHaveBeenCalledWith({
+      ...SCOPE,
+      expectedActiveVersionId: BASE_REVISION_ID,
+      requestId: SIMULATION_REQUEST_ID,
+      form: { guests: 200 },
+      eventIngredientOutputs
+    });
+    expect(result.inventoryObservation).toMatchObject({
+      authority: "inventory_read_only_observation",
+      state: "available",
+      baseQuoteRevisionId: BASE_REVISION_ID,
+      proposedQuoteRevisionId: TARGET_REVISION_ID,
+      commercialSimulationReceiptId: SIMULATION_RECEIPT_ID,
+      commercialSimulationReceiptDigest: DIGEST,
+      commercialPreviewRevisionId: "preview-v0015",
+      inputDigest: DIGEST,
+      preview: {
+        quoteRevisionId: TARGET_REVISION_ID,
+        projection: { quoteRevisionId: TARGET_REVISION_ID, freshness: "preview" }
+      }
+    });
+    expect(Object.isFrozen(result.inventoryObservation.preview.projection)).toBe(true);
+  });
+
+  test("rejects malformed output rows before Firebase and cross-bound Inventory evidence after it", async () => {
+    await expect(simulateCommercialQuoteChange({
+      ...SCOPE,
+      expectedActiveVersionId: BASE_REVISION_ID,
+      requestId: SIMULATION_REQUEST_ID,
+      form: { guests: 175 },
+      eventIngredientOutputs: [{
+        menuItemId: "chicken-pasta",
+        requiredOutputQuantity: "0175",
+        guestCount: 175
+      }]
+    })).rejects.toMatchObject({ code: "invalid-argument" });
+    expect(mockState.callable).not.toHaveBeenCalled();
+
+    const validInput = {
+      ...SCOPE,
+      expectedActiveVersionId: BASE_REVISION_ID,
+      requestId: SIMULATION_REQUEST_ID,
+      form: { guests: 175 },
+      eventIngredientOutputs: [{ menuItemId: "chicken-pasta", requiredOutputQuantity: "175" }]
+    };
+    const divergentBindings = [
+      { organizationId: "org-other" },
+      { quoteId: "quote-other" },
+      { baseQuoteRevisionId: "v0001" },
+      { proposedQuoteRevisionId: "v0099" },
+      { commercialSimulationReceiptId: `ccs_${"2".repeat(48)}` },
+      { commercialSimulationReceiptDigest: "9".repeat(64) },
+      { commercialPreviewRevisionId: "preview-v0099" },
+      { preview: inventoryPreview({ quoteRevisionId: "v0099" }) }
+    ];
+    for (const divergence of divergentBindings) {
+      mockState.callable.mockResolvedValue({
+        data: simulationResponse({
+          inventoryObservation: inventoryObservation("available", divergence)
+        })
+      });
+      await expect(simulateCommercialQuoteChange(validInput))
+        .rejects.toMatchObject({ code: "invalid-server-response" });
+    }
+  });
+
+  test("preserves an explicit unavailable Inventory observation without treating it as commercial idempotency", async () => {
+    mockState.callable.mockResolvedValue({
+      data: simulationResponse({
+        idempotent: true,
+        inventoryObservation: inventoryObservation("unavailable", {
+          reasonCode: "inventory_preview_failed"
+        })
+      })
+    });
+
+    const result = await simulateCommercialQuoteChange({
+      ...SCOPE,
+      expectedActiveVersionId: BASE_REVISION_ID,
+      requestId: SIMULATION_REQUEST_ID,
+      form: { guests: 175 },
+      eventIngredientOutputs: [{ menuItemId: "chicken-pasta", requiredOutputQuantity: "175" }]
+    });
+
+    expect(result).toMatchObject({
+      idempotent: true,
+      inventoryObservation: {
+        state: "unavailable",
+        reasonCode: "inventory_preview_failed"
+      }
+    });
+    expect(result.inventoryObservation).not.toHaveProperty("idempotent");
   });
 
   test("rejects a cross-scope or receipt-divergent server projection as uncertain", async () => {
