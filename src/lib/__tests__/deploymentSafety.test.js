@@ -7,13 +7,8 @@ import {
   functionsDeployOutputHasFailure,
   listExpectedFunctionIds,
   planFunctionDeployBatches,
-  isEnabledProductionSecretVersion,
-  validateProductionSecretMetadata,
   validateProductionFunctionsReadback
 } from "../../../scripts/deploy-firebase-production.mjs";
-import {
-  validateProductionBrowserEnvironment
-} from "../../../scripts/deploy-vercel-production.mjs";
 
 const ROOT = process.cwd();
 const FIREBASE_WORKFLOW = path.join(
@@ -135,14 +130,11 @@ describe("direct production deployment safety", () => {
     expect(source).toMatch(/^\s+VITE_APP_HOST:\s*quotepilot\.mbmapps\.com\s*$/m);
     expect(source).toMatch(/^\s+VITE_BASE_DOMAIN:\s*\$\{\{ vars\.APP_BASE_DOMAIN \}\}\s*$/m);
     expect(source).toMatch(
-      /^\s+VITE_DEFAULT_ORGANIZATION_ID:\s*\$\{\{ inputs\.release_profile == 'all-qualified-features' && 'mm05366-sandbox' \|\| vars\.VITE_DEFAULT_ORGANIZATION_ID \}\}\s*$/m
+      /^\s+VITE_DEFAULT_ORGANIZATION_ID:\s*\$\{\{ vars\.VITE_DEFAULT_ORGANIZATION_ID \}\}\s*$/m
     );
     expect(source).toMatch(/^\s+VITE_CUSTOMER_CENTERED_WORKSPACE_ENABLED:\s*"true"\s*$/m);
     expect(source).toMatch(/^\s+VITE_BUYER_ACCESS_ENABLED:\s*"false"\s*$/m);
     expect(source).toMatch(/^\s+VITE_BUYER_ACCESS_PUBLIC_CTA_ENABLED:\s*"false"\s*$/m);
-    expect(source).toMatch(/^\s+VITE_INQUIRY_SHOWCASE_ENABLED:\s*\$\{\{ inputs\.release_profile == 'all-qualified-features' && 'true' \|\| 'false' \}\}\s*$/m);
-    expect(source).toMatch(/^\s+VITE_INQUIRY_TURNSTILE_SITE_KEY:\s*\$\{\{ inputs\.release_profile == 'all-qualified-features' && vars\.VITE_INQUIRY_TURNSTILE_SITE_KEY \|\| '' \}\}\s*$/m);
-    expect(source).toMatch(/^\s+VITE_PILOT_MODEL_ENABLED:\s*\$\{\{ inputs\.release_profile == 'all-qualified-features' && 'true' \|\| 'false' \}\}\s*$/m);
     expect(source).not.toContain("VITE_BUYER_ACCESS_TURNSTILE_SITE_KEY");
     expect(source).not.toMatch(/vars\.VITE_BUYER_ACCESS_(?:ENABLED|PUBLIC_CTA_ENABLED)/);
     expect(source).not.toMatch(/BUYER_ACCESS_TURNSTILE_SECRET/);
@@ -252,10 +244,10 @@ describe("direct production deployment safety", () => {
     );
 
     expect(firebaseWorkflow).toContain(
-      "OPERATIONAL_STAFFING_AUTHORITY_ENABLED: ${{ (inputs.release_profile == 'ragnakok-operations' || inputs.release_profile == 'all-qualified-features') && 'true' || 'false' }}"
+      "OPERATIONAL_STAFFING_AUTHORITY_ENABLED: ${{ inputs.release_profile == 'ragnakok-operations' && 'true' || 'false' }}"
     );
     expect(firebaseWorkflow).toContain(
-      "INVENTORY_AUTHORITY_ENABLED: ${{ (inputs.release_profile == 'ragnakok-operations' || inputs.release_profile == 'all-qualified-features') && 'true' || 'false' }}"
+      "INVENTORY_AUTHORITY_ENABLED: ${{ inputs.release_profile == 'ragnakok-operations' && 'true' || 'false' }}"
     );
     expect(vercelWorkflow).not.toContain("OPERATIONAL_STAFFING_AUTHORITY_ENABLED");
     expect(functionsExample).toMatch(/^OPERATIONAL_STAFFING_AUTHORITY_ENABLED=false$/m);
@@ -277,15 +269,14 @@ describe("direct production deployment safety", () => {
     }
     expect(source).toContain("- email-active");
     expect(source).toContain("- ragnakok-operations");
-    expect(source).toContain("- all-qualified-features");
     expect(source).toContain(
-      "COMMERCIAL_CHANGE_AUTHORITY_ENABLED: ${{ (inputs.release_profile == 'ragnakok-operations' || inputs.release_profile == 'all-qualified-features') && 'true' || 'false' }}"
+      "COMMERCIAL_CHANGE_AUTHORITY_ENABLED: ${{ inputs.release_profile == 'ragnakok-operations' && 'true' || 'false' }}"
     );
     expect(source).toContain(
-      "EVENT_OPERATING_SPINE_ENABLED: ${{ (inputs.release_profile == 'ragnakok-operations' || inputs.release_profile == 'all-qualified-features') && 'true' || 'false' }}"
+      "EVENT_OPERATING_SPINE_ENABLED: ${{ inputs.release_profile == 'ragnakok-operations' && 'true' || 'false' }}"
     );
     expect(source).toMatch(
-      /NOTIFICATIONS_EMAIL_PROVIDER:\s*\$\{\{ \(inputs\.release_profile == 'email-active' \|\| inputs\.release_profile == 'ragnakok-workflows' \|\| inputs\.release_profile == 'ragnakok-operations' \|\| inputs\.release_profile == 'all-qualified-features'\) && 'resend' \|\| 'none' \}\}/
+      /NOTIFICATIONS_EMAIL_PROVIDER:\s*\$\{\{ \(inputs\.release_profile == 'email-active' \|\| inputs\.release_profile == 'ragnakok-workflows' \|\| inputs\.release_profile == 'ragnakok-operations'\) && 'resend' \|\| 'none' \}\}/
     );
     expect(source).toMatch(/email-active\|ragnakok-workflows\|ragnakok-operations\)[\s\S]*FIREBASE_SCOPE[\s\S]*EXPECTED_EMAIL_PROVIDER[\s\S]*resend/);
     expect(source).not.toContain("BUYER_ACCESS_TURNSTILE_HOSTNAMES");
@@ -311,23 +302,18 @@ describe("direct production deployment safety", () => {
     );
     const batches = planFunctionDeployBatches(ids);
 
-    expect(ids).toHaveLength(142);
-    expect(new Set(ids).size).toBe(142);
+    expect(ids).toHaveLength(128);
+    expect(new Set(ids).size).toBe(128);
     expect(ids).toEqual(expect.arrayContaining([
       "getEventOperatingSnapshot", "applyEventOperatingCommand", "getWorkflowConfiguration",
       "applyWorkflowDefinitionCommand", "getQuoteAttendance", "submitQuoteAttendanceResponse",
       "getWorkflowPackSnapshot", "applyWorkflowPackCommand",
       "getInventoryWorkspace", "applyInventoryCommand", "previewEventInventory",
       "invalidateEventIngredientsOnQuoteChange", "invalidateEventIngredientsOnRecipeChange",
-      "invalidateEventIngredientsOnMenuCostChange",
-      "getPublishedInquiryShowcase", "submitPublicInquiry", "resolveInquirySubmission",
-      "getInquiryShowcaseAdminState", "saveInquiryShowcaseDraft", "publishInquiryShowcase",
-      "pauseInquiryShowcase", "republishInquiryShowcaseVersion", "getInquiryQueue",
-      "acknowledgeInquiry", "previewInquiryConversion", "convertInquiryToQuoteDraft",
-      "dismissInquiry", "purgeExpiredInquiries"
+      "invalidateEventIngredientsOnMenuCostChange"
     ]));
     expect(FUNCTIONS_DEPLOY_BATCH_SIZE).toBe(35);
-    expect(batches.map((batch) => batch.length)).toEqual([35, 35, 35, 35, 2]);
+    expect(batches.map((batch) => batch.length)).toEqual([35, 35, 35, 23]);
     expect(batches.flat()).toEqual(ids);
     expect(Math.max(...batches.map((batch) => batch.length))).toBeLessThan(50);
     expect(fs.readFileSync(FIREBASE_STUB, "utf8")).toContain(
@@ -355,11 +341,7 @@ describe("direct production deployment safety", () => {
       REVENUE_AUTOPILOT_ENABLED: "false",
       REVENUE_AUTOPILOT_SENDS_ENABLED: "false",
       BUYER_ACCESS_ENABLED: "false",
-      BUYER_ACCESS_STRIPE_MODE: "test",
-      INQUIRY_SHOWCASE_ENABLED: "false",
-      INTENT_PARSER_ENABLED: "false",
-      INTENT_PARSER_PROVIDER: "none",
-      INTENT_PARSER_MODEL: ""
+      BUYER_ACCESS_STRIPE_MODE: "test"
     };
     const entry = (id, environmentVariables = runtime) => ({
       id,
@@ -414,37 +396,6 @@ describe("direct production deployment safety", () => {
       expectedIds,
       "ragnakok-operations"
     ).profile).toBe("ragnakok-operations");
-    const allQualifiedRuntime = {
-      ...runtime,
-      NOTIFICATIONS_EMAIL_PROVIDER: "resend",
-      TENANT_WORKFLOW_ORGANIZATION_ID: "mm05366-sandbox",
-      COMMERCIAL_CHANGE_AUTHORITY_ENABLED: "true",
-      EVENT_OPERATING_SPINE_ENABLED: "true",
-      OPERATIONAL_STAFFING_AUTHORITY_ENABLED: "true",
-      INVENTORY_AUTHORITY_ENABLED: "true",
-      INQUIRY_SHOWCASE_ENABLED: "true",
-      INQUIRY_TURNSTILE_HOSTNAMES: "quotepilot.mbmapps.com,tonicatering.web.app",
-      INTENT_PARSER_ENABLED: "true",
-      INTENT_PARSER_PROVIDER: "openai",
-      INTENT_PARSER_MODEL: "gpt-5-mini",
-      INTENT_PARSER_ORGANIZATION_ID: "mm05366-sandbox"
-    };
-    const allQualifiedResponse = {
-      ...response,
-      result: expectedIds.map((id) => entry(id, allQualifiedRuntime))
-    };
-    expect(validateProductionFunctionsReadback(
-      allQualifiedResponse,
-      expectedIds,
-      "all-qualified-features"
-    ).profile).toBe("all-qualified-features");
-    expect(() => validateProductionFunctionsReadback({
-      ...allQualifiedResponse,
-      result: expectedIds.map((id) => entry(id, {
-        ...allQualifiedRuntime,
-        INTENT_PARSER_MODEL: "gpt-5"
-      }))
-    }, expectedIds, "all-qualified-features")).toThrow(/INTENT_PARSER_MODEL/i);
     expect(() => validateProductionFunctionsReadback(
       response,
       expectedIds,
@@ -468,99 +419,6 @@ describe("direct production deployment safety", () => {
         entry(expectedIds[1], { ...runtime, BUYER_ACCESS_TURNSTILE_HOSTNAMES: "example.invalid" })
       ]
     }, expectedIds)).toThrow(/disabled runtime residue BUYER_ACCESS_TURNSTILE_HOSTNAMES/i);
-    expect(() => validateProductionFunctionsReadback({
-      ...response,
-      result: [
-        entry(expectedIds[0]),
-        entry(expectedIds[1], { ...runtime, INQUIRY_TURNSTILE_HOSTNAMES: "example.invalid" })
-      ]
-    }, expectedIds)).toThrow(/disabled runtime residue INQUIRY_TURNSTILE_HOSTNAMES/i);
-  });
-
-  test("binds the all-qualified browser profile to Inquiry, Model Assist, and the exact tenant", () => {
-    expect(validateProductionBrowserEnvironment({
-      VITE_INQUIRY_SHOWCASE_ENABLED: "false",
-      VITE_INQUIRY_TURNSTILE_SITE_KEY: "",
-      VITE_PILOT_MODEL_ENABLED: "false"
-    }, "safe-off")).toMatchObject({
-      releaseProfile: "safe-off",
-      VITE_INQUIRY_SHOWCASE_ENABLED: "false",
-      VITE_PILOT_MODEL_ENABLED: "false"
-    });
-
-    const active = {
-      VITE_DEFAULT_ORGANIZATION_ID: "mm05366-sandbox",
-      VITE_INQUIRY_SHOWCASE_ENABLED: "true",
-      VITE_INQUIRY_TURNSTILE_SITE_KEY: "0x4AAAAAReviewedProductionKey123",
-      VITE_PILOT_MODEL_ENABLED: "true"
-    };
-    expect(validateProductionBrowserEnvironment(
-      active,
-      "all-qualified-features"
-    )).toMatchObject({
-      releaseProfile: "all-qualified-features",
-      VITE_DEFAULT_ORGANIZATION_ID: "mm05366-sandbox",
-      VITE_INQUIRY_SHOWCASE_ENABLED: "true",
-      VITE_PILOT_MODEL_ENABLED: "true"
-    });
-    expect(() => validateProductionBrowserEnvironment({
-      ...active,
-      VITE_DEFAULT_ORGANIZATION_ID: "other"
-    }, "all-qualified-features")).toThrow(/VITE_DEFAULT_ORGANIZATION_ID/i);
-    expect(() => validateProductionBrowserEnvironment({
-      ...active,
-      VITE_INQUIRY_TURNSTILE_SITE_KEY: "placeholder-key"
-    }, "all-qualified-features")).toThrow(/reviewed non-placeholder/i);
-    expect(() => validateProductionBrowserEnvironment({
-      ...active,
-      VITE_INTENT_PARSER_OPENAI_KEY: "plaintext"
-    }, "all-qualified-features")).toThrow(/forbidden/i);
-  });
-
-  test("checks all-qualified Secret Manager prerequisites by metadata only", () => {
-    expect(isEnabledProductionSecretVersion({
-      secret: "projects/tonicatering/secrets/INTENT_PARSER_OPENAI_KEY",
-      state: "ENABLED"
-    }, "INTENT_PARSER_OPENAI_KEY")).toBe(true);
-    expect(isEnabledProductionSecretVersion({
-      secret: { name: "INTENT_PARSER_OPENAI_KEY" },
-      state: "DISABLED"
-    }, "INTENT_PARSER_OPENAI_KEY")).toBe(false);
-    expect(validateProductionSecretMetadata({
-      status: "success",
-      result: {
-        secrets: [{
-          secret: { name: "INQUIRY_TURNSTILE_SECRET" },
-          state: "ENABLED"
-        }]
-      }
-    }, "INQUIRY_TURNSTILE_SECRET")).toEqual({
-      name: "INQUIRY_TURNSTILE_SECRET",
-      state: "ENABLED"
-    });
-    expect(() => validateProductionSecretMetadata({
-      status: "success",
-      result: { secrets: [] }
-    }, "INQUIRY_RATE_LIMIT_SECRET")).toThrow(/no enabled version/i);
-
-    const source = fs.readFileSync(FIREBASE_STUB, "utf8");
-    for (const name of [
-      "INQUIRY_TURNSTILE_SECRET",
-      "INQUIRY_RATE_LIMIT_SECRET",
-      "INTENT_PARSER_OPENAI_KEY",
-      "RESEND_API_KEY"
-    ]) {
-      expect(source).toContain(`"${name}"`);
-    }
-    expect(source).toContain('"functions:secrets:get"');
-    expect(source).not.toContain("accessSecretVersion(");
-    expect(source).not.toContain("createSecret(");
-
-    const functionsSource = fs.readFileSync(FUNCTIONS_ENTRYPOINT, "utf8");
-    expect(functionsSource).toContain(
-      'normalizeText(result.action) !== "public_inquiry_submit"'
-    );
-    expect(functionsSource).not.toContain("INQUIRY_TURNSTILE_ACTION");
   });
 
   test("requires ephemeral workload identity credentials for Firebase production", () => {
@@ -667,7 +525,7 @@ describe("direct production deployment safety", () => {
     const pullOffset = source.indexOf('"pull"');
     const revalidateOffset = source.indexOf("validateVercelProjectLink();", pullOffset);
     const buildOffset = source.indexOf('"build"', pullOffset);
-    const deployOffset = source.indexOf("deployAndBindProductionDomain(headSha, releaseProfile);", buildOffset);
+    const deployOffset = source.indexOf("deployAndBindProductionDomain(headSha);", buildOffset);
 
     expect(pullOffset).toBeGreaterThan(0);
     expect(source.slice(pullOffset, buildOffset)).toMatch(/--environment=production/);

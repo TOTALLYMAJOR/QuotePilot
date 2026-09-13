@@ -35,7 +35,6 @@ on:
           - email-active
           - ragnakok-workflows
           - ragnakok-operations
-          - all-qualified-features
       sms_provider:
         description: Exact deployment-owned owner-SMS provider for this release
         required: true
@@ -60,7 +59,7 @@ concurrency:
 jobs:
   deploy_firebase:
     name: Verify + Deploy Firebase
-    if: github.ref == 'refs/heads/main' && github.sha == inputs.release_sha && (inputs.release_profile == 'safe-off' || (inputs.release_profile == 'all-qualified-features' && inputs.firebase_scope == 'all' && vars.VITE_INQUIRY_TURNSTILE_SITE_KEY != '') || (((inputs.release_profile == 'email-active' || inputs.release_profile == 'ragnakok-workflows' || inputs.release_profile == 'ragnakok-operations')) && (inputs.firebase_scope == 'backend' || inputs.firebase_scope == 'all'))) && inputs.sms_provider == 'none' && inputs.sms_configuration_generation == 'not-applicable'
+    if: github.ref == 'refs/heads/main' && github.sha == inputs.release_sha && (inputs.release_profile == 'safe-off' || (((inputs.release_profile == 'email-active' || inputs.release_profile == 'ragnakok-workflows' || inputs.release_profile == 'ragnakok-operations')) && (inputs.firebase_scope == 'backend' || inputs.firebase_scope == 'all'))) && inputs.sms_provider == 'none' && inputs.sms_configuration_generation == 'not-applicable'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     environment: ${{ vars.RELEASE_APPROVAL_MODE == 'solo-operator' && 'production-solo' || 'production' }}
@@ -126,7 +125,7 @@ jobs:
         env:
           RELEASE_PROFILE: ${{ inputs.release_profile }}
           FIREBASE_SCOPE: ${{ inputs.firebase_scope }}
-          EXPECTED_EMAIL_PROVIDER: ${{ (inputs.release_profile == 'email-active' || inputs.release_profile == 'ragnakok-workflows' || inputs.release_profile == 'ragnakok-operations' || inputs.release_profile == 'all-qualified-features') && 'resend' || 'none' }}
+          EXPECTED_EMAIL_PROVIDER: ${{ (inputs.release_profile == 'email-active' || inputs.release_profile == 'ragnakok-workflows' || inputs.release_profile == 'ragnakok-operations') && 'resend' || 'none' }}
           EXPECTED_SMS_PROVIDER: ${{ inputs.sms_provider }}
           EXPECTED_SMS_CONFIGURATION_GENERATION: ${{ inputs.sms_configuration_generation }}
         run: |
@@ -137,10 +136,6 @@ jobs:
               ;;
             email-active|ragnakok-workflows|ragnakok-operations)
               test "${FIREBASE_SCOPE}" = "backend" || test "${FIREBASE_SCOPE}" = "all"
-              test "${EXPECTED_EMAIL_PROVIDER}" = "resend"
-              ;;
-            all-qualified-features)
-              test "${FIREBASE_SCOPE}" = "all"
               test "${EXPECTED_EMAIL_PROVIDER}" = "resend"
               ;;
             *)
@@ -157,27 +152,21 @@ jobs:
           APP_BASE_URL: ${{ vars.APP_BASE_URL }}
           APP_BASE_DOMAIN: ${{ vars.APP_BASE_DOMAIN }}
           AUTH_PLATFORM_ADMIN_EMAILS: ${{ secrets.AUTH_PLATFORM_ADMIN_EMAILS }}
-          NOTIFICATIONS_EMAIL_PROVIDER: ${{ (inputs.release_profile == 'email-active' || inputs.release_profile == 'ragnakok-workflows' || inputs.release_profile == 'ragnakok-operations' || inputs.release_profile == 'all-qualified-features') && 'resend' || 'none' }}
+          NOTIFICATIONS_EMAIL_PROVIDER: ${{ (inputs.release_profile == 'email-active' || inputs.release_profile == 'ragnakok-workflows' || inputs.release_profile == 'ragnakok-operations') && 'resend' || 'none' }}
           EMAIL_FROM_NAME: ${{ vars.EMAIL_FROM_NAME }}
           EMAIL_FROM_EMAIL: ${{ vars.EMAIL_FROM_EMAIL }}
           NOTIFICATIONS_SMS_PROVIDER: none
           STRIPE_MODE: live
-          COMMERCIAL_CHANGE_AUTHORITY_ENABLED: ${{ (inputs.release_profile == 'ragnakok-operations' || inputs.release_profile == 'all-qualified-features') && 'true' || 'false' }}
-          EVENT_OPERATING_SPINE_ENABLED: ${{ (inputs.release_profile == 'ragnakok-operations' || inputs.release_profile == 'all-qualified-features') && 'true' || 'false' }}
-          TENANT_WORKFLOW_ORGANIZATION_ID: ${{ (inputs.release_profile == 'ragnakok-workflows' || inputs.release_profile == 'ragnakok-operations' || inputs.release_profile == 'all-qualified-features') && 'mm05366-sandbox' || '' }}
-          OPERATIONAL_STAFFING_AUTHORITY_ENABLED: ${{ (inputs.release_profile == 'ragnakok-operations' || inputs.release_profile == 'all-qualified-features') && 'true' || 'false' }}
-          INVENTORY_AUTHORITY_ENABLED: ${{ (inputs.release_profile == 'ragnakok-operations' || inputs.release_profile == 'all-qualified-features') && 'true' || 'false' }}
+          COMMERCIAL_CHANGE_AUTHORITY_ENABLED: ${{ inputs.release_profile == 'ragnakok-operations' && 'true' || 'false' }}
+          EVENT_OPERATING_SPINE_ENABLED: ${{ inputs.release_profile == 'ragnakok-operations' && 'true' || 'false' }}
+          TENANT_WORKFLOW_ORGANIZATION_ID: ${{ (inputs.release_profile == 'ragnakok-workflows' || inputs.release_profile == 'ragnakok-operations') && 'mm05366-sandbox' || '' }}
+          OPERATIONAL_STAFFING_AUTHORITY_ENABLED: ${{ inputs.release_profile == 'ragnakok-operations' && 'true' || 'false' }}
+          INVENTORY_AUTHORITY_ENABLED: ${{ inputs.release_profile == 'ragnakok-operations' && 'true' || 'false' }}
           REVENUE_AUTOPILOT_ENABLED: "false"
           REVENUE_AUTOPILOT_SENDS_ENABLED: "false"
           BUYER_ACCESS_ENABLED: "false"
           BUYER_ACCESS_STRIPE_MODE: test
           BUYER_ACCESS_APP_BASE_URL: ${{ vars.BUYER_ACCESS_APP_BASE_URL }}
-          INQUIRY_SHOWCASE_ENABLED: ${{ inputs.release_profile == 'all-qualified-features' && 'true' || 'false' }}
-          INQUIRY_TURNSTILE_HOSTNAMES: ${{ inputs.release_profile == 'all-qualified-features' && 'quotepilot.mbmapps.com,tonicatering.web.app' || '' }}
-          INTENT_PARSER_ENABLED: ${{ inputs.release_profile == 'all-qualified-features' && 'true' || 'false' }}
-          INTENT_PARSER_PROVIDER: ${{ inputs.release_profile == 'all-qualified-features' && 'openai' || 'none' }}
-          INTENT_PARSER_MODEL: ${{ inputs.release_profile == 'all-qualified-features' && 'gpt-5-mini' || '' }}
-          INTENT_PARSER_ORGANIZATION_ID: ${{ inputs.release_profile == 'all-qualified-features' && 'mm05366-sandbox' || '' }}
         run: node ./scripts/materialize-functions-env.mjs
 
       - name: Prepare checksum-verified Firebase CLI
@@ -222,7 +211,7 @@ jobs:
           VITE_APP_URL: ${{ vars.APP_BASE_URL }}
           VITE_APP_HOST: quotepilot.mbmapps.com
           VITE_BASE_DOMAIN: ${{ vars.APP_BASE_DOMAIN }}
-          VITE_DEFAULT_ORGANIZATION_ID: ${{ inputs.release_profile == 'all-qualified-features' && 'mm05366-sandbox' || vars.VITE_DEFAULT_ORGANIZATION_ID }}
+          VITE_DEFAULT_ORGANIZATION_ID: ${{ vars.VITE_DEFAULT_ORGANIZATION_ID }}
           VITE_CUSTOMER_CENTERED_WORKSPACE_ENABLED: "true"
           VITE_PILOT_NOW_ENABLED: "true"
           VITE_PILOT_EVENT_ROOM_ENABLED: "true"
@@ -238,9 +227,6 @@ jobs:
           VITE_EVENT_OPERATING_SPINE_ENABLED: "true"
           VITE_BUYER_ACCESS_ENABLED: "false"
           VITE_BUYER_ACCESS_PUBLIC_CTA_ENABLED: "false"
-          VITE_INQUIRY_SHOWCASE_ENABLED: ${{ inputs.release_profile == 'all-qualified-features' && 'true' || 'false' }}
-          VITE_INQUIRY_TURNSTILE_SITE_KEY: ${{ inputs.release_profile == 'all-qualified-features' && vars.VITE_INQUIRY_TURNSTILE_SITE_KEY || '' }}
-          VITE_PILOT_MODEL_ENABLED: ${{ inputs.release_profile == 'all-qualified-features' && 'true' || 'false' }}
         run: |
           node ./scripts/deploy-firebase-production.mjs \
             --scope "${FIREBASE_SCOPE}" \

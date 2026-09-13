@@ -208,7 +208,6 @@ beforeEach(() => {
 afterEach(() => {
   act(() => root.unmount());
   container.remove();
-  vi.useRealTimers();
 });
 
 describe("AmbientLivingOpportunity", () => {
@@ -710,8 +709,6 @@ describe("AmbientLivingOpportunity", () => {
   });
 
   test("mounts exact Proposal evidence, restores focus, and routes only to governed controls", async () => {
-    vi.useFakeTimers({ toFake: ["Date"] });
-    vi.setSystemTime(new Date("2026-08-13T10:42:00.000Z"));
     const proposalQuote = Object.freeze({
       ...QUOTE,
       updatedAtISO: "2026-08-12T10:42:00.000Z",

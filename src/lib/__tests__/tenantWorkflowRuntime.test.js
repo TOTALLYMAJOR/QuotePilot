@@ -18,32 +18,6 @@ describe("deployment-scoped tenant workflow runtime", () => {
     expect(tenantWorkflowRuntimeEnabled(flag, "mm05366-sandbox", {})).toBe(false);
     expect(tenantWorkflowRuntimeEnabled(flag, "local-fixture", { [flag]: "true" })).toBe(true);
   });
-  test("requires explicit Inquiry activation in addition to the approved tenant fence", () => {
-    const existingProfile = {
-      TENANT_WORKFLOW_ORGANIZATION_ID: "mm05366-sandbox",
-      INQUIRY_SHOWCASE_ENABLED: "false"
-    };
-    expect(tenantWorkflowRuntimeEnabled(
-      "INQUIRY_SHOWCASE_ENABLED",
-      "mm05366-sandbox",
-      existingProfile
-    )).toBe(false);
-    expect(tenantWorkflowRuntimeEnabled(
-      "INQUIRY_SHOWCASE_ENABLED",
-      "mm05366-sandbox",
-      { ...existingProfile, INQUIRY_SHOWCASE_ENABLED: "true" }
-    )).toBe(true);
-    expect(tenantWorkflowRuntimeEnabled(
-      "INQUIRY_SHOWCASE_ENABLED",
-      "other",
-      { ...existingProfile, INQUIRY_SHOWCASE_ENABLED: "true" }
-    )).toBe(false);
-    expect(tenantWorkflowRuntimeEnabled(
-      "INQUIRY_SHOWCASE_ENABLED",
-      "local-fixture",
-      { INQUIRY_SHOWCASE_ENABLED: "true" }
-    )).toBe(true);
-  });
   test("does not activate buyer access or provider sends", () => {
     const env = { TENANT_WORKFLOW_ORGANIZATION_ID: "mm05366-sandbox" };
     for (const flag of ["BUYER_ACCESS_ENABLED", "REVENUE_AUTOPILOT_SENDS_ENABLED"]) {

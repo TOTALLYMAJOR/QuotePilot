@@ -167,7 +167,6 @@ const OPERATIONAL_STAFFING_UI_ENABLED = ["1", "true", "yes", "on"].includes(
   String(import.meta.env.VITE_OPERATIONAL_STAFFING_ENABLED || "").trim().toLowerCase()
 );
 const INVENTORY_AUTHORITY_UI_ENABLED = import.meta.env.VITE_INVENTORY_AUTHORITY_ENABLED === "true";
-const INQUIRY_SHOWCASE_UI_ENABLED = import.meta.env.VITE_INQUIRY_SHOWCASE_ENABLED === "true";
 const AdminCatalogView = createRecoverableLazy(
   () => import("./components/AdminCatalogModal").then((module) => ({ default: module.AdminCatalogView })),
   "AdminCatalogView"
@@ -287,9 +286,6 @@ const PILOT_CREATE_ENABLED = import.meta.env.VITE_PILOT_CREATE_ENABLED === "1"
   || import.meta.env.VITE_PILOT_CREATE_ENABLED === "true"
   || import.meta.env.VITE_PILOT_CREATE_ENABLED === "yes"
   || import.meta.env.VITE_PILOT_CREATE_ENABLED === "on";
-// Model assistance is a separate browser capability. CREATE's deterministic
-// intake remains available whenever its own gate is enabled.
-const PILOT_MODEL_ENABLED = import.meta.env.VITE_PILOT_MODEL_ENABLED === "true";
 // The client-request panel is an additional default-off presentation gate.
 // It parses the stored change-request message into stageable draft edits
 // only; the ordinary save path remains the sole versioning authority.
@@ -6323,7 +6319,6 @@ export default function App({
           tenantEnabled: inventoryTenantEnabled
         },
         inventoryRecipeExtension,
-        inquiryShowcaseEnabled: INQUIRY_SHOWCASE_UI_ENABLED,
         arrivalContext: workspaceArrivalContext?.surfaceId === "ambient-library"
           ? workspaceArrivalContext
           : null,
@@ -7563,7 +7558,7 @@ export default function App({
             styles={Object.keys(STAFF_RULES)}
             onApplyDraft={applyIntentDraft}
             organizationId={authSession.organizationId}
-            onModelParse={PILOT_MODEL_ENABLED ? parseIntentDraftWithModel : undefined}
+            onModelParse={parseIntentDraftWithModel}
           />
         )}
         {PILOT_CHANGE_REQUESTS_ENABLED && ChangeRequestPanel
@@ -7892,7 +7887,6 @@ export default function App({
             serviceStyles={Object.keys(STAFF_RULES)}
             ambientPricingCatalog={AMBIENT_UI_ENABLED ? catalog : null}
             ambientPricingSettings={AMBIENT_UI_ENABLED ? effectiveSettings : null}
-            inquiryShowcaseEnabled={INQUIRY_SHOWCASE_UI_ENABLED}
             globalPilotRequest={AMBIENT_UI_ENABLED && globalPilotRequest?.target === "living_opportunity"
               ? globalPilotRequest
               : null}

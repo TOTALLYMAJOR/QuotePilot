@@ -19,7 +19,6 @@ import "./ambientLibraryRoute.css";
 
 const TenantWorkflowConfigurationStudio = import.meta.env.VITE_EVENT_OPERATING_SPINE_ENABLED === "true"
   ? lazy(() => import("./TenantWorkflowConfigurationStudio")) : null;
-const InquiryShowcaseAdmin = lazy(() => import("./InquiryShowcaseAdmin"));
 const CATALOG_SECTION_IDS = new Set(["starter", "workflow", ...AMBIENT_LIBRARY_SECTION_ORDER]);
 const EDITOR_SECTION_LABELS = Object.freeze({
   starter: "Library setup",
@@ -330,8 +329,7 @@ export default function AmbientLibraryRoute({
   onInteractionStateChange,
   contextualOrigin = null,
   inventoryRecipeExtension = null,
-  inventoryRecipeAccess = null,
-  inquiryShowcaseEnabled = false
+  inventoryRecipeAccess = null
 }) {
   const navigation = useOptionalWorkspaceNavigation();
   const headingRef = useWorkspaceRouteHeadingFocus(open);
@@ -889,14 +887,6 @@ export default function AmbientLibraryRoute({
       />
 
       {contextualBanner}
-
-      {isAdmin && inquiryShowcaseEnabled && <Suspense fallback={<p role="status">Loading Inquiry page settings…</p>}>
-        <InquiryShowcaseAdmin
-          organizationId={organizationId}
-          currentUserRole={currentUserRole}
-          enabled
-        />
-      </Suspense>}
 
       {resolvedInventoryRecipeExtension?.enabled === true && (
         <InventoryMenuCostSummary

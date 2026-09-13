@@ -23,7 +23,6 @@ on:
         type: choice
         options:
           - safe-off
-          - all-qualified-features
       confirmation:
         description: DEPLOY quotepilot.mbmapps.com via vercel
         required: true
@@ -36,7 +35,7 @@ concurrency:
 jobs:
   deploy_vercel:
     name: Verify + Deploy Vercel
-    if: github.ref == 'refs/heads/main' && github.sha == inputs.release_sha && (inputs.release_profile == 'safe-off' || (inputs.release_profile == 'all-qualified-features' && vars.VITE_INQUIRY_TURNSTILE_SITE_KEY != '')) && inputs.confirmation == 'DEPLOY quotepilot.mbmapps.com via vercel'
+    if: github.ref == 'refs/heads/main' && github.sha == inputs.release_sha && inputs.release_profile == 'safe-off' && inputs.confirmation == 'DEPLOY quotepilot.mbmapps.com via vercel'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     environment: ${{ vars.RELEASE_APPROVAL_MODE == 'solo-operator' && 'production-solo' || 'production' }}
@@ -97,7 +96,7 @@ jobs:
           VITE_APP_URL: ${{ vars.APP_BASE_URL }}
           VITE_APP_HOST: quotepilot.mbmapps.com
           VITE_BASE_DOMAIN: ${{ vars.APP_BASE_DOMAIN }}
-          VITE_DEFAULT_ORGANIZATION_ID: ${{ inputs.release_profile == 'all-qualified-features' && 'mm05366-sandbox' || vars.VITE_DEFAULT_ORGANIZATION_ID }}
+          VITE_DEFAULT_ORGANIZATION_ID: ${{ vars.VITE_DEFAULT_ORGANIZATION_ID }}
           VITE_CUSTOMER_CENTERED_WORKSPACE_ENABLED: "true"
           VITE_PILOT_NOW_ENABLED: "true"
           VITE_PILOT_EVENT_ROOM_ENABLED: "true"
@@ -113,9 +112,6 @@ jobs:
           VITE_EVENT_OPERATING_SPINE_ENABLED: "true"
           VITE_BUYER_ACCESS_ENABLED: "false"
           VITE_BUYER_ACCESS_PUBLIC_CTA_ENABLED: "false"
-          VITE_INQUIRY_SHOWCASE_ENABLED: ${{ inputs.release_profile == 'all-qualified-features' && 'true' || 'false' }}
-          VITE_INQUIRY_TURNSTILE_SITE_KEY: ${{ inputs.release_profile == 'all-qualified-features' && vars.VITE_INQUIRY_TURNSTILE_SITE_KEY || '' }}
-          VITE_PILOT_MODEL_ENABLED: ${{ inputs.release_profile == 'all-qualified-features' && 'true' || 'false' }}
           RELEASE_SHA: ${{ inputs.release_sha }}
           CI_RUN_ID: ${{ inputs.ci_run_id }}
           ROLLBACK_SHA: ${{ inputs.rollback_sha }}

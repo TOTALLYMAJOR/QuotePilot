@@ -9,7 +9,6 @@ import {
   getReleaseUatProfilePlan,
   parseAttesterIds,
   parseProductionReleaseProfile,
-  validateProductionReleaseProfileTarget,
   parseReleaseApprovalMode,
   parseSoloOperatorIds,
   parseReleaseEvidenceCliArgs,
@@ -1160,23 +1159,6 @@ describe("current preparation workflow validator", () => {
     }
   );
 
-  test.each(["firebase-all", "vercel"])(
-    "binds the all-qualified-features profile to the exact %s deployment title",
-    (profile) => {
-      expect(validateDirectDeploymentRun(
-        makeDirectDeploymentRun(profile, {
-          display_title: makeDirectDeploymentTitle({
-            profile,
-            releaseProfile: "all-qualified-features"
-          })
-        }),
-        makeDirectDeploymentOptions(profile, {
-          releaseProfile: "all-qualified-features"
-        })
-      )).toEqual({ operatorId: OPERATOR_ID });
-    }
-  );
-
   test.each([
     [{ repository: { id: 1, full_name: "other/repo" } }, /different repository/i],
     [{ id: 999 }, /response id does not match the current run/i],
@@ -1235,19 +1217,6 @@ describe("direct deployment workflow validator", () => {
     );
     expect(parseProductionReleaseProfile("email-active")).toBe("email-active");
     expect(parseProductionReleaseProfile("ragnakok-operations")).toBe("ragnakok-operations");
-    expect(parseProductionReleaseProfile("all-qualified-features")).toBe("all-qualified-features");
-    expect(validateProductionReleaseProfileTarget(
-      "all-qualified-features",
-      "firebase-all"
-    )).toBe("all-qualified-features");
-    expect(validateProductionReleaseProfileTarget(
-      "all-qualified-features",
-      "vercel"
-    )).toBe("all-qualified-features");
-    expect(() => validateProductionReleaseProfileTarget(
-      "all-qualified-features",
-      "firebase-backend"
-    )).toThrow(/requires firebase-all or vercel/i);
     expect(() => parseProductionReleaseProfile("full-authority")).toThrow(
       /must be one of: safe-off, email-active/i
     );

@@ -27,11 +27,7 @@ const PRODUCTION_RUNTIME_BASE = Object.freeze({
   REVENUE_AUTOPILOT_ENABLED: "false",
   REVENUE_AUTOPILOT_SENDS_ENABLED: "false",
   BUYER_ACCESS_ENABLED: "false",
-  BUYER_ACCESS_STRIPE_MODE: "test",
-  INQUIRY_SHOWCASE_ENABLED: "false",
-  INTENT_PARSER_ENABLED: "false",
-  INTENT_PARSER_PROVIDER: "none",
-  INTENT_PARSER_MODEL: ""
+  BUYER_ACCESS_STRIPE_MODE: "test"
 });
 
 const PRODUCTION_RUNTIME_EXPECTED = Object.freeze({
@@ -56,46 +52,16 @@ const PRODUCTION_RUNTIME_EXPECTED = Object.freeze({
     EVENT_OPERATING_SPINE_ENABLED: "true",
     OPERATIONAL_STAFFING_AUTHORITY_ENABLED: "true",
     INVENTORY_AUTHORITY_ENABLED: "true"
-  }),
-  "all-qualified-features": Object.freeze({
-    ...PRODUCTION_RUNTIME_BASE,
-    NOTIFICATIONS_EMAIL_PROVIDER: "resend",
-    TENANT_WORKFLOW_ORGANIZATION_ID: "mm05366-sandbox",
-    COMMERCIAL_CHANGE_AUTHORITY_ENABLED: "true",
-    EVENT_OPERATING_SPINE_ENABLED: "true",
-    OPERATIONAL_STAFFING_AUTHORITY_ENABLED: "true",
-    INVENTORY_AUTHORITY_ENABLED: "true",
-    INQUIRY_SHOWCASE_ENABLED: "true",
-    INQUIRY_TURNSTILE_HOSTNAMES: "quotepilot.mbmapps.com,tonicatering.web.app",
-    INTENT_PARSER_ENABLED: "true",
-    INTENT_PARSER_PROVIDER: "openai",
-    INTENT_PARSER_MODEL: "gpt-5-mini",
-    INTENT_PARSER_ORGANIZATION_ID: "mm05366-sandbox"
   })
 });
 
-const ALWAYS_FORBIDDEN_RUNTIME = Object.freeze([
+const SAFE_OFF_RUNTIME_FORBIDDEN = Object.freeze([
   "TWILIO_ACCOUNT_SID",
   "TWILIO_MESSAGING_SERVICE_SID",
   "NOTIFICATIONS_OWNER_PHONE",
   "NOTIFICATIONS_OWNER_SMS_CONSENT",
   "BUYER_ACCESS_ALLOWED_EMAILS",
-  "BUYER_ACCESS_TURNSTILE_HOSTNAMES",
-  "INQUIRY_TURNSTILE_SECRET",
-  "INQUIRY_RATE_LIMIT_SECRET",
-  "INTENT_PARSER_OPENAI_KEY",
-  "INTENT_PARSER_ANTHROPIC_KEY",
-  "INTENT_PARSER_AUTO_ROUTE"
-]);
-const PROFILE_DISABLED_RUNTIME = Object.freeze([
-  "INQUIRY_TURNSTILE_HOSTNAMES",
-  "INTENT_PARSER_ORGANIZATION_ID"
-]);
-const ALL_QUALIFIED_REQUIRED_SECRET_METADATA = Object.freeze([
-  "INQUIRY_TURNSTILE_SECRET",
-  "INQUIRY_RATE_LIMIT_SECRET",
-  "INTENT_PARSER_OPENAI_KEY",
-  "RESEND_API_KEY"
+  "BUYER_ACCESS_TURNSTILE_HOSTNAMES"
 ]);
 
 export function listExpectedFunctionIds(source) {
@@ -138,7 +104,7 @@ export function validateProductionFunctionsReadback(
 ) {
   const releaseProfile = validateProductionReleaseProfileTarget(
     releaseProfileValue,
-    releaseProfileValue === "all-qualified-features" ? "firebase-all" : "firebase-backend"
+    "firebase-backend"
   );
   const expectedRuntime = PRODUCTION_RUNTIME_EXPECTED[releaseProfile];
   if (response?.status !== "success" || !Array.isArray(response?.result)) {
@@ -174,16 +140,9 @@ export function validateProductionFunctionsReadback(
         );
       }
     }
-    for (const name of ALWAYS_FORBIDDEN_RUNTIME) {
+    for (const name of SAFE_OFF_RUNTIME_FORBIDDEN) {
       if (String(runtime[name] ?? "").trim()) {
         throw new Error(`Firebase production Functions readback retains disabled runtime residue ${name} for ${id}.`);
-      }
-    }
-    if (releaseProfile !== "all-qualified-features") {
-      for (const name of PROFILE_DISABLED_RUNTIME) {
-        if (String(runtime[name] ?? "").trim()) {
-          throw new Error(`Firebase production Functions readback retains disabled runtime residue ${name} for ${id}.`);
-        }
       }
     }
   }
@@ -269,39 +228,6 @@ function parseJsonOutput(value, label) {
   } catch {
     throw new Error(`${label} did not return valid JSON.`);
   }
-}
-
-export function isEnabledProductionSecretVersion(version, expectedName) {
-  const secret = version?.secret;
-  const observedName = typeof secret === "string"
-    ? secret.split("/").at(-1)
-    : secret?.name;
-  return observedName === expectedName && version?.state === "ENABLED";
-}
-
-export function validateProductionSecretMetadata(response, expectedName) {
-  const versions = response?.status === "success" && Array.isArray(response?.result?.secrets)
-    ? response.result.secrets
-    : [];
-  if (!versions.some((version) => isEnabledProductionSecretVersion(version, expectedName))) {
-    throw new Error(
-      `Firebase production Secret Manager metadata has no enabled version for ${expectedName}.`
-    );
-  }
-  return Object.freeze({ name: expectedName, state: "ENABLED" });
-}
-
-function validateAllQualifiedSecretPrerequisites(firebaseCliPath) {
-  return ALL_QUALIFIED_REQUIRED_SECRET_METADATA.map((name) => {
-    const response = parseJsonOutput(capture(firebaseCliPath, [
-      "functions:secrets:get",
-      name,
-      "--project",
-      PROJECT_ID,
-      "--json"
-    ]), `Firebase production Secret Manager metadata for ${name}`);
-    return validateProductionSecretMetadata(response, name);
-  });
 }
 
 function readExpectedFunctionIds() {
@@ -464,9 +390,6 @@ export async function main() {
   });
 
   await verify(validateWorkflowContext());
-  if (releaseProfile === "all-qualified-features") {
-    validateAllQualifiedSecretPrerequisites(firebaseCliPath);
-  }
   run("npm", ["run", "check:env"]);
   if (selected.functions) validateFunctionsEnvironment();
   if (selected.build) run("npm", ["run", "build"]);

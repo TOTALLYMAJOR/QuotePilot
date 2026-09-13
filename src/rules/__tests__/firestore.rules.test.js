@@ -119,16 +119,6 @@ const SERVER_OWNED_COMMERCIAL_AUTHORITY_PATHS = Object.freeze([
   ["organizations", "org-a", "revenueAutopilotReceipts", "receipt-1"],
   ["organizations", "org-a", "revenueAutopilotProviderEvents", "provider-event-1"],
   ["organizations", "org-a", "revenueAutopilotEmailControls", "customer-1"],
-  ["organizations", "org-a", "inquiryShowcases", "default"],
-  ["organizations", "org-a", "inquiryShowcases", "default", "versions", "pub_000001"],
-  ["organizations", "org-a", "inquiryShowcases", "default", "receipts", "publish-receipt-1"],
-  ["organizations", "org-a", "customerInquiries", "inquiry-1"],
-  ["organizations", "org-a", "customerInquiries", "inquiry-1", "receipts", "received-receipt-1"],
-  ["inquirySlugs", "event-inquiry"],
-  ["publicInquiryRequests", "public-inquiry-request-1"],
-  ["inquiryRateLimits", "tenant-ip-hour-1"],
-  ["inquiryDeletionReceipts", "inquiry-deleted-1"],
-  ["inquiryAnalytics", "org-a-2026-09-13-inquiry-submitted"],
   ["revenueAutopilotTenants", "org-a"],
   ["revenueAutopilotProviderMessageIndex", "provider-message-1"],
   ["revenueAutopilotSchedulerState", "global"]
@@ -143,13 +133,6 @@ const OWNER_SMS_SERVER_ONLY_GLOBAL_COLLECTIONS = Object.freeze([
   ["ownerSmsProviderControls", "provider-control-org-a-1"],
   ["ownerSmsOutbox", "outbox-org-a-1"]
 ]);
-
-test("enumerates every Inquiry Showcase private path for browser denial coverage", () => {
-  const inquiryPaths = SERVER_OWNED_COMMERCIAL_AUTHORITY_PATHS.filter((pathParts) =>
-    pathParts.some((part) => ["inquiryShowcases", "customerInquiries", "inquirySlugs", "publicInquiryRequests", "inquiryRateLimits", "inquiryDeletionReceipts", "inquiryAnalytics"].includes(String(part)))
-  );
-  expect(inquiryPaths.length).toBe(10);
-});
 
 const STEWARD_SERVER_ONLY_PATHS = Object.freeze([
   ["organizations", "org-a", "stewardRuns", "run-1"],

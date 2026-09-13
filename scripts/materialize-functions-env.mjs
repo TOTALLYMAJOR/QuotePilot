@@ -63,10 +63,6 @@ const BUYER_ACCESS_APPROVED_TURNSTILE_HOSTNAMES = [
   "quotepilot.mbmapps.com",
   "tonicatering.web.app"
 ];
-const INQUIRY_APPROVED_TURNSTILE_HOSTNAMES = [
-  "quotepilot.mbmapps.com",
-  "tonicatering.web.app"
-];
 const assertBuyerAccessTurnstileHostnames = (value) => {
   const hostnames = value
     .split(",")
@@ -84,28 +80,6 @@ const assertBuyerAccessTurnstileHostnames = (value) => {
   ) {
     throw new Error(
       "BUYER_ACCESS_TURNSTILE_HOSTNAMES must contain only the exact approved QuotePilot production hosts: quotepilot.mbmapps.com,tonicatering.web.app."
-    );
-  }
-
-  return [...new Set(hostnames)].join(",");
-};
-const assertInquiryTurnstileHostnames = (value) => {
-  const hostnames = value
-    .split(",")
-    .map((item) => item.trim().toLowerCase())
-    .filter(Boolean);
-  const approved = new Set(INQUIRY_APPROVED_TURNSTILE_HOSTNAMES);
-
-  if (
-    !hostnames.length
-    || hostnames.some((hostname) => !/^[a-z0-9.-]+$/.test(hostname))
-    || hostnames.some((hostname) => !approved.has(hostname))
-    || INQUIRY_APPROVED_TURNSTILE_HOSTNAMES.some(
-      (hostname) => !hostnames.includes(hostname)
-    )
-  ) {
-    throw new Error(
-      "INQUIRY_TURNSTILE_HOSTNAMES must contain only the exact approved QuotePilot production hosts: quotepilot.mbmapps.com,tonicatering.web.app."
     );
   }
 
@@ -330,60 +304,6 @@ if (buyerAccessEnabled === "true" && !buyerAccessTurnstileHostnames) {
 const normalizedBuyerAccessTurnstileHostnames = buyerAccessTurnstileHostnames
   ? assertBuyerAccessTurnstileHostnames(buyerAccessTurnstileHostnames)
   : "";
-const inquiryShowcaseEnabled = optional("INQUIRY_SHOWCASE_ENABLED", "false").toLowerCase();
-if (!["true", "false"].includes(inquiryShowcaseEnabled)) {
-  throw new Error("INQUIRY_SHOWCASE_ENABLED must be true or false.");
-}
-const inquiryTurnstileHostnames = optional("INQUIRY_TURNSTILE_HOSTNAMES");
-if (inquiryTurnstileHostnames && inquiryShowcaseEnabled !== "true") {
-  throw new Error(
-    "INQUIRY_TURNSTILE_HOSTNAMES is allowed only while INQUIRY_SHOWCASE_ENABLED=true."
-  );
-}
-if (inquiryShowcaseEnabled === "true" && !inquiryTurnstileHostnames) {
-  throw new Error(
-    "INQUIRY_TURNSTILE_HOSTNAMES is required while the Inquiry Showcase is enabled."
-  );
-}
-if (
-  inquiryShowcaseEnabled === "true"
-  && tenantWorkflowOrganizationId !== "mm05366-sandbox"
-) {
-  throw new Error(
-    "Production Inquiry Showcase activation requires TENANT_WORKFLOW_ORGANIZATION_ID=mm05366-sandbox."
-  );
-}
-const normalizedInquiryTurnstileHostnames = inquiryTurnstileHostnames
-  ? assertInquiryTurnstileHostnames(inquiryTurnstileHostnames)
-  : "";
-const intentParserEnabled = optional("INTENT_PARSER_ENABLED", "false").toLowerCase();
-const intentParserProvider = optional("INTENT_PARSER_PROVIDER", "none").toLowerCase();
-const intentParserModel = optional("INTENT_PARSER_MODEL");
-const intentParserOrganizationId = optional("INTENT_PARSER_ORGANIZATION_ID");
-if (!["true", "false"].includes(intentParserEnabled)) {
-  throw new Error("INTENT_PARSER_ENABLED must be true or false.");
-}
-if (intentParserEnabled === "true") {
-  if (
-    intentParserProvider !== "openai"
-    || intentParserModel !== "gpt-5-mini"
-    || intentParserOrganizationId !== "mm05366-sandbox"
-    || tenantWorkflowOrganizationId !== "mm05366-sandbox"
-    || inquiryShowcaseEnabled !== "true"
-  ) {
-    throw new Error(
-      "Production Model Assist activation requires Inquiry Showcase plus the exact openai/gpt-5-mini/mm05366-sandbox profile."
-    );
-  }
-} else if (
-  intentParserProvider !== "none"
-  || intentParserModel
-  || intentParserOrganizationId
-) {
-  throw new Error(
-    "INTENT_PARSER_PROVIDER, INTENT_PARSER_MODEL, and INTENT_PARSER_ORGANIZATION_ID must remain inert while INTENT_PARSER_ENABLED=false."
-  );
-}
 for (const secretName of [
   "RESEND_API_KEY",
   "RESEND_WEBHOOK_SECRET",
@@ -398,11 +318,7 @@ for (const secretName of [
   "BUYER_ACCESS_STRIPE_SECRET_KEY",
   "BUYER_ACCESS_STRIPE_WEBHOOK_SECRET",
   "BUYER_ACCESS_TURNSTILE_SECRET",
-  "BUYER_ACCESS_RATE_LIMIT_SECRET",
-  "INQUIRY_TURNSTILE_SECRET",
-  "INQUIRY_RATE_LIMIT_SECRET",
-  "INTENT_PARSER_OPENAI_KEY",
-  "INTENT_PARSER_ANTHROPIC_KEY"
+  "BUYER_ACCESS_RATE_LIMIT_SECRET"
 ]) {
   if (optional(secretName)) {
     throw new Error(
@@ -448,16 +364,6 @@ const values = {
   BUYER_ACCESS_APP_BASE_URL: buyerAccessAppBaseUrl,
   ...(normalizedBuyerAccessTurnstileHostnames
     ? { BUYER_ACCESS_TURNSTILE_HOSTNAMES: normalizedBuyerAccessTurnstileHostnames }
-    : {}),
-  INQUIRY_SHOWCASE_ENABLED: inquiryShowcaseEnabled,
-  ...(normalizedInquiryTurnstileHostnames
-    ? { INQUIRY_TURNSTILE_HOSTNAMES: normalizedInquiryTurnstileHostnames }
-    : {}),
-  INTENT_PARSER_ENABLED: intentParserEnabled,
-  INTENT_PARSER_PROVIDER: intentParserProvider,
-  INTENT_PARSER_MODEL: intentParserModel,
-  ...(intentParserOrganizationId
-    ? { INTENT_PARSER_ORGANIZATION_ID: intentParserOrganizationId }
     : {})
 };
 

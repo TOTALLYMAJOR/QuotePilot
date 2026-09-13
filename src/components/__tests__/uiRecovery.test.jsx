@@ -80,7 +80,7 @@ describe("recoverable lazy surfaces", () => {
     const appSource = readSource("../../App.jsx");
     const workspaceBoundarySource = readSource("../WorkspaceSurfaceBoundary.jsx");
 
-    expect(mainSource.match(/<LazyPublicRoute/g)).toHaveLength(6);
+    expect(mainSource.match(/<LazyPublicRoute/g)).toHaveLength(5);
     expect(readSource("../WorkspaceRoute.jsx"))
       .toContain("mountFirebaseEmailActionPage(node)");
     expect(mainSource).toContain("const RevenueAutopilotUnsubscribePage = createRecoverableLazy(");

@@ -54,8 +54,7 @@ const CANDIDATE_FUNCTIONS_RUNTIME_BASE = Object.freeze({
   REVENUE_AUTOPILOT_SENDS_ENABLED: "false",
   BUYER_ACCESS_ENABLED: "false",
   BUYER_ACCESS_STRIPE_MODE: "test",
-  BUYER_ACCESS_APP_BASE_URL: `${RELEASE_CANDIDATE_POLICY.firebase.hostingUrl}/app`,
-  INQUIRY_SHOWCASE_ENABLED: "false"
+  BUYER_ACCESS_APP_BASE_URL: `${RELEASE_CANDIDATE_POLICY.firebase.hostingUrl}/app`
 });
 
 export function requireCandidateUatProfile(value) {
@@ -123,9 +122,7 @@ export const CANDIDATE_FUNCTIONS_FORBIDDEN_PLAINTEXT = Object.freeze([
   "BUYER_ACCESS_STRIPE_SECRET_KEY",
   "BUYER_ACCESS_STRIPE_WEBHOOK_SECRET",
   "BUYER_ACCESS_TURNSTILE_SECRET",
-  "BUYER_ACCESS_RATE_LIMIT_SECRET",
-  "INQUIRY_TURNSTILE_SECRET",
-  "INQUIRY_RATE_LIMIT_SECRET"
+  "BUYER_ACCESS_RATE_LIMIT_SECRET"
 ]);
 
 export const CANDIDATE_REQUIRED_SECRET_METADATA = Object.freeze([
@@ -133,8 +130,6 @@ export const CANDIDATE_REQUIRED_SECRET_METADATA = Object.freeze([
   "BUYER_ACCESS_STRIPE_SECRET_KEY",
   "BUYER_ACCESS_STRIPE_WEBHOOK_SECRET",
   "BUYER_ACCESS_TURNSTILE_SECRET",
-  "INQUIRY_RATE_LIMIT_SECRET",
-  "INQUIRY_TURNSTILE_SECRET",
   "PINGRAM_API_KEY",
   "PINGRAM_WEBHOOK_SECRET",
   "RESEND_API_KEY",
@@ -151,8 +146,7 @@ const CANDIDATE_FUNCTIONS_DISABLED_RESIDUE = Object.freeze([
   "TWILIO_ACCOUNT_SID",
   "TWILIO_MESSAGING_SERVICE_SID",
   "NOTIFICATIONS_OWNER_PHONE",
-  "BUYER_ACCESS_ALLOWED_EMAILS",
-  "INQUIRY_TURNSTILE_HOSTNAMES"
+  "BUYER_ACCESS_ALLOWED_EMAILS"
 ]);
 
 const CANDIDATE_FUNCTIONS_ALLOWED_KEYS = new Set([
@@ -324,14 +318,6 @@ export function validateCandidateBrowserEnvironment(
       "VITE_BUYER_ACCESS_TURNSTILE_SITE_KEY must be a reviewed non-test staging site key for provider acceptance."
     );
   }
-  if (["1", "true", "yes", "on"].includes(
-    String(environment.VITE_INQUIRY_SHOWCASE_ENABLED || "").trim().toLowerCase()
-  )) {
-    reject("VITE_INQUIRY_SHOWCASE_ENABLED must remain false in every existing candidate profile.");
-  }
-  if (String(environment.VITE_INQUIRY_TURNSTILE_SITE_KEY || "").trim()) {
-    reject("VITE_INQUIRY_TURNSTILE_SITE_KEY must remain empty while Inquiry Showcase is disabled.");
-  }
   return Object.freeze({
     ...exact,
     VITE_AMBIENT_UI_ENABLED: "true",
@@ -341,8 +327,6 @@ export function validateCandidateBrowserEnvironment(
     VITE_BUYER_ACCESS_TURNSTILE_SITE_KEY: providerAcceptance
       ? turnstileSiteKey
       : "",
-    VITE_INQUIRY_SHOWCASE_ENABLED: "false",
-    VITE_INQUIRY_TURNSTILE_SITE_KEY: "",
     ...(profile === RELEASE_CANDIDATE_EVENT_SPINE_UAT_PROFILE ? { VITE_EVENT_OPERATING_SPINE_ENABLED: "true" } : {})
   });
 }

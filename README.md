@@ -1,6 +1,6 @@
 # QuotePilot by MBMApps
 
-Last updated: 2026-09-13 17:24:50 CDT
+Last updated: 2026-09-11 00:36:51 CDT
 
 Multi-tenant catering quote application built with React, Vite, Firebase, and jsPDF.
 
@@ -81,12 +81,6 @@ evidence paths, freshness, blocker references, and the single next proof event.
   Workspace. Existing bookmarks continue to work, but new exact-quote
   navigation uses `/app/quotes/:quoteId`; neither alias grants mutation or
   provider authority.
-- `/inquire/:slug`: share-only, `noindex` Guided Inquiry Page backed by an
-  immutable Inquiry Showcase publication. It collects event preferences
-  without prices or availability claims and creates only a server-owned
-  inquiry receipt. Administrators publish from **Library → Inquiry page**;
-  staff acknowledge, review catalog/identity drift, and convert from
-  **Opportunities** through the existing authoritative quote-creation path.
 - `/app/messages`: temporary-flagged staff Event Messaging Station. Each
   conversation remains segregated by its canonical quote/event, the inbox
   watches up to 50 same-tenant quote documents ordered by their body-free
@@ -384,14 +378,6 @@ Optional:
   guided-selling/AI-assist gates, apply behavior, and autopilot semantics
   are unchanged. Purely presentational; not a deployment or acceptance
   decision.)
-- `VITE_INQUIRY_SHOWCASE_ENABLED` (default off. Exposes the Library Inquiry
-  Showcase, Opportunities inquiry queue, and `/inquire/:slug` browser
-  surfaces; the server `INQUIRY_SHOWCASE_ENABLED` gate and tenant publication
-  gate must also be enabled.)
-- `VITE_INQUIRY_TURNSTILE_SITE_KEY` (public site key used only for the
-  `public_inquiry_submit` action). The Functions runtime separately requires
-  `INQUIRY_TURNSTILE_SECRET`, `INQUIRY_TURNSTILE_HOSTNAMES`, and
-  `INQUIRY_RATE_LIMIT_SECRET`; do not reuse Buyer Access credentials.
 - `VITE_PILOT_CREATE_ENABLED` (default off. Renders the CREATE intake
   canvas above the new-quote builder: free text is structured by a
   deterministic browser-only extractor — no provider, no I/O, no invention;
@@ -457,11 +443,6 @@ Optional:
   No new callable, message field, catalog exposure, direct quote mutation, or
   trust boundary.)
 
-- `VITE_PILOT_MODEL_ENABLED` (default off. Exposes the Model assist control in
-  CREATE only when the server lane is independently enabled and provider-ready.
-  When false or absent, CREATE retains its deterministic Structure it workflow
-  and does not render a provider action.)
-
 - `INTENT_PARSER_ENABLED` / `INTENT_PARSER_PROVIDER` / `INTENT_PARSER_MODEL`
   (server env, all dormant by default: `false` / `none` / per-provider
   default. The owner-approved model-assisted intake lane; providers
@@ -469,12 +450,10 @@ Optional:
   `provider:model` candidate order from `INTENT_PARSER_MODEL` or the
   built-in defaults, trims the completion-token budget by request
   complexity, and may escalate once to the next configured candidate.
-  Enabling requires creating the
+  Enabling later requires creating the
   `INTENT_PARSER_OPENAI_KEY` and/or `INTENT_PARSER_ANTHROPIC_KEY` secrets
-  in Firebase Secret Manager and binding them only to the parse callable;
-  the OpenAI binding is present in the current source candidate. Until the
-  browser gate, server gate, provider, enabled secret, and provider account
-  capacity all exist, parsing
+  in Firebase Secret Manager and binding them to the parse callable when
+  it ships with the CREATE integration; until every piece exists, parsing
   fails closed with a named precondition and the deterministic browser
   extractor remains the availability floor. See
   `docs/INTENT_INTAKE_ADR.md`.)
@@ -1479,15 +1458,6 @@ Primary production deployment is manual-workflow-only:
   `backend`, or `all` surface to the fixed `tonicatering` project.
 - `Deploy Vercel Production` builds and promotes the exact release to the fixed
   `mbmapps/quoteflow` project and `quotepilot.mbmapps.com` production edge.
-- The protected `all-qualified-features` profile is the coordinated
-  founder-tenant path and is accepted only for Firebase `all` and Vercel. It
-  pins both compiled and server access to `mm05366-sandbox`; enables the
-  qualified workspace, Resend, Commercial Change, Event Spine, Staffing,
-  Inventory, Guided Inquiry, and review-only Model Assist; and keeps Buyer
-  Access, SMS, Revenue Autopilot sends, test bypasses, and hard App Check
-  enforcement off. It requires the dedicated Inquiry Turnstile public site key
-  plus enabled Secret Manager metadata for Inquiry, rate limiting, OpenAI, and
-  Resend before Firebase mutation. Deployment never publishes an Inquiry slug.
 - `Release UAT Attestation` remains available when a release needs a separately
   recorded human acceptance receipt. Its v4 receipt binds the exact tracked
   candidate profile and that profile's fixed SMS provider in addition to the
@@ -1509,13 +1479,6 @@ allowlisted human dispatcher. The same live evidence is checked again after
 the build and immediately before provider mutation. The Vercel token and the
 Firebase workload-identity ADC file are scoped to their final mutation steps;
 Firebase production rejects the legacy `FIREBASE_TOKEN` path.
-
-The coordinated profile is currently source-only and has not been deployed.
-Its Inquiry prerequisite is blocked until the dedicated managed Turnstile
-widget is created and verified. Its Model Assist configuration is also not
-provider-ready: the latest live OpenAI probe returned
-`credit_balance_exhausted`. Restore capacity and pass a fresh minimal probe
-before dispatch; an enabled secret version alone is not AI availability.
 
 The pre-merge candidate path is narrower than the production workflows. It
 uses the checksum-verified official Firebase v15.24.0 binary for every Firebase

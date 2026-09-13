@@ -229,9 +229,7 @@ describe("governed release candidate deployment", () => {
       "REVENUE_AUTOPILOT_TOKEN_SECRET",
       "SMS_CONTACT_DIGEST_SECRET",
       "STRIPE_SECRET_KEY",
-      "TWILIO_AUTH_TOKEN",
-      "INQUIRY_TURNSTILE_SECRET",
-      "INQUIRY_RATE_LIMIT_SECRET"
+      "TWILIO_AUTH_TOKEN"
     ]));
     const source = fs.readFileSync(SCRIPT, "utf8");
     expect(source).toContain('"functions:secrets:get"');
@@ -291,7 +289,6 @@ describe("governed release candidate deployment", () => {
       .toMatchObject({
         AUTH_PLATFORM_ADMIN_EMAILS: "flightcontrol@quietpilot.us",
         OPERATIONAL_STAFFING_AUTHORITY_ENABLED: "false",
-        INQUIRY_SHOWCASE_ENABLED: "false",
         platformAdminCount: 1
       });
     expect(() => validateCandidateFunctionsEnvironment(functionsEnvironment({
@@ -316,12 +313,6 @@ describe("governed release candidate deployment", () => {
     expect(() => validateCandidateFunctionsEnvironment(functionsEnvironment({
       TWILIO_ACCOUNT_SID: "disabled-provider-residue"
     }))).toThrow(/must be empty/i);
-    expect(() => validateCandidateFunctionsEnvironment(functionsEnvironment({
-      INQUIRY_TURNSTILE_HOSTNAMES: "quotepilot-staging-20260804.web.app"
-    }))).toThrow(/must be empty/i);
-    expect(() => validateCandidateFunctionsEnvironment(functionsEnvironment({
-      INQUIRY_TURNSTILE_SECRET: "plaintext-fixture"
-    }))).toThrow(/Secret Manager/i);
   });
 
   test("opens only the controlled test-provider profile and rejects browser test keys", () => {
@@ -362,9 +353,7 @@ describe("governed release candidate deployment", () => {
     )).toMatchObject({
       VITE_BUYER_ACCESS_ENABLED: "true",
       VITE_BUYER_ACCESS_PUBLIC_CTA_ENABLED: "true",
-      VITE_BUYER_ACCESS_TURNSTILE_SITE_KEY: "0x4AAAAAReviewedStagingKey123",
-      VITE_INQUIRY_SHOWCASE_ENABLED: "false",
-      VITE_INQUIRY_TURNSTILE_SITE_KEY: ""
+      VITE_BUYER_ACCESS_TURNSTILE_SITE_KEY: "0x4AAAAAReviewedStagingKey123"
     });
     expect(() => validateCandidateBrowserEnvironment({
       ...browser,
@@ -658,8 +647,6 @@ describe("governed release candidate deployment", () => {
       VITE_PILOT_MODEL_ENABLED: "false",
       VITE_BUYER_ACCESS_ENABLED: "false",
       VITE_BUYER_ACCESS_PUBLIC_CTA_ENABLED: "false",
-      VITE_INQUIRY_SHOWCASE_ENABLED: "false",
-      VITE_INQUIRY_TURNSTILE_SITE_KEY: "",
       VITE_E2E_BYPASS_AUTH: "false",
       VITE_USE_FIREBASE_EMULATORS: "false",
       VITE_ALLOW_LOCAL_CATALOG_FALLBACK: "false",
@@ -671,16 +658,6 @@ describe("governed release candidate deployment", () => {
       encoding: "utf8"
     });
     expect(candidate.status).toBe(0);
-    const inquiryResidue = spawnSync(process.execPath, [path.join(ROOT, "scripts", "check-env.mjs")], {
-      cwd: ROOT,
-      env: {
-        ...stagingEnv,
-        VITE_INQUIRY_TURNSTILE_SITE_KEY: "public-inquiry-key-fixture"
-      },
-      encoding: "utf8"
-    });
-    expect(inquiryResidue.status).not.toBe(0);
-    expect(inquiryResidue.stderr).toMatch(/must remain empty/i);
     const defaultProfile = spawnSync(process.execPath, [path.join(ROOT, "scripts", "check-env.mjs")], {
       cwd: ROOT,
       env: { ...stagingEnv, QUOTEPILOT_BUILD_PROFILE: "" },

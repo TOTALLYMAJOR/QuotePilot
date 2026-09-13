@@ -106,10 +106,6 @@ describe("Firebase Functions env materializer", { timeout: 30_000 }, () => {
     expect(output).toContain("REVENUE_AUTOPILOT_SENDS_ENABLED=false");
     expect(output).toContain("BUYER_ACCESS_ENABLED=false");
     expect(output).toContain("BUYER_ACCESS_STRIPE_MODE=test");
-    expect(output).toContain("INQUIRY_SHOWCASE_ENABLED=false");
-    expect(output).toContain("INTENT_PARSER_ENABLED=false");
-    expect(output).toContain("INTENT_PARSER_PROVIDER=none");
-    expect(output).toContain("INTENT_PARSER_MODEL=");
     expect(output).toContain(
       "BUYER_ACCESS_APP_BASE_URL=https://quotepilot.mbmapps.com/app"
     );
@@ -119,9 +115,6 @@ describe("Firebase Functions env materializer", { timeout: 30_000 }, () => {
     expect(output).not.toContain("BUYER_ACCESS_STRIPE_WEBHOOK_SECRET");
     expect(output).not.toContain("BUYER_ACCESS_TURNSTILE_SECRET");
     expect(output).not.toContain("BUYER_ACCESS_RATE_LIMIT_SECRET");
-    expect(output).not.toContain("INQUIRY_TURNSTILE_HOSTNAMES");
-    expect(output).not.toContain("INQUIRY_TURNSTILE_SECRET");
-    expect(output).not.toContain("INQUIRY_RATE_LIMIT_SECRET");
     expect(output).not.toContain("RESEND_API_KEY");
     expect(output).not.toContain("RESEND_WEBHOOK_SECRET");
     expect(output).not.toContain("STRIPE_SECRET_KEY");
@@ -375,113 +368,6 @@ describe("Firebase Functions env materializer", { timeout: 30_000 }, () => {
     }).result;
     expect(rateLimitSecret.status).not.toBe(0);
     expect(rateLimitSecret.stderr).toMatch(/Firebase Secret Manager/i);
-  });
-
-  test("materializes Inquiry Showcase configuration only with an explicit approved hostname allowlist", () => {
-    const enabled = runMaterializer({
-      TENANT_WORKFLOW_ORGANIZATION_ID: "mm05366-sandbox",
-      INQUIRY_SHOWCASE_ENABLED: "true",
-      INQUIRY_TURNSTILE_HOSTNAMES: "quotepilot.mbmapps.com, tonicatering.web.app"
-    });
-    expect(enabled.result.status).toBe(0);
-    const output = fs.readFileSync(
-      path.join(enabled.cwd, "functions", ".env.tonicatering"),
-      "utf8"
-    );
-    expect(output).toContain("INQUIRY_SHOWCASE_ENABLED=true");
-    expect(output).toContain(
-      "INQUIRY_TURNSTILE_HOSTNAMES=quotepilot.mbmapps.com,tonicatering.web.app"
-    );
-    expect(output).not.toContain("INQUIRY_TURNSTILE_SECRET");
-    expect(output).not.toContain("INQUIRY_RATE_LIMIT_SECRET");
-
-    const missingHostnames = runMaterializer({
-      TENANT_WORKFLOW_ORGANIZATION_ID: "mm05366-sandbox",
-      INQUIRY_SHOWCASE_ENABLED: "true"
-    }).result;
-    expect(missingHostnames.status).not.toBe(0);
-    expect(missingHostnames.stderr).toMatch(/INQUIRY_TURNSTILE_HOSTNAMES is required/i);
-
-    const disabledResidue = runMaterializer({
-      INQUIRY_TURNSTILE_HOSTNAMES: "quotepilot.mbmapps.com"
-    }).result;
-    expect(disabledResidue.status).not.toBe(0);
-    expect(disabledResidue.stderr).toMatch(/allowed only while INQUIRY_SHOWCASE_ENABLED=true/i);
-
-    const unapprovedHostname = runMaterializer({
-      TENANT_WORKFLOW_ORGANIZATION_ID: "mm05366-sandbox",
-      INQUIRY_SHOWCASE_ENABLED: "true",
-      INQUIRY_TURNSTILE_HOSTNAMES: "inquiry.example.invalid"
-    }).result;
-    expect(unapprovedHostname.status).not.toBe(0);
-    expect(unapprovedHostname.stderr).toMatch(/approved QuotePilot production hosts/i);
-  });
-
-  test("rejects Inquiry Showcase secrets in dotenv because Secret Manager owns them", () => {
-    for (const [name, value] of [
-      ["INQUIRY_TURNSTILE_SECRET", "turnstile-secret-fixture"],
-      ["INQUIRY_RATE_LIMIT_SECRET", "rate-limit-secret-fixture"],
-      ["INTENT_PARSER_OPENAI_KEY", "openai-secret-fixture"],
-      ["INTENT_PARSER_ANTHROPIC_KEY", "anthropic-secret-fixture"]
-    ]) {
-      const { result } = runMaterializer({ [name]: value });
-      expect(result.status).not.toBe(0);
-      expect(result.stderr).toMatch(/Firebase Secret Manager/i);
-      expect(result.stderr).toContain(name);
-    }
-  });
-
-  test("materializes only the exact tenant-fenced production Model Assist tuple", () => {
-    const exact = runMaterializer({
-      TENANT_WORKFLOW_ORGANIZATION_ID: "mm05366-sandbox",
-      COMMERCIAL_CHANGE_AUTHORITY_ENABLED: "true",
-      EVENT_OPERATING_SPINE_ENABLED: "true",
-      OPERATIONAL_STAFFING_AUTHORITY_ENABLED: "true",
-      INVENTORY_AUTHORITY_ENABLED: "true",
-      INQUIRY_SHOWCASE_ENABLED: "true",
-      INQUIRY_TURNSTILE_HOSTNAMES: "quotepilot.mbmapps.com,tonicatering.web.app",
-      INTENT_PARSER_ENABLED: "true",
-      INTENT_PARSER_PROVIDER: "openai",
-      INTENT_PARSER_MODEL: "gpt-5-mini",
-      INTENT_PARSER_ORGANIZATION_ID: "mm05366-sandbox"
-    });
-    expect(exact.result.status).toBe(0);
-    const output = fs.readFileSync(
-      path.join(exact.cwd, "functions", ".env.tonicatering"),
-      "utf8"
-    );
-    for (const binding of [
-      "TENANT_WORKFLOW_ORGANIZATION_ID=mm05366-sandbox",
-      "INQUIRY_SHOWCASE_ENABLED=true",
-      "INTENT_PARSER_ENABLED=true",
-      "INTENT_PARSER_PROVIDER=openai",
-      "INTENT_PARSER_MODEL=gpt-5-mini",
-      "INTENT_PARSER_ORGANIZATION_ID=mm05366-sandbox"
-    ]) {
-      expect(output).toContain(binding);
-    }
-    expect(output).not.toContain("INTENT_PARSER_OPENAI_KEY");
-
-    for (const override of [
-      { INTENT_PARSER_PROVIDER: "anthropic" },
-      { INTENT_PARSER_MODEL: "gpt-5" },
-      { INTENT_PARSER_ORGANIZATION_ID: "other" },
-      { TENANT_WORKFLOW_ORGANIZATION_ID: "" },
-      { INQUIRY_SHOWCASE_ENABLED: "false", INQUIRY_TURNSTILE_HOSTNAMES: "" }
-    ]) {
-      const result = runMaterializer({
-        TENANT_WORKFLOW_ORGANIZATION_ID: "mm05366-sandbox",
-        INQUIRY_SHOWCASE_ENABLED: "true",
-        INQUIRY_TURNSTILE_HOSTNAMES: "quotepilot.mbmapps.com,tonicatering.web.app",
-        INTENT_PARSER_ENABLED: "true",
-        INTENT_PARSER_PROVIDER: "openai",
-        INTENT_PARSER_MODEL: "gpt-5-mini",
-        INTENT_PARSER_ORGANIZATION_ID: "mm05366-sandbox",
-        ...override
-      }).result;
-      expect(result.status).not.toBe(0);
-      expect(result.stderr).toMatch(/exact openai\/gpt-5-mini\/mm05366-sandbox profile|TENANT_WORKFLOW_ORGANIZATION_ID/i);
-    }
   });
 
   test("enables Resend without materializing its Secret Manager credential", () => {
