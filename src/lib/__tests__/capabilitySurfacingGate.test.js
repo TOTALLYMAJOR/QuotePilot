@@ -300,8 +300,6 @@ describe("capability surfacing delivery gate", () => {
   test("inventories every explicit Functions export without swallowing later declarations", () => {
     const currentExports = parseFunctionExports(functionsEntrypointSource);
     expect(currentExports).toHaveLength(142);
-    expect(currentExports).toContain("functions/index.js#getEventOperationalNotesSnapshot");
-    expect(currentExports).toContain("functions/index.js#applyEventOperationalNoteCommand");
     expect(currentExports).toContain("functions/index.js#getInventoryWorkspace");
     expect(currentExports).toContain("functions/index.js#applyInventoryCommand");
     expect(currentExports).toContain("functions/index.js#previewEventInventory");

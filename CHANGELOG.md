@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-09-13 15:44:41 CDT
+Last updated: 2026-09-13 16:00:26 CDT
 
 All notable project changes are documented in this file.
 
@@ -25,7 +25,10 @@ All notable project changes are documented in this file.
   to all Showcase, inquiry, abuse, recovery, analytics, and receipt records is
   denied. This is source/local candidate evidence only; deployment, secrets,
   gates, hosted/provider behavior, production data, accessibility, human
-  acceptance, and commercial outcomes remain open.
+  acceptance, and commercial outcomes remain open. Release validation also
+  inventories the exact current-main Functions exports and evaluates portal
+  expiry against a deterministic test clock, without changing fail-closed
+  production expiry behavior.
 
 - Correct the `staging-event-operating-spine` candidate envelope so enabling
   Commercial Change and Event Spine preserves Staffing and Inventory and binds
