@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "catalogVersion": 86,
+  "catalogVersion": 87,
   "contracts": [
     {
       "id": "bounded-security-operations-audit",
@@ -3366,19 +3366,193 @@
       "safeOutcome": "Staff can see which exact dependent decisions and artifacts remain invalid, why publication is blocked, and which note-backed reconciliation receipt resolved each selected invalidation; no visual family alone claims artifact freshness or authorization."
     },
     {
-      "id": "trusted-kitchen-beo-authority",
-      "reviewRevision": 4,
+      "id": "event-operational-notes",
+      "reviewRevision": 1,
       "status": "active",
       "deliveryType": "user_relevant",
       "capabilityKind": "mixed_surface",
       "audiences": [
         "staff"
       ],
-      "summary": "Staff can inspect server-authoritative Kitchen BEO freshness, download exact prior receipt bytes, and generate a new PDF with a durable source fingerprint and immutable receipt.",
+      "summary": "Same-tenant staff can record, correct, and revision-review a bounded journal of kitchen, venue, service, and staffing instructions; only explicitly BEO-visible notes enter the trusted Kitchen BEO fingerprint and PDF, while newer notes create one event-brief review cue.",
+      "backendPaths": [
+        "functions/eventOperationalNotes.js",
+        "functions/index.js",
+        "functions/kitchenBeoAuthority.js",
+        "functions/kitchenBeoPdf.js",
+        "firestore.rules",
+        "src/lib/eventOperationalNotesClient.js"
+      ],
+      "backendExports": [
+        "functions/index.js#getEventOperationalNotesSnapshot",
+        "functions/index.js#applyEventOperationalNoteCommand"
+      ],
+      "affectedBackendExports": [
+        "functions/index.js#getKitchenBeoArtifactStatus",
+        "functions/index.js#generateKitchenBeo"
+      ],
+      "frontendPaths": [
+        "src/components/EventOperationalNotesPanel.jsx",
+        "src/components/KitchenBeoArtifactPanel.jsx",
+        "src/components/QuoteHistoryModal.jsx",
+        "src/components/LegacyQuoteHistoryModal.jsx",
+        "src/components/EventScheduleModal.jsx"
+      ],
+      "entryPointLocators": [
+        {
+          "path": "src/components/EventOperationalNotesPanel.jsx",
+          "locator": "data-event-operational-notes-panel=\"true\""
+        },
+        {
+          "path": "src/components/QuoteHistoryModal.jsx",
+          "locator": "data-capability-id=\"cwf-15-kitchen-beo-entry\""
+        },
+        {
+          "path": "src/components/EventScheduleModal.jsx",
+          "locator": "Review event brief again"
+        }
+      ],
+      "testPaths": [
+        "src/lib/__tests__/eventOperationalNotes.server.test.js",
+        "src/lib/__tests__/eventOperationalNotesClient.test.js",
+        "src/components/__tests__/eventOperationalNotesPanel.test.jsx",
+        "src/lib/__tests__/kitchenBeoAuthority.server.test.js",
+        "src/lib/__tests__/kitchenBeoPdf.server.test.js",
+        "src/lib/__tests__/kitchenBeoIntegration.server.test.js",
+        "src/components/__tests__/quoteHistoryKitchenBeoIntegration.test.jsx",
+        "src/rules/__tests__/firestore.rules.test.js"
+      ],
+      "testLocators": [
+        {
+          "path": "src/lib/__tests__/eventOperationalNotes.server.test.js",
+          "locator": "corrects through a new note revision, preserves the prior snapshot, and clears review"
+        },
+        {
+          "path": "src/lib/__tests__/eventOperationalNotes.server.test.js",
+          "locator": "projects privacy-safe staff data and BEO-visible content only"
+        },
+        {
+          "path": "src/components/__tests__/eventOperationalNotesPanel.test.jsx",
+          "locator": "one note consequence routes to checklist review without changing completion"
+        },
+        {
+          "path": "src/lib/__tests__/kitchenBeoAuthority.server.test.js",
+          "locator": "versions visible operational notes without changing the immutable commercial graph"
+        },
+        {
+          "path": "src/lib/__tests__/kitchenBeoIntegration.server.test.js",
+          "locator": "keeps operational notes callable-owned, revision-bound, and receipt-backed"
+        }
+      ],
+      "documentationPaths": [
+        "docs/FEATURE_MATRIX.md",
+        "docs/USER_MANUAL.md"
+      ],
+      "documentationLocators": [
+        {
+          "path": "docs/FEATURE_MATRIX.md",
+          "locator": "Revision-bound event operational notes"
+        },
+        {
+          "path": "docs/USER_MANUAL.md",
+          "locator": "### Event operational notes and downstream review"
+        }
+      ],
+      "surfaceReview": "changed",
+      "surfaceReviewNote": "One compact journal inside the familiar Kitchen BEO workspace replaces separate note modules. Type and audience are explicit, the 800-character boundary is visible, correction preserves the draft and requires a reason, revision drift yields one journal-wide review action, and a note newer than a recorded event brief yields one direct checklist handoff. All interactive controls are at least 44 CSS pixels in the compact surface.",
+      "stateEvidence": [
+        {
+          "state": "loading",
+          "path": "src/components/__tests__/eventOperationalNotesPanel.test.jsx",
+          "locator": "notes journal distinguishes loading, empty, success, and stale read states",
+          "assertionLocator": "data-capability-state=\"loading\""
+        },
+        {
+          "state": "empty",
+          "path": "src/components/__tests__/eventOperationalNotesPanel.test.jsx",
+          "locator": "notes journal distinguishes loading, empty, success, and stale read states",
+          "assertionLocator": "data-capability-state=\"empty\""
+        },
+        {
+          "state": "success",
+          "path": "src/components/__tests__/eventOperationalNotesPanel.test.jsx",
+          "locator": "notes journal distinguishes loading, empty, success, and stale read states",
+          "assertionLocator": "data-capability-state=\"success\""
+        },
+        {
+          "state": "ready",
+          "path": "src/components/__tests__/eventOperationalNotesPanel.test.jsx",
+          "locator": "notes journal distinguishes loading, empty, success, and stale read states",
+          "assertionLocator": "data-capability-state=\"ready\""
+        },
+        {
+          "state": "stale",
+          "path": "src/components/__tests__/eventOperationalNotesPanel.test.jsx",
+          "locator": "stale note journal is one visible revision action with no hidden BEO claim",
+          "assertionLocator": "data-capability-state=\"stale\""
+        },
+        {
+          "state": "partial",
+          "path": "src/components/__tests__/eventOperationalNotesPanel.test.jsx",
+          "locator": "a loaded journal is partial when its required checklist handoff is unavailable",
+          "assertionLocator": "data-capability-state=\"partial\""
+        },
+        {
+          "state": "submitting",
+          "path": "src/components/__tests__/eventOperationalNotesPanel.test.jsx",
+          "locator": "adding a note uses familiar type and audience controls with an 800-character boundary",
+          "assertionLocator": "data-capability-state=\"submitting\""
+        },
+        {
+          "state": "receipt",
+          "path": "src/components/__tests__/eventOperationalNotesPanel.test.jsx",
+          "locator": "adding a note uses familiar type and audience controls with an 800-character boundary",
+          "assertionLocator": "data-capability-state=\"receipt\""
+        },
+        {
+          "state": "uncertain",
+          "path": "src/components/__tests__/eventOperationalNotesPanel.test.jsx",
+          "locator": "uncertain and deterministic failures preserve the editor and offer explicit recovery",
+          "assertionLocator": "data-capability-state=\"uncertain\""
+        },
+        {
+          "state": "reconciliation",
+          "path": "src/components/__tests__/eventOperationalNotesPanel.test.jsx",
+          "locator": "uncertain and deterministic failures preserve the editor and offer explicit recovery",
+          "assertionLocator": "data-capability-state=\"reconciliation\""
+        },
+        {
+          "state": "error",
+          "path": "src/components/__tests__/eventOperationalNotesPanel.test.jsx",
+          "locator": "uncertain and deterministic failures preserve the editor and offer explicit recovery",
+          "assertionLocator": "data-capability-state=\"error\""
+        },
+        {
+          "state": "recovery",
+          "path": "src/components/__tests__/eventOperationalNotesPanel.test.jsx",
+          "locator": "uncertain and deterministic failures preserve the editor and offer explicit recovery",
+          "assertionLocator": "data-capability-state=\"recovery\""
+        }
+      ],
+      "stateExceptions": {},
+      "safeOutcome": "Authorized staff can retain a small revision-bound internal instruction journal with immutable correction receipts, deliberately include selected content in a newly generated trusted Kitchen BEO, and reach the existing event-brief checklist when recorded review is older. Notes do not change a quote, customer proposal, price, staffing assignment, inventory evidence, checklist completion, publication, message, booking, payment, or readiness state."
+    },
+    {
+      "id": "trusted-kitchen-beo-authority",
+      "reviewRevision": 5,
+      "status": "active",
+      "deliveryType": "user_relevant",
+      "capabilityKind": "mixed_surface",
+      "audiences": [
+        "staff"
+      ],
+      "summary": "Staff can inspect server-authoritative Kitchen BEO freshness, review a revision-bound operational-note journal, download exact prior receipt bytes, and generate a new PDF with a durable source fingerprint and immutable receipt.",
       "backendPaths": [
         "functions/index.js",
         "functions/kitchenBeoAuthority.js",
         "functions/kitchenBeoPdf.js",
+        "functions/eventOperationalNotes.js",
+        "src/lib/eventOperationalNotesClient.js",
         "src/lib/kitchenBeoClient.js"
       ],
       "backendExports": [
@@ -3390,11 +3564,14 @@
         "functions/index.js#getKitchenBeoArtifactStatus",
         "functions/index.js#downloadKitchenBeoReceipt",
         "functions/index.js#generateKitchenBeo",
+        "functions/index.js#getEventOperationalNotesSnapshot",
+        "functions/index.js#applyEventOperationalNoteCommand",
         "functions/index.js#reconcileCommercialDependencyState"
       ],
       "frontendPaths": [
         "src/components/QuoteHistoryModal.jsx",
         "src/components/KitchenBeoArtifactPanel.jsx",
+        "src/components/EventOperationalNotesPanel.jsx",
         "src/components/EventExecutionContextPanel.jsx"
       ],
       "entryPointLocators": [
@@ -3409,6 +3586,10 @@
         {
           "path": "src/components/KitchenBeoArtifactPanel.jsx",
           "locator": "data-capability-action=\"download-receipt\""
+        },
+        {
+          "path": "src/components/EventOperationalNotesPanel.jsx",
+          "locator": "data-event-operational-notes-panel=\"true\""
         }
       ],
       "testPaths": [
@@ -3418,6 +3599,9 @@
         "src/lib/__tests__/kitchenBeoClient.test.js",
         "src/lib/__tests__/kitchenBeoIntegration.server.test.js",
         "src/lib/__tests__/kitchenBeoPdf.server.test.js",
+        "src/lib/__tests__/eventOperationalNotes.server.test.js",
+        "src/lib/__tests__/eventOperationalNotesClient.test.js",
+        "src/components/__tests__/eventOperationalNotesPanel.test.jsx",
         "src/components/__tests__/EventExecutionContextPanel.test.jsx"
       ],
       "testLocators": [
@@ -3449,7 +3633,7 @@
         }
       ],
       "surfaceReview": "changed",
-      "surfaceReviewNote": "The existing quote-record status read, current/stale/unknown boundary, prior receipt download, generation request lock, immutable receipt, uncertain reconciliation, browser-download failure, and recovery controls were verified unchanged. The server PDF renderer now loads only after the existing authorization and input-validation boundary; exports, role authority, UI states, receipt semantics, and recovery behavior are unchanged. Slice D adds a read-only current execution context consumer of the existing trusted getter, with source revisions, observation time and independent failure handling. No mutation, authority, provider effect or historical execution claim is added.",
+      "surfaceReviewNote": "The quote detail now exposes a stable Event handoff entry, and the BEO panel embeds one compact typed-note journal before generation. Visible notes version the BEO input contract while retaining the existing immutable commercial graph; initial adoption requires review and later corrections produce exact fingerprint staleness. The server double-reads the verified journal, aborts concurrent changes, and renders content only—never actor or correction history. Existing status, receipt download, uncertain reconciliation, and execution-context consumers retain their proof boundaries.",
       "stateEvidence": [
         {
           "state": "loading",
@@ -3525,7 +3709,7 @@
         }
       ],
       "stateExceptions": {},
-      "safeOutcome": "Staff can distinguish not generated, current, stale, incomplete, and failed BEO evidence, download only exact trusted receipt bytes, and generate or reconcile one request identity without treating a browser download as artifact-generation proof."
+      "safeOutcome": "Staff can distinguish not generated, current, stale, incomplete, and failed BEO evidence, deliberately include reviewed BEO-visible operational instructions, download only exact trusted receipt bytes, and generate or reconcile one request identity without treating a browser download, note, or checklist cue as artifact-use or readiness proof."
     },
     {
       "id": "decision-debt-and-policy-controls",

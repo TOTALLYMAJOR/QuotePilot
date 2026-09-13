@@ -85,6 +85,7 @@ const eventOperations = require("./eventOperations");
 const eventOperatingWork = require("./eventOperatingWork");
 const eventOperatingActuals = require("./eventOperatingActuals");
 const eventOperatingHistory = require("./eventOperatingHistory");
+const eventOperationalNotes = require("./eventOperationalNotes");
 const workflowDefinitions = require("./workflowDefinitions");
 const workflowExecution = require("./workflowExecution");
 const eventWorkflowAdapter = require("./eventWorkflowAdapter");
@@ -527,6 +528,7 @@ const PORTAL_CONVERSATION_STATE_COLLECTION = "portalConversationState";
 const POST_EVENT_CLOSEOUTS_COLLECTION = "postEventCloseouts";
 const KITCHEN_BEO_ARTIFACTS_COLLECTION = "kitchenBeoArtifacts";
 const KITCHEN_BEO_RECEIPTS_COLLECTION = "kitchenBeoGenerationReceipts";
+const EVENT_OPERATIONAL_NOTES_COLLECTION = "eventOperationalNotes";
 const KITCHEN_BEO_RECEIPT_HISTORY_SCHEMA_VERSION = 1;
 const KITCHEN_BEO_RECEIPT_HISTORY_LIMIT = 10;
 const COMMERCIAL_CHANGE_SIMULATIONS_COLLECTION = "commercialChangeSimulations";
@@ -18620,9 +18622,243 @@ exports.refreshPostEventCloseoutConfiguration = functions.region(REGION).https.o
   }
 });
 
+function eventOperationalNotesRefs(organizationId, quoteId, receiptId = "") {
+  const organizationRef = db.collection(ORGANIZATIONS_COLLECTION).doc(organizationId);
+  const journalRef = organizationRef.collection(EVENT_OPERATIONAL_NOTES_COLLECTION).doc(quoteId);
+  return {
+    organizationRef,
+    quoteRef: organizationRef.collection(QUOTES_COLLECTION).doc(quoteId),
+    journalRef,
+    receiptRef: receiptId ? journalRef.collection("receipts").doc(receiptId) : null
+  };
+}
+
+function eventOperationalNotesSource({ organizationId, quoteId, quote = {} }) {
+  const sourceVersionId = normalizeText(
+    quote.activeVersionId || quote.versionMeta?.versionId
+  );
+  if (!sourceVersionId) {
+    throw new eventOperations.EventOperationsError(
+      "failed-precondition",
+      "A canonical active quote revision is required for operational notes."
+    );
+  }
+  if (normalizeOrganizationId(quote.organizationId) !== organizationId) {
+    throw new eventOperations.EventOperationsError(
+      "permission-denied",
+      "The operational-notes quote is outside the requested organization."
+    );
+  }
+  return { organizationId, quoteId, sourceVersionId };
+}
+
+function projectEventBriefReviewConsequences(quote = {}, snapshot = {}) {
+  const checklist = Array.isArray(quote.booking?.productionChecklist)
+    ? quote.booking.productionChecklist
+    : [];
+  const eventBrief = checklist.find((item) => normalizeText(item?.id) === "event-brief");
+  const completedAtISO = normalizeText(eventBrief?.completedAtISO);
+  const sourceUpdatedAtISO = normalizeText(snapshot.updatedAtISO);
+  if (
+    eventBrief?.completed === true
+    && Number.isFinite(Date.parse(completedAtISO))
+    && Number.isFinite(Date.parse(sourceUpdatedAtISO))
+    && sourceUpdatedAtISO > completedAtISO
+  ) {
+    return [{
+      code: "event_brief_review_required",
+      sourceUpdatedAtISO,
+      checklistCompletedAtISO: completedAtISO
+    }];
+  }
+  return [];
+}
+
+function throwEventOperationalNotesFailure(error, operation) {
+  if (error instanceof functions.https.HttpsError) throw error;
+  if (error instanceof eventOperations.EventOperationsError) {
+    throw new functions.https.HttpsError(error.code, error.message);
+  }
+  functions.logger.error(`${operation} failed`, {
+    error: normalizeText(error?.message).slice(0, 240)
+  });
+  throw new functions.https.HttpsError(
+    "internal",
+    "The authoritative event-notes operation did not complete."
+  );
+}
+
+exports.getEventOperationalNotesSnapshot = functions.region(REGION).https.onCall(async (data, context) => {
+  const organizationId = normalizeOrganizationId(data?.organizationId);
+  const staff = await assertStaff(context, { expectedOrganizationId: organizationId });
+  try {
+    const request = eventOperationalNotes.normalizeReadRequest(data);
+    if (staff.principalOrganizationId !== request.organizationId) {
+      throw new eventOperations.EventOperationsError(
+        "permission-denied",
+        "Operational notes require same-organization staff authority."
+      );
+    }
+    const refs = eventOperationalNotesRefs(request.organizationId, request.quoteId);
+    const result = await db.runTransaction(async (tx) => {
+      const [quoteSnap, journalSnap] = await Promise.all([
+        tx.get(refs.quoteRef),
+        tx.get(refs.journalRef)
+      ]);
+      if (!quoteSnap.exists) {
+        throw new eventOperations.EventOperationsError("not-found", "Quote not found.");
+      }
+      const quote = { id: request.quoteId, ...(quoteSnap.data() || {}) };
+      const source = eventOperationalNotesSource({
+        organizationId: request.organizationId,
+        quoteId: request.quoteId,
+        quote
+      });
+      if (source.sourceVersionId !== request.sourceVersionId) {
+        throw new eventOperations.EventOperationsError(
+          "aborted",
+          "The quote revision changed. Reload before reviewing operational notes."
+        );
+      }
+      const journal = journalSnap.exists ? journalSnap.data() || {} : null;
+      let latestReceipt = null;
+      if (journal) {
+        const lastReceiptId = normalizeText(journal.lastReceiptId);
+        if (!lastReceiptId) {
+          throw new eventOperations.EventOperationsError(
+            "data-loss",
+            "The operational-notes journal is missing its latest receipt pointer."
+          );
+        }
+        const receiptSnap = await tx.get(
+          refs.journalRef.collection("receipts").doc(lastReceiptId)
+        );
+        if (!receiptSnap.exists) {
+          throw new eventOperations.EventOperationsError(
+            "data-loss",
+            "The operational-notes journal receipt is unavailable."
+          );
+        }
+        latestReceipt = receiptSnap.data() || {};
+      }
+      const snapshot = eventOperationalNotes.projectStaffSnapshot({
+        source,
+        journal,
+        latestReceipt
+      });
+      return {
+        snapshot,
+        consequences: projectEventBriefReviewConsequences(quote, snapshot)
+      };
+    });
+    return {
+      ok: true,
+      storage: "firebase",
+      organizationId: request.organizationId,
+      quoteId: request.quoteId,
+      ...result
+    };
+  } catch (error) {
+    return throwEventOperationalNotesFailure(error, "getEventOperationalNotesSnapshot");
+  }
+});
+
+exports.applyEventOperationalNoteCommand = functions.region(REGION).https.onCall(async (data, context) => {
+  const organizationId = normalizeOrganizationId(data?.organizationId);
+  const staff = await assertStaff(context, { expectedOrganizationId: organizationId });
+  try {
+    const request = eventOperationalNotes.normalizeRequest(data);
+    if (staff.principalOrganizationId !== request.organizationId) {
+      throw new eventOperations.EventOperationsError(
+        "permission-denied",
+        "Operational notes require same-organization staff authority."
+      );
+    }
+    const requestedReceiptId = eventOperationalNotes.receiptIdFor(request);
+    const refs = eventOperationalNotesRefs(
+      request.organizationId,
+      request.quoteId,
+      requestedReceiptId
+    );
+    const recordedAtISO = new Date().toISOString();
+    const result = await db.runTransaction(async (tx) => {
+      const [quoteSnap, journalSnap, existingReceiptSnap] = await Promise.all([
+        tx.get(refs.quoteRef),
+        tx.get(refs.journalRef),
+        tx.get(refs.receiptRef)
+      ]);
+      if (!quoteSnap.exists) {
+        throw new eventOperations.EventOperationsError("not-found", "Quote not found.");
+      }
+      const quote = { id: request.quoteId, ...(quoteSnap.data() || {}) };
+      const source = eventOperationalNotesSource({
+        organizationId: request.organizationId,
+        quoteId: request.quoteId,
+        quote
+      });
+      const journal = journalSnap.exists ? journalSnap.data() || {} : null;
+      let currentReceipt = null;
+      if (journal && !existingReceiptSnap.exists) {
+        const lastReceiptId = normalizeText(journal.lastReceiptId);
+        if (!lastReceiptId) {
+          throw new eventOperations.EventOperationsError(
+            "data-loss",
+            "The operational-notes journal is missing its latest receipt pointer."
+          );
+        }
+        const currentReceiptSnap = await tx.get(
+          refs.journalRef.collection("receipts").doc(lastReceiptId)
+        );
+        if (!currentReceiptSnap.exists) {
+          throw new eventOperations.EventOperationsError(
+            "data-loss",
+            "The operational-notes journal receipt is unavailable."
+          );
+        }
+        currentReceipt = currentReceiptSnap.data() || {};
+      }
+      const planned = eventOperationalNotes.planCommand({
+        request,
+        actor: {
+          organizationId: request.organizationId,
+          uid: staff.uid,
+          role: staff.role
+        },
+        source,
+        journal,
+        currentReceipt,
+        existingReceipt: existingReceiptSnap.exists ? existingReceiptSnap.data() || {} : null,
+        nowISO: recordedAtISO
+      });
+      if (!planned.idempotent) {
+        tx.create(refs.receiptRef, planned.receipt);
+        tx.set(refs.journalRef, planned.nextJournal);
+      }
+      return {
+        idempotent: planned.idempotent,
+        snapshot: planned.snapshot,
+        receipt: eventOperationalNotes.publicReceipt(planned.receipt),
+        consequences: projectEventBriefReviewConsequences(quote, planned.snapshot)
+      };
+    });
+    return {
+      ok: true,
+      storage: "firebase",
+      organizationId: request.organizationId,
+      quoteId: request.quoteId,
+      ...result
+    };
+  } catch (error) {
+    return throwEventOperationalNotesFailure(error, "applyEventOperationalNoteCommand");
+  }
+});
+
 function kitchenBeoRefs(organizationId, quoteId, receiptId = "") {
   const organizationRef = db.collection(ORGANIZATIONS_COLLECTION).doc(organizationId);
   const artifactRef = organizationRef.collection(KITCHEN_BEO_ARTIFACTS_COLLECTION).doc(quoteId);
+  const operationalNotesRef = organizationRef
+    .collection(EVENT_OPERATIONAL_NOTES_COLLECTION)
+    .doc(quoteId);
   const dependencyStateRef = organizationRef
     .collection(COMMERCIAL_DEPENDENCY_STATE_COLLECTION)
     .doc(quoteId);
@@ -18634,6 +18870,7 @@ function kitchenBeoRefs(organizationId, quoteId, receiptId = "") {
     receiptRef: receiptId
       ? organizationRef.collection(KITCHEN_BEO_RECEIPTS_COLLECTION).doc(receiptId)
       : null,
+    operationalNotesRef,
     dependencyStateRef,
     invalidationsRef: dependencyStateRef.collection(COMMERCIAL_DEPENDENCY_INVALIDATIONS_COLLECTION),
     applyReceiptsRef: organizationRef.collection(COMMERCIAL_CHANGE_APPLY_RECEIPTS_COLLECTION),
@@ -18642,10 +18879,40 @@ function kitchenBeoRefs(organizationId, quoteId, receiptId = "") {
   };
 }
 
+function projectVerifiedOperationalNotesForBeo({
+  organizationId,
+  quoteId,
+  activeRevisionId,
+  journalRecord = null,
+  receiptRecord = null
+}) {
+  if (!journalRecord) {
+    return { projection: null, sourceReviewRequired: false };
+  }
+  const source = { organizationId, quoteId, sourceVersionId: activeRevisionId };
+  const snapshot = eventOperationalNotes.projectStaffSnapshot({
+    source,
+    journal: journalRecord,
+    latestReceipt: receiptRecord
+  });
+  if (snapshot.reasonCode === "source_revision_review_required") {
+    return { projection: null, sourceReviewRequired: true };
+  }
+  return {
+    projection: eventOperationalNotes.projectBeoProjection(journalRecord, {
+      organizationId,
+      quoteId,
+      activeRevisionId
+    }),
+    sourceReviewRequired: false
+  };
+}
+
 function throwKitchenBeoFailure(error, operation) {
   if (error instanceof functions.https.HttpsError) throw error;
   if (
     error instanceof KitchenBeoAuthorityError
+    || error instanceof eventOperations.EventOperationsError
     || error instanceof CommercialChangeAuthorityError
   ) {
     throw new functions.https.HttpsError(error.code, error.message);
@@ -18918,10 +19185,11 @@ async function readKitchenBeoReceiptHistory({
 
 async function readKitchenBeoStatus({ organizationId, quoteId, nowISO }) {
   const refs = kitchenBeoRefs(organizationId, quoteId);
-  const [quoteSnap, artifactSnap, invalidationsSnap] = await Promise.all([
+  const [quoteSnap, artifactSnap, invalidationsSnap, operationalNotesSnap] = await Promise.all([
     refs.quoteRef.get(),
     refs.artifactRef.get(),
-    refs.invalidationsRef.limit(101).get()
+    refs.invalidationsRef.limit(101).get(),
+    refs.operationalNotesRef.get()
   ]);
   if (!quoteSnap.exists) {
     throw new functions.https.HttpsError("not-found", "Quote not found.");
@@ -18931,6 +19199,32 @@ async function readKitchenBeoStatus({ organizationId, quoteId, nowISO }) {
     throw new functions.https.HttpsError("permission-denied", "Quote is outside your organization.");
   }
   const artifactPointer = artifactSnap.exists ? artifactSnap.data() || {} : null;
+  const activeRevisionId = normalizeText(quote.activeVersionId || quote.versionMeta?.versionId);
+  let operationalNotes = { projection: null, sourceReviewRequired: false };
+  if (operationalNotesSnap.exists) {
+    const journalRecord = operationalNotesSnap.data() || {};
+    const lastReceiptId = normalizeText(journalRecord.lastReceiptId);
+    if (!lastReceiptId) {
+      throw new eventOperations.EventOperationsError(
+        "data-loss",
+        "The operational-notes journal is missing its latest receipt pointer."
+      );
+    }
+    const receiptSnap = await refs.operationalNotesRef.collection("receipts").doc(lastReceiptId).get();
+    if (!receiptSnap.exists) {
+      throw new eventOperations.EventOperationsError(
+        "data-loss",
+        "The operational-notes journal receipt is unavailable."
+      );
+    }
+    operationalNotes = projectVerifiedOperationalNotesForBeo({
+      organizationId,
+      quoteId,
+      activeRevisionId,
+      journalRecord,
+      receiptRecord: receiptSnap.data() || {}
+    });
+  }
   const receiptHistory = await readKitchenBeoReceiptHistory({
     refs,
     artifactExists: artifactSnap.exists,
@@ -18958,8 +19252,29 @@ async function readKitchenBeoStatus({ organizationId, quoteId, nowISO }) {
       receiptHistory: receiptHistory.projection
     };
   }
+  if (operationalNotes.sourceReviewRequired) {
+    return {
+      quote,
+      status: projectKitchenBeoStatus({
+        schemaVersion: KITCHEN_BEO_STATUS_SCHEMA_VERSION,
+        authority: "server_derived",
+        state: KITCHEN_BEO_FRESHNESS_STATES.UNKNOWN,
+        observedAtISO: nowISO,
+        reasonCodes: ["operational_notes_source_revision_review_required"],
+        receiptId: normalizeText(receiptHistory.trustedCurrentReceipt?.receiptId),
+        receiptDependencyFingerprint: normalizeText(
+          receiptHistory.trustedCurrentReceipt?.dependencyFingerprint
+        ),
+        commercialSourceRevisionId: normalizeText(
+          receiptHistory.trustedCurrentReceipt?.commercialSourceRevisionId
+        )
+      }),
+      receiptHistory: receiptHistory.projection
+    };
+  }
   const status = kitchenBeoAuthority.deriveArtifactStatus({
     canonicalQuote: quote,
+    operationalNotes: operationalNotes.projection,
     trustedReceipt: receiptHistory.trustedCurrentReceipt,
     invalidations: invalidationsSnap.docs
       .map((snapshot) => ({ id: snapshot.id, ...(snapshot.data() || {}) }))
@@ -19102,11 +19417,51 @@ exports.generateKitchenBeo = functions.region(REGION).https.onCall(async (data, 
   try {
     const claimedAtISO = new Date().toISOString();
     const initialRefs = kitchenBeoRefs(organizationId, quoteId);
-    const initialQuoteSnap = await initialRefs.quoteRef.get();
+    const [initialQuoteSnap, initialOperationalNotesSnap] = await Promise.all([
+      initialRefs.quoteRef.get(),
+      initialRefs.operationalNotesRef.get()
+    ]);
     if (!initialQuoteSnap.exists) {
       throw new functions.https.HttpsError("not-found", "Quote not found.");
     }
     const canonicalQuote = { id: quoteId, ...(initialQuoteSnap.data() || {}) };
+    const activeRevisionId = normalizeText(
+      canonicalQuote.activeVersionId || canonicalQuote.versionMeta?.versionId
+    );
+    let initialOperationalNotes = { projection: null, sourceReviewRequired: false };
+    if (initialOperationalNotesSnap.exists) {
+      const journalRecord = initialOperationalNotesSnap.data() || {};
+      const lastReceiptId = normalizeText(journalRecord.lastReceiptId);
+      if (!lastReceiptId) {
+        throw new eventOperations.EventOperationsError(
+          "data-loss",
+          "The operational-notes journal is missing its latest receipt pointer."
+        );
+      }
+      const receiptSnap = await initialRefs.operationalNotesRef
+        .collection("receipts")
+        .doc(lastReceiptId)
+        .get();
+      if (!receiptSnap.exists) {
+        throw new eventOperations.EventOperationsError(
+          "data-loss",
+          "The operational-notes journal receipt is unavailable."
+        );
+      }
+      initialOperationalNotes = projectVerifiedOperationalNotesForBeo({
+        organizationId,
+        quoteId,
+        activeRevisionId,
+        journalRecord,
+        receiptRecord: receiptSnap.data() || {}
+      });
+    }
+    if (initialOperationalNotes.sourceReviewRequired) {
+      throw new eventOperations.EventOperationsError(
+        "failed-precondition",
+        "Review retained operational notes for the active quote revision before generating the Kitchen BEO."
+      );
+    }
     const trustedContext = {
       organizationId,
       quoteId,
@@ -19115,6 +19470,7 @@ exports.generateKitchenBeo = functions.region(REGION).https.onCall(async (data, 
     };
     const claim = kitchenBeoAuthority.buildGenerationClaim({
       canonicalQuote,
+      operationalNotes: initialOperationalNotes.projection,
       request: { requestId },
       trustedContext
     });
@@ -19145,14 +19501,16 @@ exports.generateKitchenBeo = functions.region(REGION).https.onCall(async (data, 
         transactionReceiptSnap,
         artifactSnap,
         dependencyStateSnap,
-        invalidationsSnap
+        invalidationsSnap,
+        transactionOperationalNotesSnap
       ] = await Promise.all([
         tx.get(refs.quoteRef),
         tx.get(refs.receiptRef),
         tx.get(refs.artifactRef),
         tx.get(refs.dependencyStateRef),
         tx.get(refs.invalidationsRef.orderBy(FieldPath.documentId())
-          .limit(COMMERCIAL_CHANGE_INVALIDATION_LIMIT + 1))
+          .limit(COMMERCIAL_CHANGE_INVALIDATION_LIMIT + 1)),
+        tx.get(refs.operationalNotesRef)
       ]);
       if (!transactionQuoteSnap.exists) {
         throw new KitchenBeoAuthorityError("not-found", "Quote not found.");
@@ -19170,8 +19528,45 @@ exports.generateKitchenBeo = functions.region(REGION).https.onCall(async (data, 
           "The Kitchen BEO quote is outside the requested organization."
         );
       }
+      const transactionActiveRevisionId = normalizeText(
+        transactionQuote.activeVersionId || transactionQuote.versionMeta?.versionId
+      );
+      let transactionOperationalNotes = { projection: null, sourceReviewRequired: false };
+      if (transactionOperationalNotesSnap.exists) {
+        const journalRecord = transactionOperationalNotesSnap.data() || {};
+        const lastReceiptId = normalizeText(journalRecord.lastReceiptId);
+        if (!lastReceiptId) {
+          throw new eventOperations.EventOperationsError(
+            "data-loss",
+            "The operational-notes journal is missing its latest receipt pointer."
+          );
+        }
+        const receiptSnap = await tx.get(
+          refs.operationalNotesRef.collection("receipts").doc(lastReceiptId)
+        );
+        if (!receiptSnap.exists) {
+          throw new eventOperations.EventOperationsError(
+            "data-loss",
+            "The operational-notes journal receipt is unavailable."
+          );
+        }
+        transactionOperationalNotes = projectVerifiedOperationalNotesForBeo({
+          organizationId,
+          quoteId,
+          activeRevisionId: transactionActiveRevisionId,
+          journalRecord,
+          receiptRecord: receiptSnap.data() || {}
+        });
+      }
+      if (transactionOperationalNotes.sourceReviewRequired) {
+        throw new eventOperations.EventOperationsError(
+          "failed-precondition",
+          "Review retained operational notes for the active quote revision before generating the Kitchen BEO."
+        );
+      }
       const transactionClaim = kitchenBeoAuthority.buildGenerationClaim({
         canonicalQuote: transactionQuote,
+        operationalNotes: transactionOperationalNotes.projection,
         request: { requestId },
         trustedContext
       });
@@ -19287,6 +19682,7 @@ exports.generateKitchenBeo = functions.region(REGION).https.onCall(async (data, 
           }));
         const postGenerationStatus = kitchenBeoAuthority.deriveArtifactStatus({
           canonicalQuote: transactionQuote,
+          operationalNotes: transactionOperationalNotes.projection,
           trustedReceipt: record,
           invalidations: remainingKitchenBeoInvalidations,
           sourceState: "available",

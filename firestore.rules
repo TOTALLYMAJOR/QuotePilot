@@ -1393,6 +1393,17 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // Operational note journals and correction receipts can contain private
+    // venue, kitchen, service, and staffing instructions. Staff access only
+    // bounded callable projections; customer and browser reads stay denied.
+    match /organizations/{orgId}/eventOperationalNotes/{quoteId} {
+      allow read, write: if false;
+    }
+
+    match /organizations/{orgId}/eventOperationalNotes/{quoteId}/receipts/{receiptId} {
+      allow read, write: if false;
+    }
+
     match /organizations/{orgId}/commercialChangeSimulations/{receiptId} {
       allow read, write: if false;
     }

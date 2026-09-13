@@ -96,6 +96,8 @@ const ORG_SCOPED_ADMIN_WRITE_CASES = [
 const SERVER_OWNED_COMMERCIAL_AUTHORITY_PATHS = Object.freeze([
   ["organizations", "org-a", "kitchenBeoArtifacts", "q1"],
   ["organizations", "org-a", "kitchenBeoGenerationReceipts", "beo-receipt-1"],
+  ["organizations", "org-a", "eventOperationalNotes", "q1"],
+  ["organizations", "org-a", "eventOperationalNotes", "q1", "receipts", "notes-receipt-1"],
   ["organizations", "org-a", "commercialChangeSimulations", "ccs-receipt-1"],
   ["organizations", "org-a", "commercialChangeApprovalRequests", "ccar-request-1"],
   ["organizations", "org-a", "commercialChangeAuthorizations", "cca-receipt-1"],

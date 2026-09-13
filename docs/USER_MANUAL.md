@@ -2139,6 +2139,35 @@ reporting remain unavailable until their own bounded evidence authorities exist.
   customer acceptance, booking, payment, provider delivery, or operational
   completion. Use the proposal/token portal for customer commercial review.
 
+### Event operational notes and downstream review
+
+- Open **Kitchen BEO and event notes** from the exact Opportunity. Event notes
+  stay inside that familiar production-artifact workspace instead of becoming a
+  separate module. Choose one purpose—Kitchen, Venue, Service, or Staffing—and
+  whether the instruction is **Internal team only** or **Include in the BEO**.
+- Each note accepts up to 800 plain-text characters and shows the remaining
+  count. A confirmed add or correction returns an immutable receipt. Correction
+  requires a reason and retains the prior/result evidence; this first slice does
+  not offer deletion. A failed or uncertain save keeps the entered text and
+  directs you to refresh or reconcile the exact request.
+- Notes are bound to the quote's exact active revision. After a quote revision
+  changes, use **Review notes for this quote revision** to review the retained
+  journal together. Until that explicit receipt exists, additions and
+  corrections are blocked and the trusted BEO cannot consume those notes.
+- Only notes deliberately marked **Include in the BEO** enter the server PDF and
+  its versioned input fingerprint. Internal-only notes, staff identity, and
+  correction history stay out of the document. Generating the BEO rereads both
+  the quote and verified note journal in the same transaction; a concurrent
+  change aborts instead of producing mixed evidence.
+- If a note changed after **Event brief reviewed** was recorded, QuotePilot shows
+  one **Review event brief again** action. It opens the existing production
+  checklist and preserves the earlier completion. On Calendar, the same action
+  is available beside a completed Event brief to record a new review timestamp;
+  it does not claim readiness or modify any other checklist item.
+- Notes are internal operational instructions. They do not update the customer
+  proposal, price, guest count, Inventory evidence, Staffing assignments,
+  booking, payment, publication, customer message, or event completion.
+
 ## Admin Catalog Operations
 - Open **Library** or `/app/catalog`. Administrators retain edit, draft, check,
   and publication authority. Sales staff can inspect the same commercial

@@ -1636,7 +1636,12 @@ export function EventScheduleView({
     }
   };
 
-  const handleProductionChecklistToggle = async (quoteId, checklistItemId, completed) => {
+  const handleProductionChecklistToggle = async (
+    quoteId,
+    checklistItemId,
+    completed,
+    { refreshCompletion = false } = {}
+  ) => {
     const id = String(quoteId || "").trim();
     const itemId = String(checklistItemId || "").trim();
     if (!id || !itemId) return;
@@ -1650,8 +1655,12 @@ export function EventScheduleView({
       return {
         ...item,
         completed,
-        completedAtISO: completed ? item.completedAtISO || nowISO : "",
-        completedByEmail: completed ? item.completedByEmail || currentUserEmail : ""
+        completedAtISO: completed
+          ? refreshCompletion ? nowISO : item.completedAtISO || nowISO
+          : "",
+        completedByEmail: completed
+          ? refreshCompletion ? currentUserEmail : item.completedByEmail || currentUserEmail
+          : ""
       };
     });
 
@@ -2226,20 +2235,38 @@ export function EventScheduleView({
                       </progress>
                       <div className="schedule-production-items">
                         {selectedEvent.productionChecklist.items.map((checklistItem) => (
-                          <label key={`${selectedEvent.id}-${checklistItem.id}`}>
-                            <input
-                              type="checkbox"
-                              checked={checklistItem.completed}
-                              onChange={(event) => handleProductionChecklistToggle(
-                                selectedEvent.id,
-                                checklistItem.id,
-                                event.target.checked
-                              )}
-                              disabled={savingChecklistId === selectedEvent.id}
-                            />
-                            <span>{checklistItem.label}</span>
-                            <small>{checklistItem.group}</small>
-                          </label>
+                          <div key={`${selectedEvent.id}-${checklistItem.id}`}>
+                            <label>
+                              <input
+                                type="checkbox"
+                                checked={checklistItem.completed}
+                                onChange={(event) => handleProductionChecklistToggle(
+                                  selectedEvent.id,
+                                  checklistItem.id,
+                                  event.target.checked
+                                )}
+                                disabled={savingChecklistId === selectedEvent.id}
+                              />
+                              <span>{checklistItem.label}</span>
+                              <small>{checklistItem.group}</small>
+                            </label>
+                            {checklistItem.id === "event-brief" && checklistItem.completed ? (
+                              <button
+                                type="button"
+                                className="ghost compact"
+                                style={{ minHeight: 44, marginTop: 8 }}
+                                disabled={savingChecklistId === selectedEvent.id}
+                                onClick={() => handleProductionChecklistToggle(
+                                  selectedEvent.id,
+                                  checklistItem.id,
+                                  true,
+                                  { refreshCompletion: true }
+                                )}
+                              >
+                                Review event brief again
+                              </button>
+                            ) : null}
+                          </div>
                         ))}
                       </div>
                     </div>

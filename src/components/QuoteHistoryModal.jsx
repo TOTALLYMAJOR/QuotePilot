@@ -2641,6 +2641,12 @@ export function QuoteHistoryView({
     onOpenIntegrations();
   };
 
+  const beoAvailable = Boolean(
+    focusedQuote
+    && permissions.canExportBeo
+    && focusedRebookDeliveryGate.ready
+  );
+
   if (detailMode) {
     const ordinaryEditAllowed = Boolean(
       focusedQuote
@@ -2648,11 +2654,6 @@ export function QuoteHistoryView({
       && canEditQuoteStatus(focusedQuoteStatus)
       && !focusedDelivery.mutationLocked
       && typeof onEditQuote === "function"
-    );
-    const beoAvailable = Boolean(
-      focusedQuote
-      && permissions.canExportBeo
-      && focusedRebookDeliveryGate.ready
     );
     const conversationAvailable = Boolean(
       focusedQuote
@@ -2881,6 +2882,33 @@ export function QuoteHistoryView({
                 : setConversationQuote(focusedQuote)}
             />
           ) : null}
+          {focusedQuote && AMBIENT_UI_ENABLED && permissions.canExportBeo ? (
+            <section
+              className="admin-section staff-capability-state"
+              data-capability-id="cwf-15-kitchen-beo-entry"
+              data-capability-state={beoAvailable ? "ready" : "blocked"}
+            >
+              <p className="eyebrow">Event handoff</p>
+              <h3>Kitchen BEO and event notes</h3>
+              <p className="source-note">
+                Review revision-bound kitchen, venue, service, and staffing instructions before generating the production artifact.
+              </p>
+              {state.source === "local" ? (
+                <p className="warning-note" role="status" data-beo-local-boundary="no-server-receipt">
+                  This local fallback has no server generation receipt, retained artifact history, or authoritative freshness status.
+                </p>
+              ) : null}
+              <QuoteHistoryKitchenBeoAction
+                source={state.source}
+                quote={focusedQuote}
+                disabled={!beoAvailable}
+                disabledReason={beoAvailable ? "" : focusedRebookDeliveryGate.message}
+                exportingLocal={exportingLocalBeoId === focusedQuote.id}
+                onOpenAuthoritative={() => handleOpenKitchenBeo(focusedQuote)}
+                onExportLocal={() => handleExportLocalBeo(focusedQuote)}
+              />
+            </section>
+          ) : null}
           {focusedQuote
             && state.source === "firebase"
             && ["admin", "sales"].includes(permissions.role) && (
@@ -2925,8 +2953,17 @@ export function QuoteHistoryView({
               organizationId={organizationId}
               quoteId={kitchenBeoQuote.id}
               quoteNumber={kitchenBeoQuote.quoteNumber}
+              currentUserUid={currentUserUid}
+              currentUserRole={permissions.role}
+              source={state.source}
+              sourceVersionId={String(
+                kitchenBeoQuote.activeVersionId || kitchenBeoQuote.versionMeta?.versionId || ""
+              ).trim()}
               returnFocusRef={kitchenBeoReturnFocusRef}
               onClose={() => setKitchenBeoQuote(null)}
+              onOpenProductionChecklist={scheduleAvailable && typeof onOpenSchedule === "function"
+                ? () => onOpenSchedule(kitchenBeoQuote.id)
+                : undefined}
               onGenerated={(result) => {
                 const feedback = result?.idempotent
                   ? `Matching server Kitchen BEO receipt confirmed for ${kitchenBeoQuote.quoteNumber}.`
@@ -4244,8 +4281,17 @@ export function QuoteHistoryView({
             organizationId={organizationId}
             quoteId={kitchenBeoQuote.id}
             quoteNumber={kitchenBeoQuote.quoteNumber}
+            currentUserUid={currentUserUid}
+            currentUserRole={permissions.role}
+            source={state.source}
+            sourceVersionId={String(
+              kitchenBeoQuote.activeVersionId || kitchenBeoQuote.versionMeta?.versionId || ""
+            ).trim()}
             returnFocusRef={kitchenBeoReturnFocusRef}
             onClose={() => setKitchenBeoQuote(null)}
+            onOpenProductionChecklist={scheduleAvailable && typeof onOpenSchedule === "function"
+              ? () => onOpenSchedule(kitchenBeoQuote.id)
+              : undefined}
             onGenerated={(result) => {
               const feedback = result?.idempotent
                 ? `Matching server Kitchen BEO receipt confirmed for ${kitchenBeoQuote.quoteNumber}.`

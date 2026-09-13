@@ -117,6 +117,39 @@ describe("server Kitchen BEO PDF", () => {
     expect(filename).toMatch(/rev14-kitchen-beo\.pdf$/u);
   });
 
+  test("renders only the content-only operational-note projection", async () => {
+    const artifact = renderKitchenBeoPdf({
+      payload: payload({
+        operationalNotes: {
+          schemaVersion: "event-operational-notes-beo-v1",
+          sourceRevisionId: "v0014",
+          journalRevision: 2,
+          notes: [
+            {
+              noteId: "event_note_0123456789abcdef0123456789abcdef",
+              type: "venue",
+              text: "Use the east loading entrance after 3 PM."
+            },
+            {
+              noteId: "event_note_fedcba9876543210fedcba9876543210",
+              type: "staffing",
+              text: "Captain checks in with the venue lead before unloading."
+            }
+          ]
+        }
+      }),
+      provenance: provenance()
+    });
+
+    const extracted = await pdfParse(artifact.bytes);
+    const pdfText = normalizedPdfText(extracted.text);
+    expect(pdfText).toContain("Operational instructions");
+    expect(pdfText).toContain("Use the east loading entrance after 3 PM.");
+    expect(pdfText).toContain("Captain checks in with the venue lead before unloading.");
+    expect(pdfText).not.toContain("event_note_");
+    expect(pdfText).not.toContain("createdBy");
+  });
+
   test("fails closed without canonical payload or trusted provenance", () => {
     expect(() => renderKitchenBeoPdf({ provenance: provenance() }))
       .toThrow(/canonical Kitchen BEO payload is required/i);

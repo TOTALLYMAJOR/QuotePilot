@@ -10,6 +10,7 @@ import {
   resetDefinitiveKitchenBeoAttempt
 } from "../lib/kitchenBeoClient";
 import { formatWorkspaceDateTime, humanizeWorkspaceValue } from "../lib/workspacePresentation";
+import EventOperationalNotesPanel from "./EventOperationalNotesPanel";
 import StatusChip from "./StatusChip";
 
 const FRESHNESS_PRESENTATION = Object.freeze({
@@ -394,9 +395,14 @@ export default function KitchenBeoArtifactPanel({
   organizationId = "",
   quoteId = "",
   quoteNumber = "",
+  currentUserUid = "",
+  currentUserRole = "customer",
+  source = "firebase",
+  sourceVersionId = "",
   available = true,
   onClose,
   onGenerated,
+  onOpenProductionChecklist,
   onStatusChange,
   returnFocusRef = null
 }) {
@@ -428,6 +434,7 @@ export default function KitchenBeoArtifactPanel({
     downloadError: ""
   });
   const [receiptDownload, setReceiptDownload] = useState({ state: "ready", receiptId: "" });
+  const [notesMutationBlocked, setNotesMutationBlocked] = useState(false);
   const { dialogRef } = useModalDialog({
     open: open && !embedded,
     onRequestClose: onClose,
@@ -501,6 +508,7 @@ export default function KitchenBeoArtifactPanel({
     receiptDownloadGenerationRef.current += 1;
     mutationInFlightRef.current = false;
     receiptDownloadInFlightRef.current = false;
+    setNotesMutationBlocked(false);
     if (!open) return undefined;
 
     let pendingAttempt = null;
@@ -598,7 +606,7 @@ export default function KitchenBeoArtifactPanel({
   };
 
   const runGeneration = async ({ reconcile = false } = {}) => {
-    if (!available || mutationInFlightRef.current) return;
+    if (!available || notesMutationBlocked || mutationInFlightRef.current) return;
     const requestIdentity = identityRef.current;
     let pendingAttempt = mutation.pendingAttempt;
     try {
@@ -790,11 +798,27 @@ export default function KitchenBeoArtifactPanel({
         />
       ) : null}
 
+      <EventOperationalNotesPanel
+        organizationId={organizationId}
+        quoteId={quoteId}
+        principalId={currentUserUid}
+        role={currentUserRole}
+        source={source}
+        enabled={available}
+        sourceVersionId={sourceVersionId}
+        onNotesMutationBlockedChange={setNotesMutationBlocked}
+        onOpenProductionChecklist={onOpenProductionChecklist}
+        onChanged={() => void loadStatus({ recovery: true })}
+      />
+
       <KitchenBeoMutationStatus
         mutation={{
           ...mutation,
           statusRef: mutationStatusRef,
-          disabled: !available || read.state === "loading" || read.state === "recovery"
+          disabled: !available
+            || notesMutationBlocked
+            || read.state === "loading"
+            || read.state === "recovery"
         }}
         onAction={handleMutationAction}
         headingId={generationHeadingId}

@@ -1,11 +1,18 @@
 # Changelog
 
-Last updated: 2026-09-13 01:56:31 CDT
+Last updated: 2026-09-13 02:26:06 CDT
 
 All notable project changes are documented in this file.
 
 ## Unreleased — Event and Commercial activation receipt correction
 
+- Add revision-bound Event operational notes inside the trusted Kitchen BEO
+  workspace. Same-tenant staff can record typed internal or BEO-visible
+  instructions, correct them with immutable prior/result receipts, explicitly
+  review the retained journal after a quote revision changes, and reach one
+  Event-brief review action when newer notes supersede the recorded checklist
+  time. Only the verified content-only visible projection enters the server PDF
+  and versioned BEO fingerprint; internal notes, actors, and history stay out.
 - Bind proposed Staffing change intelligence to the server's actual private
   prospective quote revision and the exact Commercial Change receipt. The
   response carries aggregate role evidence only: same-window comparisons may
