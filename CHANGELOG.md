@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-09-13 16:00:26 CDT
+Last updated: 2026-09-13 16:07:03 CDT
 
 All notable project changes are documented in this file.
 
@@ -29,6 +29,13 @@ All notable project changes are documented in this file.
   inventories the exact current-main Functions exports and evaluates portal
   expiry against a deterministic test clock, without changing fail-closed
   production expiry behavior.
+
+- Make model-assisted CREATE parsing honor its independent browser gate and
+  bind the OpenAI key only through Firebase Secret Manager on the parse
+  callable. Deterministic intake remains available with either gate off, and
+  model facts remain low-confidence, confirm-before-apply, stateless, and
+  non-authoritative. Production activation is not claimed: the current live
+  provider probe reports exhausted credit capacity.
 
 - Correct the `staging-event-operating-spine` candidate envelope so enabling
   Commercial Change and Event Spine preserves Staffing and Inventory and binds

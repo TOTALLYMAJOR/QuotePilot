@@ -1,6 +1,6 @@
 # User Manual
 
-Last updated: 2026-09-13 15:44:41 CDT
+Last updated: 2026-09-13 16:07:03 CDT
 
 ## Purpose
 This guide explains day-to-day usage of QuotePilot for staff users and admins.
@@ -3286,9 +3286,11 @@ gates.
 
 On New quote, next to Structure it, a Model assist button can ask a
 configured AI provider (OpenAI or Anthropic) to read the same note. This
-lane ships off: until your administrator enables it and configures a
-provider key, the button reports that the lane is off and typed
-structuring keeps working exactly the same. When it is on, model
+lane ships off: until an administrator explicitly enables both its browser
+control and server/provider rail, the button is not shown and typed structuring
+keeps working exactly the same. If the control is visible but the provider
+later becomes unavailable, the lane reports that recoverable outcome without
+changing the note or deterministic result. When it is on, model
 suggestions appear in their own list and every one requires your explicit
 Confirm before it touches the draft — the model never fills the form,
 never prices, and never saves. Anything the model could not read is

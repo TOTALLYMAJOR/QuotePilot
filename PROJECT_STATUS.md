@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-09-13 15:44:41 CDT
+Last updated: 2026-09-13 16:07:03 CDT
 
 ## Current evidence boundary
 
@@ -16,6 +16,7 @@ evidence receipts and must not be described as one artifact.
 | Production tenant authority | Protected workflow `34551712371` on main merge `2f4246846496f066e909d16fb46886cd0cc193fc` verified the exact current Firebase backend and Vercel browser receipts, then read back both `commercialChangeAuthorityEnabled` and `eventOperatingSpineEnabled` as `true` for `mm05366-sandbox` | Both fields were already true at the verified operation, so the run rebound the activation to current split-surface evidence without changing tenant data. It did not execute a commercial amendment, event command, provider send, payment, or automatic transition. |
 | Isolated staging Event/Commercial profile | Exact SHA `2f5d123d9ba06153823def6f44b3f5ff89183023`, CI `34420973414`, Firebase Hosting version `31a0bcbf39d65ec2`, profile `staging-event-operating-spine` | The original deployment and recovery readback proved both runtime gates true, but a later Functions deployment replaced that runtime. Current readback at `2026-09-11T05:31Z` found Commercial Change false; the tenant fields remain true. Staging must be redeployed and read back before it is described as active. |
 | Repository `origin/main` | Contains the v0.18.2 release source, protected PR `#137` customer-claim provenance, PR `#138` receipt-safe staff-retry corrections, and PR `#141` split-receipt activation correction | Repository state is not runtime state; production and staging remain separately evidenced surfaces. |
+| Guided Inquiry and model-assist candidate | Release PR `#145` publishes the source candidate. Production Secret Manager now has enabled version 1 for `INQUIRY_RATE_LIMIT_SECRET` and `INTENT_PARSER_OPENAI_KEY`; no value was exposed. | Inquiry remains blocked on an inquiry-specific Turnstile widget/secret and protected deployment. A live OpenAI Responses probe on 2026-09-13 returned `429 insufficient_quota` / `credit_balance_exhausted`, so model-assist gates must remain off until provider capacity is restored and reverified. Secret presence is not provider readiness or deployment evidence. |
 
 The first production Inventory request exposed an App Check rollout mismatch:
 the browser had no reviewed provider registration while the callable enforced a

@@ -1,6 +1,6 @@
 # QuotePilot Development Tasks
 
-Last updated: 2026-09-10 15:09:08 CDT
+Last updated: 2026-09-13 16:07:03 CDT
 
 This file contains open work only. Completed delivery belongs in
 [`CHANGELOG.md`](CHANGELOG.md), current evidence in
@@ -53,6 +53,10 @@ This file contains open work only. Completed delivery belongs in
   tenant, publish one reviewed slug, and preserve source/local, CI, hosted,
   provider, production-data, accessibility, human, and commercial-outcome
   receipts separately.
+- [ ] Restore OpenAI API credit capacity, rerun a minimal provider probe, and
+  enable the browser/server model-assist gates only through an exact protected
+  release whose Function readback proves the Secret Manager binding. Do not
+  treat an enabled secret version as a successful model call.
 - [ ] Add emulator acceptance for anonymous direct-Firestore denial, tenant
   isolation, exact-slug lookup, IP/tenant quotas, replay/recovery, stale
   publication rejection, concurrent duplicate conversion, and atomic

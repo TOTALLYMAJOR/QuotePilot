@@ -287,6 +287,9 @@ const PILOT_CREATE_ENABLED = import.meta.env.VITE_PILOT_CREATE_ENABLED === "1"
   || import.meta.env.VITE_PILOT_CREATE_ENABLED === "true"
   || import.meta.env.VITE_PILOT_CREATE_ENABLED === "yes"
   || import.meta.env.VITE_PILOT_CREATE_ENABLED === "on";
+// Model assistance is a separate browser capability. CREATE's deterministic
+// intake remains available whenever its own gate is enabled.
+const PILOT_MODEL_ENABLED = import.meta.env.VITE_PILOT_MODEL_ENABLED === "true";
 // The client-request panel is an additional default-off presentation gate.
 // It parses the stored change-request message into stageable draft edits
 // only; the ordinary save path remains the sole versioning authority.
@@ -7560,7 +7563,7 @@ export default function App({
             styles={Object.keys(STAFF_RULES)}
             onApplyDraft={applyIntentDraft}
             organizationId={authSession.organizationId}
-            onModelParse={parseIntentDraftWithModel}
+            onModelParse={PILOT_MODEL_ENABLED ? parseIntentDraftWithModel : undefined}
           />
         )}
         {PILOT_CHANGE_REQUESTS_ENABLED && ChangeRequestPanel

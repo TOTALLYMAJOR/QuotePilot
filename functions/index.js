@@ -27243,11 +27243,16 @@ exports.stripeWebhook = functions
 // provider's key must all exist before any provider call happens; until
 // then every request fails closed with a definitive precondition error.
 // Persists nothing and returns only low-confidence, human-review facts.
-// NOTE: keys are read from process.env so this deploys green before the
-// secrets exist; when the owner creates INTENT_PARSER_OPENAI_KEY /
-// INTENT_PARSER_ANTHROPIC_KEY in Secret Manager, add
-// .runWith({ secrets: [...] }) here to bind them.
-exports.parseIntentDraft = functions.region(REGION).https.onCall(async (data, context) => {
+// OpenAI access is available only through the callable's Firebase Secret
+// Manager binding. The compatibility fallback keeps isolated source-slice and
+// VM tests working when their minimal RegionBuilder stub does not expose
+// runWith; the hosted Firebase gen1 runtime does expose it and receives the
+// bound value through process.env.
+const intentParserRegion = functions.region(REGION);
+const intentParserRuntime = typeof intentParserRegion.runWith === "function"
+  ? intentParserRegion.runWith({ secrets: ["INTENT_PARSER_OPENAI_KEY"] })
+  : intentParserRegion;
+exports.parseIntentDraft = intentParserRuntime.https.onCall(async (data, context) => {
   const {
     INTENT_PARSER_OPENAI_KEY_NAME,
     INTENT_PARSER_ANTHROPIC_KEY_NAME,

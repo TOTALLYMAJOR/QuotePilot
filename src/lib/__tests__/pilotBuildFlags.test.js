@@ -2,6 +2,7 @@ import fs from "node:fs";
 import { describe, expect, test } from "vitest";
 
 const APP_SOURCE = fs.readFileSync(new URL("../../App.jsx", import.meta.url), "utf8");
+const LEGACY_APP_SOURCE = fs.readFileSync(new URL("../../LegacyApp.jsx", import.meta.url), "utf8");
 const VITE_CONFIG_SOURCE = fs.readFileSync(new URL("../../../vite.config.js", import.meta.url), "utf8");
 const WORKSPACE_ROUTE_SOURCE = fs.readFileSync(
   new URL("../../components/WorkspaceRoute.jsx", import.meta.url),
@@ -91,6 +92,17 @@ describe("statically foldable Pilot build flags", () => {
 
     for (const value of TRUE_VALUES) {
       expect(acceptedValues.includes(value), value).toBe(true);
+    }
+  });
+
+  test("offers model-assisted CREATE parsing only behind an explicit true browser gate", () => {
+    for (const source of [APP_SOURCE, LEGACY_APP_SOURCE]) {
+      expect(source).toContain(
+        'const PILOT_MODEL_ENABLED = import.meta.env.VITE_PILOT_MODEL_ENABLED === "true";'
+      );
+      expect(source).toContain(
+        "onModelParse={PILOT_MODEL_ENABLED ? parseIntentDraftWithModel : undefined}"
+      );
     }
   });
 

@@ -1,6 +1,6 @@
 # Performance Guardrails
 
-Last updated: 2026-09-05 13:22:00 CDT
+Last updated: 2026-09-13 16:07:03 CDT
 
 ## Objectives
 Keep delivery speed high while protecting end-user experience and predictable performance.
@@ -144,6 +144,15 @@ Threshold policy:
   ceilings, retaining only the already observed profile-specific runner
   differences: 3,478,714 / 399,665 for compatibility and 4,444,836 / 435,565
   for Ambient. This is not percentage or future-growth headroom.
+  The Guided Inquiry Showcase plus the explicit browser-gated model-assist
+  binding now measures the exact local CI matrices at 3,517,367 / 385,181
+  bytes for compatibility and 4,796,685 / 443,563 bytes for Ambient. The
+  exception aggregate ceilings are pinned to those literal graphs; the
+  existing 399,665-byte and 445,000-byte largest-chunk ceilings remain
+  unchanged. The increase is distributed across the new lazy public inquiry,
+  Library administration, Opportunities queue, recovery, and conversion
+  surfaces; it is reviewed feature cost, not future growth headroom. Exact-PR
+  CI must still confirm both graphs before release.
   Searchable-PDF inspection additionally emits 1,667,684 raw runtime bytes in
   `dist/vendor/pdfjs-5.7.284`, with a 1,232,303-byte worker as its largest file.
   These assets are same-origin and load only after PDF inspection begins; they

@@ -1,6 +1,6 @@
 # QuotePilot by MBMApps
 
-Last updated: 2026-09-13 15:44:41 CDT
+Last updated: 2026-09-13 16:07:03 CDT
 
 Multi-tenant catering quote application built with React, Vite, Firebase, and jsPDF.
 
@@ -457,6 +457,11 @@ Optional:
   No new callable, message field, catalog exposure, direct quote mutation, or
   trust boundary.)
 
+- `VITE_PILOT_MODEL_ENABLED` (default off. Exposes the Model assist control in
+  CREATE only when the server lane is independently enabled and provider-ready.
+  When false or absent, CREATE retains its deterministic Structure it workflow
+  and does not render a provider action.)
+
 - `INTENT_PARSER_ENABLED` / `INTENT_PARSER_PROVIDER` / `INTENT_PARSER_MODEL`
   (server env, all dormant by default: `false` / `none` / per-provider
   default. The owner-approved model-assisted intake lane; providers
@@ -464,10 +469,12 @@ Optional:
   `provider:model` candidate order from `INTENT_PARSER_MODEL` or the
   built-in defaults, trims the completion-token budget by request
   complexity, and may escalate once to the next configured candidate.
-  Enabling later requires creating the
+  Enabling requires creating the
   `INTENT_PARSER_OPENAI_KEY` and/or `INTENT_PARSER_ANTHROPIC_KEY` secrets
-  in Firebase Secret Manager and binding them to the parse callable when
-  it ships with the CREATE integration; until every piece exists, parsing
+  in Firebase Secret Manager and binding them only to the parse callable;
+  the OpenAI binding is present in the current source candidate. Until the
+  browser gate, server gate, provider, enabled secret, and provider account
+  capacity all exist, parsing
   fails closed with a named precondition and the deterministic browser
   extractor remains the availability floor. See
   `docs/INTENT_INTAKE_ADR.md`.)
