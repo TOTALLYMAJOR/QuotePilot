@@ -1,10 +1,17 @@
 # Changelog
 
-Last updated: 2026-09-12 14:51:07 CDT
+Last updated: 2026-09-13 00:31:30 CDT
 
 All notable project changes are documented in this file.
 
 ## Unreleased — Event and Commercial activation receipt correction
+
+- Make blocked quote saves recoverable in place: each supported blocker now
+  opens and focuses its exact event, customer, or menu control instead of
+  leaving the operator to search the proposal. Tablet and mobile surfaces put
+  the real save-or-review action in the sticky bar and keep Quote details as a
+  secondary action; neither blocker review nor navigation changes quote,
+  pricing, revision, or publication authority.
 
 - Complete Attendance Slice F through the existing post-event closeout
   authority. Same-tenant staff can record or correct one 1–400 actual count
