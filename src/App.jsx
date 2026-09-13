@@ -2967,6 +2967,11 @@ export default function App({
     form.chefs,
     form.servers
   ]);
+  const proposedStaffingEventWindowState = useMemo(() => (
+    ["date", "time", "hours"].every((field) => (
+      String(editingQuote.baseForm?.[field] ?? "") === String(form[field] ?? "")
+    )) ? "current" : "changed_unchecked"
+  ), [editingQuote.baseForm, form.date, form.hours, form.time]);
   const commercialInventoryScenarioPreview = useMemo(() => {
     const observation = changeImpactPreview.inventoryObservation;
     if (observation?.state === "available" && observation.preview?.projection) {
@@ -3078,6 +3083,7 @@ export default function App({
     staffingRead: fulfillmentStaffing.read,
     proposedStaffingRequirements,
     proposedStaffingRequirementsSource: "proposed_commercial_and_canonical_counts",
+    proposedStaffingEventWindowState,
     appliedQuote: changeImpactPreview.appliedQuote,
     workbenchRequest: changeImpactPreview.workbenchRequest
   }), [
@@ -3107,6 +3113,7 @@ export default function App({
     inventoryGuestScenarioEligible,
     livingTwinBaseQuoteRevisionId,
     proposedStaffingRequirements,
+    proposedStaffingEventWindowState,
     fulfillmentStaffing.read,
     quoteDirty
   ]);

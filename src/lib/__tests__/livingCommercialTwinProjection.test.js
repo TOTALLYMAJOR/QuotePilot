@@ -409,6 +409,28 @@ describe("buildLivingCommercialTwinProjection", () => {
     });
   });
 
+  test("does not carry saved-window assignment coverage into changed proposed timing", () => {
+    const projection = buildLivingCommercialTwinProjection(readyInput({
+      ...coveredStaffingAt175(),
+      proposedStaffingEventWindowState: "changed_unchecked"
+    }));
+
+    expect(projection.fulfillment.people).toMatchObject({
+      evidenceState: "available",
+      completeness: "partial",
+      current: { coverageState: "coverage_confirmed", totalGap: 0 },
+      proposed: {
+        coverageState: "unknown",
+        totalGap: null,
+        assignmentBasis: "proposed_event_window_not_evaluated"
+      }
+    });
+    expect(projection.decisionAnswer).toMatchObject({
+      state: "unverifiable",
+      staffing: { effect: "unverified", assignmentGap: null }
+    });
+  });
+
   test("composes the 125 to 175 Chicken Alfredo scenario from exact commercial and inventory evidence", () => {
     const input = readyInput();
     const projection = buildLivingCommercialTwinProjection(input);

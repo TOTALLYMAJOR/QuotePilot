@@ -6562,7 +6562,7 @@
     },
     {
       "id": "authoritative-operational-staffing",
-      "reviewRevision": 10,
+      "reviewRevision": 11,
       "status": "active",
       "deliveryType": "user_relevant",
       "capabilityKind": "mixed_surface",
@@ -6570,7 +6570,7 @@
         "staff",
         "administrators"
       ],
-      "summary": "Independently default-off authoritative operational staffing binds one exact same-tenant quote revision and event window to bounded profiles, operator-recorded availability, operator-confirmed assignments, explicit gaps, schedule fences, and immutable receipts. Staff creation requires only name and role; other maturity evidence remains independent. The Living Commercial Twin consumes the bounded safe snapshot through fulfillmentProjection-v1 and one Layer-3 presenter. Current assignments cover the proposal only when current complete People evidence reports an exact zero gap. The higher-order decision answer remains unverifiable unless Supply is also current and complete, and retained evidence supplies no current Staffing claim or action. No Staffing authority is merged into Commercial or Inventory.",
+      "summary": "Independently default-off authoritative operational staffing binds one exact same-tenant quote revision and event window to bounded profiles, operator-recorded availability, operator-confirmed assignments, explicit gaps, schedule fences, and immutable receipts. Staff creation requires only name and role; other maturity evidence remains independent. The Living Commercial Twin consumes the bounded safe snapshot through fulfillmentProjection-v1 and one Layer-3 presenter. Current assignments cover the proposal only when current complete People evidence reports an exact zero gap; when proposed date, start time, or duration changes, current coverage remains visible but proposed coverage is not verified until availability and conflicts are reviewed for that window. The higher-order decision answer remains unverifiable unless Supply is also current and complete, and retained evidence supplies no current Staffing claim or action. No Staffing authority is merged into Commercial or Inventory.",
       "backendPaths": [
         "firestore.rules",
         "functions/index.js",

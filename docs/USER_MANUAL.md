@@ -1,6 +1,6 @@
 # User Manual
 
-Last updated: 2026-09-13 01:37:10 CDT
+Last updated: 2026-09-13 01:47:44 CDT
 
 ## Purpose
 This guide explains day-to-day usage of QuotePilot for staff users and admins.
@@ -1611,7 +1611,11 @@ reporting remain unavailable until their own bounded evidence authorities exist.
   by resolving a constraint. It may say that current assignments cover the
   proposed staffing requirement only when People evidence is current and
   complete and its exact assignment gap is zero. Otherwise the staffing
-  conclusion remains unavailable or names the exact gap. Kitchen BEO review is
+  conclusion remains unavailable or names the exact gap. If the proposed event
+  date, start time, or duration changes, Current coverage stays visible but the
+  Working need becomes **Not verified** until availability and conflicts are
+  reviewed for that proposed window; saved-window assignments are never carried
+  forward as if they covered the new time. Kitchen BEO review is
   required only when the exact projected BEO effect requires it.
 - A supplier resolution can appear only from a current, exact-scope,
   revision-bound `inventory-sourcing-preview-v1` carrying a unique match under

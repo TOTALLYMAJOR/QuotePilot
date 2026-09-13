@@ -780,7 +780,9 @@ export default function FulfillmentIntelligence({
             <div>
               <span>Working need</span>
               <strong>{proposedCoverageValue(people.proposed)}</strong>
-              <small>Current confirmed assignments compared with the proposed requirement</small>
+              <small>{people.proposed?.assignmentBasis === "proposed_event_window_not_evaluated"
+                ? "Proposed timing changed; availability and conflicts still need review"
+                : "Current confirmed assignments compared with the proposed requirement"}</small>
             </div>
             <div>
               <span>People headroom</span>

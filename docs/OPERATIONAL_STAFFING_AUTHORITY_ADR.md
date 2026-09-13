@@ -1,6 +1,6 @@
 # Authoritative Operational Staffing ADR
 
-Last updated: 2026-09-09 18:17:25 CDT
+Last updated: 2026-09-13 01:47:44 CDT
 
 Status: deployed in exact `v0.15.0` behind independent presentation, server,
 and tenant gates. The first two gates are deployed on; protected workflow run
@@ -128,6 +128,14 @@ saved revision and is reused across those scenario views rather than reread for
 each guest-count edit. A new Staffing scope generation rejects a late result.
 Scenario projection caching does not promote that read into a plan, assignment,
 availability confirmation, or new Staffing revision.
+
+The proposed comparison also preserves the saved event-window boundary. When
+date, start time, or duration changes, QuotePilot continues to show the recorded
+current coverage but withholds any proposed coverage or zero-gap conclusion.
+The proposed requirement remains visible, while availability and schedule
+conflicts are labeled not evaluated for the new window and direct the operator
+back to event staffing. This is a presentation fence, not a proposed Staffing
+plan or substitute for a future server evaluation of the prospective revision.
 
 An exact current Staffing response with no plan is affirmative zero-assignment
 evidence for that saved revision, not `not_yet_available`. Fulfillment composes

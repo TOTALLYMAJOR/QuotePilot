@@ -1,11 +1,16 @@
 # Changelog
 
-Last updated: 2026-09-13 01:37:10 CDT
+Last updated: 2026-09-13 01:47:44 CDT
 
 All notable project changes are documented in this file.
 
 ## Unreleased — Event and Commercial activation receipt correction
 
+- Keep saved-window staffing evidence from becoming a false proposed-coverage
+  claim. When an edited event changes date, start time, or duration, Fulfillment
+  preserves Current coverage and the proposed role requirement but marks the
+  Working need unverified until availability and conflicts are evaluated for
+  that window; no assignment, invitation, price, or quote state changes.
 - Coordinate eligible Quote Edit Inventory evidence with the authoritative
   Commercial Change simulation. Inventory now evaluates the private
   server-built prospective quote revision in a read-only transaction, accepts
