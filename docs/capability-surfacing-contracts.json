@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "catalogVersion": 87,
+  "catalogVersion": 88,
   "contracts": [
     {
       "id": "bounded-security-operations-audit",
@@ -3536,6 +3536,193 @@
       ],
       "stateExceptions": {},
       "safeOutcome": "Authorized staff can retain a small revision-bound internal instruction journal with immutable correction receipts, deliberately include selected content in a newly generated trusted Kitchen BEO, and reach the existing event-brief checklist when recorded review is older. Notes do not change a quote, customer proposal, price, staffing assignment, inventory evidence, checklist completion, publication, message, booking, payment, or readiness state."
+    },
+    {
+      "id": "google-calendar-integration",
+      "reviewRevision": 2,
+      "status": "active",
+      "deliveryType": "user_relevant",
+      "capabilityKind": "mixed_surface",
+      "audiences": [
+        "staff",
+        "admin"
+      ],
+      "summary": "Same-tenant staff can inspect a revision-bound one-way Google Calendar copy while administrators independently connect the tenant calendar and deliberately add, update, reconcile, remove, or disconnect through serialized, generation-bound provider operations.",
+      "backendPaths": [
+        "functions/googleCalendarIntegration.js",
+        "functions/index.js",
+        "functions/tenantWorkflowRuntime.js",
+        "firestore.rules",
+        "src/lib/googleCalendarClient.js"
+      ],
+      "backendExports": [
+        "functions/index.js#getGoogleCalendarStatus",
+        "functions/index.js#startGoogleCalendarConnection",
+        "functions/index.js#googleCalendarOAuthCallback",
+        "functions/index.js#applyGoogleCalendarEventCommand",
+        "functions/index.js#disconnectGoogleCalendar"
+      ],
+      "affectedBackendExports": [
+        "functions/index.js#getGoogleCalendarStatus",
+        "functions/index.js#startGoogleCalendarConnection",
+        "functions/index.js#googleCalendarOAuthCallback",
+        "functions/index.js#applyGoogleCalendarEventCommand",
+        "functions/index.js#disconnectGoogleCalendar"
+      ],
+      "frontendPaths": [
+        "src/components/GoogleCalendarIntegrationPanel.jsx",
+        "src/components/IntegrationOpsModal.jsx",
+        "src/components/EventScheduleModal.jsx",
+        "src/App.jsx",
+        "src/LegacyApp.jsx"
+      ],
+      "entryPointLocators": [
+        {
+          "path": "src/components/GoogleCalendarIntegrationPanel.jsx",
+          "locator": "function GoogleCalendarPanel"
+        },
+        {
+          "path": "src/components/IntegrationOpsModal.jsx",
+          "locator": "mode=\"connection\""
+        },
+        {
+          "path": "src/components/EventScheduleModal.jsx",
+          "locator": "mode=\"event\""
+        }
+      ],
+      "testPaths": [
+        "src/lib/__tests__/googleCalendarIntegration.server.test.js",
+        "src/lib/__tests__/googleCalendarIntegration.server.integration.test.js",
+        "src/lib/__tests__/googleCalendarClient.test.js",
+        "src/components/__tests__/googleCalendarIntegrationPanel.test.jsx",
+        "src/components/__tests__/eventScheduleModal.test.jsx",
+        "src/lib/__tests__/tenantWorkflowRuntime.test.js",
+        "src/lib/__tests__/deploymentSafety.test.js",
+        "src/rules/__tests__/firestore.rules.test.js"
+      ],
+      "testLocators": [
+        {
+          "path": "src/lib/__tests__/googleCalendarIntegration.server.test.js",
+          "locator": "keeps one provider event identity across accepted source revisions"
+        },
+        {
+          "path": "src/lib/__tests__/googleCalendarIntegration.server.integration.test.js",
+          "locator": "verifies immutable acceptance before projecting and preserves QuotePilot authority"
+        },
+        {
+          "path": "src/lib/__tests__/googleCalendarIntegration.server.integration.test.js",
+          "locator": "blocks blind publish or removal while a queued provider operation can still be reconciled"
+        },
+        {
+          "path": "src/lib/__tests__/googleCalendarClient.test.js",
+          "locator": "retains an uncertain event request and allows only exact reconciliation"
+        },
+        {
+          "path": "src/components/__tests__/googleCalendarIntegrationPanel.test.jsx",
+          "locator": "keeps sales review-only and gives administrators deliberate cleanup for retained copies"
+        },
+        {
+          "path": "src/rules/__tests__/firestore.rules.test.js",
+          "locator": "enumerates every Google Calendar private path for browser denial coverage"
+        }
+      ],
+      "documentationPaths": [
+        "docs/FEATURE_MATRIX.md",
+        "docs/USER_MANUAL.md",
+        "docs/GOOGLE_CALENDAR_INTEGRATION.md"
+      ],
+      "documentationLocators": [
+        {
+          "path": "docs/FEATURE_MATRIX.md",
+          "locator": "Revision-bound Google Calendar event copies"
+        },
+        {
+          "path": "docs/USER_MANUAL.md",
+          "locator": "### Google Calendar event copies"
+        },
+        {
+          "path": "docs/GOOGLE_CALENDAR_INTEGRATION.md",
+          "locator": "## Duplicate, drift, and recovery policy"
+        }
+      ],
+      "surfaceReview": "changed",
+      "surfaceReviewNote": "The optional provider is presented through two familiar contexts rather than a new module: one admin connection in Integrations Ops and one exact-event action in Operations. Copy is one-way and privacy-bounded, staff visibility is read-only, all controls meet the 44 CSS-pixel target, retained copies must be recovered before disconnect, a truncated cleanup list is explicit, revision or connection-generation mismatch is visible, consequential labels name their effect, provider drift never overwrites automatically, and uncertain event or revocation results preserve one exact retry or reconciliation action.",
+      "stateEvidence": [
+        {
+          "state": "loading",
+          "path": "src/components/__tests__/googleCalendarIntegrationPanel.test.jsx",
+          "locator": "emits every canonical read and in-flight mutation marker",
+          "assertionLocator": "data-capability-state=\"loading\""
+        },
+        {
+          "state": "empty",
+          "path": "src/components/__tests__/googleCalendarIntegrationPanel.test.jsx",
+          "locator": "emits every canonical read and in-flight mutation marker",
+          "assertionLocator": "data-capability-state=\"empty\""
+        },
+        {
+          "state": "success",
+          "path": "src/components/__tests__/googleCalendarIntegrationPanel.test.jsx",
+          "locator": "emits every canonical read and in-flight mutation marker",
+          "assertionLocator": "data-capability-state=\"success\""
+        },
+        {
+          "state": "partial",
+          "path": "src/components/__tests__/googleCalendarIntegrationPanel.test.jsx",
+          "locator": "uses partial state for a mismatched selected revision and keeps controls mobile-sized",
+          "assertionLocator": "data-capability-state=\"partial\""
+        },
+        {
+          "state": "stale",
+          "path": "src/components/__tests__/googleCalendarIntegrationPanel.test.jsx",
+          "locator": "retains the last verified status as stale when refresh fails",
+          "assertionLocator": "data-capability-state=\"stale\""
+        },
+        {
+          "state": "error",
+          "path": "src/components/__tests__/googleCalendarIntegrationPanel.test.jsx",
+          "locator": "emits every canonical read and in-flight mutation marker",
+          "assertionLocator": "data-capability-state=\"error\""
+        },
+        {
+          "state": "recovery",
+          "path": "src/components/__tests__/googleCalendarIntegrationPanel.test.jsx",
+          "locator": "emits every canonical read and in-flight mutation marker",
+          "assertionLocator": "data-capability-state=\"recovery\""
+        },
+        {
+          "state": "ready",
+          "path": "src/components/__tests__/googleCalendarIntegrationPanel.test.jsx",
+          "locator": "emits every canonical read and in-flight mutation marker",
+          "assertionLocator": "data-capability-state=\"ready\""
+        },
+        {
+          "state": "submitting",
+          "path": "src/components/__tests__/googleCalendarIntegrationPanel.test.jsx",
+          "locator": "emits every canonical read and in-flight mutation marker",
+          "assertionLocator": "data-capability-state=\"submitting\""
+        },
+        {
+          "state": "uncertain",
+          "path": "src/components/__tests__/googleCalendarIntegrationPanel.test.jsx",
+          "locator": "preserves an uncertain action and reconciles the exact operation instead of retrying",
+          "assertionLocator": "data-capability-state=\"uncertain\""
+        },
+        {
+          "state": "reconciliation",
+          "path": "src/components/__tests__/googleCalendarIntegrationPanel.test.jsx",
+          "locator": "emits every canonical read and in-flight mutation marker",
+          "assertionLocator": "data-capability-state=\"reconciliation\""
+        },
+        {
+          "state": "receipt",
+          "path": "src/components/__tests__/googleCalendarIntegrationPanel.test.jsx",
+          "locator": "publishes only the exact selected revision and renders a focused receipt",
+          "assertionLocator": "data-capability-state=\"receipt\""
+        }
+      ],
+      "stateExceptions": {},
+      "safeOutcome": "Same-tenant staff can distinguish not connected, current, changed-revision, uncertain, provider-drift, and reconnect states for a narrow external event copy. Only administrators can connect, publish, update, reconcile, remove, or disconnect; those actions never change the authoritative quote, acceptance, booking, staffing, inventory, BEO, checklist, payment, message, readiness, delivery, or completion state, and source/local evidence does not claim provider, hosted, or human acceptance."
     },
     {
       "id": "trusted-kitchen-beo-authority",

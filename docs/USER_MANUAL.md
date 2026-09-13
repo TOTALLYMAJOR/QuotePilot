@@ -1,6 +1,6 @@
 # User Manual
 
-Last updated: 2026-09-13 01:56:31 CDT
+Last updated: 2026-09-13 02:54:14 CDT
 
 ## Purpose
 This guide explains day-to-day usage of QuotePilot for staff users and admins.
@@ -138,6 +138,88 @@ accepted/booked Event Schedule as the canonical operational lens.
 **Open in Calendar** keeps the exact Opportunity identity; **Open
 opportunity** returns to that exact record. `/app/schedule` remains a
 compatibility path to the same Calendar.
+
+### Google Calendar event copies (source/local candidate)
+
+Google Calendar is an optional one-way copy, not QuotePilot's event record.
+When the deployment and tenant gates are enabled, an administrator opens
+**Integrations Ops → Google Calendar** and chooses **Connect Google Calendar**.
+Authorization opens in Google's own page. Connecting does not add an event.
+Firebase Google sign-in does not grant Calendar access.
+If Google's token exchange itself is uncertain, QuotePilot does not call the
+connection successful; review the app's access in the Google account before
+starting a new authorization, then choose **I reviewed Google access — retry
+connection**. That acknowledgement allows a new attempt; it does not claim that
+the earlier exchange failed or revoke anything by itself. If QuotePilot
+receives a grant but Google does not confirm verification or revocation, the
+encrypted grant stays available to the explicit disconnect recovery rather
+than being discarded.
+If the authorization window expires, choose **Recover expired Google
+authorization**. QuotePilot replaces only an unused pending attempt. An
+interrupted exchange becomes explicit unknown outcome; a retained grant is
+activated only when owned-calendar verification already passed, otherwise it
+must be revoked before reconnecting.
+If the authorization window expires while Google's bounded exchange is already
+running, QuotePilot waits for that active exchange lease before offering
+recovery. Refreshing cannot invalidate the in-flight provider request.
+
+For an accepted or booked event, open the focused event in **Operations**. The
+Google Calendar panel offers only the action that fits the recorded state:
+
+- **Add to Google Calendar** publishes the exact current accepted revision.
+- **Update Google Calendar** appears after QuotePilot's active revision changes;
+  the prior Google copy is retained until the administrator chooses to update.
+- **Check original Calendar action** reconciles the exact request after an
+  uncertain provider result or checks a drifted copy. Do not repeat the
+  publish/update request.
+- **Remove Google Calendar copy** removes only QuotePilot's external copy. It
+  does not cancel the event, quote, booking, staffing, checklist, or BEO.
+- **Review Google copy** means Google content or its ETag changed outside
+  QuotePilot. QuotePilot does not overwrite it automatically.
+
+Sales staff can read the state but cannot mutate the provider copy in this
+first slice. Integrations Ops lists retained copies even if their source quote
+is no longer shown in the accepted/booked calendar. Remove or reconcile every
+listed copy before disconnecting; QuotePilot blocks revocation while cleanup is
+still needed. If Google does not confirm revocation, the panel says the result
+is uncertain and offers the exact disconnect request again. It does not claim
+success or discard the encrypted token. If the browser receipt is unavailable,
+the server fences a new retry against the recorded uncertain state. When more
+than 50 copies remain, clear the visible group and refresh for the rest.
+
+If Google rejects stored credentials, Integrations Ops offers **Disconnect
+rejected Google access**. Revoke that unusable authorization before deliberately
+connecting again; QuotePilot does not accumulate a replacement grant beside
+unresolved stored access. If prior event copies remain, the receipt names them
+explicitly and keeps them listed for cleanup after a valid reconnection.
+
+If a newly issued grant fails owned-calendar verification, it is retained only
+for revocation and cannot be used to clean up older event copies. In that narrow
+case, **Retry disconnect** revokes the unactivated grant first even while older
+copies remain. QuotePilot then explicitly reports that those copies remain;
+clean them up after a valid reconnection or through a separately verified manual
+provider action.
+
+If Calendar publishing is later disabled while an encrypted grant still
+exists, Integrations Ops keeps **Revoke stored Google access** available when
+provider cleanup is still configured. It revokes the grant without publishing
+or changing any event. Existing Google copies remain explicitly listed as
+external records; disabling the integration does not imply that they vanished.
+
+The copy contains only the event title (or quote reference), start/end, tenant
+time zone, venue, and private ownership fingerprints. It contains no attendees,
+customer/staff contact details, guest count, menu, dietary/allergy information,
+pricing, payment, operational notes, Kitchen BEO, checklist, Inventory, or
+Staffing evidence. A Google `synced` state proves only that the exact external
+copy was verified. QuotePilot remains the authority for every business record.
+Event title and venue are free text and can themselves identify a customer. The
+copy uses the primary calendar's default visibility and therefore follows that
+calendar's sharing settings.
+
+This workflow remains default-off in source. Until the web OAuth client,
+consent screen, exact callback, Secret Manager bindings/IAM, tenant setting,
+hosted callback, and live provider round trip are accepted, the panel correctly
+reports Calendar as unavailable. See [Google Calendar integration authority](GOOGLE_CALENDAR_INTEGRATION.md).
 
 Desktop **Operations** and the mobile Operations group contain
 **Operations**, **Clear the Deck**, and **Staff**, plus administrator-only

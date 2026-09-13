@@ -30,6 +30,7 @@ import {
 import { buildEventRunOfShowReadModel } from "../lib/eventRunOfShow";
 import { useEventIngredientExecutionProjection } from "../hooks/useEventIngredientExecutionProjection";
 import EventIngredientOperationsSummary from "./EventIngredientOperationsSummary";
+import GoogleCalendarIntegrationPanel from "./GoogleCalendarIntegrationPanel";
 import "./scheduleMotion.css";
 
 export const EVENT_SCHEDULE_QUOTE_LIMIT = 500;
@@ -932,6 +933,7 @@ export function EventScheduleView({
   onOpenIngredientPlan = null,
   onOpenPeople = null,
   onOpenReporting = null,
+  onOpenIntegrations = null,
   returnFocusRef = null
 }) {
   const embedded = presentation === "embedded";
@@ -2082,6 +2084,16 @@ export function EventScheduleView({
                     ) : null}
                   </header>
                   <ScheduleEventFacts item={selectedEvent} compact />
+                  <GoogleCalendarIntegrationPanel
+                    mode="event"
+                    organizationId={organizationId}
+                    quoteId={selectedEvent.id}
+                    sourceVersionId={selectedEvent.activeRevisionId}
+                    eventStatus={selectedEvent.status}
+                    source={state.source}
+                    role={role}
+                    onOpenIntegrations={onOpenIntegrations}
+                  />
                   {operationsMode && ingredientExecution.access.readEnabled ? (
                     <EventIngredientOperationsSummary
                       planRead={ingredientExecution.planRead}

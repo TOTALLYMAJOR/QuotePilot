@@ -1,11 +1,42 @@
 # Changelog
 
-Last updated: 2026-09-13 02:26:06 CDT
+Last updated: 2026-09-13 02:54:14 CDT
 
 All notable project changes are documented in this file.
 
 ## Unreleased — Event and Commercial activation receipt correction
 
+- Add a revision-bound Google Calendar event-copy workflow to Integrations Ops
+  and the focused Operations event. An administrator connects an independently
+  consented primary calendar, then deliberately publishes, updates, checks, or
+  removes one narrow copy of an exact accepted/booked quote revision. Stable
+  provider IDs, accepted-snapshot verification, ETag fences, one-use OAuth
+  state, encrypted refresh tokens, one serialized connection-mutation lease,
+  connection-generation binding, replay-safe dispatch ownership, private
+  callable-owned records, cleanup-before-disconnect, and exact uncertain
+  revocation retry prevent duplicate, stranded, or silent overwrites. An
+  uncertain exchange requires explicit review of Google third-party access
+  before another authorization attempt. An unverified revocation-only grant can
+  be revoked without falsely claiming that older retained copies were cleaned.
+  Expired authorization recovery replaces only unused pending attempts,
+  converts interrupted exchanges to named uncertainty, activates only a
+  previously verified retained grant, and routes any unverified grant to
+  explicit revocation. Rejected credentials can also be revoked without
+  concealing prior copies that require cleanup after reconnection.
+  The callback extends a bounded exchange lease beyond its explicit runtime
+  ceiling before contacting Google, and a late uncertain grant can bind only to
+  its exact unreplaced recovery record, so an expired authorization window
+  cannot race active token work. Disabling
+  publishing keeps credential revocation available when provider cleanup is
+  configured and explicitly retains any external event copies.
+  Calendar
+  receives only event title or quote reference, time, tenant time zone, venue,
+  and private ownership fingerprints—never attendees, customer/staff contact,
+  menu, dietary, pricing, payment, notes, BEO, or checklist content; free-text
+  title/venue may still identify a customer and default visibility follows the
+  selected calendar's sharing policy. This is a
+  source/local candidate; provider consent, Secret Manager bindings, hosted
+  behavior, live Calendar mutation, and human acceptance remain unproven.
 - Add revision-bound Event operational notes inside the trusted Kitchen BEO
   workspace. Same-tenant staff can record typed internal or BEO-visible
   instructions, correct them with immutable prior/result receipts, explicitly

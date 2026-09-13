@@ -7353,6 +7353,9 @@ export default function App({
             onOpenReporting={dashboardEnabled
               ? () => navigateWorkspace(WORKSPACE_PATHS.reporting)
               : undefined}
+            onOpenIntegrations={integrationsEnabled
+              ? () => navigateWorkspace(WORKSPACE_PATHS.integrations)
+              : undefined}
           />
         </WorkspaceLazyRoute>
       )}

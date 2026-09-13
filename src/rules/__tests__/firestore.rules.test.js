@@ -98,6 +98,10 @@ const SERVER_OWNED_COMMERCIAL_AUTHORITY_PATHS = Object.freeze([
   ["organizations", "org-a", "kitchenBeoGenerationReceipts", "beo-receipt-1"],
   ["organizations", "org-a", "eventOperationalNotes", "q1"],
   ["organizations", "org-a", "eventOperationalNotes", "q1", "receipts", "notes-receipt-1"],
+  ["organizations", "org-a", "googleCalendarConnections", "current"],
+  ["organizations", "org-a", "googleCalendarEventLinks", "q1"],
+  ["organizations", "org-a", "googleCalendarOperations", `calendar_operation_${"a".repeat(48)}`],
+  ["googleCalendarOAuthStates", `calendar_oauth_state_${"b".repeat(48)}`],
   ["organizations", "org-a", "commercialChangeSimulations", "ccs-receipt-1"],
   ["organizations", "org-a", "commercialChangeApprovalRequests", "ccar-request-1"],
   ["organizations", "org-a", "commercialChangeAuthorizations", "cca-receipt-1"],
@@ -125,6 +129,17 @@ const SERVER_OWNED_COMMERCIAL_AUTHORITY_PATHS = Object.freeze([
   ["revenueAutopilotProviderMessageIndex", "provider-message-1"],
   ["revenueAutopilotSchedulerState", "global"]
 ]);
+
+test("enumerates every Google Calendar private path for browser denial coverage", () => {
+  expect(SERVER_OWNED_COMMERCIAL_AUTHORITY_PATHS.filter((pathParts) =>
+    pathParts.some((part) => String(part).startsWith("googleCalendar"))
+  )).toEqual([
+    ["organizations", "org-a", "googleCalendarConnections", "current"],
+    ["organizations", "org-a", "googleCalendarEventLinks", "q1"],
+    ["organizations", "org-a", "googleCalendarOperations", `calendar_operation_${"a".repeat(48)}`],
+    ["googleCalendarOAuthStates", `calendar_oauth_state_${"b".repeat(48)}`]
+  ]);
+});
 
 const OWNER_SMS_SERVER_ONLY_GLOBAL_COLLECTIONS = Object.freeze([
   ["ownerSmsAttempts", "sms-attempt-org-a-1"],
@@ -3149,6 +3164,30 @@ rulesDescribe("firestore rules - org scoped access controls", () => {
     });
     await assertFails(setDoc(settingsRef, {
       operationalStaffingAuthorityEnabled: true
+    }));
+  });
+
+  test("Google Calendar integration cannot be promoted by a browser administrator", async () => {
+    const adminDb = testEnv.authenticatedContext("admin-org-a", {
+      email: "admin-a@example.com",
+      email_verified: true,
+      organizationId: "org-a"
+    }).firestore();
+    const settingsRef = doc(adminDb, "organizations", "org-a", "settings", "config");
+    await assertFails(updateDoc(settingsRef, {
+      googleCalendarIntegrationEnabled: true
+    }));
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await deleteDoc(doc(
+        context.firestore(),
+        "organizations",
+        "org-a",
+        "settings",
+        "config"
+      ));
+    });
+    await assertFails(setDoc(settingsRef, {
+      googleCalendarIntegrationEnabled: true
     }));
   });
 

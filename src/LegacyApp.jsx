@@ -4625,9 +4625,13 @@ function LegacyAppCore({
             open={scheduleRouteOpen}
             onClose={() => navigateWorkspace(WORKSPACE_PATHS.home)}
             organizationId={authSession.organizationId}
+            role={authSession.role}
             staffLeads={scheduleStaffLeads}
             capacityLimit={scheduleCapacityLimit}
             currentUserEmail={authSession.user?.email || ""}
+            onOpenIntegrations={integrationsEnabled
+              ? () => navigateWorkspace(WORKSPACE_PATHS.integrations)
+              : undefined}
           />
         </WorkspaceLazyRoute>
       )}
@@ -5245,9 +5249,17 @@ function LegacyAppCore({
             onClose={() => closeWorkspaceToolRoute(WORKSPACE_ROUTE_IDS.SCHEDULE, setScheduleOpen)}
             returnFocusRef={workspaceToolReturnFocusRef}
             organizationId={authSession.organizationId}
+            role={authSession.role}
             staffLeads={scheduleStaffLeads}
             capacityLimit={scheduleCapacityLimit}
             currentUserEmail={authSession.user?.email || ""}
+            onOpenIntegrations={integrationsEnabled
+              ? () => openRoutedWorkspaceTool(
+                  WORKSPACE_PATHS.integrations,
+                  setIntegrationsOpen,
+                  { menuTriggerRef: operationsMenuTriggerRef }
+                )
+              : undefined}
           />
         </WorkspaceLazyTool>
       )}

@@ -299,9 +299,14 @@ describe("capability surfacing delivery gate", () => {
 
   test("inventories every explicit Functions export without swallowing later declarations", () => {
     const currentExports = parseFunctionExports(functionsEntrypointSource);
-    expect(currentExports).toHaveLength(131);
+    expect(currentExports).toHaveLength(136);
     expect(currentExports).toContain("functions/index.js#getEventOperationalNotesSnapshot");
     expect(currentExports).toContain("functions/index.js#applyEventOperationalNoteCommand");
+    expect(currentExports).toContain("functions/index.js#getGoogleCalendarStatus");
+    expect(currentExports).toContain("functions/index.js#startGoogleCalendarConnection");
+    expect(currentExports).toContain("functions/index.js#googleCalendarOAuthCallback");
+    expect(currentExports).toContain("functions/index.js#applyGoogleCalendarEventCommand");
+    expect(currentExports).toContain("functions/index.js#disconnectGoogleCalendar");
     expect(currentExports).toContain("functions/index.js#getInventoryWorkspace");
     expect(currentExports).toContain("functions/index.js#applyInventoryCommand");
     expect(currentExports).toContain("functions/index.js#previewEventInventory");

@@ -231,6 +231,38 @@ if (!["true", "false"].includes(inventoryAuthorityEnabled)) {
   throw new Error("INVENTORY_AUTHORITY_ENABLED must be true or false.");
 }
 
+const googleCalendarIntegrationEnabled = optional(
+  "GOOGLE_CALENDAR_INTEGRATION_ENABLED",
+  "false"
+).toLowerCase();
+if (!["true", "false"].includes(googleCalendarIntegrationEnabled)) {
+  throw new Error("GOOGLE_CALENDAR_INTEGRATION_ENABLED must be true or false.");
+}
+if (tenantWorkflowOrganizationId && googleCalendarIntegrationEnabled !== "false") {
+  throw new Error("Tenant-scoped workflow activation requires the global Google Calendar gate off.");
+}
+const googleCalendarOAuthRedirectUri = optional(
+  "GOOGLE_CALENDAR_OAUTH_REDIRECT_URI",
+  "https://us-central1-tonicatering.cloudfunctions.net/googleCalendarOAuthCallback"
+);
+if (googleCalendarOAuthRedirectUri !== "https://us-central1-tonicatering.cloudfunctions.net/googleCalendarOAuthCallback") {
+  throw new Error("GOOGLE_CALENDAR_OAUTH_REDIRECT_URI must be the exact deployed QuotePilot callback.");
+}
+const googleCalendarAppReturnUrl = optional(
+  "GOOGLE_CALENDAR_APP_RETURN_URL",
+  "https://quotepilot.mbmapps.com/app/integrations"
+);
+if (googleCalendarAppReturnUrl !== "https://quotepilot.mbmapps.com/app/integrations") {
+  throw new Error("GOOGLE_CALENDAR_APP_RETURN_URL must be the canonical Integrations workspace route.");
+}
+const googleCalendarOAuthKeyVersion = optional(
+  "GOOGLE_CALENDAR_OAUTH_KEY_VERSION",
+  "calendar-key-v1"
+);
+if (!/^calendar-key-v[1-9][0-9]{0,2}$/.test(googleCalendarOAuthKeyVersion)) {
+  throw new Error("GOOGLE_CALENDAR_OAUTH_KEY_VERSION must identify a bounded Calendar encryption-key generation.");
+}
+
 const revenueAutopilotEnabled = optional(
   "REVENUE_AUTOPILOT_ENABLED",
   "false"
@@ -299,7 +331,11 @@ for (const secretName of [
   "BUYER_ACCESS_STRIPE_SECRET_KEY",
   "BUYER_ACCESS_STRIPE_WEBHOOK_SECRET",
   "BUYER_ACCESS_TURNSTILE_SECRET",
-  "BUYER_ACCESS_RATE_LIMIT_SECRET"
+  "BUYER_ACCESS_RATE_LIMIT_SECRET",
+  "GOOGLE_CALENDAR_OAUTH_CLIENT_ID",
+  "GOOGLE_CALENDAR_OAUTH_CLIENT_SECRET",
+  "GOOGLE_CALENDAR_OAUTH_STATE_SECRET",
+  "GOOGLE_CALENDAR_TOKEN_ENCRYPTION_KEY"
 ]) {
   if (optional(secretName)) {
     throw new Error(
@@ -338,6 +374,10 @@ const values = {
   ...(tenantWorkflowOrganizationId ? { TENANT_WORKFLOW_ORGANIZATION_ID: tenantWorkflowOrganizationId } : {}),
   OPERATIONAL_STAFFING_AUTHORITY_ENABLED: operationalStaffingAuthorityEnabled,
   INVENTORY_AUTHORITY_ENABLED: inventoryAuthorityEnabled,
+  GOOGLE_CALENDAR_INTEGRATION_ENABLED: googleCalendarIntegrationEnabled,
+  GOOGLE_CALENDAR_OAUTH_REDIRECT_URI: googleCalendarOAuthRedirectUri,
+  GOOGLE_CALENDAR_APP_RETURN_URL: googleCalendarAppReturnUrl,
+  GOOGLE_CALENDAR_OAUTH_KEY_VERSION: googleCalendarOAuthKeyVersion,
   REVENUE_AUTOPILOT_ENABLED: revenueAutopilotEnabled,
   REVENUE_AUTOPILOT_SENDS_ENABLED: revenueAutopilotSendsEnabled,
   BUYER_ACCESS_ENABLED: buyerAccessEnabled,
