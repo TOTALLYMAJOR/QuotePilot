@@ -255,6 +255,9 @@ const PILOT_NOW_ENABLED = CUSTOMER_CENTERED_WORKSPACE_ENABLED
 const PILOT_CREATE_ENABLED = ["1", "true", "yes", "on"].includes(
   String(import.meta.env.VITE_PILOT_CREATE_ENABLED || "").trim().toLowerCase()
 );
+// Model assistance is a separate browser capability. CREATE's deterministic
+// intake remains available whenever its own gate is enabled.
+const PILOT_MODEL_ENABLED = import.meta.env.VITE_PILOT_MODEL_ENABLED === "true";
 const ActiveLegacyHome = createRecoverableLazy(
   () => import("quotepilot-active-legacy-home"),
   "ActiveLegacyHome"
@@ -4717,7 +4720,7 @@ function LegacyAppCore({
             styles={Object.keys(STAFF_RULES)}
             onApplyDraft={applyIntentDraft}
             organizationId={authSession.organizationId}
-            onModelParse={parseIntentDraftWithModel}
+            onModelParse={PILOT_MODEL_ENABLED ? parseIntentDraftWithModel : undefined}
           />
         )}
         {PILOT_CHANGE_REQUESTS_ENABLED

@@ -1,4 +1,6 @@
 import { createRequire } from "node:module";
+import fs from "node:fs";
+import vm from "node:vm";
 import { describe, expect, test } from "vitest";
 
 const require = createRequire(import.meta.url);
@@ -18,7 +20,56 @@ const {
   shouldRetryIntentParserAttempt
 } = require("../intentParserCore.cjs");
 
+const FUNCTIONS_SOURCE = fs.readFileSync(
+  new URL("../../../functions/index.js", import.meta.url),
+  "utf8"
+);
+
+function intentParserCallableSource() {
+  const start = FUNCTIONS_SOURCE.indexOf("const intentParserRegion =");
+  const end = FUNCTIONS_SOURCE.indexOf("\n// Event work journal", start);
+  if (start < 0 || end <= start) throw new Error("Intent parser callable source markers are missing.");
+  return FUNCTIONS_SOURCE.slice(start, end);
+}
+
+function evaluateIntentParserCallable(region) {
+  const sandbox = { exports: {}, functions: { region }, REGION: "test-region" };
+  vm.runInNewContext(intentParserCallableSource(), sandbox);
+  return sandbox.exports;
+}
+
 describe("intent parser configuration gate", () => {
+  test("binds the OpenAI key through Firebase Secret Manager when runWith is available", () => {
+    const bindings = [];
+    const https = { onCall: (handler) => handler };
+    const callableExports = evaluateIntentParserCallable(() => ({
+      https,
+      runWith(options) {
+        bindings.push(options);
+        return { https };
+      }
+    }));
+
+    expect(bindings).toEqual([{ secrets: ["INTENT_PARSER_OPENAI_KEY"] }]);
+    expect(callableExports.parseIntentDraft).toBeTypeOf("function");
+    expect(intentParserCallableSource()).toContain(
+      'intentParserOrganizationId !== "mm05366-sandbox"'
+    );
+    expect(intentParserCallableSource()).toContain(
+      "organizationId !== intentParserOrganizationId"
+    );
+    expect(intentParserCallableSource().indexOf("intentParserOrganizationId"))
+      .toBeLessThan(intentParserCallableSource().indexOf("const apiKeys"));
+  });
+
+  test("keeps isolated source-slice stubs compatible when runWith is unavailable", () => {
+    const callableExports = evaluateIntentParserCallable(() => ({
+      https: { onCall: (handler) => handler }
+    }));
+
+    expect(callableExports.parseIntentDraft).toBeTypeOf("function");
+  });
+
   test("is disabled with provider none by default, and rejects unknown providers back to none", () => {
     expect(normalizeIntentParserConfig({})).toMatchObject({ enabled: false, provider: "none" });
     expect(normalizeIntentParserConfig({

@@ -1,10 +1,62 @@
 # Changelog
 
-Last updated: 2026-09-11 00:36:51 CDT
+Last updated: 2026-09-13 17:24:50 CDT
 
 All notable project changes are documented in this file.
 
 ## Unreleased — Event and Commercial activation receipt correction
+
+- Add a protected `all-qualified-features` production release profile for one
+  coordinated Firebase-all and Vercel promotion. The profile compiles the
+  qualified staff workspace, Inquiry Showcase, and review-only Model Assist
+  presentation, binds Commercial Change, Event Spine, Staffing, Inventory,
+  Inquiry, and model runtime to the exact existing organization
+  `mm05366-sandbox`, and keeps Resend provider support available. Firebase
+  readback must prove the exact runtime profile on every active Function;
+  Vercel must prove the reviewed public Inquiry site key remains present after
+  its production-environment pull. Both paths retain the semantic tag,
+  exact-current-main CI, target-specific rollback ancestor, protected
+  environment, allowlisted human dispatcher, and repeated pre-mutation checks.
+- Keep the same profile intentionally closed for the public $1 Buyer Access
+  rail, owner SMS, Revenue Autopilot sends, local/test bypasses, and hard App
+  Check enforcement. Inquiry requires its own managed Turnstile widget, exact
+  production hostname allowlist, browser-visible site key, and Secret Manager
+  secret. Model Assist uses `openai` / `gpt-5-mini` only for
+  `mm05366-sandbox`, but provider readiness is currently blocked by a live
+  `credit_balance_exhausted` response. No production deployment, automatic
+  Inquiry publication, model response, customer submission, provider send, or
+  human acceptance is claimed by this source change.
+
+- Add an off-by-default Guided Inquiry Page backed by one immutable Inquiry
+  Showcase rather than a second commercial catalog. Administrators curate and
+  preview customer-safe references in Library, publish/pause/republish exact
+  versions with slug and receipt fences, and never copy pricing, cost, margin,
+  inclusion, rule, staffing, inventory, or availability authority. Customers
+  use `/inquire/:slug` to review and submit event preferences through distinct
+  Turnstile and bounded abuse controls; stale publications fail closed,
+  uncertain outcomes resolve with an opaque session recovery secret, and the
+  on-screen receipt explicitly creates no customer, quote, portal, Calendar
+  event, payment, availability claim, proposal, or booking. Opportunities owns
+  the Received/Acknowledged/Converted/Dismissed queue, notification failure is
+  isolated after durable recording, current-catalog and customer-identity
+  drift require explicit staff resolution, and the existing authoritative
+  quote transaction commits quote/customer/portal/version plus the Converted
+  receipt atomically. Unconverted content receives a 90-day deletion time;
+  scheduled cleanup retains only a content-free receipt. Direct browser access
+  to all Showcase, inquiry, abuse, recovery, analytics, and receipt records is
+  denied. This is source/local candidate evidence only; deployment, secrets,
+  gates, hosted/provider behavior, production data, accessibility, human
+  acceptance, and commercial outcomes remain open. Release validation also
+  inventories the exact current-main Functions exports and evaluates portal
+  expiry against a deterministic test clock, without changing fail-closed
+  production expiry behavior.
+
+- Make model-assisted CREATE parsing honor its independent browser gate and
+  bind the OpenAI key only through Firebase Secret Manager on the parse
+  callable. Deterministic intake remains available with either gate off, and
+  model facts remain low-confidence, confirm-before-apply, stateless, and
+  non-authoritative. Production activation is not claimed: the current live
+  provider probe reports exhausted credit capacity.
 
 - Correct the `staging-event-operating-spine` candidate envelope so enabling
   Commercial Change and Event Spine preserves Staffing and Inventory and binds

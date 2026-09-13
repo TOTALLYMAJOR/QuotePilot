@@ -1,6 +1,6 @@
 # Technology Exceptions
 
-Last updated: 2026-09-05 13:22:00 CDT
+Last updated: 2026-09-13 16:07:03 CDT
 
 Use this log when a change intentionally departs from stable-first policy or requires temporary governance/performance exception handling.
 
@@ -57,8 +57,15 @@ Use this log when a change intentionally departs from stable-first policy or req
   Library profile recalibration reviewed September 4, 2026)
 - Owner: QuotePilot maintainers
 - Change: Enforce separate, detected bundle profiles for the compatibility and
-  production-equivalent Ambient graphs. The Proposal Composer quote-builder
-  candidate (measured 2,943,941 local compatibility bytes, largest chunk
+  production-equivalent Ambient graphs. Guided Inquiry and model-assist update:
+  the exact current CI matrices measure
+  3,517,367 / 385,181 bytes for compatibility and 4,796,685 / 443,563 bytes
+  for Ambient. Their aggregate ceilings are pinned to those literal local
+  graphs, while the existing largest-chunk ceilings remain unchanged. This
+  admits the reviewed public inquiry, Library administration, recovery, staff
+  queue, conversion, and model-gating source without adding discretionary
+  headroom; exact-PR CI must confirm both graphs before release. The Proposal
+  Composer quote-builder candidate (measured 2,943,941 local compatibility bytes, largest chunk
   unchanged), the first Live planning and Staff People presentation slice
   (measured 2,963,542 compatibility bytes, largest chunk unchanged), and the
   shared shell and Now visual-system pass (measured 2,964,327 compatibility

@@ -1,6 +1,6 @@
 # User Manual
 
-Last updated: 2026-09-11 00:36:51 CDT
+Last updated: 2026-09-13 17:24:50 CDT
 
 ## Purpose
 This guide explains day-to-day usage of QuotePilot for staff users and admins.
@@ -97,6 +97,25 @@ make and publish catalog changes.
    available provider-backed action; a provider-accepted receipt, not the button
    click, is delivery evidence.
 7. Return to **Opportunities** to track the next recorded action.
+
+### Publish and operate a guided inquiry page
+
+1. As an administrator, open **Library → Inquiry page**. The Inquiry Showcase is a public-presentation layer over the existing Library, not another catalog or price book.
+2. Choose active customer-safe Offers, services, rentals, menu items, or Event Templates. Write the public title, short description, optional HTTPS image, featured label, and display order. The Showcase cannot store or override price, cost, margin, inclusions, rules, staffing, inventory, or availability.
+3. Choose a lowercase slug, enable the tenant publication gate, and select **Save draft**. Saving does not change an active published version.
+4. Review **Preview customer-safe projection**, then select **Publish immutable version**. The receipt identifies the exact publication and catalog evidence. A changed slug deactivates the previous slug; QuotePilot does not redirect it.
+5. Use `/inquire/{slug}` as a share-only, `noindex` page. The customer provides contact details, event type/date, estimated guests, location, optional notes, and curated preferences, then reviews the exact request before sending it. The on-screen receipt means only that the inquiry was recorded.
+6. Open **Opportunities**. A new inquiry starts as **Received**. Select **Acknowledge and assign to me** before conversion. The in-app record is authoritative; an optional staff-email failure is shown but never removes or rolls back the inquiry.
+7. Select **Review conversion**. Resolve every missing, inactive, changed, or incompatible reference and explicitly choose whether a same-tenant email claim should use the existing customer identity or create a new identity.
+8. Review the exact authoritative quote prefill, choose any required current Offer/Menu values, then select **Create authoritative quote draft**. QuotePilot re-prices through the existing server path and commits the quote, customer binding, portal record, first version, Converted state, and conversion receipt together.
+
+Customer selections remain unconfirmed preferences on the resulting quote. Inquiry submission never creates a customer, quote, portal, Calendar event, or payment request and never confirms price, availability, allergen safety, reservation, proposal, acceptance, or booking. Unconverted inquiry content is retained for 90 days, then scheduled for deletion with only a content-free receipt retained. Service-response consent does not subscribe the customer to marketing. Customer email confirmation, attachments, multilingual pages, custom domains, campaign pages, public availability search, instant quoting, and marketing automation are not available in v1.
+
+This workflow is not yet available in production. The coordinated release must
+first pass its dedicated Inquiry Turnstile, exact-main/tag/CI, Firebase-all,
+Vercel, and provider-readback gates for `mm05366-sandbox`. Deployment does not
+create or publish a page; the administrator publication steps above remain
+required afterward.
 
 ### Commercial Workbench (v0.18 source contract)
 
@@ -3273,9 +3292,11 @@ gates.
 
 On New quote, next to Structure it, a Model assist button can ask a
 configured AI provider (OpenAI or Anthropic) to read the same note. This
-lane ships off: until your administrator enables it and configures a
-provider key, the button reports that the lane is off and typed
-structuring keeps working exactly the same. When it is on, model
+lane ships off: until an administrator explicitly enables both its browser
+control and server/provider rail, the button is not shown and typed structuring
+keeps working exactly the same. If the control is visible but the provider
+later becomes unavailable, the lane reports that recoverable outcome without
+changing the note or deterministic result. When it is on, model
 suggestions appear in their own list and every one requires your explicit
 Confirm before it touches the draft — the model never fills the form,
 never prices, and never saves. Anything the model could not read is
@@ -3284,6 +3305,13 @@ or use an internal `auto` route that tries the configured cheaper-first
 provider:model order and may retry once when the first attempt is
 unreadable or unavailable; this routing detail never changes the review-
 only boundary.
+
+For the coordinated founder-tenant production profile, Model Assist is pinned
+to OpenAI `gpt-5-mini` and `mm05366-sandbox`; the general provider/auto controls
+above do not widen that release. The current provider probe reports
+`credit_balance_exhausted`, so this lane must be treated as unavailable until
+capacity is restored and reverified. The deterministic **Structure it** path
+remains available and is the safe recovery.
 
 After `Add details to the draft`, CREATE compresses the completed reading into
 an `Inquiry added` handoff so the proposal becomes the next visible task,
