@@ -345,7 +345,8 @@ const EMPTY_CHANGE_IMPACT_PREVIEW = Object.freeze({
   appliedQuote: null,
   workbenchRequest: null,
   inventoryObservation: null,
-  inventoryScenarioFingerprint: ""
+  inventoryScenarioFingerprint: "",
+  staffingObservation: null
 });
 const EMPTY_EVENT_INGREDIENT_PREVIEW_INPUT = Object.freeze({ valid: false, selections: [] });
 
@@ -1584,6 +1585,17 @@ function LegacyAppCore({
       String(editingQuote.baseForm?.[field] ?? "") === String(form[field] ?? "")
     )) ? "current" : "changed_unchecked"
   ), [editingQuote.baseForm, form.date, form.hours, form.time]);
+  const authoritativeStaffingObservation = changeImpactPreview.formKey === currentChangeImpactFormKey
+    && changeImpactPreview.staffingObservation?.state === "available"
+    ? changeImpactPreview.staffingObservation
+    : null;
+  const effectiveProposedStaffingRequirements = authoritativeStaffingObservation
+    ?.preview?.proposed?.requirementsByRole || proposedStaffingRequirements;
+  const effectiveProposedStaffingEventWindowState = authoritativeStaffingObservation
+    ? authoritativeStaffingObservation.preview?.comparison?.windowState === "changed"
+      ? "changed_unchecked"
+      : "current"
+    : proposedStaffingEventWindowState;
   const commercialInventoryScenarioPreview = useMemo(() => {
     const observation = changeImpactPreview.inventoryObservation;
     if (observation?.state === "available" && observation.preview?.projection) {
@@ -1680,9 +1692,11 @@ function LegacyAppCore({
     inventoryConsequences: commercialInventoryConsequences,
     inventoryPreview: commercialInventoryScenarioPreview,
     staffingRead: fulfillmentStaffing.read,
-    proposedStaffingRequirements,
-    proposedStaffingRequirementsSource: "proposed_commercial_and_canonical_counts",
-    proposedStaffingEventWindowState,
+    proposedStaffingRequirements: effectiveProposedStaffingRequirements,
+    proposedStaffingRequirementsSource: authoritativeStaffingObservation
+      ? "server_authoritative_commercial_preview"
+      : "proposed_commercial_and_canonical_counts",
+    proposedStaffingEventWindowState: effectiveProposedStaffingEventWindowState,
     appliedQuote: changeImpactPreview.appliedQuote,
     workbenchRequest: changeImpactPreview.workbenchRequest
   }), [
@@ -1711,6 +1725,9 @@ function LegacyAppCore({
     form.guests,
     inventoryGuestScenarioEligible,
     livingTwinBaseQuoteRevisionId,
+    authoritativeStaffingObservation,
+    effectiveProposedStaffingEventWindowState,
+    effectiveProposedStaffingRequirements,
     proposedStaffingRequirements,
     proposedStaffingEventWindowState,
     fulfillmentStaffing.read,
@@ -2391,7 +2408,8 @@ function LegacyAppCore({
         appliedQuote: null,
         workbenchRequest: exactWorkbenchRequest,
         inventoryObservation: result.inventoryObservation,
-        inventoryScenarioFingerprint: inventoryScenarioFingerprintForRequest
+        inventoryScenarioFingerprint: inventoryScenarioFingerprintForRequest,
+        staffingObservation: result.staffingObservation
       });
     } catch (error) {
       if (changeImpactPreviewGenerationRef.current !== generation) return;

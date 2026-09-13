@@ -1,6 +1,6 @@
 # User Manual
 
-Last updated: 2026-09-13 01:47:44 CDT
+Last updated: 2026-09-13 01:56:31 CDT
 
 ## Purpose
 This guide explains day-to-day usage of QuotePilot for staff users and admins.
@@ -1615,7 +1615,11 @@ reporting remain unavailable until their own bounded evidence authorities exist.
   date, start time, or duration changes, Current coverage stays visible but the
   Working need becomes **Not verified** until availability and conflicts are
   reviewed for that proposed window; saved-window assignments are never carried
-  forward as if they covered the new time. Kitchen BEO review is
+  forward as if they covered the new time. The reviewed comparison comes from
+  the same server simulation as the commercial change and is bound to its real
+  prospective quote revision; it exposes aggregate role counts, not staff
+  names, private details, assignments, or an automatic team decision. Kitchen
+  BEO review is
   required only when the exact projected BEO effect requires it.
 - A supplier resolution can appear only from a current, exact-scope,
   revision-bound `inventory-sourcing-preview-v1` carrying a unique match under

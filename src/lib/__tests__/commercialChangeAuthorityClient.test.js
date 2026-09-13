@@ -355,6 +355,63 @@ function inventoryObservation(state = "not_requested", overrides = {}) {
     : { ...common, reasonCode: state === "not_requested" ? "explicit_outputs_not_provided" : "inventory_unavailable", ...overrides };
 }
 
+function staffingObservation(state = "available", overrides = {}) {
+  const requirementsByRole = { lead: 0, server: 2, chef: 1, bartender: 1 };
+  const byRole = Object.fromEntries(Object.entries(requirementsByRole).map(([role, requiredCount]) => [
+    role,
+    {
+      requiredCount,
+      operatorConfirmedCount: requiredCount,
+      gap: 0
+    }
+  ]));
+  const common = {
+    schemaVersion: "commercial-change-staffing-observation-v1",
+    authority: "operational_staffing_read_only_observation",
+    state,
+    organizationId: SCOPE.organizationId,
+    quoteId: SCOPE.quoteId,
+    baseQuoteRevisionId: BASE_REVISION_ID,
+    proposedQuoteRevisionId: TARGET_REVISION_ID,
+    commercialSimulationReceiptId: SIMULATION_RECEIPT_ID,
+    commercialSimulationReceiptDigest: DIGEST,
+    commercialPreviewRevisionId: "preview-v0015",
+    observedAtISO: SIMULATED_AT,
+    boundary: "Read-only aggregate Staffing observation; no assignment was written or disclosed."
+  };
+  return state === "available"
+    ? {
+      ...common,
+      inputDigest: DIGEST,
+      preview: {
+        proposed: {
+          quoteRevisionId: TARGET_REVISION_ID,
+          eventWindow: {
+            startAtISO: "2026-08-18T22:00:00.000Z",
+            endAtISO: "2026-08-19T04:00:00.000Z"
+          },
+          requirementsByRole,
+          totalRequired: 4
+        },
+        currentPlanState: "current",
+        comparison: {
+          windowState: "same",
+          coverage: {
+            state: "coverage_confirmed",
+            byRole,
+            totalRequired: 4,
+            totalOperatorConfirmedCount: 4,
+            totalGap: 0,
+            reasonCode: "current_assignments_compared_with_proposed_requirements"
+          }
+        },
+        boundary: "Aggregate Staffing comparison only."
+      },
+      ...overrides
+    }
+    : { ...common, reasonCode: "operational_staffing_authority_disabled", ...overrides };
+}
+
 function simulationResponse(overrides = {}) {
   return {
     ok: true,
@@ -365,6 +422,7 @@ function simulationResponse(overrides = {}) {
     simulationReceipt: simulationReceipt(),
     simulation: simulationProjection(),
     inventoryObservation: inventoryObservation(),
+    staffingObservation: staffingObservation(),
     persistedEffects: persistedEffects(),
     ...overrides
   };
@@ -582,7 +640,8 @@ describe("Commercial Change Authority simulation client", () => {
       ...SCOPE,
       expectedActiveVersionId: BASE_REVISION_ID,
       requestId: SIMULATION_REQUEST_ID,
-      form
+      form,
+      staffingObservationVersion: "v1"
     });
     expect(result).toMatchObject({
       ...SCOPE,
@@ -601,6 +660,17 @@ describe("Commercial Change Authority simulation client", () => {
         baseQuoteRevisionId: BASE_REVISION_ID,
         proposedQuoteRevisionId: TARGET_REVISION_ID,
         reasonCode: "explicit_outputs_not_provided"
+      },
+      staffingObservation: {
+        state: "available",
+        proposedQuoteRevisionId: TARGET_REVISION_ID,
+        preview: {
+          currentPlanState: "current",
+          comparison: {
+            windowState: "same",
+            coverage: { totalGap: 0 }
+          }
+        }
       },
       persistedEffects: {
         identity: {
@@ -645,6 +715,7 @@ describe("Commercial Change Authority simulation client", () => {
       expectedActiveVersionId: BASE_REVISION_ID,
       requestId: SIMULATION_REQUEST_ID,
       form: { guests: 200 },
+      staffingObservationVersion: "v1",
       eventIngredientOutputs
     });
     expect(result.inventoryObservation).toMatchObject({
@@ -732,6 +803,67 @@ describe("Commercial Change Authority simulation client", () => {
       }
     });
     expect(result.inventoryObservation).not.toHaveProperty("idempotent");
+  });
+
+  test("validates the separately bound aggregate Staffing observation and preserves explicit unavailability", async () => {
+    mockState.callable.mockResolvedValue({ data: simulationResponse() });
+    const input = {
+      ...SCOPE,
+      expectedActiveVersionId: BASE_REVISION_ID,
+      requestId: SIMULATION_REQUEST_ID,
+      form: { guests: 175 }
+    };
+    const result = await simulateCommercialQuoteChange(input);
+    expect(result.staffingObservation).toMatchObject({
+      authority: "operational_staffing_read_only_observation",
+      state: "available",
+      proposedQuoteRevisionId: TARGET_REVISION_ID,
+      commercialSimulationReceiptId: SIMULATION_RECEIPT_ID,
+      preview: {
+        proposed: {
+          quoteRevisionId: TARGET_REVISION_ID,
+          requirementsByRole: { lead: 0, server: 2, chef: 1, bartender: 1 }
+        },
+        comparison: {
+          windowState: "same",
+          coverage: { state: "coverage_confirmed", totalGap: 0 }
+        }
+      }
+    });
+    expect(JSON.stringify(result.staffingObservation)).not.toContain("displayName");
+    expect(JSON.stringify(result.staffingObservation)).not.toContain("staffId");
+
+    mockState.callable.mockResolvedValue({
+      data: simulationResponse({ staffingObservation: staffingObservation("unavailable") })
+    });
+    const unavailable = await simulateCommercialQuoteChange(input);
+    expect(unavailable.staffingObservation).toMatchObject({
+      state: "unavailable",
+      reasonCode: "operational_staffing_authority_disabled"
+    });
+  });
+
+  test.each([
+    { organizationId: "org-other" },
+    { quoteId: "quote-other" },
+    { baseQuoteRevisionId: "v0001" },
+    { proposedQuoteRevisionId: "v0099" },
+    { commercialSimulationReceiptId: `ccs_${"2".repeat(48)}` },
+    { commercialSimulationReceiptDigest: "9".repeat(64) },
+    { commercialPreviewRevisionId: "preview-v0099" },
+    { preview: { ...staffingObservation().preview, currentPlanState: "unknown" } }
+  ])("rejects cross-bound or malformed Staffing observation %#", async (divergence) => {
+    mockState.callable.mockResolvedValue({
+      data: simulationResponse({
+        staffingObservation: staffingObservation("available", divergence)
+      })
+    });
+    await expect(simulateCommercialQuoteChange({
+      ...SCOPE,
+      expectedActiveVersionId: BASE_REVISION_ID,
+      requestId: SIMULATION_REQUEST_ID,
+      form: { guests: 175 }
+    })).rejects.toMatchObject({ code: "invalid-server-response" });
   });
 
   test("rejects a cross-scope or receipt-divergent server projection as uncertain", async () => {

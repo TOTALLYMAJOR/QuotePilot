@@ -1,11 +1,17 @@
 # Changelog
 
-Last updated: 2026-09-13 01:47:44 CDT
+Last updated: 2026-09-13 01:56:31 CDT
 
 All notable project changes are documented in this file.
 
 ## Unreleased — Event and Commercial activation receipt correction
 
+- Bind proposed Staffing change intelligence to the server's actual private
+  prospective quote revision and the exact Commercial Change receipt. The
+  response carries aggregate role evidence only: same-window comparisons may
+  reuse confirmed counts, changed timing and stale plans withhold coverage, and
+  an absent plan establishes zero assignments. It writes no Staffing plan,
+  assignment, invitation, schedule fence, pricing, authorization, or quote.
 - Keep saved-window staffing evidence from becoming a false proposed-coverage
   claim. When an edited event changes date, start time, or duration, Fulfillment
   preserves Current coverage and the proposed role requirement but marks the

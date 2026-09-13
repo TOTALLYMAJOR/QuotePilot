@@ -1571,6 +1571,228 @@ function normalizeCommercialInventoryObservation(
   return deepFreeze(observation);
 }
 
+function normalizeStaffingRoleCounts(value, label) {
+  exactKeys(value, ["lead", "server", "chef", "bartender"], label);
+  return Object.freeze({
+    lead: boundedInteger(value.lead, `${label} lead`, 128),
+    server: boundedInteger(value.server, `${label} server`, 128),
+    chef: boundedInteger(value.chef, `${label} chef`, 128),
+    bartender: boundedInteger(value.bartender, `${label} bartender`, 128)
+  });
+}
+
+function normalizeStaffingWindow(value, label) {
+  exactKeys(value, ["startAtISO", "endAtISO"], label);
+  const startAtISO = exactISO(value.startAtISO, `${label} start`);
+  const endAtISO = exactISO(value.endAtISO, `${label} end`);
+  if (Date.parse(endAtISO) <= Date.parse(startAtISO)) {
+    fail(`${label} is not a valid event window.`);
+  }
+  return Object.freeze({ startAtISO, endAtISO });
+}
+
+function normalizeCommercialStaffingObservation(
+  value,
+  scope,
+  simulationReceipt,
+  proposedQuoteRevisionId
+) {
+  const commonKeys = [
+    "schemaVersion",
+    "authority",
+    "state",
+    "organizationId",
+    "quoteId",
+    "baseQuoteRevisionId",
+    "proposedQuoteRevisionId",
+    "commercialSimulationReceiptId",
+    "commercialSimulationReceiptDigest",
+    "commercialPreviewRevisionId",
+    "observedAtISO",
+    "boundary"
+  ];
+  if (!record(value)) fail("Staffing observation must be an exact server object.");
+  const state = text(value.state).toLowerCase();
+  if (!new Set(["available", "unavailable"]).has(state)) {
+    fail("Staffing observation state is invalid.");
+  }
+  exactKeys(
+    value,
+    state === "available" ? [...commonKeys, "inputDigest", "preview"] : [...commonKeys, "reasonCode"],
+    "Staffing observation"
+  );
+  const proposedRevisionId = exactOpaqueId(
+    proposedQuoteRevisionId,
+    "projected quote revision",
+    256,
+    "invalid-server-response"
+  );
+  if (
+    value.schemaVersion !== "commercial-change-staffing-observation-v1"
+    || value.authority !== "operational_staffing_read_only_observation"
+    || value.organizationId !== scope.organizationId
+    || value.quoteId !== scope.quoteId
+    || value.baseQuoteRevisionId !== simulationReceipt.baseRevisionId
+    || value.proposedQuoteRevisionId !== proposedRevisionId
+    || value.commercialSimulationReceiptId !== simulationReceipt.receiptId
+    || value.commercialSimulationReceiptDigest !== simulationReceipt.receiptDigest
+    || value.commercialPreviewRevisionId !== simulationReceipt.proposedRevisionId
+  ) {
+    fail("Staffing observation crossed its Commercial and Staffing authority boundary.");
+  }
+  const observation = {
+    schemaVersion: value.schemaVersion,
+    authority: value.authority,
+    state,
+    organizationId: scope.organizationId,
+    quoteId: scope.quoteId,
+    baseQuoteRevisionId: simulationReceipt.baseRevisionId,
+    proposedQuoteRevisionId: proposedRevisionId,
+    commercialSimulationReceiptId: simulationReceipt.receiptId,
+    commercialSimulationReceiptDigest: simulationReceipt.receiptDigest,
+    commercialPreviewRevisionId: simulationReceipt.proposedRevisionId,
+    observedAtISO: exactISO(value.observedAtISO, "Staffing observation time"),
+    boundary: exactText(value.boundary, "Staffing observation boundary", 2_000)
+  };
+  if (state === "unavailable") {
+    observation.reasonCode = inventoryReasonCode(value.reasonCode);
+    return deepFreeze(observation);
+  }
+
+  exactKeys(value.preview, ["proposed", "currentPlanState", "comparison", "boundary"], "Staffing observation preview");
+  exactKeys(
+    value.preview.proposed,
+    ["quoteRevisionId", "eventWindow", "requirementsByRole", "totalRequired"],
+    "Staffing proposed requirement"
+  );
+  if (value.preview.proposed.quoteRevisionId !== proposedRevisionId) {
+    fail("Staffing proposed requirement crossed its quote revision boundary.");
+  }
+  const requirementsByRole = normalizeStaffingRoleCounts(
+    value.preview.proposed.requirementsByRole,
+    "Staffing proposed role counts"
+  );
+  const totalRequired = boundedInteger(
+    value.preview.proposed.totalRequired,
+    "Staffing proposed total",
+    128
+  );
+  if (Object.values(requirementsByRole).reduce((sum, count) => sum + count, 0) !== totalRequired) {
+    fail("Staffing proposed total does not match its bounded role counts.");
+  }
+  const currentPlanState = text(value.preview.currentPlanState).toLowerCase();
+  if (!["absent", "current", "stale"].includes(currentPlanState)) {
+    fail("Staffing current plan state is invalid.");
+  }
+  exactKeys(value.preview.comparison, ["windowState", "coverage"], "Staffing comparison");
+  const windowState = text(value.preview.comparison.windowState).toLowerCase();
+  if (!["same", "changed", "not_applicable"].includes(windowState)) {
+    fail("Staffing proposed window state is invalid.");
+  }
+  const coverageValue = value.preview.comparison.coverage;
+  exactKeys(coverageValue, [
+    "state",
+    "byRole",
+    "totalRequired",
+    "totalOperatorConfirmedCount",
+    "totalGap",
+    "reasonCode"
+  ], "Staffing proposed coverage");
+  const coverageState = text(coverageValue.state).toLowerCase();
+  if (!["unverified", "not_required", "coverage_confirmed", "attention"].includes(coverageState)) {
+    fail("Staffing proposed coverage state is invalid.");
+  }
+  exactKeys(coverageValue.byRole, ["lead", "server", "chef", "bartender"], "Staffing coverage roles");
+  const byRole = {};
+  let summedConfirmed = 0;
+  let summedGap = 0;
+  for (const role of ["lead", "server", "chef", "bartender"]) {
+    const roleValue = coverageValue.byRole[role];
+    exactKeys(roleValue, ["requiredCount", "operatorConfirmedCount", "gap"], `Staffing ${role} coverage`);
+    const requiredCount = boundedInteger(roleValue.requiredCount, `Staffing ${role} required`, 128);
+    const operatorConfirmedCount = roleValue.operatorConfirmedCount === null
+      ? null
+      : boundedInteger(roleValue.operatorConfirmedCount, `Staffing ${role} confirmed`, 128);
+    const gap = roleValue.gap === null
+      ? null
+      : boundedInteger(roleValue.gap, `Staffing ${role} gap`, 128);
+    if (requiredCount !== requirementsByRole[role]) {
+      fail(`Staffing ${role} coverage does not match the proposed requirement.`);
+    }
+    const roleUnverified = operatorConfirmedCount === null && gap === null;
+    const rolePartiallyMissing = (operatorConfirmedCount === null) !== (gap === null);
+    if (rolePartiallyMissing || (coverageState === "unverified") !== roleUnverified) {
+      fail(`Staffing ${role} coverage does not match the proposed evidence state.`);
+    }
+    if (!roleUnverified) {
+      if (gap !== Math.max(0, requiredCount - operatorConfirmedCount)) {
+        fail(`Staffing ${role} gap does not match its aggregate counts.`);
+      }
+      summedConfirmed += operatorConfirmedCount;
+      summedGap += gap;
+    }
+    byRole[role] = Object.freeze({ requiredCount, operatorConfirmedCount, gap });
+  }
+  const totalOperatorConfirmedCount = coverageValue.totalOperatorConfirmedCount === null
+    ? null
+    : boundedInteger(coverageValue.totalOperatorConfirmedCount, "Staffing confirmed total", 128);
+  const totalGap = coverageValue.totalGap === null
+    ? null
+    : boundedInteger(coverageValue.totalGap, "Staffing gap total", 128);
+  const totalsUnverified = totalOperatorConfirmedCount === null && totalGap === null;
+  const totalsPartiallyMissing = (totalOperatorConfirmedCount === null) !== (totalGap === null);
+  if (totalsPartiallyMissing || (coverageState === "unverified") !== totalsUnverified) {
+    fail("Staffing aggregate coverage does not match the proposed evidence state.");
+  }
+  const coverageTotalRequired = boundedInteger(
+    coverageValue.totalRequired,
+    "Staffing coverage total",
+    128
+  );
+  if (coverageTotalRequired !== totalRequired) {
+    fail("Staffing coverage total does not match the proposed requirement total.");
+  }
+  if (!totalsUnverified && (
+    totalOperatorConfirmedCount !== summedConfirmed
+    || totalGap !== summedGap
+  )) {
+    fail("Staffing coverage totals do not match their bounded role evidence.");
+  }
+  const expectedCoverageState = totalsUnverified
+    ? "unverified"
+    : totalRequired === 0
+      ? "not_required"
+      : totalGap === 0
+        ? "coverage_confirmed"
+        : "attention";
+  if (coverageState !== expectedCoverageState) {
+    fail("Staffing coverage state does not match its aggregate role evidence.");
+  }
+  observation.inputDigest = digest(value.inputDigest, "Staffing observation input digest");
+  observation.preview = {
+    proposed: {
+      quoteRevisionId: proposedRevisionId,
+      eventWindow: normalizeStaffingWindow(value.preview.proposed.eventWindow, "Staffing proposed event window"),
+      requirementsByRole,
+      totalRequired
+    },
+    currentPlanState,
+    comparison: {
+      windowState,
+      coverage: {
+        state: coverageState,
+        byRole,
+        totalRequired: coverageTotalRequired,
+        totalOperatorConfirmedCount,
+        totalGap,
+        reasonCode: inventoryReasonCode(coverageValue.reasonCode)
+      }
+    },
+    boundary: exactText(value.preview.boundary, "Staffing preview boundary", 2_000)
+  };
+  return deepFreeze(observation);
+}
+
 export async function simulateCommercialQuoteChange(input = {}) {
   const scope = normalizeScope(input);
   const expectedActiveVersionId = exactOpaqueId(
@@ -1595,6 +1817,7 @@ export async function simulateCommercialQuoteChange(input = {}) {
     expectedActiveVersionId,
     requestId,
     form,
+    staffingObservationVersion: "v1",
     ...(eventIngredientOutputs ? { eventIngredientOutputs } : {}),
     ...(input.attendanceSubmissionReceiptId ? { attendanceSubmissionReceiptId: exactOpaqueId(input.attendanceSubmissionReceiptId, "attendanceSubmissionReceiptId") } : {})
   });
@@ -1609,6 +1832,7 @@ export async function simulateCommercialQuoteChange(input = {}) {
     "simulationReceipt",
     "simulation",
     "inventoryObservation",
+    "staffingObservation",
     "persistedEffects"
   ], "Commercial change simulation response");
   const idempotent = exactBoolean(result.idempotent, "Simulation idempotency state");
@@ -1657,6 +1881,12 @@ export async function simulateCommercialQuoteChange(input = {}) {
     proposedQuoteRevisionId,
     eventIngredientOutputs !== null
   );
+  const staffingObservation = normalizeCommercialStaffingObservation(
+    result.staffingObservation,
+    scope,
+    simulationReceipt,
+    proposedQuoteRevisionId
+  );
   return deepFreeze({
     ok: true,
     storage: "firebase",
@@ -1667,6 +1897,7 @@ export async function simulateCommercialQuoteChange(input = {}) {
     simulationReceipt,
     simulation,
     inventoryObservation,
+    staffingObservation,
     ...(persistedEffects ? { persistedEffects } : {})
   });
 }

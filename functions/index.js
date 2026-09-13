@@ -265,7 +265,9 @@ const {
 const {
   OperationalStaffingRuntimeError,
   assertOperationalStaffingAuthorityEnabled,
+  authorityState: operationalStaffingAuthorityState,
   buildOperationalStaffingSnapshotEnvelope,
+  buildProjectedOperationalStaffingObservation,
   buildSnapshotScheduleFenceRefs,
   dedupeScheduleFenceAssignments,
   deriveCanonicalOperationalStaffingEvidence,
@@ -13497,6 +13499,9 @@ function commercialChangeRefs(organizationId, quoteId = "") {
     quoteRef: quoteId
       ? organizationRef.collection(QUOTES_COLLECTION).doc(quoteId)
       : null,
+    staffingPlanRef: quoteId
+      ? organizationRef.collection(OPERATIONAL_STAFFING_PLANS_COLLECTION).doc(quoteId)
+      : null,
     simulationsRef: organizationRef.collection(COMMERCIAL_CHANGE_SIMULATIONS_COLLECTION),
     authorizationsRef: organizationRef.collection(COMMERCIAL_CHANGE_AUTHORIZATIONS_COLLECTION),
     approvalRequestsRef: organizationRef.collection(COMMERCIAL_CHANGE_APPROVAL_REQUESTS_COLLECTION),
@@ -13800,7 +13805,14 @@ function throwCommercialChangeFailure(error, operation, context = {}) {
 }
 
 exports.simulateCommercialQuoteChange = functions.region(REGION).https.onCall(async (data, context) => {
-  if (!data || Object.keys(data).some((key) => !["organizationId", "quoteId", "expectedActiveVersionId", "requestId", "form", "attendanceSubmissionReceiptId", "eventIngredientOutputs"].includes(key))) throw new functions.https.HttpsError("invalid-argument", "Unsupported commercial simulation fields.");
+  if (!data || Object.keys(data).some((key) => !["organizationId", "quoteId", "expectedActiveVersionId", "requestId", "form", "attendanceSubmissionReceiptId", "eventIngredientOutputs", "staffingObservationVersion"].includes(key))) throw new functions.https.HttpsError("invalid-argument", "Unsupported commercial simulation fields.");
+  if (data.staffingObservationVersion !== undefined && data.staffingObservationVersion !== "v1") {
+    throw new functions.https.HttpsError(
+      "invalid-argument",
+      "Unsupported commercial Staffing observation version."
+    );
+  }
+  const staffingObservationRequested = data.staffingObservationVersion === "v1";
   const organizationId = normalizeOrganizationId(data?.organizationId);
   const quoteId = normalizeText(data?.quoteId);
   const expectedActiveVersionId = normalizeText(data?.expectedActiveVersionId);
@@ -13836,10 +13848,11 @@ exports.simulateCommercialQuoteChange = functions.region(REGION).https.onCall(as
     });
     const refs = commercialChangeRefs(organizationId, quoteId);
     const result = await db.runTransaction(async (tx) => {
-      const [quoteSnap, settingsSnap, organizationSnap] = await Promise.all([
+      const [quoteSnap, settingsSnap, organizationSnap, staffingPlanSnap] = await Promise.all([
         tx.get(refs.quoteRef),
         tx.get(refs.settingsRef),
-        tx.get(refs.organizationRef)
+        tx.get(refs.organizationRef),
+        staffingObservationRequested ? tx.get(refs.staffingPlanRef) : Promise.resolve(null)
       ]);
       if (!quoteSnap.exists) {
         throw new CommercialChangeAuthorityError("not-found", "Quote not found.");
@@ -13882,6 +13895,43 @@ exports.simulateCommercialQuoteChange = functions.region(REGION).https.onCall(as
         },
         nowISO
       });
+      let staffingObservationResult = null;
+      if (staffingObservationRequested) {
+        const gate = operationalStaffingAuthorityState(
+          tenantWorkflowRuntimeEnabled("OPERATIONAL_STAFFING_AUTHORITY_ENABLED", organizationId),
+          settingsSnap.data() || {}
+        );
+        if (!gate.enabled) {
+          staffingObservationResult = {
+            state: "unavailable",
+            reasonCode: "operational_staffing_authority_disabled"
+          };
+        } else {
+          try {
+            staffingObservationResult = {
+              state: "available",
+              ...buildProjectedOperationalStaffingObservation({
+                organizationId,
+                quoteId,
+                expectedBaseQuoteRevisionId: expectedActiveVersionId,
+                projectedVersion: projectedEditDocuments.version,
+                currentPlan: staffingPlanSnap?.exists ? staffingPlanSnap.data() || {} : null,
+                settings: settingsSnap.data() || {}
+              })
+            };
+          } catch (error) {
+            functions.logger.warn("Commercial Staffing observation unavailable", {
+              organizationId,
+              quoteId,
+              code: normalizeText(error?.code).slice(0, 80)
+            });
+            staffingObservationResult = {
+              state: "unavailable",
+              reasonCode: "staffing_observation_unavailable"
+            };
+          }
+        }
+      }
       const proposed = commercialChangeAuthority.simulate({
         request: { requestId, organizationId, quoteId, expectedActiveVersionId },
         canonicalQuote: quote,
@@ -13917,6 +13967,7 @@ exports.simulateCommercialQuoteChange = functions.region(REGION).https.onCall(as
         planned,
         evaluatedImpact,
         projectedVersion: projectedEditDocuments.version,
+        staffingObservationResult,
         persistedEffects: projectCommercialChangePersistedEffects({
           receipt: planned.receipt,
           quote,
@@ -13973,6 +14024,34 @@ exports.simulateCommercialQuoteChange = functions.region(REGION).https.onCall(as
         };
       }
     }
+    const staffingObservationBase = {
+      schemaVersion: "commercial-change-staffing-observation-v1",
+      authority: "operational_staffing_read_only_observation",
+      organizationId,
+      quoteId,
+      baseQuoteRevisionId: expectedActiveVersionId,
+      proposedQuoteRevisionId: normalizeText(result.projectedVersion?.versionId),
+      commercialSimulationReceiptId: normalizeText(result.planned.receipt?.receiptId),
+      commercialSimulationReceiptDigest: normalizeText(result.planned.receipt?.receiptDigest),
+      commercialPreviewRevisionId: normalizeText(result.planned.receipt?.proposedRevisionId),
+      observedAtISO: nowISO,
+      boundary: "Read-only aggregate Staffing evidence only; no person, assignment, invitation, schedule fence, payroll, pricing, authorization, or quote state was written or disclosed."
+    };
+    const staffingObservation = staffingObservationRequested
+      ? result.staffingObservationResult?.state === "available"
+        ? {
+          ...staffingObservationBase,
+          state: "available",
+          inputDigest: normalizeText(result.staffingObservationResult.inputDigest),
+          preview: result.staffingObservationResult.preview
+        }
+        : {
+          ...staffingObservationBase,
+          state: "unavailable",
+          reasonCode: normalizeText(result.staffingObservationResult?.reasonCode)
+            || "staffing_observation_unavailable"
+        }
+      : null;
     return {
       ok: true,
       storage: "firebase",
@@ -13986,6 +14065,7 @@ exports.simulateCommercialQuoteChange = functions.region(REGION).https.onCall(as
         result.evaluatedImpact
       ),
       inventoryObservation,
+      ...(staffingObservation ? { staffingObservation } : {}),
       persistedEffects: result.persistedEffects
     };
   } catch (error) {

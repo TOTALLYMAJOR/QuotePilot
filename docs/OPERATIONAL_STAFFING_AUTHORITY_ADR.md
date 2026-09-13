@@ -1,6 +1,6 @@
 # Authoritative Operational Staffing ADR
 
-Last updated: 2026-09-13 01:47:44 CDT
+Last updated: 2026-09-13 01:56:31 CDT
 
 Status: deployed in exact `v0.15.0` behind independent presentation, server,
 and tenant gates. The first two gates are deployed on; protected workflow run
@@ -129,13 +129,25 @@ each guest-count edit. A new Staffing scope generation rejects a late result.
 Scenario projection caching does not promote that read into a plan, assignment,
 availability confirmation, or new Staffing revision.
 
-The proposed comparison also preserves the saved event-window boundary. When
-date, start time, or duration changes, QuotePilot continues to show the recorded
-current coverage but withholds any proposed coverage or zero-gap conclusion.
-The proposed requirement remains visible, while availability and schedule
-conflicts are labeled not evaluated for the new window and direct the operator
-back to event staffing. This is a presentation fence, not a proposed Staffing
-plan or substitute for a future server evaluation of the prospective revision.
+The proposed comparison also preserves the saved event-window boundary. The
+Commercial Change simulation can request a versioned, response-only Staffing
+observation. Inside the same transaction, the server derives event timing and
+role requirements from the actual private prospective quote revision and reads
+the existing plan before any simulation receipt write. The observation is
+bound independently to the base revision, prospective revision, simulation
+receipt identity, and receipt digest. It returns aggregate role counts only;
+person, assignment, availability, rate, and private staff records do not cross
+the Commercial response.
+
+When date, start time, or duration changes, QuotePilot continues to show the
+recorded current coverage but the server observation withholds any proposed
+coverage or zero-gap conclusion. The proposed requirement remains visible,
+while availability and schedule conflicts are labeled not evaluated for the
+new window and direct the operator back to event staffing. A stale plan also
+withholds the comparison. An exact absent plan establishes zero confirmed
+assignments without synthesizing a plan or person. This is read-only change
+intelligence, not a proposed Staffing plan, assignment, invitation, or quote
+mutation.
 
 An exact current Staffing response with no plan is affirmative zero-assignment
 evidence for that saved revision, not `not_yet_available`. Fulfillment composes
