@@ -1,10 +1,31 @@
 # Changelog
 
-Last updated: 2026-09-13 16:07:03 CDT
+Last updated: 2026-09-13 17:24:50 CDT
 
 All notable project changes are documented in this file.
 
 ## Unreleased — Event and Commercial activation receipt correction
+
+- Add a protected `all-qualified-features` production release profile for one
+  coordinated Firebase-all and Vercel promotion. The profile compiles the
+  qualified staff workspace, Inquiry Showcase, and review-only Model Assist
+  presentation, binds Commercial Change, Event Spine, Staffing, Inventory,
+  Inquiry, and model runtime to the exact existing organization
+  `mm05366-sandbox`, and keeps Resend provider support available. Firebase
+  readback must prove the exact runtime profile on every active Function;
+  Vercel must prove the reviewed public Inquiry site key remains present after
+  its production-environment pull. Both paths retain the semantic tag,
+  exact-current-main CI, target-specific rollback ancestor, protected
+  environment, allowlisted human dispatcher, and repeated pre-mutation checks.
+- Keep the same profile intentionally closed for the public $1 Buyer Access
+  rail, owner SMS, Revenue Autopilot sends, local/test bypasses, and hard App
+  Check enforcement. Inquiry requires its own managed Turnstile widget, exact
+  production hostname allowlist, browser-visible site key, and Secret Manager
+  secret. Model Assist uses `openai` / `gpt-5-mini` only for
+  `mm05366-sandbox`, but provider readiness is currently blocked by a live
+  `credit_balance_exhausted` response. No production deployment, automatic
+  Inquiry publication, model response, customer submission, provider send, or
+  human acceptance is claimed by this source change.
 
 - Add an off-by-default Guided Inquiry Page backed by one immutable Inquiry
   Showcase rather than a second commercial catalog. Administrators curate and

@@ -1,6 +1,6 @@
 # QuotePilot Development Tasks
 
-Last updated: 2026-09-13 16:07:03 CDT
+Last updated: 2026-09-13 17:24:50 CDT
 
 This file contains open work only. Completed delivery belongs in
 [`CHANGELOG.md`](CHANGELOG.md), current evidence in
@@ -9,6 +9,15 @@ This file contains open work only. Completed delivery belongs in
 
 ## P0 — Reconcile the current release surface
 
+- [ ] Qualify the integrated `all-qualified-features` release head: publish the
+  source revision, obtain exact-head PR checks, merge through protected
+  `main`, wait for exact-main CI, tag that same SHA, and record independent
+  Firebase-all and Vercel rollback ancestors. Do not reuse the earlier PR-head
+  checks after the profile changes.
+- [ ] Dispatch the protected profile only for `mm05366-sandbox`, first to
+  Firebase with `firebase_scope=all`, then to Vercel. Record the two provider
+  receipts and exact runtime/browser readback; source qualification is not a
+  deployment receipt.
 - [ ] Build, qualify, and separately authorize promotion of one exact frontend
   candidate compatible with the deployed `v0.18.1` Firebase backend. Record the
   source SHA, exact CI, immutable deployment, public route probes, and rollback.
@@ -53,6 +62,10 @@ This file contains open work only. Completed delivery belongs in
   tenant, publish one reviewed slug, and preserve source/local, CI, hosted,
   provider, production-data, accessibility, human, and commercial-outcome
   receipts separately.
+- [ ] Create and review the dedicated managed Inquiry Turnstile widget for
+  `quotepilot.mbmapps.com` and `tonicatering.web.app`, store only its secret in
+  Firebase Secret Manager, store only its public site key in the approved
+  repository variable, and prove action/hostname rejection before activation.
 - [ ] Restore OpenAI API credit capacity, rerun a minimal provider probe, and
   enable the browser/server model-assist gates only through an exact protected
   release whose Function readback proves the Secret Manager binding. Do not

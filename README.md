@@ -1,6 +1,6 @@
 # QuotePilot by MBMApps
 
-Last updated: 2026-09-13 16:07:03 CDT
+Last updated: 2026-09-13 17:24:50 CDT
 
 Multi-tenant catering quote application built with React, Vite, Firebase, and jsPDF.
 
@@ -1479,6 +1479,15 @@ Primary production deployment is manual-workflow-only:
   `backend`, or `all` surface to the fixed `tonicatering` project.
 - `Deploy Vercel Production` builds and promotes the exact release to the fixed
   `mbmapps/quoteflow` project and `quotepilot.mbmapps.com` production edge.
+- The protected `all-qualified-features` profile is the coordinated
+  founder-tenant path and is accepted only for Firebase `all` and Vercel. It
+  pins both compiled and server access to `mm05366-sandbox`; enables the
+  qualified workspace, Resend, Commercial Change, Event Spine, Staffing,
+  Inventory, Guided Inquiry, and review-only Model Assist; and keeps Buyer
+  Access, SMS, Revenue Autopilot sends, test bypasses, and hard App Check
+  enforcement off. It requires the dedicated Inquiry Turnstile public site key
+  plus enabled Secret Manager metadata for Inquiry, rate limiting, OpenAI, and
+  Resend before Firebase mutation. Deployment never publishes an Inquiry slug.
 - `Release UAT Attestation` remains available when a release needs a separately
   recorded human acceptance receipt. Its v4 receipt binds the exact tracked
   candidate profile and that profile's fixed SMS provider in addition to the
@@ -1500,6 +1509,13 @@ allowlisted human dispatcher. The same live evidence is checked again after
 the build and immediately before provider mutation. The Vercel token and the
 Firebase workload-identity ADC file are scoped to their final mutation steps;
 Firebase production rejects the legacy `FIREBASE_TOKEN` path.
+
+The coordinated profile is currently source-only and has not been deployed.
+Its Inquiry prerequisite is blocked until the dedicated managed Turnstile
+widget is created and verified. Its Model Assist configuration is also not
+provider-ready: the latest live OpenAI probe returned
+`credit_balance_exhausted`. Restore capacity and pass a fresh minimal probe
+before dispatch; an enabled secret version alone is not AI availability.
 
 The pre-merge candidate path is narrower than the production workflows. It
 uses the checksum-verified official Firebase v15.24.0 binary for every Firebase

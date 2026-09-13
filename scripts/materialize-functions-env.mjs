@@ -100,9 +100,12 @@ const assertInquiryTurnstileHostnames = (value) => {
     !hostnames.length
     || hostnames.some((hostname) => !/^[a-z0-9.-]+$/.test(hostname))
     || hostnames.some((hostname) => !approved.has(hostname))
+    || INQUIRY_APPROVED_TURNSTILE_HOSTNAMES.some(
+      (hostname) => !hostnames.includes(hostname)
+    )
   ) {
     throw new Error(
-      "INQUIRY_TURNSTILE_HOSTNAMES must contain only approved QuotePilot production hosts: quotepilot.mbmapps.com,tonicatering.web.app."
+      "INQUIRY_TURNSTILE_HOSTNAMES must contain only the exact approved QuotePilot production hosts: quotepilot.mbmapps.com,tonicatering.web.app."
     );
   }
 
@@ -342,9 +345,45 @@ if (inquiryShowcaseEnabled === "true" && !inquiryTurnstileHostnames) {
     "INQUIRY_TURNSTILE_HOSTNAMES is required while the Inquiry Showcase is enabled."
   );
 }
+if (
+  inquiryShowcaseEnabled === "true"
+  && tenantWorkflowOrganizationId !== "mm05366-sandbox"
+) {
+  throw new Error(
+    "Production Inquiry Showcase activation requires TENANT_WORKFLOW_ORGANIZATION_ID=mm05366-sandbox."
+  );
+}
 const normalizedInquiryTurnstileHostnames = inquiryTurnstileHostnames
   ? assertInquiryTurnstileHostnames(inquiryTurnstileHostnames)
   : "";
+const intentParserEnabled = optional("INTENT_PARSER_ENABLED", "false").toLowerCase();
+const intentParserProvider = optional("INTENT_PARSER_PROVIDER", "none").toLowerCase();
+const intentParserModel = optional("INTENT_PARSER_MODEL");
+const intentParserOrganizationId = optional("INTENT_PARSER_ORGANIZATION_ID");
+if (!["true", "false"].includes(intentParserEnabled)) {
+  throw new Error("INTENT_PARSER_ENABLED must be true or false.");
+}
+if (intentParserEnabled === "true") {
+  if (
+    intentParserProvider !== "openai"
+    || intentParserModel !== "gpt-5-mini"
+    || intentParserOrganizationId !== "mm05366-sandbox"
+    || tenantWorkflowOrganizationId !== "mm05366-sandbox"
+    || inquiryShowcaseEnabled !== "true"
+  ) {
+    throw new Error(
+      "Production Model Assist activation requires Inquiry Showcase plus the exact openai/gpt-5-mini/mm05366-sandbox profile."
+    );
+  }
+} else if (
+  intentParserProvider !== "none"
+  || intentParserModel
+  || intentParserOrganizationId
+) {
+  throw new Error(
+    "INTENT_PARSER_PROVIDER, INTENT_PARSER_MODEL, and INTENT_PARSER_ORGANIZATION_ID must remain inert while INTENT_PARSER_ENABLED=false."
+  );
+}
 for (const secretName of [
   "RESEND_API_KEY",
   "RESEND_WEBHOOK_SECRET",
@@ -361,7 +400,9 @@ for (const secretName of [
   "BUYER_ACCESS_TURNSTILE_SECRET",
   "BUYER_ACCESS_RATE_LIMIT_SECRET",
   "INQUIRY_TURNSTILE_SECRET",
-  "INQUIRY_RATE_LIMIT_SECRET"
+  "INQUIRY_RATE_LIMIT_SECRET",
+  "INTENT_PARSER_OPENAI_KEY",
+  "INTENT_PARSER_ANTHROPIC_KEY"
 ]) {
   if (optional(secretName)) {
     throw new Error(
@@ -411,6 +452,12 @@ const values = {
   INQUIRY_SHOWCASE_ENABLED: inquiryShowcaseEnabled,
   ...(normalizedInquiryTurnstileHostnames
     ? { INQUIRY_TURNSTILE_HOSTNAMES: normalizedInquiryTurnstileHostnames }
+    : {}),
+  INTENT_PARSER_ENABLED: intentParserEnabled,
+  INTENT_PARSER_PROVIDER: intentParserProvider,
+  INTENT_PARSER_MODEL: intentParserModel,
+  ...(intentParserOrganizationId
+    ? { INTENT_PARSER_ORGANIZATION_ID: intentParserOrganizationId }
     : {})
 };
 

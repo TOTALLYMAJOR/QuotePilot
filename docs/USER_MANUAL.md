@@ -1,6 +1,6 @@
 # User Manual
 
-Last updated: 2026-09-13 16:07:03 CDT
+Last updated: 2026-09-13 17:24:50 CDT
 
 ## Purpose
 This guide explains day-to-day usage of QuotePilot for staff users and admins.
@@ -110,6 +110,12 @@ make and publish catalog changes.
 8. Review the exact authoritative quote prefill, choose any required current Offer/Menu values, then select **Create authoritative quote draft**. QuotePilot re-prices through the existing server path and commits the quote, customer binding, portal record, first version, Converted state, and conversion receipt together.
 
 Customer selections remain unconfirmed preferences on the resulting quote. Inquiry submission never creates a customer, quote, portal, Calendar event, or payment request and never confirms price, availability, allergen safety, reservation, proposal, acceptance, or booking. Unconverted inquiry content is retained for 90 days, then scheduled for deletion with only a content-free receipt retained. Service-response consent does not subscribe the customer to marketing. Customer email confirmation, attachments, multilingual pages, custom domains, campaign pages, public availability search, instant quoting, and marketing automation are not available in v1.
+
+This workflow is not yet available in production. The coordinated release must
+first pass its dedicated Inquiry Turnstile, exact-main/tag/CI, Firebase-all,
+Vercel, and provider-readback gates for `mm05366-sandbox`. Deployment does not
+create or publish a page; the administrator publication steps above remain
+required afterward.
 
 ### Commercial Workbench (v0.18 source contract)
 
@@ -3299,6 +3305,13 @@ or use an internal `auto` route that tries the configured cheaper-first
 provider:model order and may retry once when the first attempt is
 unreadable or unavailable; this routing detail never changes the review-
 only boundary.
+
+For the coordinated founder-tenant production profile, Model Assist is pinned
+to OpenAI `gpt-5-mini` and `mm05366-sandbox`; the general provider/auto controls
+above do not widen that release. The current provider probe reports
+`credit_balance_exhausted`, so this lane must be treated as unavailable until
+capacity is restored and reverified. The deterministic **Structure it** path
+remains available and is the safe recovery.
 
 After `Add details to the draft`, CREATE compresses the completed reading into
 an `Inquiry added` handoff so the proposal becomes the next visible task,

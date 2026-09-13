@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-09-13 16:07:03 CDT
+Last updated: 2026-09-13 17:24:50 CDT
 
 ## Current evidence boundary
 
@@ -17,6 +17,7 @@ evidence receipts and must not be described as one artifact.
 | Isolated staging Event/Commercial profile | Exact SHA `2f5d123d9ba06153823def6f44b3f5ff89183023`, CI `34420973414`, Firebase Hosting version `31a0bcbf39d65ec2`, profile `staging-event-operating-spine` | The original deployment and recovery readback proved both runtime gates true, but a later Functions deployment replaced that runtime. Current readback at `2026-09-11T05:31Z` found Commercial Change false; the tenant fields remain true. Staging must be redeployed and read back before it is described as active. |
 | Repository `origin/main` | Contains the v0.18.2 release source, protected PR `#137` customer-claim provenance, PR `#138` receipt-safe staff-retry corrections, and PR `#141` split-receipt activation correction | Repository state is not runtime state; production and staging remain separately evidenced surfaces. |
 | Guided Inquiry and model-assist candidate | Release PR `#145` publishes the source candidate. Production Secret Manager now has enabled version 1 for `INQUIRY_RATE_LIMIT_SECRET` and `INTENT_PARSER_OPENAI_KEY`; no value was exposed. | Inquiry remains blocked on an inquiry-specific Turnstile widget/secret and protected deployment. A live OpenAI Responses probe on 2026-09-13 returned `429 insufficient_quota` / `credit_balance_exhausted`, so model-assist gates must remain off until provider capacity is restored and reverified. Secret presence is not provider readiness or deployment evidence. |
+| Coordinated all-qualified production candidate | Source now defines the protected `all-qualified-features` profile for Firebase `all` plus Vercel, with exact organization `mm05366-sandbox`. The profile includes the qualified browser workspace, Resend-capable Functions, Commercial Change, Event Spine, Staffing, Inventory, Inquiry, and review-only Model Assist; it keeps Buyer Access, SMS, Revenue Autopilot sends, test bypasses, and hard App Check enforcement off. | No deployment has occurred. The previously published PR head had nine green checks, but the integrated profile must be committed, republished, and pass a new exact-head PR run before merge. Promotion then requires a semantic tag on current `main`, the exact successful main-push CI run, target-specific rollback ancestors, the protected human dispatch, and provider readback for both targets. |
 
 The first production Inventory request exposed an App Check rollout mismatch:
 the browser had no reviewed provider registration while the callable enforced a
@@ -129,10 +130,23 @@ BEO currentness.
   authenticated hosted conversion, cross-tenant emulator acceptance,
   accessibility scan, assistive-technology review, customer/staff human
   acceptance, or commercial outcome is recorded.
+- The coordinated `all-qualified-features` profile is not deployable until a
+  dedicated managed Inquiry Turnstile widget supplies the reviewed public site
+  key and `INQUIRY_TURNSTILE_SECRET`, and the OpenAI credit balance is restored
+  and a fresh minimal provider probe succeeds. The Inquiry page is not
+  automatically published by deployment; an administrator must still curate
+  and publish an immutable customer-safe Showcase version.
 
 ## Next proof event
 
-Complete an authenticated `mm05366-sandbox` administrator journey on v0.18.2
+First complete the two provider prerequisites for the coordinated candidate:
+bind and verify the dedicated Inquiry Turnstile widget without exposing its
+secret, and restore/reprobe OpenAI capacity. Then republish the exact release
+head, require green PR and current-main CI, tag that same SHA, dispatch the
+protected Firebase-all and Vercel `all-qualified-features` workflows with
+target-specific rollback ancestors, and verify provider readback before any
+Inquiry publication. After promotion, complete an authenticated
+`mm05366-sandbox` administrator journey
 across Living Opportunity, Quote administration, Operations, Inventory,
 Library pricing review, one governed Commercial Change simulation/authorization
 path, one explicit Event Spine command, and exact readback. The receipt must

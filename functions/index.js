@@ -27286,6 +27286,18 @@ exports.parseIntentDraft = intentParserRuntime.https.onCall(async (data, context
       "The model-assisted intake lane is disabled. The deterministic extractor remains available."
     );
   }
+  const intentParserOrganizationId = normalizeOrganizationId(
+    process.env.INTENT_PARSER_ORGANIZATION_ID
+  );
+  if (
+    intentParserOrganizationId !== "mm05366-sandbox"
+    || organizationId !== intentParserOrganizationId
+  ) {
+    throw new functions.https.HttpsError(
+      "failed-precondition",
+      "Model-assisted intake is not enabled for this workspace."
+    );
+  }
   const apiKeys = Object.freeze({
     openai: String(process.env[INTENT_PARSER_OPENAI_KEY_NAME] || "").trim(),
     anthropic: String(process.env[INTENT_PARSER_ANTHROPIC_KEY_NAME] || "").trim()

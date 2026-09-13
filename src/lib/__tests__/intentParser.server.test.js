@@ -52,6 +52,14 @@ describe("intent parser configuration gate", () => {
 
     expect(bindings).toEqual([{ secrets: ["INTENT_PARSER_OPENAI_KEY"] }]);
     expect(callableExports.parseIntentDraft).toBeTypeOf("function");
+    expect(intentParserCallableSource()).toContain(
+      'intentParserOrganizationId !== "mm05366-sandbox"'
+    );
+    expect(intentParserCallableSource()).toContain(
+      "organizationId !== intentParserOrganizationId"
+    );
+    expect(intentParserCallableSource().indexOf("intentParserOrganizationId"))
+      .toBeLessThan(intentParserCallableSource().indexOf("const apiKeys"));
   });
 
   test("keeps isolated source-slice stubs compatible when runWith is unavailable", () => {
