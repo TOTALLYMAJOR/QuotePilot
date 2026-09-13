@@ -1,6 +1,6 @@
 # User Manual
 
-Last updated: 2026-09-13 02:54:14 CDT
+Last updated: 2026-09-13 14:49:08 CDT
 
 ## Purpose
 This guide explains day-to-day usage of QuotePilot for staff users and admins.
@@ -102,6 +102,19 @@ make and publish catalog changes.
    available provider-backed action; a provider-accepted receipt, not the button
    click, is delivery evidence.
 7. Return to **Opportunities** to track the next recorded action.
+
+### Publish and operate a guided inquiry page
+
+1. As an administrator, open **Library → Inquiry page**. The Inquiry Showcase is a public-presentation layer over the existing Library, not another catalog or price book.
+2. Choose active customer-safe Offers, services, rentals, menu items, or Event Templates. Write the public title, short description, optional HTTPS image, featured label, and display order. The Showcase cannot store or override price, cost, margin, inclusions, rules, staffing, inventory, or availability.
+3. Choose a lowercase slug, enable the tenant publication gate, and select **Save draft**. Saving does not change an active published version.
+4. Review **Preview customer-safe projection**, then select **Publish immutable version**. The receipt identifies the exact publication and catalog evidence. A changed slug deactivates the previous slug; QuotePilot does not redirect it.
+5. Use `/inquire/{slug}` as a share-only, `noindex` page. The customer provides contact details, event type/date, estimated guests, location, optional notes, and curated preferences, then reviews the exact request before sending it. The on-screen receipt means only that the inquiry was recorded.
+6. Open **Opportunities**. A new inquiry starts as **Received**. Select **Acknowledge and assign to me** before conversion. The in-app record is authoritative; an optional staff-email failure is shown but never removes or rolls back the inquiry.
+7. Select **Review conversion**. Resolve every missing, inactive, changed, or incompatible reference and explicitly choose whether a same-tenant email claim should use the existing customer identity or create a new identity.
+8. Review the exact authoritative quote prefill, choose any required current Offer/Menu values, then select **Create authoritative quote draft**. QuotePilot re-prices through the existing server path and commits the quote, customer binding, portal record, first version, Converted state, and conversion receipt together.
+
+Customer selections remain unconfirmed preferences on the resulting quote. Inquiry submission never creates a customer, quote, portal, Calendar event, or payment request and never confirms price, availability, allergen safety, reservation, proposal, acceptance, or booking. Unconverted inquiry content is retained for 90 days, then scheduled for deletion with only a content-free receipt retained. Service-response consent does not subscribe the customer to marketing. Customer email confirmation, attachments, multilingual pages, custom domains, campaign pages, public availability search, instant quoting, and marketing automation are not available in v1.
 
 ### Commercial Workbench (v0.18 source contract)
 

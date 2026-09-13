@@ -56,6 +56,7 @@ const {
   projectCustomerIdentityToImmutableVersion,
   sanitizeQuoteCreationRequest
 } = require("./quoteCreation");
+const inquiryShowcase = require("./inquiryShowcase");
 const {
   RebookQuoteDraftError,
   assertRebookCurrentEventDate,
@@ -512,6 +513,14 @@ const OPERATIONAL_STAFFING_PLANS_COLLECTION = "eventStaffingPlans";
 const OPERATIONAL_STAFFING_FENCES_COLLECTION = "staffingScheduleFences";
 const PORTAL_COLLECTION = "customerPortalQuotes";
 const CUSTOMER_EMAIL_CLAIMS_COLLECTION = "customerEmailClaims";
+const INQUIRY_SHOWCASES_COLLECTION = "inquiryShowcases";
+const INQUIRY_VERSIONS_COLLECTION = "versions";
+const INQUIRY_RECEIPTS_COLLECTION = "receipts";
+const CUSTOMER_INQUIRIES_COLLECTION = "customerInquiries";
+const INQUIRY_SLUGS_COLLECTION = "inquirySlugs";
+const INQUIRY_REQUESTS_COLLECTION = "publicInquiryRequests";
+const INQUIRY_RATE_LIMITS_COLLECTION = "inquiryRateLimits";
+const INQUIRY_DELETION_RECEIPTS_COLLECTION = "inquiryDeletionReceipts";
 const CUSTOMER_IMPORT_BATCH_KIND = "customer";
 const CUSTOMER_IMPORT_SOURCE = "import_studio";
 const CUSTOMER_IMPORT_TYPE = "customers";
@@ -585,6 +594,8 @@ const BUYER_ACCESS_STRIPE_SECRET_NAME = "BUYER_ACCESS_STRIPE_SECRET_KEY";
 const BUYER_ACCESS_STRIPE_WEBHOOK_SECRET_NAME = "BUYER_ACCESS_STRIPE_WEBHOOK_SECRET";
 const BUYER_ACCESS_TURNSTILE_SECRET_NAME = "BUYER_ACCESS_TURNSTILE_SECRET";
 const BUYER_ACCESS_RATE_LIMIT_SECRET_NAME = "BUYER_ACCESS_RATE_LIMIT_SECRET";
+const INQUIRY_TURNSTILE_SECRET_NAME = "INQUIRY_TURNSTILE_SECRET";
+const INQUIRY_RATE_LIMIT_SECRET_NAME = "INQUIRY_RATE_LIMIT_SECRET";
 const GOOGLE_CALENDAR_OAUTH_CLIENT_ID_SECRET_NAME = "GOOGLE_CALENDAR_OAUTH_CLIENT_ID";
 const GOOGLE_CALENDAR_OAUTH_CLIENT_SECRET_NAME = "GOOGLE_CALENDAR_OAUTH_CLIENT_SECRET";
 const GOOGLE_CALENDAR_OAUTH_STATE_SECRET_NAME = "GOOGLE_CALENDAR_OAUTH_STATE_SECRET";
@@ -9342,6 +9353,30 @@ exports.deleteOrganizationWorkspace = functions.region(REGION).https.onCall(asyn
   };
 });
 
+async function deleteConvertedInquiriesForQuote({ organizationId, quoteId } = {}) {
+  const inquiries = await db.collection(ORGANIZATIONS_COLLECTION).doc(organizationId)
+    .collection(CUSTOMER_INQUIRIES_COLLECTION)
+    .where("conversion.quoteId", "==", normalizeText(quoteId))
+    .limit(10)
+    .get();
+  let deleted = 0;
+  for (const inquirySnap of inquiries.docs) {
+    const inquiry = inquirySnap.data() || {};
+    const requestRecords = await db.collection(INQUIRY_REQUESTS_COLLECTION)
+      .where("inquiryId", "==", inquiry.inquiryId || inquirySnap.id)
+      .limit(10)
+      .get();
+    const deletionReceipt = inquiryShowcase.contentFreeDeletionReceipt(inquiry, new Date().toISOString());
+    await db.recursiveDelete(inquirySnap.ref);
+    const batch = db.batch();
+    requestRecords.docs.forEach((requestRecord) => batch.delete(requestRecord.ref));
+    batch.set(db.collection(INQUIRY_DELETION_RECEIPTS_COLLECTION).doc(inquiryReceiptId("inquiry_deleted", `${organizationId}|${inquiry.inquiryId || inquirySnap.id}`)), { ...deletionReceipt, createdAt: FieldValue.serverTimestamp() });
+    await batch.commit();
+    deleted += 1;
+  }
+  return { deleted };
+}
+
 exports.hardDeleteQuote = functions.region(REGION).https.onCall(async (data, context) => {
   const requestedOrganizationId = normalizeOrganizationId(data?.organizationId);
   const quoteId = normalizeText(data?.quoteId);
@@ -9487,6 +9522,7 @@ exports.hardDeleteQuote = functions.region(REGION).https.onCall(async (data, con
       fallbackPortalKey: claim.portalKey
     });
     await db.recursiveDelete(quoteRef);
+    await deleteConvertedInquiriesForQuote({ organizationId, quoteId });
     const completedAtISO = new Date().toISOString();
     const result = {
       portalSnapshotsDeleted: portalCleanup.deleted,
@@ -15265,6 +15301,7 @@ async function createTrustedQuoteDraftInternal({
   expectedCustomerContact = null,
   rebooking = null,
   rebookSourceRequest = null,
+  inquiryConversion = null,
   requestedNowISO = ""
 }) {
   const sanitized = sanitizeQuoteCreationRequest({
@@ -15352,6 +15389,10 @@ async function createTrustedQuoteDraftInternal({
     sourceQuoteId,
     rebooking
   });
+  if (inquiryConversion) {
+    documents.quote.inquiryProvenance = inquiryConversion.provenance;
+    documents.version.snapshot.inquiryProvenance = inquiryConversion.provenance;
+  }
   const portalRef = db.collection(PORTAL_COLLECTION).doc(portalKey);
   const versionRef = quoteRef.collection("versions").doc(documents.version.versionId);
   const customerCollectionRef = db
@@ -15429,6 +15470,12 @@ async function createTrustedQuoteDraftInternal({
   const customerEmailClaimRef = organizationRef
     .collection(CUSTOMER_EMAIL_CLAIMS_COLLECTION)
     .doc(customerEmailClaimDocumentId(normalizedCustomerEmail));
+  const inquiryRef = inquiryConversion
+    ? organizationRef.collection(CUSTOMER_INQUIRIES_COLLECTION).doc(inquiryConversion.inquiryId)
+    : null;
+  const inquiryConversionReceiptRef = inquiryRef
+    ? inquiryRef.collection(INQUIRY_RECEIPTS_COLLECTION).doc(inquiryConversion.receiptId)
+    : null;
 
   const result = await db.runTransaction(async (tx) => {
     const [
@@ -15442,6 +15489,8 @@ async function createTrustedQuoteDraftInternal({
       expectedCustomerSnapshot,
       rebookSourceQuoteSnapshot,
       rebookSourceVersionSnapshot,
+      inquirySnapshot,
+      inquiryConversionReceiptSnapshot,
       transactionPricingSettingsSnapshot
     ] = await Promise.all([
       tx.get(quoteRef),
@@ -15454,6 +15503,8 @@ async function createTrustedQuoteDraftInternal({
       expectedCustomerRef ? tx.get(expectedCustomerRef) : Promise.resolve(null),
       rebookSourceQuoteRef ? tx.get(rebookSourceQuoteRef) : Promise.resolve(null),
       rebookSourceVersionRef ? tx.get(rebookSourceVersionRef) : Promise.resolve(null),
+      inquiryRef ? tx.get(inquiryRef) : Promise.resolve(null),
+      inquiryConversionReceiptRef ? tx.get(inquiryConversionReceiptRef) : Promise.resolve(null),
       tx.get(settingsRef)
     ]);
     if (!transactionPricingSettingsSnapshot.exists) {
@@ -15472,6 +15523,29 @@ async function createTrustedQuoteDraftInternal({
         "already-exists",
         "A generated quote identity collided. Retry quote creation."
       );
+    }
+    if (inquiryConversion) {
+      const currentInquiry = inquirySnapshot?.exists ? inquirySnapshot.data() || {} : null;
+      if (!currentInquiry) {
+        throw new QuoteCreationError("failed-precondition", "The inquiry no longer exists.");
+      }
+      if (inquiryConversionReceiptSnapshot?.exists) {
+        throw new QuoteCreationError("already-exists", "This inquiry conversion already has a receipt.");
+      }
+      if (
+        normalizeOrganizationId(currentInquiry.organizationId) !== organizationId
+        || normalizeText(currentInquiry.state) !== "acknowledged"
+        || Number(currentInquiry.revision || 0) !== inquiryConversion.expectedInquiryRevision
+        || Number(transactionPricingSettingsSnapshot.data()?.catalogRevision || 0) !== inquiryConversion.catalogRevisionAtReview
+        || normalizeText(currentInquiry.source?.publicationVersionId) !== inquiryConversion.provenance.publicationVersionId
+        || normalizeText(currentInquiry.source?.publicationDigest) !== inquiryConversion.provenance.publicationDigest
+        || normalizeText(currentInquiry.fields?.email).toLowerCase() !== normalizedCustomerEmail
+      ) {
+        throw new QuoteCreationError(
+          "aborted",
+          "The inquiry changed after conversion review. Review it again before creating a quote."
+        );
+      }
     }
     if (normalizedRebookSourceRequest) {
       if (!rebookSourceQuoteSnapshot?.exists || !rebookSourceVersionSnapshot?.exists) {
@@ -15529,6 +15603,15 @@ async function createTrustedQuoteDraftInternal({
       customerSnapshots,
       normalizedCustomerEmail
     );
+    if (
+      inquiryConversion?.identityChoice === "create_new"
+      && (claimBinding || emailMatchedCustomerDoc?.exists)
+    ) {
+      throw new QuoteCreationError(
+        "aborted",
+        "A customer identity appeared after conversion review. Review the identity choice again."
+      );
+    }
     if (claimBinding && !claimedCustomerSnapshot?.exists) {
       throw new QuoteCreationError(
         "failed-precondition",
@@ -15654,6 +15737,47 @@ async function createTrustedQuoteDraftInternal({
         ? { createdAt: FieldValue.serverTimestamp() }
         : {})
     }, { merge: true });
+    if (inquiryConversion) {
+      const conversionReceipt = {
+        schemaVersion: 1,
+        receiptType: "inquiry_converted",
+        receiptId: inquiryConversion.receiptId,
+        organizationId,
+        inquiryId: inquiryConversion.inquiryId,
+        conversionRequestId: inquiryConversion.conversionRequestId,
+        quoteId: quoteRef.id,
+        quoteVersionId: boundDocuments.result.activeVersionId,
+        publicationVersionId: inquiryConversion.provenance.publicationVersionId,
+        publicationDigest: inquiryConversion.provenance.publicationDigest,
+        catalogRevisionAtReview: inquiryConversion.catalogRevisionAtReview,
+        catalogAuthorityDigest: pricingResult.catalogAuthority.settingsFingerprintSha256,
+        resolutions: inquiryConversion.resolutions,
+        identityChoice: inquiryConversion.identityChoice,
+        convertedAtISO: nowISO,
+        convertedBy: {
+          uid: staff.uid,
+          email: normalizeEmail(staff.email),
+          role: normalizeText(staff.role).toLowerCase()
+        }
+      };
+      tx.update(inquiryRef, {
+        state: "converted",
+        revision: inquiryConversion.expectedInquiryRevision + 1,
+        convertedAtISO: nowISO,
+        deleteAtISO: "",
+        deleteAt: FieldValue.delete(),
+        conversion: {
+          quoteId: quoteRef.id,
+          receiptId: inquiryConversion.receiptId,
+          requestId: inquiryConversion.conversionRequestId
+        },
+        updatedAt: FieldValue.serverTimestamp()
+      });
+      tx.create(inquiryConversionReceiptRef, {
+        ...conversionReceipt,
+        createdAt: FieldValue.serverTimestamp()
+      });
+    }
     return boundDocuments.result;
   });
 
@@ -31226,3 +31350,549 @@ async function resolveCommercialWorkflowContext(tx, refs, staff, { nowISO, catal
   return { definition, workflowPolicy, attendanceBinding,
     trustedContext: workflowPolicy || attendanceBinding ? { ...base, workflowPolicy, attendanceBinding } : base };
 }
+
+// Inquiry Showcase is a customer-safe merchandising projection. It never owns
+// commercial price, availability, inclusion, staffing, or inventory authority.
+function throwInquiryShowcaseError(error, fallback = "Inquiry operation failed.") {
+  if (error instanceof functions.https.HttpsError) throw error;
+  if (error instanceof inquiryShowcase.InquiryShowcaseError || error instanceof QuoteCreationError) {
+    throw new functions.https.HttpsError(error.code || "failed-precondition", error.message, error.details || undefined);
+  }
+  functions.logger.error("Inquiry Showcase operation failed", {
+    error: normalizeText(error?.message || error).slice(0, 300)
+  });
+  throw new functions.https.HttpsError("internal", fallback);
+}
+
+function assertInquiryRuntime(organizationId) {
+  if (!tenantWorkflowRuntimeEnabled("INQUIRY_SHOWCASE_ENABLED", organizationId)) {
+    throw new functions.https.HttpsError("failed-precondition", "Inquiry pages are not enabled for this workspace.");
+  }
+}
+
+async function assertInquiryStaff(context, data, { admin = false } = {}) {
+  const requestedOrganizationId = normalizeOrganizationId(data?.organizationId);
+  const staff = await assertStaff(context, { expectedOrganizationId: requestedOrganizationId });
+  const organizationId = normalizeOrganizationId(requestedOrganizationId || staff.organizationId);
+  assertInquiryRuntime(organizationId);
+  if (admin && normalizeText(staff.role).toLowerCase() !== "admin") {
+    throw new functions.https.HttpsError("permission-denied", "Administrator role required.");
+  }
+  return { staff, organizationId };
+}
+
+async function loadInquiryCatalog(organizationId) {
+  const organizationRef = db.collection(ORGANIZATIONS_COLLECTION).doc(organizationId);
+  const settingsRef = organizationRef.collection("settings").doc("config");
+  const [organizationSnap, settingsSnap, packagesSnap, addonsSnap, rentalsSnap, menuItemsSnap] = await Promise.all([
+    organizationRef.get(),
+    settingsRef.get(),
+    organizationRef.collection("catalogPackages").get(),
+    organizationRef.collection("catalogAddons").get(),
+    organizationRef.collection("catalogRentals").get(),
+    organizationRef.collection("menuItems").get()
+  ]);
+  if (!organizationSnap.exists || !settingsSnap.exists) {
+    throw new inquiryShowcase.InquiryShowcaseError("failed-precondition", "The workspace catalog is not available.");
+  }
+  const mapDocs = (snapshot) => snapshot.docs.map((item) => ({ id: item.id, ...(item.data() || {}) }));
+  return {
+    organizationRef,
+    organization: organizationSnap.data() || {},
+    settings: settingsSnap.data() || {},
+    catalog: {
+      packages: mapDocs(packagesSnap),
+      addons: mapDocs(addonsSnap),
+      rentals: mapDocs(rentalsSnap),
+      menuItems: mapDocs(menuItemsSnap)
+    }
+  };
+}
+
+function projectInquiryCatalog(bundle) {
+  const collections = {
+    offer: bundle.catalog.packages,
+    addon: bundle.catalog.addons,
+    rental: bundle.catalog.rentals,
+    menu_item: bundle.catalog.menuItems,
+    template: Array.isArray(bundle.settings.eventTemplates) ? bundle.settings.eventTemplates : []
+  };
+  return Object.entries(collections).flatMap(([referenceType, items]) => items.map((item) => ({
+    referenceType,
+    referenceId: normalizeText(item.id),
+    name: normalizeText(item.name).slice(0, 160),
+    active: item.active !== false,
+    customerSafe: item.internalOnly !== true && item.customerVisible !== false,
+    sourceItemVersion: inquiryShowcase.sourceItemVersion(item)
+  })));
+}
+
+function inquiryShowcaseRefs(organizationId) {
+  const organizationRef = db.collection(ORGANIZATIONS_COLLECTION).doc(organizationId);
+  const headRef = organizationRef.collection(INQUIRY_SHOWCASES_COLLECTION).doc("default");
+  return { organizationRef, headRef, versionsRef: headRef.collection(INQUIRY_VERSIONS_COLLECTION) };
+}
+
+function inquiryReceiptId(kind, value) {
+  return `${kind}_${inquiryShowcase.digest({ kind, value }).slice(0, 48)}`;
+}
+
+function incrementInquiryAnalytics(tx, organizationId, eventName, nowISO) {
+  if (!inquiryShowcase.ANALYTICS_EVENTS.includes(eventName)) return;
+  const day = nowISO.slice(0, 10);
+  const ref = db.collection("inquiryAnalytics").doc(`${day}_${eventName}`);
+  tx.set(ref, {
+    schemaVersion: 1,
+    day,
+    eventName,
+    count: FieldValue.increment(1),
+    updatedAt: FieldValue.serverTimestamp()
+  }, { merge: true });
+}
+
+async function recordInquiryAnalyticsBestEffort(organizationId, eventName, nowISO) {
+  try {
+    await db.runTransaction(async (tx) => incrementInquiryAnalytics(tx, organizationId, eventName, nowISO));
+  } catch (error) {
+    functions.logger.warn("Inquiry analytics write failed", {
+      organizationId,
+      eventName,
+      error: normalizeText(error?.message || error).slice(0, 200)
+    });
+  }
+}
+
+async function updateInquiryNotificationBestEffort(inquiryRef, notification) {
+  try {
+    await inquiryRef.set({ notification, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+  } catch (error) {
+    functions.logger.warn("Inquiry notification status write failed after durable receipt", {
+      inquiryId: inquiryRef.id,
+      state: notification?.state || "unknown",
+      error: normalizeText(error?.message || error).slice(0, 200)
+    });
+  }
+}
+
+function requestBodySize(data) {
+  try { return Buffer.byteLength(JSON.stringify(data || {}), "utf8"); } catch { return Number.MAX_SAFE_INTEGER; }
+}
+
+async function verifyInquiryTurnstile({ token, requestIp } = {}) {
+  const secret = readBoundSecret(INQUIRY_TURNSTILE_SECRET_NAME);
+  const allowedHostnames = String(readConfig("inquiry_turnstile_hostnames", ""))
+    .split(",").map((value) => normalizeHostname(value)).filter(Boolean);
+  if (!secret || !allowedHostnames.length) {
+    throw new functions.https.HttpsError("failed-precondition", "Inquiry verification is not configured.");
+  }
+  if (secret === CLOUDFLARE_TURNSTILE_ALWAYS_PASS_TEST_SECRET && process.env.FUNCTIONS_EMULATOR !== "true") {
+    throw new functions.https.HttpsError("failed-precondition", "Inquiry verification test credentials are not permitted in a hosted runtime.");
+  }
+  let response;
+  try {
+    response = await fetch("https://challenges.cloudflare.com/turnstile/v0/siteverify", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ secret, response: normalizeText(token), ...(requestIp ? { remoteip: requestIp } : {}) }),
+      signal: AbortSignal.timeout(5_000)
+    });
+  } catch {
+    throw new functions.https.HttpsError("unavailable", "Inquiry verification is temporarily unavailable.");
+  }
+  const result = await response.json().catch(() => null);
+  const hostname = normalizeHostname(result?.hostname);
+  const officialTest = secret === CLOUDFLARE_TURNSTILE_ALWAYS_PASS_TEST_SECRET
+    && result?.success === true && hostname === "example.com" && !normalizeText(result?.action);
+  if (!response.ok || result?.success !== true || (!officialTest && (
+    normalizeText(result.action) !== "public_inquiry_submit" || !allowedHostnames.includes(hostname)
+  ))) {
+    throw new functions.https.HttpsError("permission-denied", "Inquiry verification failed. Refresh and try again.");
+  }
+  return { action: normalizeText(result.action), hostname, challengeTimestamp: normalizeText(result.challenge_ts) };
+}
+
+async function applyInquiryRateLimits({ organizationId, requestIp, nowMs }) {
+  const secret = readBoundSecret(INQUIRY_RATE_LIMIT_SECRET_NAME);
+  if (!secret) throw new functions.https.HttpsError("failed-precondition", "Inquiry abuse controls are not configured.");
+  const windowStart = Math.floor(nowMs / 3_600_000) * 3_600_000;
+  const ipKey = createHmac("sha256", secret).update(`${organizationId}|${requestIp || "unknown"}|${windowStart}`).digest("hex");
+  const tenantKey = createHmac("sha256", secret).update(`${organizationId}|tenant|${windowStart}`).digest("hex");
+  const ipRef = db.collection(INQUIRY_RATE_LIMITS_COLLECTION).doc(`ip_${ipKey}`);
+  const tenantRef = db.collection(INQUIRY_RATE_LIMITS_COLLECTION).doc(`tenant_${tenantKey}`);
+  await db.runTransaction(async (tx) => {
+    const [ipSnap, tenantSnap] = await Promise.all([tx.get(ipRef), tx.get(tenantRef)]);
+    const ipCount = Number(ipSnap.data()?.count || 0);
+    const tenantCount = Number(tenantSnap.data()?.count || 0);
+    if (ipCount >= 8 || tenantCount >= 40) {
+      throw new functions.https.HttpsError("resource-exhausted", "Too many inquiry requests. Try again later.");
+    }
+    const patch = (scope, count) => ({ scope, count: count + 1, windowStartISO: new Date(windowStart).toISOString(), expiresAt: Timestamp.fromMillis(windowStart + 7_200_000), updatedAt: FieldValue.serverTimestamp() });
+    tx.set(ipRef, patch("tenant_ip_hour", ipCount));
+    tx.set(tenantRef, patch("tenant_hour", tenantCount));
+  });
+}
+
+async function publishInquiryVersion({ organizationId, staff, sourceVersion = null } = {}) {
+  const bundle = await loadInquiryCatalog(organizationId);
+  const refs = inquiryShowcaseRefs(organizationId);
+  return db.runTransaction(async (tx) => {
+    const [headSnap, settingsSnap] = await Promise.all([
+      tx.get(refs.headRef),
+      tx.get(refs.organizationRef.collection("settings").doc("config"))
+    ]);
+    if (!headSnap.exists) throw new inquiryShowcase.InquiryShowcaseError("failed-precondition", "Save an Inquiry Showcase draft before publishing.");
+    if (!settingsSnap.exists || Number(settingsSnap.data()?.catalogRevision || 0) !== Number(bundle.settings.catalogRevision || 0)) {
+      throw new inquiryShowcase.InquiryShowcaseError("aborted", "The catalog changed during publication. Review the Inquiry Showcase and publish again.");
+    }
+    const head = headSnap.data() || {};
+    if (head.tenantEnabled !== true) throw new inquiryShowcase.InquiryShowcaseError("failed-precondition", "Enable this tenant's inquiry page before publishing.");
+    let draft = head.draft;
+    if (sourceVersion) {
+      const sourceSnap = await tx.get(refs.versionsRef.doc(sourceVersion));
+      if (!sourceSnap.exists) throw new inquiryShowcase.InquiryShowcaseError("not-found", "The requested publication version is unavailable.");
+      const source = sourceSnap.data() || {};
+      draft = {
+        slug: source.slug,
+        pageTitle: source.pageTitle,
+        introduction: source.introduction,
+        responsePromise: source.responsePromise,
+        entries: source.entries
+      };
+    }
+    const sequence = Math.max(1, Number(head.nextVersionNumber || 1));
+    const versionId = `pub_${String(sequence).padStart(6, "0")}`;
+    const nowISO = new Date().toISOString();
+    const publication = inquiryShowcase.buildPublication({ organizationId, versionId, draft, catalog: bundle.catalog, settings: bundle.settings, actor: staff, nowISO });
+    const slugRef = db.collection(INQUIRY_SLUGS_COLLECTION).doc(publication.slug);
+    const slugSnap = await tx.get(slugRef);
+    if (slugSnap.exists && normalizeOrganizationId(slugSnap.data()?.organizationId) !== organizationId) {
+      throw new inquiryShowcase.InquiryShowcaseError("already-exists", "That inquiry page slug is already in use.");
+    }
+    const priorSlug = normalizeText(head.activeSlug);
+    if (priorSlug && priorSlug !== publication.slug) {
+      tx.set(db.collection(INQUIRY_SLUGS_COLLECTION).doc(priorSlug), {
+        active: false,
+        deactivatedAtISO: nowISO,
+        deactivatedAt: FieldValue.serverTimestamp()
+      }, { merge: true });
+    }
+    const receiptId = inquiryReceiptId("inquiry_publish", `${organizationId}|${versionId}|${publication.publicationDigest}`);
+    tx.create(refs.versionsRef.doc(versionId), { ...publication, createdAt: FieldValue.serverTimestamp() });
+    tx.create(refs.headRef.collection(INQUIRY_RECEIPTS_COLLECTION).doc(receiptId), {
+      schemaVersion: 1, receiptType: sourceVersion ? "inquiry_version_republished" : "inquiry_published",
+      receiptId, organizationId, versionId, sourceVersionId: sourceVersion || "", publicationDigest: publication.publicationDigest,
+      actor: { uid: staff.uid, email: normalizeEmail(staff.email), role: staff.role }, occurredAtISO: nowISO,
+      createdAt: FieldValue.serverTimestamp()
+    });
+    tx.set(slugRef, { organizationId, showcaseId: "default", active: true, versionId, publicationDigest: publication.publicationDigest, updatedAt: FieldValue.serverTimestamp() });
+    tx.set(refs.headRef, { state: "published", activeVersionId: versionId, activeSlug: publication.slug, nextVersionNumber: sequence + 1, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+    return { versionId, receiptId, publicationDigest: publication.publicationDigest, slug: publication.slug, publishedAtISO: nowISO };
+  });
+}
+
+exports.getPublishedInquiryShowcase = functions.region(REGION).https.onCall(async (data) => {
+  try {
+    const requestedSlug = inquiryShowcase.slug(data?.slug);
+    if (!requestedSlug) throw new inquiryShowcase.InquiryShowcaseError("invalid-argument", "A valid inquiry slug is required.");
+    const slugSnap = await db.collection(INQUIRY_SLUGS_COLLECTION).doc(requestedSlug).get();
+    if (!slugSnap.exists || slugSnap.data()?.active !== true) throw new inquiryShowcase.InquiryShowcaseError("not-found", "This inquiry page is not available.");
+    const slugRecord = slugSnap.data() || {};
+    const organizationId = normalizeOrganizationId(slugRecord.organizationId);
+    assertInquiryRuntime(organizationId);
+    const refs = inquiryShowcaseRefs(organizationId);
+    const [headSnap, versionSnap, bundle] = await Promise.all([
+      refs.headRef.get(), refs.versionsRef.doc(normalizeText(slugRecord.versionId)).get(), loadInquiryCatalog(organizationId)
+    ]);
+    if (headSnap.data()?.state !== "published" || headSnap.data()?.tenantEnabled !== true || !versionSnap.exists) {
+      throw new inquiryShowcase.InquiryShowcaseError("not-found", "This inquiry page is not available.");
+    }
+    const nowISO = new Date().toISOString();
+    const analyticsEvent = normalizeText(data?.analyticsEvent) === "inquiry_form_started"
+      && normalizeText(data?.publicationVersionId) === normalizeText(slugRecord.versionId)
+      ? "inquiry_form_started"
+      : "inquiry_page_viewed";
+    await recordInquiryAnalyticsBestEffort(organizationId, analyticsEvent, nowISO);
+    return { ok: true, showcase: inquiryShowcase.publicProjection(versionSnap.data(), { ...bundle.organization, ...bundle.settings }) };
+  } catch (error) { return throwInquiryShowcaseError(error, "Unable to load this inquiry page."); }
+});
+
+exports.getInquiryShowcaseAdminState = functions.region(REGION).https.onCall(async (data, context) => {
+  try {
+    const { staff, organizationId } = await assertInquiryStaff(context, data, { admin: true });
+    const bundle = await loadInquiryCatalog(organizationId);
+    const refs = inquiryShowcaseRefs(organizationId);
+    const [headSnap, versionsSnap, receiptsSnap] = await Promise.all([
+      refs.headRef.get(), refs.versionsRef.orderBy("publishedAtISO", "desc").limit(20).get(), refs.headRef.collection(INQUIRY_RECEIPTS_COLLECTION).orderBy("occurredAtISO", "desc").limit(20).get()
+    ]);
+    return { ok: true, organizationId, role: staff.role, state: headSnap.exists ? headSnap.data() : { state: "draft", tenantEnabled: false, draft: null }, catalogRevision: Number(bundle.settings.catalogRevision || 0), catalogReferences: projectInquiryCatalog(bundle), versions: versionsSnap.docs.map((doc) => ({ id: doc.id, ...doc.data() })), receipts: receiptsSnap.docs.map((doc) => ({ id: doc.id, ...doc.data() })) };
+  } catch (error) { return throwInquiryShowcaseError(error); }
+});
+
+exports.saveInquiryShowcaseDraft = functions.region(REGION).https.onCall(async (data, context) => {
+  try {
+    const { staff, organizationId } = await assertInquiryStaff(context, data, { admin: true });
+    const draft = inquiryShowcase.normalizeDraft(data?.draft);
+    const bundle = await loadInquiryCatalog(organizationId);
+    const validation = inquiryShowcase.validateDraftReferences(draft, bundle);
+    const refs = inquiryShowcaseRefs(organizationId);
+    const nowISO = new Date().toISOString();
+    const headSnap = await refs.headRef.get();
+    const retainedState = headSnap.data()?.activeVersionId && headSnap.data()?.state !== "paused" ? "published" : headSnap.data()?.state || "draft";
+    await refs.headRef.set({ schemaVersion: 1, showcaseId: "default", organizationId, state: retainedState, tenantEnabled: data?.tenantEnabled === true, draft, draftValidation: validation, updatedAtISO: nowISO, updatedBy: { uid: staff.uid, email: normalizeEmail(staff.email) }, ...(!headSnap.exists ? { nextVersionNumber: 1 } : {}), updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+    return { ok: true, state: retainedState, tenantEnabled: data?.tenantEnabled === true, validation, savedAtISO: nowISO };
+  } catch (error) { return throwInquiryShowcaseError(error, "Unable to save the Inquiry Showcase draft."); }
+});
+
+exports.publishInquiryShowcase = functions.region(REGION).https.onCall(async (data, context) => {
+  try { const { staff, organizationId } = await assertInquiryStaff(context, data, { admin: true }); return { ok: true, ...(await publishInquiryVersion({ organizationId, staff })) }; }
+  catch (error) { return throwInquiryShowcaseError(error, "Unable to publish the Inquiry Showcase."); }
+});
+
+exports.republishInquiryShowcaseVersion = functions.region(REGION).https.onCall(async (data, context) => {
+  try { const { staff, organizationId } = await assertInquiryStaff(context, data, { admin: true }); return { ok: true, ...(await publishInquiryVersion({ organizationId, staff, sourceVersion: normalizeText(data?.versionId) })) }; }
+  catch (error) { return throwInquiryShowcaseError(error, "Unable to republish that Inquiry Showcase version."); }
+});
+
+exports.pauseInquiryShowcase = functions.region(REGION).https.onCall(async (data, context) => {
+  try {
+    const { staff, organizationId } = await assertInquiryStaff(context, data, { admin: true });
+    const refs = inquiryShowcaseRefs(organizationId);
+    const nowISO = new Date().toISOString();
+    const result = await db.runTransaction(async (tx) => {
+      const headSnap = await tx.get(refs.headRef); const head = headSnap.data() || {};
+      if (!headSnap.exists || head.state !== "published") throw new inquiryShowcase.InquiryShowcaseError("failed-precondition", "Only a published inquiry page can be paused.");
+      const receiptId = inquiryReceiptId("inquiry_pause", `${organizationId}|${head.activeVersionId}|${nowISO}`);
+      tx.set(db.collection(INQUIRY_SLUGS_COLLECTION).doc(head.activeSlug), { active: false, deactivatedAtISO: nowISO, deactivatedAt: FieldValue.serverTimestamp() }, { merge: true });
+      tx.set(refs.headRef, { state: "paused", updatedAtISO: nowISO, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+      tx.create(refs.headRef.collection(INQUIRY_RECEIPTS_COLLECTION).doc(receiptId), { schemaVersion: 1, receiptType: "inquiry_paused", receiptId, organizationId, versionId: head.activeVersionId, actor: { uid: staff.uid, email: normalizeEmail(staff.email) }, occurredAtISO: nowISO, createdAt: FieldValue.serverTimestamp() });
+      return { receiptId, versionId: head.activeVersionId, pausedAtISO: nowISO };
+    });
+    return { ok: true, ...result };
+  } catch (error) { return throwInquiryShowcaseError(error, "Unable to pause the Inquiry Showcase."); }
+});
+
+const inquirySubmitRegion = functions.region(REGION);
+const inquirySubmitRuntime = typeof inquirySubmitRegion.runWith === "function"
+  ? inquirySubmitRegion.runWith({ secrets: ["INQUIRY_TURNSTILE_SECRET", "INQUIRY_RATE_LIMIT_SECRET", "RESEND_API_KEY"] })
+  : inquirySubmitRegion;
+exports.submitPublicInquiry = inquirySubmitRuntime.https.onCall(async (data, context) => {
+  try {
+    if (requestBodySize(data) > 32_000) throw new inquiryShowcase.InquiryShowcaseError("invalid-argument", "Inquiry request is too large.");
+    const requestedSlug = inquiryShowcase.slug(data?.slug);
+    const requestId = normalizeText(data?.requestId);
+    if (!requestedSlug || !/^[A-Za-z0-9][A-Za-z0-9._:@-]{15,127}$/u.test(requestId)) throw new inquiryShowcase.InquiryShowcaseError("invalid-argument", "Inquiry request identity is invalid.");
+    const slugSnap = await db.collection(INQUIRY_SLUGS_COLLECTION).doc(requestedSlug).get();
+    if (!slugSnap.exists || slugSnap.data()?.active !== true) throw new inquiryShowcase.InquiryShowcaseError("not-found", "This inquiry page is not available.");
+    const organizationId = normalizeOrganizationId(slugSnap.data()?.organizationId);
+    assertInquiryRuntime(organizationId);
+    const requestDocId = inquiryReceiptId("public_inquiry", `${requestedSlug}|${requestId}`);
+    const requestRef = db.collection(INQUIRY_REQUESTS_COLLECTION).doc(requestDocId);
+    const existingRequestSnap = await requestRef.get();
+    if (existingRequestSnap.exists) {
+      const prior = existingRequestSnap.data() || {};
+      if (!inquiryShowcase.recoverySecretMatches(data?.recoverySecret, prior.recoverySecretHash)) throw new functions.https.HttpsError("permission-denied", "Inquiry request cannot be resolved.");
+      return { ok: true, idempotent: true, inquiryId: prior.inquiryId, receiptId: prior.receiptId, submittedAtISO: prior.submittedAtISO, message: "Your inquiry was received. This is not a quote, booking, or availability confirmation." };
+    }
+    const requestIp = getTrustedBuyerAccessRequestIp(context);
+    const turnstile = await verifyInquiryTurnstile({ token: data?.turnstileToken, requestIp });
+    await applyInquiryRateLimits({ organizationId, requestIp, nowMs: Date.now() });
+    const refs = inquiryShowcaseRefs(organizationId);
+    const versionId = normalizeText(data?.publicationVersionId);
+    const versionSnap = await refs.versionsRef.doc(versionId).get();
+    const headSnap = await refs.headRef.get();
+    if (!versionSnap.exists || headSnap.data()?.state !== "published" || headSnap.data()?.activeVersionId !== versionId || slugSnap.data()?.versionId !== versionId) {
+      throw new inquiryShowcase.InquiryShowcaseError("aborted", "This inquiry page changed while it was open. Refresh and review your request before submitting.");
+    }
+    const inquiryRef = refs.organizationRef.collection(CUSTOMER_INQUIRIES_COLLECTION).doc();
+    const now = new Date(); const nowISO = now.toISOString(); const deleteAt = new Date(now.getTime() + 90 * 24 * 60 * 60 * 1000);
+    const inquiry = inquiryShowcase.buildInquiry({ organizationId, inquiryId: inquiryRef.id, requestId, recoverySecret: data?.recoverySecret, publication: versionSnap.data(), fields: data?.fields, preferenceRefs: data?.preferenceRefs, nowISO, deleteAtISO: deleteAt.toISOString() });
+    const receiptId = inquiryReceiptId("inquiry_received", `${organizationId}|${inquiryRef.id}|${requestId}`);
+    const result = await db.runTransaction(async (tx) => {
+      const [requestSnap, currentHeadSnap] = await Promise.all([tx.get(requestRef), tx.get(refs.headRef)]);
+      if (requestSnap.exists) {
+        const prior = requestSnap.data() || {};
+        if (!inquiryShowcase.recoverySecretMatches(data?.recoverySecret, prior.recoverySecretHash)) throw new functions.https.HttpsError("permission-denied", "Inquiry request cannot be resolved.");
+        return { idempotent: true, inquiryId: prior.inquiryId, receiptId: prior.receiptId, submittedAtISO: prior.submittedAtISO };
+      }
+      if (currentHeadSnap.data()?.activeVersionId !== versionId || currentHeadSnap.data()?.state !== "published") throw new inquiryShowcase.InquiryShowcaseError("aborted", "This inquiry page changed while it was open. Refresh and review your request before submitting.");
+      tx.create(inquiryRef, { ...inquiry, revision: 1, deleteAt: Timestamp.fromDate(deleteAt), turnstile, createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() });
+      tx.create(inquiryRef.collection(INQUIRY_RECEIPTS_COLLECTION).doc(receiptId), { schemaVersion: 1, receiptType: "inquiry_received", receiptId, organizationId, inquiryId: inquiryRef.id, publicationVersionId: versionId, publicationDigest: inquiry.source.publicationDigest, submittedAtISO: nowISO, createdAt: FieldValue.serverTimestamp() });
+      tx.create(requestRef, { schemaVersion: 1, organizationId, inquiryId: inquiryRef.id, requestId, recoverySecretHash: inquiry.recoverySecretHash, receiptId, state: "received", submittedAtISO: nowISO, expiresAt: Timestamp.fromDate(deleteAt), createdAt: FieldValue.serverTimestamp() });
+      incrementInquiryAnalytics(tx, organizationId, "inquiry_submitted", nowISO);
+      return { idempotent: false, inquiryId: inquiryRef.id, receiptId, submittedAtISO: nowISO };
+    });
+    if (!result.idempotent) {
+      try {
+        const bundle = await loadInquiryCatalog(organizationId);
+        const notifyEmail = normalizeEmail(bundle.settings.inquiryNotificationEmail || bundle.settings.businessEmail);
+        if (notifyEmail) {
+          const sent = await sendCustomerEmail({ toEmail: notifyEmail, subject: `New event inquiry: ${inquiry.fields.eventType}`, text: `A new inquiry was recorded in QuotePilot.\n\nContact: ${inquiry.fields.name} <${inquiry.fields.email}>\nEvent date: ${inquiry.fields.eventDate}\nEstimated guests: ${inquiry.fields.estimatedGuests}\n\nOpen Opportunities in QuotePilot to acknowledge and review it.`, idempotencyKey: receiptId });
+          await updateInquiryNotificationBestEffort(inquiryRef, { state: "accepted", attemptedAtISO: new Date().toISOString(), provider: sent.provider, messageId: sent.messageId, failureCode: "" });
+        } else {
+          await updateInquiryNotificationBestEffort(inquiryRef, { state: "not_configured", attemptedAtISO: new Date().toISOString(), provider: "none", messageId: "", failureCode: "" });
+        }
+      } catch (error) {
+        await updateInquiryNotificationBestEffort(inquiryRef, { state: "failed", attemptedAtISO: new Date().toISOString(), provider: getEmailProvider(), messageId: "", failureCode: normalizeText(error?.code || "provider_failure").slice(0, 80) });
+      }
+    }
+    return { ok: true, ...result, message: "Your inquiry was received. This is not a quote, booking, or availability confirmation." };
+  } catch (error) { return throwInquiryShowcaseError(error, "Unable to submit this inquiry."); }
+  });
+
+exports.resolveInquirySubmission = functions.region(REGION).https.onCall(async (data) => {
+  try {
+    const requestedSlug = inquiryShowcase.slug(data?.slug); const requestId = normalizeText(data?.requestId);
+    const requestRef = db.collection(INQUIRY_REQUESTS_COLLECTION).doc(inquiryReceiptId("public_inquiry", `${requestedSlug}|${requestId}`));
+    const requestSnap = await requestRef.get();
+    if (!requestSnap.exists || !inquiryShowcase.recoverySecretMatches(data?.recoverySecret, requestSnap.data()?.recoverySecretHash)) throw new inquiryShowcase.InquiryShowcaseError("not-found", "No matching inquiry outcome was found.");
+    const request = requestSnap.data() || {};
+    return { ok: true, outcome: "received", receiptId: request.receiptId, submittedAtISO: request.submittedAtISO, message: "Your inquiry was received. This response does not include inquiry content." };
+  } catch (error) { return throwInquiryShowcaseError(error, "Unable to resolve this inquiry outcome."); }
+});
+
+function projectInquiryForQueue(doc) {
+  const value = doc.data ? doc.data() : doc;
+  return { inquiryId: value.inquiryId || doc.id, state: value.state, revision: Number(value.revision || 0), submittedAtISO: value.submittedAtISO, assignment: value.assignment || null, fields: value.fields || {}, preferences: value.preferences || [], source: value.source || {}, notification: value.notification || {}, conversion: value.conversion || {} };
+}
+
+exports.getInquiryQueue = functions.region(REGION).https.onCall(async (data, context) => {
+  try {
+    const { organizationId } = await assertInquiryStaff(context, data);
+    const snapshot = await db.collection(ORGANIZATIONS_COLLECTION).doc(organizationId).collection(CUSTOMER_INQUIRIES_COLLECTION).orderBy("submittedAtISO", "desc").limit(100).get();
+    const inquiries = snapshot.docs.map(projectInquiryForQueue);
+    return { ok: true, organizationId, inquiries, truncated: snapshot.size >= 100 };
+  } catch (error) { return throwInquiryShowcaseError(error, "Unable to load inquiries."); }
+});
+
+async function transitionStoredInquiry({ organizationId, inquiryId, staff, nextState, expectedRevision, reason = "" }) {
+  const ref = db.collection(ORGANIZATIONS_COLLECTION).doc(organizationId).collection(CUSTOMER_INQUIRIES_COLLECTION).doc(normalizeText(inquiryId));
+  const nowISO = new Date().toISOString();
+  return db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref); if (!snap.exists) throw new inquiryShowcase.InquiryShowcaseError("not-found", "Inquiry not found.");
+    const current = snap.data() || {};
+    if (Number(current.revision || 0) !== Number(expectedRevision)) throw new inquiryShowcase.InquiryShowcaseError("aborted", "The inquiry changed. Refresh and try again.");
+    const patch = inquiryShowcase.transitionInquiry(current, nextState, { actor: staff, nowISO, reason });
+    const revision = Number(current.revision || 0) + 1;
+    const receiptId = inquiryReceiptId(`inquiry_${nextState}`, `${organizationId}|${inquiryId}|${revision}`);
+    tx.update(ref, { ...patch, revision, updatedAt: FieldValue.serverTimestamp() });
+    tx.create(ref.collection(INQUIRY_RECEIPTS_COLLECTION).doc(receiptId), { schemaVersion: 1, receiptType: `inquiry_${nextState}`, receiptId, organizationId, inquiryId, actor: { uid: staff.uid, email: normalizeEmail(staff.email), role: staff.role }, occurredAtISO: nowISO, reason: normalizeText(reason).slice(0, 300), createdAt: FieldValue.serverTimestamp() });
+    if (nextState === "dismissed") incrementInquiryAnalytics(tx, organizationId, "inquiry_dismissed", nowISO);
+    return { inquiryId, state: nextState, revision, receiptId, occurredAtISO: nowISO };
+  });
+}
+
+exports.acknowledgeInquiry = functions.region(REGION).https.onCall(async (data, context) => {
+  try { const { staff, organizationId } = await assertInquiryStaff(context, data); return { ok: true, ...(await transitionStoredInquiry({ organizationId, inquiryId: data?.inquiryId, staff, nextState: "acknowledged", expectedRevision: data?.expectedRevision })) }; }
+  catch (error) { return throwInquiryShowcaseError(error, "Unable to acknowledge this inquiry."); }
+});
+
+exports.dismissInquiry = functions.region(REGION).https.onCall(async (data, context) => {
+  try { const { staff, organizationId } = await assertInquiryStaff(context, data); return { ok: true, ...(await transitionStoredInquiry({ organizationId, inquiryId: data?.inquiryId, staff, nextState: "dismissed", expectedRevision: data?.expectedRevision, reason: data?.reason })) }; }
+  catch (error) { return throwInquiryShowcaseError(error, "Unable to dismiss this inquiry."); }
+});
+
+async function buildInquiryConversionPreview(organizationId, inquiryId) {
+  const bundle = await loadInquiryCatalog(organizationId);
+  const ref = bundle.organizationRef.collection(CUSTOMER_INQUIRIES_COLLECTION).doc(normalizeText(inquiryId));
+  const snap = await ref.get(); if (!snap.exists) throw new inquiryShowcase.InquiryShowcaseError("not-found", "Inquiry not found.");
+  const inquiry = { inquiryId: snap.id, ...(snap.data() || {}) };
+  if (!["received", "acknowledged"].includes(inquiry.state)) throw new inquiryShowcase.InquiryShowcaseError("failed-precondition", "This inquiry is no longer available for conversion.");
+  const drift = inquiryShowcase.resolveReferenceDrift(inquiry.preferences, bundle);
+  const claimRef = bundle.organizationRef.collection(CUSTOMER_EMAIL_CLAIMS_COLLECTION).doc(customerEmailClaimDocumentId(inquiry.fields?.email));
+  const claimSnap = await claimRef.get(); const claim = claimSnap.exists ? claimSnap.data() || {} : null;
+  return { bundle, inquiry, drift, prefill: inquiryShowcase.buildQuotePrefill(inquiry, drift), identity: claim ? { state: "existing_claim", customerId: normalizeText(claim.customerId), email: normalizeEmail(claim.emailKey) } : { state: "unclaimed", customerId: "", email: normalizeEmail(inquiry.fields?.email) }, catalogRevision: Number(bundle.settings.catalogRevision || 0) };
+}
+
+function quoteFormContainsInquiryReference(form = {}, driftItem = {}) {
+  const referenceId = normalizeText(driftItem.referenceId);
+  if (!referenceId) return false;
+  if (driftItem.referenceType === "offer") return normalizeText(form.pkg) === referenceId;
+  if (driftItem.referenceType === "template") return normalizeText(form.eventTemplateId) === referenceId;
+  const field = driftItem.referenceType === "addon"
+    ? "addons"
+    : driftItem.referenceType === "rental" ? "rentals" : driftItem.referenceType === "menu_item" ? "menuItems" : "";
+  return field ? (Array.isArray(form[field]) ? form[field] : []).map(normalizeText).includes(referenceId) : false;
+}
+
+exports.previewInquiryConversion = functions.region(REGION).https.onCall(async (data, context) => {
+  try {
+    const { organizationId } = await assertInquiryStaff(context, data);
+    const preview = await buildInquiryConversionPreview(organizationId, data?.inquiryId);
+    const nowISO = new Date().toISOString();
+    await recordInquiryAnalyticsBestEffort(organizationId, "inquiry_reviewed", nowISO);
+    return { ok: true, organizationId, inquiryId: preview.inquiry.inquiryId, inquiryRevision: Number(preview.inquiry.revision || 0), state: preview.inquiry.state, drift: preview.drift, identity: preview.identity, prefill: preview.prefill, catalogRevision: preview.catalogRevision, reviewedAtISO: nowISO };
+  } catch (error) { return throwInquiryShowcaseError(error, "Unable to preview inquiry conversion."); }
+});
+
+exports.convertInquiryToQuoteDraft = functions.region(REGION).https.onCall(async (data, context) => {
+  let staff = null; let organizationId = "";
+  try {
+    ({ staff, organizationId } = await assertInquiryStaff(context, data));
+    const conversionRequestId = normalizeText(data?.conversionRequestId);
+    if (!/^[A-Za-z0-9][A-Za-z0-9._:@-]{15,127}$/u.test(conversionRequestId)) throw new inquiryShowcase.InquiryShowcaseError("invalid-argument", "A valid conversion request identity is required.");
+    const preview = await buildInquiryConversionPreview(organizationId, data?.inquiryId);
+    if (Number(data?.expectedInquiryRevision) !== Number(preview.inquiry.revision) || Number(data?.expectedCatalogRevision) !== preview.catalogRevision) throw new inquiryShowcase.InquiryShowcaseError("aborted", "The inquiry or catalog changed after review. Review conversion again.");
+    if (preview.inquiry.state !== "acknowledged") throw new inquiryShowcase.InquiryShowcaseError("failed-precondition", "Acknowledge and assign this inquiry before conversion.");
+    const resolutions = Array.isArray(data?.resolutions) ? data.resolutions : [];
+    const resolutionByEntry = new Map(resolutions.map((item) => [normalizeText(item?.entryId), normalizeText(item?.resolution)]));
+    preview.drift.filter((item) => item.requiresResolution).forEach((item) => {
+      const resolution = resolutionByEntry.get(item.entryId);
+      const allowed = item.state === "changed" ? ["use_current", "remove"] : ["remove"];
+      if (!allowed.includes(resolution)) throw new inquiryShowcase.InquiryShowcaseError("failed-precondition", `Resolve ${item.publicTitle} before conversion.`);
+      const included = quoteFormContainsInquiryReference(data?.quoteForm, item);
+      if ((resolution === "use_current" && !included) || (resolution === "remove" && included)) {
+        throw new inquiryShowcase.InquiryShowcaseError("failed-precondition", `The quote prefill does not match the resolution for ${item.publicTitle}. Review the conversion again.`);
+      }
+    });
+    const identityChoice = normalizeText(data?.identityChoice);
+    if ((preview.identity.state === "existing_claim" && identityChoice !== "use_existing") || (preview.identity.state === "unclaimed" && identityChoice !== "create_new")) throw new inquiryShowcase.InquiryShowcaseError("failed-precondition", "Choose how to handle the customer identity before conversion.");
+    const receiptId = inquiryReceiptId("inquiry_converted", `${organizationId}|${preview.inquiry.inquiryId}|${conversionRequestId}`);
+    const provenance = {
+      schemaVersion: 1,
+      authority: "customer_preference_evidence",
+      inquiryId: preview.inquiry.inquiryId,
+      publicationVersionId: preview.inquiry.source.publicationVersionId,
+      publicationDigest: preview.inquiry.source.publicationDigest,
+      submittedAtISO: preview.inquiry.submittedAtISO,
+      originalSubmission: { fields: preview.inquiry.fields, preferences: preview.inquiry.preferences },
+      commercialStatus: "unconfirmed_preferences"
+    };
+    const result = await createTrustedQuoteDraftInternal({
+      organizationId, staff, form: data?.quoteForm, creationReason: "inquiry_conversion",
+      expectedCustomerId: preview.identity.state === "existing_claim" ? preview.identity.customerId : "",
+      inquiryConversion: { inquiryId: preview.inquiry.inquiryId, receiptId, conversionRequestId, expectedInquiryRevision: Number(preview.inquiry.revision), catalogRevisionAtReview: preview.catalogRevision, resolutions, identityChoice, provenance }
+    });
+    await recordInquiryAnalyticsBestEffort(organizationId, "inquiry_converted", new Date().toISOString());
+    return { ...result, inquiryId: preview.inquiry.inquiryId, conversionReceiptId: receiptId };
+  } catch (error) {
+    if (error instanceof inquiryShowcase.InquiryShowcaseError) return throwInquiryShowcaseError(error);
+    return quoteCreationFailure(error, { operation: "convertInquiryToQuoteDraft", staff: staff || { uid: "" }, organizationId, failureMessage: "Unable to convert this inquiry." });
+  }
+});
+
+exports.purgeExpiredInquiries = functions.region(REGION).pubsub?.schedule
+  ? functions.region(REGION).pubsub.schedule("every 60 minutes").onRun(async () => {
+    const now = new Date(); const nowISO = now.toISOString();
+    let deleted = 0; let scanned = 0;
+    for (let page = 0; page < 10; page += 1) {
+      const snapshot = await db.collectionGroup(CUSTOMER_INQUIRIES_COLLECTION).where("deleteAt", "<=", Timestamp.fromDate(now)).limit(50).get();
+      scanned += snapshot.size;
+      for (const inquirySnap of snapshot.docs) {
+        const inquiry = inquirySnap.data() || {};
+        const [receiptsSnap, requestRecordsSnap] = await Promise.all([
+          inquirySnap.ref.collection(INQUIRY_RECEIPTS_COLLECTION).limit(100).get(),
+          db.collection(INQUIRY_REQUESTS_COLLECTION).where("inquiryId", "==", inquiry.inquiryId || inquirySnap.id).limit(10).get()
+        ]);
+        const batch = db.batch();
+        receiptsSnap.docs.forEach((receipt) => batch.delete(receipt.ref));
+        requestRecordsSnap.docs.forEach((requestRecord) => batch.delete(requestRecord.ref));
+        const deletionReceipt = inquiryShowcase.contentFreeDeletionReceipt(inquiry, nowISO);
+        batch.set(db.collection(INQUIRY_DELETION_RECEIPTS_COLLECTION).doc(inquiryReceiptId("inquiry_deleted", `${inquiry.organizationId}|${inquiry.inquiryId}`)), { ...deletionReceipt, createdAt: FieldValue.serverTimestamp() });
+        batch.delete(inquirySnap.ref);
+        await batch.commit(); deleted += 1;
+      }
+      if (snapshot.size < 50) break;
+    }
+    return { deleted, scanned, checkedAtISO: nowISO };
+  })
+  : async () => ({ deleted: 0, checkedAtISO: "" });

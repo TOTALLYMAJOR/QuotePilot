@@ -894,6 +894,7 @@ export function QuoteHistoryView({
   onQuickUpdatesGuardChange,
   ambientPricingCatalog = null,
   ambientPricingSettings = null,
+  inquiryShowcaseEnabled = false,
   globalPilotRequest = null,
   globalPilotReturnFocusRef = null,
   onGlobalPilotResolution = null,
@@ -3298,6 +3299,9 @@ export function QuoteHistoryView({
             </section>
           )}>
             <AmbientOpportunitiesStream
+              organizationId={organizationId}
+              catalog={ambientPricingCatalog}
+              inquiryShowcaseEnabled={inquiryShowcaseEnabled}
               headingRef={routeHeadingRef}
               quotes={state.quotes}
               source={state.source}
@@ -3312,6 +3316,10 @@ export function QuoteHistoryView({
               onOpenWorkflow={onOpenWorkflow}
               onStartOpportunity={onStartOpportunity}
               onRefresh={load}
+              onInquiryQuoteCreated={(quoteId) => {
+                load();
+                onOpenOpportunity?.({ quoteId, actionId: `open-inquiry-conversion:${quoteId}` });
+              }}
               controller={quoteHistoryController}
             />
           </Suspense>

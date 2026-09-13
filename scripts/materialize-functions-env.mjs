@@ -63,6 +63,10 @@ const BUYER_ACCESS_APPROVED_TURNSTILE_HOSTNAMES = [
   "quotepilot.mbmapps.com",
   "tonicatering.web.app"
 ];
+const INQUIRY_APPROVED_TURNSTILE_HOSTNAMES = [
+  "quotepilot.mbmapps.com",
+  "tonicatering.web.app"
+];
 const assertBuyerAccessTurnstileHostnames = (value) => {
   const hostnames = value
     .split(",")
@@ -80,6 +84,25 @@ const assertBuyerAccessTurnstileHostnames = (value) => {
   ) {
     throw new Error(
       "BUYER_ACCESS_TURNSTILE_HOSTNAMES must contain only the exact approved QuotePilot production hosts: quotepilot.mbmapps.com,tonicatering.web.app."
+    );
+  }
+
+  return [...new Set(hostnames)].join(",");
+};
+const assertInquiryTurnstileHostnames = (value) => {
+  const hostnames = value
+    .split(",")
+    .map((item) => item.trim().toLowerCase())
+    .filter(Boolean);
+  const approved = new Set(INQUIRY_APPROVED_TURNSTILE_HOSTNAMES);
+
+  if (
+    !hostnames.length
+    || hostnames.some((hostname) => !/^[a-z0-9.-]+$/.test(hostname))
+    || hostnames.some((hostname) => !approved.has(hostname))
+  ) {
+    throw new Error(
+      "INQUIRY_TURNSTILE_HOSTNAMES must contain only approved QuotePilot production hosts: quotepilot.mbmapps.com,tonicatering.web.app."
     );
   }
 
@@ -317,6 +340,24 @@ if (buyerAccessEnabled === "true" && !buyerAccessTurnstileHostnames) {
 const normalizedBuyerAccessTurnstileHostnames = buyerAccessTurnstileHostnames
   ? assertBuyerAccessTurnstileHostnames(buyerAccessTurnstileHostnames)
   : "";
+const inquiryShowcaseEnabled = optional("INQUIRY_SHOWCASE_ENABLED", "false").toLowerCase();
+if (!["true", "false"].includes(inquiryShowcaseEnabled)) {
+  throw new Error("INQUIRY_SHOWCASE_ENABLED must be true or false.");
+}
+const inquiryTurnstileHostnames = optional("INQUIRY_TURNSTILE_HOSTNAMES");
+if (inquiryTurnstileHostnames && inquiryShowcaseEnabled !== "true") {
+  throw new Error(
+    "INQUIRY_TURNSTILE_HOSTNAMES is allowed only while INQUIRY_SHOWCASE_ENABLED=true."
+  );
+}
+if (inquiryShowcaseEnabled === "true" && !inquiryTurnstileHostnames) {
+  throw new Error(
+    "INQUIRY_TURNSTILE_HOSTNAMES is required while the Inquiry Showcase is enabled."
+  );
+}
+const normalizedInquiryTurnstileHostnames = inquiryTurnstileHostnames
+  ? assertInquiryTurnstileHostnames(inquiryTurnstileHostnames)
+  : "";
 for (const secretName of [
   "RESEND_API_KEY",
   "RESEND_WEBHOOK_SECRET",
@@ -332,6 +373,8 @@ for (const secretName of [
   "BUYER_ACCESS_STRIPE_WEBHOOK_SECRET",
   "BUYER_ACCESS_TURNSTILE_SECRET",
   "BUYER_ACCESS_RATE_LIMIT_SECRET",
+  "INQUIRY_TURNSTILE_SECRET",
+  "INQUIRY_RATE_LIMIT_SECRET",
   "GOOGLE_CALENDAR_OAUTH_CLIENT_ID",
   "GOOGLE_CALENDAR_OAUTH_CLIENT_SECRET",
   "GOOGLE_CALENDAR_OAUTH_STATE_SECRET",
@@ -385,6 +428,10 @@ const values = {
   BUYER_ACCESS_APP_BASE_URL: buyerAccessAppBaseUrl,
   ...(normalizedBuyerAccessTurnstileHostnames
     ? { BUYER_ACCESS_TURNSTILE_HOSTNAMES: normalizedBuyerAccessTurnstileHostnames }
+    : {}),
+  INQUIRY_SHOWCASE_ENABLED: inquiryShowcaseEnabled,
+  ...(normalizedInquiryTurnstileHostnames
+    ? { INQUIRY_TURNSTILE_HOSTNAMES: normalizedInquiryTurnstileHostnames }
     : {})
 };
 

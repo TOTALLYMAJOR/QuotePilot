@@ -105,6 +105,7 @@ describe("Firebase Functions env materializer", { timeout: 30_000 }, () => {
     expect(output).toContain("REVENUE_AUTOPILOT_SENDS_ENABLED=false");
     expect(output).toContain("BUYER_ACCESS_ENABLED=false");
     expect(output).toContain("BUYER_ACCESS_STRIPE_MODE=test");
+    expect(output).toContain("INQUIRY_SHOWCASE_ENABLED=false");
     expect(output).toContain(
       "BUYER_ACCESS_APP_BASE_URL=https://quotepilot.mbmapps.com/app"
     );
@@ -114,6 +115,9 @@ describe("Firebase Functions env materializer", { timeout: 30_000 }, () => {
     expect(output).not.toContain("BUYER_ACCESS_STRIPE_WEBHOOK_SECRET");
     expect(output).not.toContain("BUYER_ACCESS_TURNSTILE_SECRET");
     expect(output).not.toContain("BUYER_ACCESS_RATE_LIMIT_SECRET");
+    expect(output).not.toContain("INQUIRY_TURNSTILE_HOSTNAMES");
+    expect(output).not.toContain("INQUIRY_TURNSTILE_SECRET");
+    expect(output).not.toContain("INQUIRY_RATE_LIMIT_SECRET");
     expect(output).not.toContain("RESEND_API_KEY");
     expect(output).not.toContain("RESEND_WEBHOOK_SECRET");
     expect(output).not.toContain("STRIPE_SECRET_KEY");
@@ -355,6 +359,55 @@ describe("Firebase Functions env materializer", { timeout: 30_000 }, () => {
     }).result;
     expect(rateLimitSecret.status).not.toBe(0);
     expect(rateLimitSecret.stderr).toMatch(/Firebase Secret Manager/i);
+  });
+
+  test("materializes Inquiry Showcase configuration only with an explicit approved hostname allowlist", () => {
+    const enabled = runMaterializer({
+      INQUIRY_SHOWCASE_ENABLED: "true",
+      INQUIRY_TURNSTILE_HOSTNAMES: "quotepilot.mbmapps.com, tonicatering.web.app"
+    });
+    expect(enabled.result.status).toBe(0);
+    const output = fs.readFileSync(
+      path.join(enabled.cwd, "functions", ".env.tonicatering"),
+      "utf8"
+    );
+    expect(output).toContain("INQUIRY_SHOWCASE_ENABLED=true");
+    expect(output).toContain(
+      "INQUIRY_TURNSTILE_HOSTNAMES=quotepilot.mbmapps.com,tonicatering.web.app"
+    );
+    expect(output).not.toContain("INQUIRY_TURNSTILE_SECRET");
+    expect(output).not.toContain("INQUIRY_RATE_LIMIT_SECRET");
+
+    const missingHostnames = runMaterializer({
+      INQUIRY_SHOWCASE_ENABLED: "true"
+    }).result;
+    expect(missingHostnames.status).not.toBe(0);
+    expect(missingHostnames.stderr).toMatch(/INQUIRY_TURNSTILE_HOSTNAMES is required/i);
+
+    const disabledResidue = runMaterializer({
+      INQUIRY_TURNSTILE_HOSTNAMES: "quotepilot.mbmapps.com"
+    }).result;
+    expect(disabledResidue.status).not.toBe(0);
+    expect(disabledResidue.stderr).toMatch(/allowed only while INQUIRY_SHOWCASE_ENABLED=true/i);
+
+    const unapprovedHostname = runMaterializer({
+      INQUIRY_SHOWCASE_ENABLED: "true",
+      INQUIRY_TURNSTILE_HOSTNAMES: "inquiry.example.invalid"
+    }).result;
+    expect(unapprovedHostname.status).not.toBe(0);
+    expect(unapprovedHostname.stderr).toMatch(/approved QuotePilot production hosts/i);
+  });
+
+  test("rejects Inquiry Showcase secrets in dotenv because Secret Manager owns them", () => {
+    for (const [name, value] of [
+      ["INQUIRY_TURNSTILE_SECRET", "turnstile-secret-fixture"],
+      ["INQUIRY_RATE_LIMIT_SECRET", "rate-limit-secret-fixture"]
+    ]) {
+      const { result } = runMaterializer({ [name]: value });
+      expect(result.status).not.toBe(0);
+      expect(result.stderr).toMatch(/Firebase Secret Manager/i);
+      expect(result.stderr).toContain(name);
+    }
   });
 
   test("enables Resend without materializing its Secret Manager credential", () => {

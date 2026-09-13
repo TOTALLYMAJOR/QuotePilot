@@ -974,6 +974,29 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // Inquiry Showcase drafts, immutable publications, customer submissions,
+    // lifecycle receipts, and conversion evidence are callable-owned. Even
+    // same-tenant staff use bounded role-checked projections.
+    match /organizations/{orgId}/inquiryShowcases/{showcaseId} {
+      allow read, write: if false;
+    }
+
+    match /organizations/{orgId}/inquiryShowcases/{showcaseId}/versions/{versionId} {
+      allow read, write: if false;
+    }
+
+    match /organizations/{orgId}/inquiryShowcases/{showcaseId}/receipts/{receiptId} {
+      allow read, write: if false;
+    }
+
+    match /organizations/{orgId}/customerInquiries/{inquiryId} {
+      allow read, write: if false;
+    }
+
+    match /organizations/{orgId}/customerInquiries/{inquiryId}/receipts/{receiptId} {
+      allow read, write: if false;
+    }
+
     match /organizations/{orgId}/importBatches/{batchId} {
       allow read: if isOrgAdmin(orgId);
       allow write: if false;
@@ -1014,6 +1037,26 @@ service cloud.firestore {
     // server-owned. Browser clients use owner-scoped callables instead of
     // reading or mutating these records directly.
     match /buyerAccessOrders/{orderId} {
+      allow read, write: if false;
+    }
+
+    match /inquirySlugs/{slug} {
+      allow read, write: if false;
+    }
+
+    match /publicInquiryRequests/{requestId} {
+      allow read, write: if false;
+    }
+
+    match /inquiryRateLimits/{rateId} {
+      allow read, write: if false;
+    }
+
+    match /inquiryDeletionReceipts/{receiptId} {
+      allow read, write: if false;
+    }
+
+    match /inquiryAnalytics/{aggregateId} {
       allow read, write: if false;
     }
 
