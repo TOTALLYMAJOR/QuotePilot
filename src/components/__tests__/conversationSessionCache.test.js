@@ -1,0 +1,172 @@
+import { beforeEach, describe, expect, test, vi } from "vitest";
+
+const mocks = vi.hoisted(() => ({
+  auth: { currentUser: { uid: "staff-1" } },
+  loadQuotePortalConversation: vi.fn()
+}));
+
+vi.mock("../../lib/firebase", () => ({ auth: mocks.auth }));
+vi.mock("../../lib/portalConversationClient", () => ({
+  loadQuotePortalConversation: mocks.loadQuotePortalConversation
+}));
+
+import {
+  clearAllConversationSessions,
+  conversationSessionPolicy,
+  loadConversationAuthoritatively,
+  readConversationSession,
+  warmConversationSession,
+  writeConversationSession
+} from "../conversationSessionCache";
+
+const ACCESS = {
+  accessMode: "staff",
+  organizationId: "org-a",
+  quoteId: "quote-a"
+};
+const PORTAL_ACCESS = {
+  accessMode: "portal",
+  portalKey: "portal-conversation-token-1234567890"
+};
+const RESULT = {
+  organizationId: "org-a",
+  quoteId: "quote-a",
+  portalIssuedAtISO: "2026-08-06T17:00:00.000Z",
+  readOnly: false,
+  readOnlyReason: "",
+  messages: [{
+    messageId: "message-1",
+    actorType: "customer",
+    actorName: "Jordan Customer",
+    body: "Hello",
+    createdAtISO: "2026-08-06T18:00:00.000Z"
+  }],
+  limits: {}
+};
+
+describe("conversation presentation session cache", () => {
+  beforeEach(() => {
+    clearAllConversationSessions();
+    mocks.loadQuotePortalConversation.mockReset();
+    mocks.auth.currentUser = { uid: "staff-1" };
+  });
+
+  test("retains a bounded recent staff conversation snapshot in memory only", () => {
+    expect(writeConversationSession(ACCESS, RESULT, { nowMs: 1000 })).toBe(true);
+    expect(readConversationSession(ACCESS, { nowMs: 1001 })).toMatchObject({
+      quoteId: "quote-a",
+      messages: [{ body: "Hello" }]
+    });
+    expect(conversationSessionPolicy).toMatchObject({
+      maxEntries: 12,
+      persistence: "memory-only",
+      accessMode: "staff-only"
+    });
+  });
+
+  test("does not retain or coalesce customer portal bodies", async () => {
+    mocks.loadQuotePortalConversation.mockResolvedValue(RESULT);
+    expect(writeConversationSession(PORTAL_ACCESS, RESULT)).toBe(false);
+    expect(readConversationSession(PORTAL_ACCESS)).toBeNull();
+
+    await loadConversationAuthoritatively(PORTAL_ACCESS);
+    await loadConversationAuthoritatively(PORTAL_ACCESS);
+
+    expect(mocks.loadQuotePortalConversation).toHaveBeenCalledTimes(2);
+    expect(readConversationSession(PORTAL_ACCESS)).toBeNull();
+  });
+
+  test("does not expose a cached staff conversation after the authenticated principal changes", () => {
+    writeConversationSession(ACCESS, RESULT, { nowMs: 1000 });
+    mocks.auth.currentUser = { uid: "staff-2" };
+    expect(readConversationSession(ACCESS, { nowMs: 1001 })).toBeNull();
+  });
+
+  test("expires retained bodies without extending ttl on reads", () => {
+    writeConversationSession(ACCESS, RESULT, { nowMs: 1000 });
+    expect(readConversationSession(ACCESS, { nowMs: 1001 })).not.toBeNull();
+    expect(readConversationSession(ACCESS, {
+      nowMs: 1000 + conversationSessionPolicy.ttlMs + 1
+    })).toBeNull();
+  });
+
+  test("returns defensive copies instead of shared cached message arrays", () => {
+    writeConversationSession(ACCESS, RESULT, { nowMs: 1000 });
+    const first = readConversationSession(ACCESS, { nowMs: 1001 });
+    first.messages[0].body = "Changed locally";
+    first.messages.push({ messageId: "fake" });
+    const second = readConversationSession(ACCESS, { nowMs: 1002 });
+    expect(second.messages).toHaveLength(1);
+    expect(second.messages[0].body).toBe("Hello");
+  });
+
+  test("coalesces concurrent authoritative loads for the same authenticated conversation", async () => {
+    let release;
+    mocks.loadQuotePortalConversation.mockImplementation(() => new Promise((resolve) => {
+      release = () => resolve(RESULT);
+    }));
+
+    const first = loadConversationAuthoritatively(ACCESS);
+    const second = loadConversationAuthoritatively({ ...ACCESS });
+    expect(mocks.loadQuotePortalConversation).toHaveBeenCalledTimes(1);
+
+    release();
+    await expect(Promise.all([first, second])).resolves.toHaveLength(2);
+    expect(readConversationSession(ACCESS)).toMatchObject({ quoteId: "quote-a" });
+  });
+
+  test("keeps in-flight staff results bound to the principal that started each request", async () => {
+    const staffOneResult = {
+      ...RESULT,
+      messages: [{ ...RESULT.messages[0], body: "Staff one conversation" }]
+    };
+    const staffTwoResult = {
+      ...RESULT,
+      messages: [{ ...RESULT.messages[0], body: "Staff two conversation" }]
+    };
+    let resolveStaffOne;
+    mocks.loadQuotePortalConversation.mockImplementationOnce(() => new Promise((resolve) => {
+      resolveStaffOne = resolve;
+    }));
+    mocks.loadQuotePortalConversation.mockResolvedValueOnce(staffTwoResult);
+
+    const staffOneLoad = loadConversationAuthoritatively(ACCESS);
+    mocks.auth.currentUser = { uid: "staff-2" };
+    const staffTwoLoad = loadConversationAuthoritatively(ACCESS);
+    await staffTwoLoad;
+    expect(mocks.loadQuotePortalConversation).toHaveBeenCalledTimes(2);
+    expect(readConversationSession(ACCESS)).toMatchObject({
+      messages: [{ body: "Staff two conversation" }]
+    });
+
+    resolveStaffOne(staffOneResult);
+    await staffOneLoad;
+    expect(readConversationSession(ACCESS)).toMatchObject({
+      messages: [{ body: "Staff two conversation" }]
+    });
+
+    mocks.auth.currentUser = { uid: "staff-1" };
+    expect(readConversationSession(ACCESS)).toMatchObject({
+      messages: [{ body: "Staff one conversation" }]
+    });
+  });
+
+  test("rejects a staff result outside the requested organization and quote scope", async () => {
+    mocks.loadQuotePortalConversation.mockResolvedValue({
+      ...RESULT,
+      organizationId: "org-other",
+      quoteId: "quote-other"
+    });
+
+    await expect(loadConversationAuthoritatively(ACCESS))
+      .rejects.toThrow(/does not match the requested quote-scoped thread/i);
+    expect(readConversationSession(ACCESS)).toBeNull();
+  });
+
+  test("warms a missing staff conversation once and reuses the session snapshot", async () => {
+    mocks.loadQuotePortalConversation.mockResolvedValue(RESULT);
+    await expect(warmConversationSession(ACCESS)).resolves.toMatchObject({ quoteId: "quote-a" });
+    await expect(warmConversationSession(ACCESS)).resolves.toMatchObject({ quoteId: "quote-a" });
+    expect(mocks.loadQuotePortalConversation).toHaveBeenCalledTimes(1);
+  });
+});

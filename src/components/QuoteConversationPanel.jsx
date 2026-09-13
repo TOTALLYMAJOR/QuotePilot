@@ -2,9 +2,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   PORTAL_CONVERSATION_BODY_MAX_LENGTH,
   buildPortalConversationClientRequestId,
-  loadQuotePortalConversation,
   sendQuotePortalConversationMessage
 } from "../lib/portalConversationClient";
+import {
+  loadConversationAuthoritatively as loadQuotePortalConversation,
+  readConversationSession as readConversationMemory,
+  writeConversationSession as writeConversationMemory
+} from "./conversationSessionCache";
 import {
   isConversationSignalNewer,
   subscribeToConversationSignal
@@ -331,11 +335,6 @@ function conversationMessageFocusRecovery({ code, quoteId, messageId, reason, ne
   });
 }
 
-/**
- * Resolves an exact customer-message focus only against the canonical bodies
- * returned for the currently loaded quote thread. The result contains opaque
- * identity and semantic context only—never the message body or customer data.
- */
 export function buildConversationMessageFocusResolution({
   expectedQuoteId = "",
   loadedQuoteId = "",
@@ -534,14 +533,17 @@ function QuoteConversationPanelInstance({
     authenticatedUid
   ]);
   const initialPendingAttempt = readConversationPendingAttempt(identity);
+  const initialMemory = readConversationMemory(access);
   const normalizedFocusMessageId = String(focusMessageId || "").trim();
   const initiallyOpen = defaultOpen || Boolean(normalizedFocusMessageId);
   const [open, setOpen] = useState(initiallyOpen);
   const [phase, setPhase] = useState(
-    initiallyOpen ? "loading" : initialPendingAttempt ? "send_error" : "closed"
+    initiallyOpen
+      ? initialMemory ? "refreshing" : "loading"
+      : initialPendingAttempt ? "send_error" : "closed"
   );
-  const [messages, setMessages] = useState([]);
-  const [loadedQuoteId, setLoadedQuoteId] = useState("");
+  const [messages, setMessages] = useState(initialMemory?.messages || []);
+  const [loadedQuoteId, setLoadedQuoteId] = useState(initialMemory?.quoteId || "");
   const [messageFocusOutcome, setMessageFocusOutcome] = useState(null);
   const [body, setBody] = useState(initialPendingAttempt?.body || "");
   const [pendingRequestId, setPendingRequestId] = useState(
@@ -555,13 +557,13 @@ function QuoteConversationPanelInstance({
   const [error, setError] = useState(initialPendingAttempt?.error || "");
   const [status, setStatus] = useState("");
   const [composerFocusRequest, setComposerFocusRequest] = useState(0);
-  const [readOnly, setReadOnly] = useState(false);
-  const [readOnlyReason, setReadOnlyReason] = useState("");
+  const [readOnly, setReadOnly] = useState(initialMemory?.readOnly === true);
+  const [readOnlyReason, setReadOnlyReason] = useState(initialMemory?.readOnlyReason || "");
   const [syncState, setSyncState] = useState(defaultOpen ? "catching_up" : "paused");
   const [signalVersion, setSignalVersion] = useState(0);
   const requestGenerationRef = useRef(0);
   const loadInFlightRef = useRef(false);
-  const latestLoadedSignalRef = useRef(buildConversationSignalBaseline([]));
+  const latestLoadedSignalRef = useRef(buildConversationSignalBaseline(initialMemory?.messages || []));
   const queuedSignalRef = useRef(null);
   const messageNodeRefs = useRef(new Map());
   const composerRef = useRef(null);
@@ -625,7 +627,8 @@ function QuoteConversationPanelInstance({
   const load = async ({
     refresh = false,
     pendingAttempt = null,
-    signalRefresh = false
+    signalRefresh = false,
+    seedMessages = null
   } = {}) => {
     const request = beginRequestGeneration();
     loadInFlightRef.current = true;
@@ -635,7 +638,8 @@ function QuoteConversationPanelInstance({
       unresolvedAttempt?.clientRequestId || pendingRequestId || ""
     ).trim();
     const reconcilingUnknownRequest = Boolean(unresolvedRequestId);
-    setPhase(refresh && messages.length ? "refreshing" : "loading");
+    const visibleMessages = Array.isArray(seedMessages) ? seedMessages : messages;
+    setPhase(refresh && visibleMessages.length ? "refreshing" : "loading");
     setError("");
     setStatus("");
     try {
@@ -663,6 +667,7 @@ function QuoteConversationPanelInstance({
       setLoadedQuoteId(returnedQuoteId);
       setReadOnly(result.readOnly);
       setReadOnlyReason(result.readOnlyReason);
+      writeConversationMemory(access, result);
       if (reconcilingUnknownRequest) {
         setBody(unresolvedAttempt?.body || body);
         setPendingRequestId(unresolvedRequestId);
@@ -684,7 +689,7 @@ function QuoteConversationPanelInstance({
       if (signalRefresh) setSyncState("stale");
       setPhase(reconcilingUnknownRequest
         ? "send_error"
-        : refresh && messages.length
+        : refresh && visibleMessages.length
           ? "refresh_error"
           : "load_error");
       const nextError = friendlyConversationError(loadError, "Unable to load this quote conversation.");
@@ -738,12 +743,6 @@ function QuoteConversationPanelInstance({
     setStatus("");
   };
 
-  // A prefill request opens the panel and seeds the composer with starter
-  // text (e.g. "Question about Pricing: "). It is presentation-only sugar
-  // over the existing send path — the text lands in the ordinary message
-  // body, verbatim — and it must never disturb stronger state: an
-  // unresolved send attempt keeps its exact reconciliation body, and a
-  // draft the user already typed is never overwritten.
   useEffect(() => {
     const text = String(prefill?.text || "");
     if (!prefill?.id || !text) return;
@@ -843,6 +842,11 @@ function QuoteConversationPanelInstance({
       setMessages((current) => {
         const nextMessages = mergeConversationMessages(current, [result.message]);
         latestLoadedSignalRef.current = buildConversationSignalBaseline(nextMessages);
+        writeConversationMemory(access, {
+          ...result,
+          quoteId: result.quoteId || loadedQuoteId || String(access?.quoteId || "").trim(),
+          messages: nextMessages
+        });
         return nextMessages;
       });
       setReadOnly(result.readOnly);
@@ -891,12 +895,13 @@ function QuoteConversationPanelInstance({
   useEffect(() => {
     requestGenerationRef.current += 1;
     const pendingAttempt = readConversationPendingAttempt(identity);
-    latestLoadedSignalRef.current = buildConversationSignalBaseline([]);
+    const cached = readConversationMemory(access);
+    latestLoadedSignalRef.current = buildConversationSignalBaseline(cached?.messages || []);
     queuedSignalRef.current = null;
     loadInFlightRef.current = false;
     setSignalVersion(0);
-    setMessages([]);
-    setLoadedQuoteId("");
+    setMessages(cached?.messages || []);
+    setLoadedQuoteId(cached?.quoteId || "");
     setMessageFocusOutcome(null);
     focusResolutionSignatureRef.current = "";
     loadResolutionSignatureRef.current = "";
@@ -907,13 +912,17 @@ function QuoteConversationPanelInstance({
     );
     setError(pendingAttempt?.error || "");
     setStatus("");
-    setReadOnly(false);
-    setReadOnlyReason("");
+    setReadOnly(cached?.readOnly === true);
+    setReadOnlyReason(cached?.readOnlyReason || "");
     const shouldOpen = defaultOpen || Boolean(normalizedFocusMessageId);
     setSyncState(shouldOpen ? "catching_up" : "paused");
     if (shouldOpen) {
       setOpen(true);
-      void load({ pendingAttempt });
+      void load({
+        pendingAttempt,
+        refresh: Boolean(cached),
+        seedMessages: cached?.messages || []
+      });
     } else {
       setOpen(false);
       setPhase(pendingAttempt ? "send_error" : "closed");

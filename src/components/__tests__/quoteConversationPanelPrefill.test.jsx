@@ -21,8 +21,14 @@ vi.mock("../../lib/firebase", () => ({
 vi.mock("../../lib/portalConversationClient", () => ({
   PORTAL_CONVERSATION_BODY_MAX_LENGTH: 1200,
   buildPortalConversationClientRequestId: clients.buildRequestId,
-  loadQuotePortalConversation: clients.load,
   sendQuotePortalConversationMessage: clients.send
+}));
+
+vi.mock("../conversationSessionCache", () => ({
+  loadConversationAuthoritatively: clients.load,
+  readConversationSession: vi.fn(() => null),
+  writeConversationSession: vi.fn(() => true),
+  clearAllConversationSessions: vi.fn()
 }));
 
 vi.mock("../../lib/conversationSignalClient", async () => {
@@ -33,6 +39,7 @@ vi.mock("../../lib/conversationSignalClient", async () => {
   };
 });
 
+import { clearAllConversationSessions } from "../conversationSessionCache";
 import QuoteConversationPanel, {
   beginConversationPendingAttempt,
   clearConversationPendingAttempt,
@@ -88,6 +95,7 @@ function enterTextareaValue(textarea, value) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  clearAllConversationSessions();
   clients.subscribe.mockReturnValue(clients.unsubscribe);
   clients.load.mockResolvedValue(emptyResult());
   container = document.createElement("div");
