@@ -1187,7 +1187,7 @@
     },
     {
       "id": "event-messaging-station-read",
-      "reviewRevision": 4,
+      "reviewRevision": 7,
       "status": "active",
       "deliveryType": "user_relevant",
       "capabilityKind": "read_surface",
@@ -1195,16 +1195,21 @@
         "staff",
         "portal_customer"
       ],
-      "summary": "A bounded same-tenant event inbox and exact quote or portal-document signals provide best-effort near-real-time conversation refresh while canonical message bodies remain behind the authority-revalidated conversation callable.",
+      "summary": "A bounded same-tenant event inbox and exact quote or portal-document signals provide best-effort near-real-time conversation refresh while canonical message bodies remain behind an authority-revalidated latest-50 cursor-paged callable with compound-cursor newer-message delta catch-up.",
       "backendPaths": [
         "firestore.rules",
         "functions/index.js",
+        "functions/portalConversation.js",
         "src/hooks/useConversationInbox.js",
         "src/lib/conversationInbox.js",
         "src/lib/conversationSignalClient.js",
+        "src/lib/messagingPerformance.js",
         "src/lib/portalConversationClient.js"
       ],
       "backendExports": [
+        "functions/index.js#getQuotePortalConversation"
+      ],
+      "affectedBackendExports": [
         "functions/index.js#getQuotePortalConversation"
       ],
       "frontendPaths": [
@@ -1236,6 +1241,8 @@
         "src/lib/__tests__/conversationInboxSubscription.test.js",
         "src/lib/__tests__/conversationInbox.test.js",
         "src/lib/__tests__/conversationSignalClient.test.js",
+        "src/lib/__tests__/messagingPerformance.test.js",
+        "src/lib/__tests__/portalConversationClient.test.js",
         "src/lib/__tests__/portalConversation.server.test.js"
       ],
       "testLocators": [
@@ -1250,6 +1257,10 @@
         {
           "path": "src/components/__tests__/quoteConversationPanelSignal.test.jsx",
           "locator": "reloads an intervening concurrent message when the final signal matches the local receipt id"
+        },
+        {
+          "path": "src/components/__tests__/quoteConversationPanelSignal.test.jsx",
+          "locator": "continues a bounded delta burst without replacing loaded history"
         },
         {
           "path": "src/components/__tests__/quoteConversationPanelSignal.test.jsx",
@@ -1303,7 +1314,7 @@
         }
       ],
       "surfaceReview": "changed",
-      "surfaceReviewNote": "The flag-gated station route, bounded event index, exact selected-thread signals, authoritative callable reload, pending/cache/paused language, mobile route and focus behavior, and manual recovery control were reviewed together.",
+      "surfaceReviewNote": "The flag-gated station route, bounded event index, exact selected-thread signals, authority-revalidated latest-50 body page, compound-cursor delta catch-up, older-history recovery, aggregate browser timing evidence, pending/cache/paused language, mobile route and focus behavior, and manual recovery control were reviewed together.",
       "stateEvidence": [
         {
           "state": "loading",
@@ -5267,7 +5278,7 @@
     },
     {
       "id": "ambient-object-and-pilot-policy-foundations",
-      "reviewRevision": 24,
+      "reviewRevision": 25,
       "status": "active",
       "deliveryType": "headless",
       "capabilityKind": "headless_operational",
@@ -6205,7 +6216,7 @@
         }
       ],
       "surfaceReview": "changed",
-      "surfaceReviewNote": "Revision 24 composes QP-UXR-002 through QP-UXR-005 over current v0.17 authorities. Clear the Deck retains exact Workflow decision identity and readback; Now and Opportunities share one evidence-preserving commercial-priority projection; Events, Event Focus, Control Room, Schedule, and Replay preserve the commitment-to-execution boundary; Event Preflight separates satisfied, attention, and unavailable evidence without a score. Current retained-data failures withdraw consequential controls, exact same-object return requires a completed fresh read, selected Control Room alone requests operational authorities, and missing or malformed payment, BEO, staffing, conflict, live-event, attendance, actuals, and issue evidence remains unavailable. No pricing, approval, payment, booking, staffing, BEO, Schedule, Workflow, or event-session authority is added.",
+      "surfaceReviewNote": "Revision 25 retains the Revision 24 QP-UXR-002 through QP-UXR-005 authority boundaries and adds the administrator Library's bounded read-only catalog decision index plus ordered first-quote activation continuation. The projection keeps Offer, Menu, Service, Rental, Template, Pricing, and Rule evidence source-scoped, keeps partial Menu evidence unavailable, and routes mutation only through the existing guarded editors or Import Studio. Clear the Deck retains exact Workflow decision identity and readback; Now and Opportunities share one evidence-preserving commercial-priority projection; Events, Event Focus, Control Room, Schedule, and Replay preserve the commitment-to-execution boundary; Event Preflight separates satisfied, attention, and unavailable evidence without a score. Current retained-data failures withdraw consequential controls, exact same-object return requires a completed fresh read, selected Control Room alone requests operational authorities, and missing or malformed payment, BEO, staffing, conflict, live-event, attendance, actuals, and issue evidence remains unavailable. No pricing, approval, payment, booking, staffing, BEO, Schedule, Workflow, catalog-write, or event-session authority is added.",
       "headlessReason": "These modules are deterministic decision, projection, and transport adapters. They normalize already-loaded evidence, preserve caller-owned bounds, and prepare context without adding Firebase, provider, pricing, communication, role, or mutation authority. The customer-decision-room helper is pure and bounded. Its local compatibility projection reads only the browser-local quote selected by the existing exact portal token and mirrors the same customer-safe terms and option shape as the canonical projection; it cannot read canonical Firebase data or manufacture provider evidence. Visible components remain gated, canonical portal access remains exact-token scoped, and no helper can authoritatively reprice, save, send, accept, book, pay, grant a role, or execute a higher-authority command. Pilot margin answers additionally require both the presentation gate and explicit authenticated staff-commercial permission.",
       "safeOutcome": "Staff may review the existing tenant-scoped evidence through Ambient orientation, Living Opportunity, exact arrivals, intelligent objects, deterministic Pilot, truthful local fallback, and one exact session-only task thread without gaining new authority. Customers may review the same exact-token proposal through a calmer decision room, ask a contextual question through the existing conversation authority, and reversibly prepare staff-marked additions as an ordinary change-request note. Those preparations never alter proposal selection, totals, revision, pricing, acceptance, payment, booking, or provider evidence; an existing customer draft or unresolved message attempt is preserved and acknowledged. Follow-up completion uses the existing guarded quote mutation, confirms only an exact same-tenant server readback, and otherwise remains visibly uncertain without repeating the write. Staff-route Back/Forward may restore only an exact adjacent same-runtime, same-organization, same-principal view; private view and draft state stays memory-only, accepted discard cannot reappear on Forward, and invalid context falls back without selecting another record. The return-context layer adds no write authority and ordinary non-expiry fixtures retain byte-equivalent business state; the existing admin quote-history read may still persist automatic expiry under its unchanged lifecycle authority, including local-fallback normalization and versioning. Any missing, mismatched, contradictory, ambiguous, unclassified, stale, truncated, unavailable, unsupported-object, or higher-authority evidence remains in truthful recovery, pending, unavailable, blocked, or Needs confirmation with a safe next resolution."
     },

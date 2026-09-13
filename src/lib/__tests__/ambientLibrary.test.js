@@ -129,6 +129,25 @@ describe("buildAmbientLibrary", () => {
       activeCount: 1,
       sectionCount: 1
     });
+    expect(result.sections.find((section) => section.id === "packages")?.records).toEqual([
+      { id: "package-plated", name: "Plated dinner", active: true }
+    ]);
+    expect(result.sections.find((section) => section.id === "menu")?.records).toEqual([
+      {
+        id: "menu-chicken",
+        name: "Herb chicken",
+        active: true,
+        sectionId: "dinner",
+        sectionName: "Dinner"
+      }
+    ]);
+    expect(result.sections.find((section) => section.id === "templates")?.records[0]).toMatchObject({
+      id: "wedding",
+      name: "Wedding",
+      active: true,
+      dependencyState: "resolved",
+      style: "Plated"
+    });
     expect(result.templates).toHaveLength(1);
     expect(result.templates[0]).toMatchObject({
       id: "wedding",

@@ -72,7 +72,6 @@ All notable project changes are documented in this file.
   the real save-or-review action in the sticky bar and keep Quote details as a
   secondary action; neither blocker review nor navigation changes quote,
   pricing, revision, or publication authority.
-
 - Complete Attendance Slice F through the existing post-event closeout
   authority. Same-tenant staff can record or correct one 1–400 actual count
   after the tenant-local closeout date with a required source type/note,
@@ -87,6 +86,43 @@ All notable project changes are documented in this file.
   advances event phase, completes closeout, sends a message, or establishes
   Replay. This is source/local evidence only; deployment, hosted authenticated
   use, production records, provider outcomes, and human acceptance remain open.
+- Make the Commercial Scenario Workbench comparison responsive and evidence-
+  explicit. Wide layouts compare Current with every session alternative;
+  stacked layouts compare Current with the selected scenario and its exact
+  difference. Exact, retained, updating, and unevaluated projections remain
+  distinct, and no new apply or persistence authority is introduced.
+- Turn the Library overview into a bounded read-only decision index by bringing
+  normalized Offer, Menu, Service, Rental, Template, Pricing, and Rule context
+  forward from the existing organization-scoped catalog projection. The full
+  editors remain the only mutation path, partial Menu evidence stays
+  unavailable, and the readiness rail remains the sole ranked setup action.
+- Replace full latest-page rereads after a server-confirmed conversation signal
+  with compound-cursor delta catch-up. The callable returns only bodies newer
+  than the last loaded `(createdAtMs, messageId)`, follows bounded continuation
+  pages during a burst, revalidates authority on every page, retains already
+  loaded history, and emits an aggregate-only catch-up duration observation.
+- Reduce first-open conversation work from as many as 500 returned bodies to
+  the latest 50, with a deterministic validated cursor and explicit **Load
+  older messages** recovery for additional history. Every page retains the
+  callable's initial and final authority checks. Aggregate browser performance
+  marks now expose route-usable, inbox-visible, and thread-interactive duration
+  without recording tenant, quote, customer, portal, message, or body identity.
+- Speed up repeated Messaging Station thread opens without creating a second
+  conversation authority. Concurrent exact-identity body loads now share one
+  callable request; up to 25 normalized results remain in application memory
+  for 30 seconds. Manual and live-signal refreshes bypass retained results, and
+  a confirmed send invalidates the thread cache before the next open.
+- Turn Library setup into an ordered first-quote activation path across
+  business basics, offers and menu, selling price, and optional cost visibility.
+  The first unfinished milestone owns the action, an existing-menu path opens
+  the established Import Studio, and detailed readiness remains available
+  without implying that imported data is published or that missing cost blocks
+  quoting.
+- Restore the Ambient Now review ledger's usable desktop, tablet, and mobile
+  width by removing a stale priority-number grid left after that numbered
+  presentation was retired. Priority identity, saved commercial context,
+  consequence, and its one continuation now stay together without overlap;
+  responsive browser coverage rejects collapsed review rows.
 - Bind the protected founder-tenant activation to the exact current
   `ragnakok-operations` Firebase backend receipt and the exact safe-off Vercel
   browser receipt. This supports the intentionally split production surfaces

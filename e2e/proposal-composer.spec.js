@@ -1,3 +1,4 @@
+import { mkdirSync } from "node:fs";
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
 
@@ -9,6 +10,10 @@ import { expect, test } from "@playwright/test";
 const PROPOSAL_COMPOSER_ENABLED = ["1", "true", "yes", "on"].includes(
   String(process.env.VITE_PROPOSAL_COMPOSER_ENABLED || "").trim().toLowerCase()
 );
+const CAPTURE_SCENARIO_PROOF = ["1", "true", "yes", "on"].includes(
+  String(process.env.CAPTURE_COMMERCIAL_SCENARIO_PROOF || "").trim().toLowerCase()
+);
+const SCENARIO_PROOF_DIRECTORY = "output/playwright/commercial-scenario-current";
 
 test.skip(!PROPOSAL_COMPOSER_ENABLED, "Proposal Composer flag is off in this lane.");
 
@@ -18,7 +23,7 @@ test.beforeEach(async ({ page }) => {
     sessionStorage.clear();
   });
   await page.goto("/app/quotes/new");
-  await expect(page.getByTestId("proposal-composer")).toBeVisible();
+  await expect(page.getByTestId("proposal-composer")).toBeVisible({ timeout: 30_000 });
 });
 
 async function openWorkbenchDomain(page, domain) {
@@ -189,6 +194,7 @@ test("staffing rate overrides reprice the quote from the staffing section", asyn
 });
 
 test("editing a saved quote surfaces the change-impact preview in the composer", async ({ page }) => {
+  test.setTimeout(120_000);
   await page.getByLabel("Event type", { exact: true }).selectOption({ index: 1 });
   await commitInline(page, "Event name", "Composer Impact Quote");
   await commitInline(page, "Date", "2027-09-12");
@@ -232,10 +238,42 @@ test("editing a saved quote surfaces the change-impact preview in the composer",
   await expect(twin).toHaveCount(1);
   await expect(twin).toBeVisible();
   await expect(twin).toHaveAttribute("data-authority", "session-only-non-authoritative");
+  await expect(twin.locator('[data-scenario-comparison="all"]')).toBeAttached();
+  await expect(twin.locator('[data-scenario-comparison="selected"]')).toBeAttached();
+  await expect(twin.locator('[data-scenario-column="current"]').first()).toHaveAttribute("data-evidence-state", "saved");
   await expect(fulfillment).toHaveCount(1);
   await expect(fulfillment).toBeVisible();
   await expect(fulfillment).toHaveAttribute("data-authority", "presentation-only");
   await expect(fulfillment).not.toContainText("Supplier B");
+
+  await twin.locator("#csw-guest-count").fill("80");
+  await expect(twin.getByRole("tab", { name: /Scenario A/ })).toBeVisible();
+  await twin.getByRole("button", { name: "Duplicate scenario" }).click();
+  await expect(twin.getByRole("tab", { name: /Scenario B/ })).toBeVisible();
+  await expect(twin.locator('[data-scenario-comparison="all"] th[scope="col"]')).toHaveCount(4);
+
+  if (CAPTURE_SCENARIO_PROOF) mkdirSync(SCENARIO_PROOF_DIRECTORY, { recursive: true });
+  for (const width of [390, 768, 1440]) {
+    await page.setViewportSize({ width, height: width === 390 ? 844 : 900 });
+    await expect(twin).toBeVisible();
+    expect(await page.evaluate(() => (
+      document.documentElement.scrollWidth - document.documentElement.clientWidth
+    ))).toBeLessThanOrEqual(1);
+    const undersized = await twin.locator("button:not([disabled]), input:not([disabled])").evaluateAll((controls) => (
+      controls.filter((control) => {
+        const rect = control.getBoundingClientRect();
+        return rect.width < 44 || rect.height < 44;
+      }).map((control) => control.getAttribute("aria-label") || control.textContent?.trim() || control.tagName)
+    ));
+    expect(undersized).toEqual([]);
+    const accessibility = await new AxeBuilder({ page }).include('[data-capability-id="commercial-scenario-workbench"]').analyze();
+    expect(accessibility.violations).toEqual([]);
+    if (CAPTURE_SCENARIO_PROOF) {
+      await twin.screenshot({
+        path: `${SCENARIO_PROOF_DIRECTORY}/scenario-comparison-${width}.png`
+      });
+    }
+  }
 
   const watching = page.getByTestId("pc-watching");
   await expect(watching).toContainText("Saved-quote impact");

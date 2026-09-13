@@ -2,6 +2,7 @@ import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, test } from "vitest";
 import {
+  ConversationHistoryAction,
   QuoteConversationMutationStatus,
   beginConversationPendingAttempt,
   buildConversationCloseGuard,
@@ -27,6 +28,28 @@ function renderConversationMutationState(props) {
 }
 
 describe("quote conversation panel states", () => {
+  test("renders older-history loading and recovery as explicit capability states", () => {
+    const loading = renderToStaticMarkup(
+      <ConversationHistoryAction
+        hasOlder
+        oldestCursor={{ createdAtMs: 1, messageId: "message-1" }}
+        phase="loading_older"
+        busy
+      />
+    );
+    const recovery = renderToStaticMarkup(
+      <ConversationHistoryAction
+        hasOlder
+        oldestCursor={{ createdAtMs: 1, messageId: "message-1" }}
+        phase="older_error"
+        error="Older history is temporarily unavailable."
+      />
+    );
+    expect(loading).toContain('data-capability-state="loading_older"');
+    expect(loading).toContain("Loading older messages...");
+    expect(recovery).toContain('data-capability-state="older_error"');
+    expect(recovery).toContain("Older history is temporarily unavailable.");
+  });
   test("deduplicates replayed message receipts and keeps canonical time order", () => {
     const first = {
       messageId: "message-a",

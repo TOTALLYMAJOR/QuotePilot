@@ -48,7 +48,7 @@
   border-bottom: 1px solid var(--csw-line);
 }
 
-.csw-header h3 {
+.csw-header h2 {
   max-width: 46rem;
   margin: 0.3rem 0 0;
   color: var(--csw-ink);
@@ -184,8 +184,8 @@
   gap: 0.75rem;
 }
 
-.csw-controls h4,
-.csw-consequence-rail h4 {
+.csw-controls h3,
+.csw-consequence-rail h3 {
   margin: 0.2rem 0 0;
   color: var(--csw-ink);
   font-family: var(--font-display, "Manrope", sans-serif);
@@ -284,6 +284,7 @@
 
 .csw-quick-adjustments button,
 .csw-quiet-button {
+  min-width: 44px;
   min-height: 44px;
   padding: 0.45rem 0.62rem;
   border: 1px solid var(--csw-line-strong);
@@ -449,6 +450,10 @@
   table-layout: fixed;
 }
 
+.csw-comparison-shell {
+  min-width: 0;
+}
+
 .csw-comparison th,
 .csw-comparison td {
   padding: 0.7rem 0;
@@ -459,7 +464,7 @@
 }
 
 .csw-comparison th:first-child {
-  width: 28%;
+  width: 24%;
 }
 
 .csw-comparison th:not(:first-child),
@@ -472,16 +477,60 @@
   font-size: 0.78rem;
   font-variant-numeric: tabular-nums;
   font-weight: 650;
-}
-
-.csw-comparison th:last-child,
-.csw-comparison td:last-child {
-  color: var(--csw-accent);
   text-align: right;
 }
 
+.csw-comparison thead th:not(:first-child) {
+  text-align: right;
+}
+
+.csw-comparison thead strong,
+.csw-comparison thead span,
+.csw-comparison td strong,
+.csw-comparison td small {
+  display: block;
+}
+
+.csw-comparison thead strong {
+  color: var(--csw-ink);
+  font-size: 0.78rem;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.csw-comparison thead span,
+.csw-comparison td small {
+  margin-top: 0.18rem;
+  color: var(--csw-muted);
+  font-size: 0.67rem;
+  font-weight: 650;
+  letter-spacing: 0;
+  line-height: 1.3;
+  text-transform: none;
+}
+
+.csw-comparison [data-selected="true"] {
+  background: color-mix(in srgb, var(--csw-accent) 7%, #fff);
+  box-shadow: inset 0 2px 0 color-mix(in srgb, var(--csw-accent) 70%, transparent);
+}
+
+.csw-comparison td[data-selected="true"] {
+  color: var(--csw-accent);
+  box-shadow: inset 0 -1px 0 color-mix(in srgb, var(--csw-accent) 24%, transparent);
+}
+
+.csw-comparison [data-evidence-state="retained"] span,
+.csw-comparison [data-evidence-state="retained"] small,
+.csw-comparison-mobile [data-evidence-state="retained"] {
+  color: var(--csw-danger);
+}
+
+.csw-comparison-mobile {
+  display: none;
+}
+
 .csw-menu-basis {
-  margin: auto 0 0;
+  margin: 0.85rem 0 0;
   padding-top: 0.1rem;
   color: var(--csw-muted);
   font-size: 0.75rem;
@@ -815,7 +864,7 @@
   to { opacity: 1; }
 }
 
-@container commercial-scenario (max-width: 65rem) {
+@container commercial-scenario (max-width: 84rem) {
   .csw-grid {
     grid-template-columns: minmax(12rem, 0.72fr) minmax(19rem, 1.28fr);
     grid-template-areas:
@@ -883,6 +932,75 @@
   .csw-footer__actions {
     justify-content: flex-end;
   }
+
+  .csw-comparison--wide {
+    display: none;
+  }
+
+  .csw-comparison-mobile {
+    display: grid;
+    border-top: 1px solid var(--csw-line);
+  }
+
+  .csw-comparison-mobile > header {
+    display: flex;
+    min-height: 44px;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    border-bottom: 1px solid var(--csw-line);
+    color: var(--csw-ink);
+    font-size: 0.75rem;
+  }
+
+  .csw-comparison-mobile > header span {
+    color: var(--csw-muted);
+    text-align: right;
+  }
+
+  .csw-comparison-mobile dl {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    margin: 0;
+    border-bottom: 1px solid var(--csw-line);
+  }
+
+  .csw-comparison-mobile dl > div {
+    min-width: 0;
+    padding: 0.7rem 0.45rem;
+  }
+
+  .csw-comparison-mobile dl > div:first-child {
+    padding-left: 0;
+  }
+
+  .csw-comparison-mobile dl > div:last-child {
+    padding-right: 0;
+    color: var(--csw-accent);
+    text-align: right;
+  }
+
+  .csw-comparison-mobile dt,
+  .csw-comparison-mobile dd {
+    margin: 0;
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .csw-comparison-mobile dt {
+    color: var(--csw-muted);
+    font-size: 0.67rem;
+    font-weight: 720;
+    line-height: 1.35;
+  }
+
+  .csw-comparison-mobile dd {
+    margin-top: 0.28rem;
+    color: inherit;
+    font-size: 0.78rem;
+    font-variant-numeric: tabular-nums;
+    font-weight: 680;
+  }
 }
 
 @container commercial-scenario (max-width: 32.5rem) {
@@ -903,10 +1021,16 @@
     grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   }
 
-  .csw-comparison th,
-  .csw-comparison td {
+  .csw-comparison-mobile dl > div {
     padding-inline: 0.3rem;
-    font-size: 0.75rem;
+  }
+
+  .csw-comparison-mobile dt {
+    font-size: 0.64rem;
+  }
+
+  .csw-comparison-mobile dd {
+    font-size: 0.74rem;
   }
 
   .csw-footer__actions {

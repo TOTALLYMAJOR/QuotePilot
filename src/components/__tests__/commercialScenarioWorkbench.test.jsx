@@ -305,6 +305,15 @@ describe("CommercialScenarioWorkbench", () => {
     act(() => root.render(<LiveHarness onRequest={onRequest} />));
     act(() => button("Duplicate scenario").click());
     expect(container.textContent).toContain("Scenario B175 guests · g0");
+    const allScenarioHeaders = [...container.querySelectorAll('[data-scenario-comparison="all"] th[scope="col"]')];
+    expect(allScenarioHeaders).toHaveLength(4);
+    expect(allScenarioHeaders.map((entry) => entry.textContent)).toEqual(expect.arrayContaining([
+      "Measure",
+      expect.stringContaining("CurrentSaved revision"),
+      expect.stringContaining("Scenario AExact preview"),
+      expect.stringContaining("Scenario BUpdating")
+    ]));
+    expect(container.querySelector('[data-scenario-column="scenario-b"][data-selected="true"]')).not.toBeNull();
     act(() => vi.runOnlyPendingTimers());
     expect(onRequest).toHaveBeenCalledTimes(1);
     expect(onRequest).toHaveBeenLastCalledWith(expect.objectContaining({
@@ -338,6 +347,8 @@ describe("CommercialScenarioWorkbench", () => {
     });
     expect(container.querySelector('[role="tab"][aria-selected="true"]').textContent)
       .toContain("Current");
+    expect(container.querySelector('[data-scenario-comparison="selected"]').getAttribute("aria-label"))
+      .toBe("Current compared with Current");
     expect(container.textContent).toContain("Nothing here has changed Commercial, Staffing, Inventory, or BEO authority");
     expect(container.textContent).not.toMatch(/best scenario/i);
   });
@@ -568,7 +579,7 @@ describe("CommercialScenarioWorkbench", () => {
     }));
   });
 
-  test("clears invalid guest input with Escape and exposes one semantic comparison and discard", () => {
+  test("clears invalid guest input with Escape and exposes all-scenario plus selected-scenario comparisons", () => {
     act(() => root.render(<LiveHarness />));
     const input = container.querySelector("#csw-guest-count");
     act(() => changeNumberInput(input, "401"));
@@ -576,7 +587,13 @@ describe("CommercialScenarioWorkbench", () => {
     act(() => input.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
     expect(input.value).toBe("175");
     expect(input.hasAttribute("aria-invalid")).toBe(false);
-    expect(container.querySelectorAll(".csw-comparison th[scope=\"col\"]")).toHaveLength(4);
+    expect(container.querySelectorAll('[data-scenario-comparison="all"] th[scope="col"]')).toHaveLength(3);
+    expect(container.querySelector('[data-scenario-comparison="all"] caption').textContent)
+      .toBe("Current commercial values and every session scenario");
+    expect(container.querySelector('[data-scenario-comparison="selected"]').getAttribute("aria-label"))
+      .toBe("Current compared with Scenario A");
+    expect(container.querySelector('[data-scenario-comparison="selected"]').textContent)
+      .toContain("Quote total · Current$12,480.00Quote total · Scenario A$16,920.00Difference+$4,440.00");
     expect([...container.querySelectorAll("button")]
       .filter((entry) => entry.textContent.trim() === "Discard scenario")).toHaveLength(1);
   });

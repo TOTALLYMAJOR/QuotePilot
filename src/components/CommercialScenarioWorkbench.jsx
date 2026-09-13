@@ -141,47 +141,170 @@ function sourceRevision(value, preferredKeys = []) {
   return "Not supplied";
 }
 
-function CurrentWorkingComparison({ projection }) {
-  const commercial = projection?.consequences?.commercial || {};
-  const inventory = projection?.consequences?.inventory || {};
-  const currency = commercial.currency || inventory.cost?.currency || "USD";
-  const rows = [
-    {
-      label: "Quote total",
-      current: formatMoney(commercial.total?.before, currency),
-      working: formatMoney(commercial.total?.proposedAfter, currency),
-      difference: signedMoney(commercial.total?.delta, currency)
-    },
-    {
-      label: "Deposit",
-      current: formatMoney(commercial.depositRequirement?.before, currency),
-      working: formatMoney(commercial.depositRequirement?.proposedAfter, currency),
-      difference: signedMoney(commercial.depositRequirement?.delta, currency)
-    },
-    {
-      label: "Ingredient cost",
-      current: formatMoney(inventory.cost?.beforeMinor, inventory.cost?.currency, { minor: true }),
-      working: formatMoney(inventory.cost?.proposedAfterMinor, inventory.cost?.currency, { minor: true }),
-      difference: signedMoney(inventory.cost?.deltaMinor, inventory.cost?.currency, { minor: true })
+function scenarioEvidenceLabel(state) {
+  return ({
+    saved: "Saved revision",
+    exact: "Exact preview",
+    retained: "Retained result",
+    updating: "Updating",
+    unavailable: "Not evaluated"
+  })[state] || "Not evaluated";
+}
+
+function workingScenarioProjection({
+  scenario,
+  activeScenario,
+  visibleProjection,
+  exactProjectionUsable,
+  showingRetainedProjection,
+  workbenchUpdating
+}) {
+  if (scenario.kind === "current") {
+    return {
+      state: "saved",
+      projection: scenario.scenarioId === activeScenario.scenarioId && exactProjectionUsable
+        ? visibleProjection
+        : null
+    };
+  }
+  if (scenario.scenarioId === activeScenario.scenarioId) {
+    if (exactProjectionUsable) return { state: "exact", projection: visibleProjection };
+    if (showingRetainedProjection) return { state: "retained", projection: visibleProjection };
+    return { state: workbenchUpdating ? "updating" : "unavailable", projection: null };
+  }
+  const envelope = scenario.cachedProjection;
+  if (
+    commercialScenarioProjectionMatches(scenario, envelope)
+    && projectionIsUsable(envelope?.projection, scenario)
+  ) {
+    return { state: "exact", projection: envelope.projection };
+  }
+  return { state: "unavailable", projection: null };
+}
+
+function comparisonMetricRows(columns, currentGuestCount) {
+  const referenceProjection = columns.find((column) => column.projection)?.projection || null;
+  const metric = (column, path, { minor = false } = {}) => {
+    const source = column.scenario.kind === "current" ? referenceProjection : column.projection;
+    const commercial = source?.consequences?.commercial || {};
+    const inventory = source?.consequences?.inventory || {};
+    const currency = commercial.currency || inventory.cost?.currency || "USD";
+    if (path === "total") {
+      return formatMoney(column.scenario.kind === "current"
+        ? commercial.total?.before
+        : commercial.total?.proposedAfter, currency);
     }
+    if (path === "deposit") {
+      return formatMoney(column.scenario.kind === "current"
+        ? commercial.depositRequirement?.before
+        : commercial.depositRequirement?.proposedAfter, currency);
+    }
+    return formatMoney(column.scenario.kind === "current"
+      ? inventory.cost?.beforeMinor
+      : inventory.cost?.proposedAfterMinor, inventory.cost?.currency, { minor });
+  };
+  const difference = (column, path, { minor = false } = {}) => {
+    if (column.scenario.kind === "current") return "No change";
+    if (!column.projection) return column.state === "updating" ? "Updating" : "Not evaluated";
+    const commercial = column.projection?.consequences?.commercial || {};
+    const inventory = column.projection?.consequences?.inventory || {};
+    const currency = commercial.currency || inventory.cost?.currency || "USD";
+    if (path === "total") return signedMoney(commercial.total?.delta, currency);
+    if (path === "deposit") return signedMoney(commercial.depositRequirement?.delta, currency);
+    return signedMoney(inventory.cost?.deltaMinor, inventory.cost?.currency, { minor });
+  };
+  return [
+    {
+      id: "guests",
+      label: "Guests",
+      value: (column) => guestLabel(column.scenario.guestCount),
+      difference: (column) => signedCount(column.scenario.guestCount - currentGuestCount)
+    },
+    { id: "quote-total", label: "Quote total", value: (column) => metric(column, "total"), difference: (column) => difference(column, "total") },
+    { id: "deposit", label: "Deposit", value: (column) => metric(column, "deposit"), difference: (column) => difference(column, "deposit") },
+    { id: "ingredient-cost", label: "Ingredient cost", value: (column) => metric(column, "ingredient", { minor: true }), difference: (column) => difference(column, "ingredient", { minor: true }) }
   ];
+}
+
+function ScenarioComparison({
+  scenarios,
+  activeScenario,
+  visibleProjection,
+  exactProjectionUsable,
+  showingRetainedProjection,
+  workbenchUpdating,
+  currentGuestCount
+}) {
+  const columns = scenarios.map((scenario) => ({
+    scenario,
+    selected: scenario.scenarioId === activeScenario.scenarioId,
+    ...workingScenarioProjection({
+      scenario,
+      activeScenario,
+      visibleProjection,
+      exactProjectionUsable,
+      showingRetainedProjection,
+      workbenchUpdating
+    })
+  }));
+  const rows = comparisonMetricRows(columns, currentGuestCount);
+  const currentColumn = columns[0];
+  const selectedColumn = columns.find((column) => column.selected) || currentColumn;
   return (
-    <table className="csw-comparison">
-      <caption className="visually-hidden">Current and working commercial comparison</caption>
-      <thead>
-        <tr><th scope="col">Measure</th><th scope="col">Current</th><th scope="col">Working</th><th scope="col">Difference</th></tr>
-      </thead>
-      <tbody>
-        {rows.map((row) => (
-          <tr key={row.label}>
-            <th scope="row">{row.label}</th>
-            <td data-column="Current">{row.current}</td>
-            <td data-column="Working">{row.working}</td>
-            <td data-column="Difference">{row.difference}</td>
+    <div className="csw-comparison-shell">
+      <table className="csw-comparison csw-comparison--wide" data-scenario-comparison="all">
+        <caption className="visually-hidden">Current commercial values and every session scenario</caption>
+        <thead>
+          <tr>
+            <th scope="col">Measure</th>
+            {columns.map((column) => (
+              <th
+                key={column.scenario.scenarioId}
+                scope="col"
+                data-scenario-column={column.scenario.scenarioId}
+                data-selected={column.selected || undefined}
+                data-evidence-state={column.state}
+              >
+                <strong>{column.scenario.name}</strong>
+                <span>{scenarioEvidenceLabel(column.state)}</span>
+              </th>
+            ))}
           </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => (
+            <tr key={row.id}>
+              <th scope="row">{row.label}</th>
+              {columns.map((column) => (
+                <td
+                  key={column.scenario.scenarioId}
+                  data-scenario-column={column.scenario.scenarioId}
+                  data-selected={column.selected || undefined}
+                  data-evidence-state={column.state}
+                >
+                  <strong>{row.value(column)}</strong>
+                  {column.scenario.kind === "working" ? <small>{row.difference(column)}</small> : null}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+
+      <div className="csw-comparison-mobile" data-scenario-comparison="selected" aria-label={`Current compared with ${selectedColumn.scenario.name}`}>
+        <header>
+          <strong>Current → {selectedColumn.scenario.name}</strong>
+          <span data-evidence-state={selectedColumn.state}>{scenarioEvidenceLabel(selectedColumn.state)}</span>
+        </header>
+        {rows.map((row) => (
+          <dl key={row.id}>
+            <div><dt>{row.label} · Current</dt><dd>{row.value(currentColumn)}</dd></div>
+            <div><dt>{row.label} · {selectedColumn.scenario.name}</dt><dd>{row.value(selectedColumn)}</dd></div>
+            <div><dt>Difference</dt><dd>{row.difference(selectedColumn)}</dd></div>
+          </dl>
         ))}
-      </tbody>
-    </table>
+      </div>
+    </div>
   );
 }
 
@@ -474,7 +597,7 @@ function CommercialScenarioWorkbenchReady({
       <header className="csw-header">
         <div>
           <p className="csw-kicker">Living Commercial Twin · Scenario Workbench</p>
-          <h3 id="csw-title">Explore the commitment before you make it</h3>
+          <h2 id="csw-title">Explore the commitment before you make it</h2>
         </div>
         <div className="csw-header__state">
           <strong>Session only · not committed</strong>
@@ -516,7 +639,7 @@ function CommercialScenarioWorkbenchReady({
         <section className="csw-commitment" aria-labelledby="csw-commitment-title">
           <div className="csw-commitment__identity">
             <p className="csw-kicker">Living commitment · Current saved</p>
-            <h4 id="csw-commitment-title">{currentIdentity.name || "Current event commitment"}</h4>
+            <h3 id="csw-commitment-title">{currentIdentity.name || "Current event commitment"}</h3>
             <p className="csw-event-meta">
               {formatEventDate(currentIdentity.date) ? <span>{formatEventDate(currentIdentity.date)}</span> : null}
               {currentIdentity.time ? <span>{currentIdentity.time}</span> : null}
@@ -556,7 +679,15 @@ function CommercialScenarioWorkbenchReady({
             </p>
           ) : null}
 
-          <CurrentWorkingComparison projection={visibleProjection} />
+          <ScenarioComparison
+            scenarios={snapshot.scenarios}
+            activeScenario={activeScenario}
+            visibleProjection={visibleProjection}
+            exactProjectionUsable={exactProjectionUsable}
+            showingRetainedProjection={showingRetainedProjection}
+            workbenchUpdating={workbenchUpdating}
+            currentGuestCount={snapshot.currentScenario.guestCount}
+          />
 
           <p className="csw-menu-basis">
             <strong>Menu basis</strong><br />
@@ -577,7 +708,7 @@ function CommercialScenarioWorkbenchReady({
           <div className="csw-controls__heading">
             <div>
               <p className="csw-kicker">Scenario controls</p>
-              <h4 id="csw-controls-title">{activeScenario.name}</h4>
+              <h3 id="csw-controls-title">{activeScenario.name}</h3>
             </div>
             <span className="csw-scenario-meta">g{activeScenario.generation}</span>
           </div>
@@ -738,7 +869,7 @@ export default function CommercialScenarioWorkbench({
         aria-labelledby="csw-unavailable-title"
       >
         <p className="csw-kicker">Living Commercial Twin · Scenario Workbench</p>
-        <h3 id="csw-unavailable-title">A scenario cannot be created from incomplete authority</h3>
+        <h2 id="csw-unavailable-title">A scenario cannot be created from incomplete authority</h2>
         <p>
           The current saved guest count, base quote revision, and quote scope are required.
           No temporary scenario or consequence request was created.

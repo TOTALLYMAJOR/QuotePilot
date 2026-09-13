@@ -32,10 +32,10 @@
   flex: 1 1 12rem;
 }
 
-.fulfillment-intelligence__header h4,
-.fulfillment-intelligence__decision h5,
-.fulfillment-intelligence__domain h5,
-.fulfillment-intelligence__constraint-stack h5 {
+.fulfillment-intelligence__header h3,
+.fulfillment-intelligence__decision h4,
+.fulfillment-intelligence__domain h4,
+.fulfillment-intelligence__constraint-stack h4 {
   margin: 0.2rem 0 0;
   color: var(--fulfillment-ink);
   font-family: var(--font-display, "Manrope", sans-serif);
@@ -43,13 +43,13 @@
   letter-spacing: -0.015em;
 }
 
-.fulfillment-intelligence__header h4 {
+.fulfillment-intelligence__header h3 {
   font-size: 1rem;
 }
 
-.fulfillment-intelligence__decision h5,
-.fulfillment-intelligence__domain h5,
-.fulfillment-intelligence__constraint-stack h5 {
+.fulfillment-intelligence__decision h4,
+.fulfillment-intelligence__domain h4,
+.fulfillment-intelligence__constraint-stack h4 {
   font-size: 0.92rem;
 }
 
@@ -389,7 +389,7 @@
   background: color-mix(in srgb, var(--tone-danger, #a82222) 5%, #fff);
 }
 
-.fulfillment-intelligence__shortage-block h6 {
+.fulfillment-intelligence__shortage-block h5 {
   margin: 0;
   color: var(--fulfillment-ink);
   font-size: 0.75rem;

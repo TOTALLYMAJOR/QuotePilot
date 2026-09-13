@@ -405,7 +405,7 @@ function DecisionAnswer({ answer, retained, onOpenInventory, onOpenStaffing }) {
         <header>
           <div>
             <p className="csw-kicker">Decision answer · retained evidence</p>
-            <h5 id="fulfillment-decision-answer-title">Current answer withheld</h5>
+            <h4 id="fulfillment-decision-answer-title">Current answer withheld</h4>
           </div>
           <EvidenceState value="stale" />
         </header>
@@ -438,7 +438,7 @@ function DecisionAnswer({ answer, retained, onOpenInventory, onOpenStaffing }) {
       <header>
         <div>
           <p className="csw-kicker">Decision answer · cross-authority synthesis</p>
-          <h5 id="fulfillment-decision-answer-title">{decisionHeadline(answer)}</h5>
+          <h4 id="fulfillment-decision-answer-title">{decisionHeadline(answer)}</h4>
         </div>
         <EvidenceState value={answer.state === "supported" ? "available" : answer.state} availableLabel="Supported" />
       </header>
@@ -541,7 +541,7 @@ function ShortageList({ supply }) {
   if (!shortages.length) return null;
   return (
     <div className="fulfillment-intelligence__shortage-block">
-      <h6>{shortages.length} proposed shortage{shortages.length === 1 ? "" : "s"}</h6>
+      <h5>{shortages.length} proposed shortage{shortages.length === 1 ? "" : "s"}</h5>
       <ul className="fulfillment-intelligence__shortages">
         {shortages.map((row, index) => (
           <li key={`${text(row.resourceId || row.resourceLabel)}-${index}`}>
@@ -561,7 +561,7 @@ function ConstraintStack({ constraints }) {
       <header>
         <div>
           <p className="csw-kicker">Ordered constraint stack</p>
-          <h5 id="fulfillment-constraint-stack-title">What governs next</h5>
+          <h4 id="fulfillment-constraint-stack-title">What governs next</h4>
         </div>
         <span>{ordered.length ? `${ordered.length} known` : "None declared"}</span>
       </header>
@@ -631,7 +631,7 @@ function ConstraintExplanation({
       data-scenario-id={activeScenario?.scenarioId}
       data-scenario-generation={activeScenario?.generation}
     >
-      <h5>Why {constraint.resourceLabel} is limiting</h5>
+      <h4>Why {constraint.resourceLabel} is limiting</h4>
       <p>
         {required !== null
           ? `Declared demand is ${formatMicros(required, constraint.unitId)}. `
@@ -726,7 +726,7 @@ export default function FulfillmentIntelligence({
       <header className="csw-rail-heading fulfillment-intelligence__header">
         <div>
           <p className="csw-kicker">Consequence rail · composed read model</p>
-          <h4 id="fulfillment-intelligence-title">Fulfillment</h4>
+          <h3 id="fulfillment-intelligence-title">Fulfillment</h3>
           <p>Independent People and Supply authority. One rebuildable consequence view.</p>
         </div>
         <StatusChip {...rootChip({ fulfillment, updating, retained })} />
@@ -767,7 +767,7 @@ export default function FulfillmentIntelligence({
           <header>
             <div>
               <span>People</span>
-              <h5>Staff coverage</h5>
+              <h4>Staff coverage</h4>
             </div>
             <EvidenceState value={people.evidenceState} availableLabel={people.completeness === "complete" ? "Current" : "Available · partial"} />
           </header>
@@ -812,7 +812,7 @@ export default function FulfillmentIntelligence({
           <header>
             <div>
               <span>Supply</span>
-              <h5>Ingredient coverage</h5>
+              <h4>Ingredient coverage</h4>
             </div>
             <EvidenceState value={supply.evidenceState} availableLabel={supply.completeness === "complete" ? "Current" : "Available · partial"} />
           </header>

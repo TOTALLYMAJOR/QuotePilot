@@ -68,11 +68,16 @@ progressively disclosed Administration, account settings, and sign-out.
 ### Five-minute first setup
 
 1. Sign in and open **Library**.
-2. Scan **Offers**, **Components**, **Templates**, and **Pricing & Rules** to
-   understand the current commercial inventory.
-3. If setup needs attention, use the one action in **Before the next quote**.
-   Other unresolved areas remain readable and completed setup is collapsed.
-4. Treat each readiness measure independently. Missing optional starting
+2. Use **Your path to the first quote** as the activation sequence:
+   **Business basics → Offers and menu → Selling price → Cost visibility**.
+   The first unfinished milestone owns the visible action. Completed milestones
+   remain visible without competing for attention.
+3. At **Offers and menu**, choose **Build offers and menu** for manual entry or
+   **Import an existing menu** to open Import Studio. An import is reviewed and
+   staged into the existing catalog setup draft; it does not create a second
+   catalog or become active pricing by itself.
+4. Treat each readiness measure independently. **Cost visibility** is optional
+   for the first quote. Missing optional starting
    points, additional users, provider connections, or cost evidence does not by
    itself block ordinary quote creation. Missing cost evidence does make margin
    unavailable for the affected scope.
@@ -900,6 +905,15 @@ unchanged.
   canonical message records or expose a body preview. Select one
   event to load its canonical history through the existing conversation
   callable; direct browser access to conversation records remains denied.
+  Concurrent requests for that exact access identity share one body load, and
+  a recently opened thread may reuse its normalized result for up to 30 seconds
+  from bounded application memory. Manual refresh, automatic signal refresh,
+  and the first revisit after a successful send still call the authoritative
+  loader. Nothing is written to browser storage.
+  The first load returns the latest 50 messages. When earlier history exists,
+  use **Load older messages** to retrieve the next chronological page through
+  the same authorization-checked callable. A failed older-page request keeps
+  the visible messages and offers the same action again.
 - A thread opens only when the quote has a current unexpired portal whose exact
   revision was provider-accepted and activated. Draft, expired, deleted, or
   mismatched delivery state is labeled unavailable; use `View event` to repair
@@ -907,9 +921,12 @@ unchanged.
 - For an open staff thread, QuotePilot watches only that exact organization
   quote document. The customer decision center watches only the exact current
   portal document. When a higher-count or distinct non-older body-free signal
-  arrives, QuotePilot calls the existing loader again so the server revalidates tenant, token,
-  issuance, lifecycle, expiry, and delivery activation before returning
-  canonical message bodies. A send remains callable-owned and is recorded only
+  arrives, QuotePilot requests only bodies after the newest loaded message. A
+  burst continues through bounded 50-message pages; every page makes the server
+  revalidate tenant, token, issuance, lifecycle, expiry, and delivery activation
+  before returning canonical message bodies. Existing loaded history remains
+  visible, and an incomplete catch-up is labeled stale with manual refresh
+  recovery. A send remains callable-owned and is recorded only
   after its exact receipt; idempotent reconciliation and existing message/rate
   limits are unchanged.
 - Read the synchronization labels narrowly: `Catching up` means the listener is
@@ -3486,14 +3503,16 @@ same save path as every other catalog field.
 
 ## Library readiness and Menu Builder
 
-Open **Library** to review the commercial inventory first. **Before the next
-quote** is contextual setup evidence, not the primary content. When something
-needs attention, the first unresolved area receives one administrator action
-and the remaining unresolved areas stay readable. Completed setup compresses
-under a disclosure. Costs, optional starting points, additional users, and
-provider connections do not block ordinary quote creation; missing cost
-evidence does keep margin unavailable for the affected scope. Standalone
-Library does not treat missing quote or proposal context as a setup failure.
+Open **Library** to review the commercial inventory first. **Your path to the
+first quote** turns setup into four ordered milestones: Business basics, Offers
+and menu, Selling price, and optional Cost visibility. The first incomplete
+milestone receives the administrator action. Offers and menu can continue into
+the existing editor or open Import Studio for an existing source. Other setup
+areas remain under a secondary disclosure, and completed setup stays quiet.
+Costs, optional starting points, additional users, and provider connections do
+not block ordinary quote creation; missing cost evidence does keep margin
+unavailable for the affected scope. Standalone Library does not treat missing
+quote or proposal context as a setup failure.
 
 Administrators can open the exact setup area. Sales staff receive the same
 business outcomes in read-only form and one statement that an administrator

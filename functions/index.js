@@ -337,11 +337,13 @@ const {
 const {
   PORTAL_CONVERSATION_RATE_LIMIT,
   PORTAL_CONVERSATION_RATE_WINDOW_MS,
+  PORTAL_CONVERSATION_PAGE_SIZE,
   PORTAL_CONVERSATION_TOTAL_MESSAGE_LIMIT,
   PortalConversationError,
   assertPortalConversationActivation,
   assertPortalConversationTotal,
   buildPortalConversationActor,
+  buildPortalConversationPage,
   buildPortalConversationMessage,
   buildPortalConversationRateKey,
   buildPortalConversationRequestKey,
@@ -13123,13 +13125,22 @@ exports.getQuotePortalConversation = functions.region(REGION).https.onCall(async
     binding = await resolvePortalConversationBinding(input, context);
     const nowISO = new Date().toISOString();
     const firstScope = await readBoundPortalConversationScope({ binding, nowISO });
-    const messagesSnap = await firstScope.refs.messagesRef
-      .orderBy("createdAtMs", "asc")
-      .limit(PORTAL_CONVERSATION_TOTAL_MESSAGE_LIMIT)
+    const catchUp = Boolean(input.after);
+    let messagesQuery = firstScope.refs.messagesRef
+      .orderBy("createdAtMs", catchUp ? "asc" : "desc")
+      .orderBy(FieldPath.documentId(), catchUp ? "asc" : "desc");
+    if (input.after) {
+      messagesQuery = messagesQuery.startAfter(input.after.createdAtMs, input.after.messageId);
+    } else if (input.before) {
+      messagesQuery = messagesQuery.startAfter(input.before.createdAtMs, input.before.messageId);
+    }
+    const messagesSnap = await messagesQuery
+      .limit(PORTAL_CONVERSATION_PAGE_SIZE + 1)
       .get();
-    const messages = messagesSnap.docs
-      .map((snapshot) => projectPortalConversationMessage(snapshot.data() || {}))
-      .filter(Boolean);
+    const conversationPage = buildPortalConversationPage(messagesSnap.docs.map((snapshot) => ({
+      id: snapshot.id,
+      data: snapshot.data() || {}
+    })), { direction: catchUp ? "newer" : "older" });
 
     // A final authorization read prevents a token rotated while the message
     // query was in flight from receiving any quote-scoped history.
@@ -13143,7 +13154,9 @@ exports.getQuotePortalConversation = functions.region(REGION).https.onCall(async
         "The customer portal changed while the conversation loaded. Open the current link and try again."
       );
     }
-    return portalConversationResponse(finalScope, messages);
+    return portalConversationResponse(finalScope, conversationPage.messages, {
+      page: conversationPage.page
+    });
   } catch (err) {
     return throwPortalConversationFailure(err, "getQuotePortalConversation", binding);
   }

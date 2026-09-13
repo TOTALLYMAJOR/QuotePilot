@@ -128,6 +128,38 @@ async function expectNoHorizontalOverflow(page) {
     .toBeLessThanOrEqual(dimensions.clientWidth + 1);
 }
 
+async function expectPriorityRowsUseAvailableWidth(now) {
+  const defects = await now.locator(".ambient-now-priority").evaluateAll((rows) => rows.flatMap((row, index) => {
+    const body = row.querySelector(".ambient-now-priority__body");
+    const copy = row.querySelector(".ambient-now-priority__copy");
+    const action = row.querySelector(".ambient-now-priority__action");
+    if (!body || !copy || !action) return [{ index, reason: "missing required priority region" }];
+
+    const rowRect = row.getBoundingClientRect();
+    const bodyRect = body.getBoundingClientRect();
+    const copyRect = copy.getBoundingClientRect();
+    const actionRect = action.getBoundingClientRect();
+    const overlapWidth = Math.max(0, Math.min(copyRect.right, actionRect.right) - Math.max(copyRect.left, actionRect.left));
+    const overlapHeight = Math.max(0, Math.min(copyRect.bottom, actionRect.bottom) - Math.max(copyRect.top, actionRect.top));
+    const reasons = [];
+
+    if (bodyRect.width < rowRect.width * 0.8) reasons.push("body collapsed within priority row");
+    if (copyRect.width < Math.min(220, rowRect.width * 0.55)) reasons.push("priority copy is not readable");
+    if (actionRect.left < rowRect.left - 1 || actionRect.right > rowRect.right + 1) reasons.push("action escaped priority row");
+    if (overlapWidth * overlapHeight > 1) reasons.push("action overlaps priority copy");
+
+    return reasons.map((reason) => ({
+      index,
+      reason,
+      rowWidth: rowRect.width,
+      bodyWidth: bodyRect.width,
+      copyWidth: copyRect.width
+    }));
+  }));
+
+  expect(defects).toEqual([]);
+}
+
 async function capture(page, filename) {
   if (!CAPTURE) return;
   mkdirSync(OUTPUT_DIR, { recursive: true });
@@ -155,6 +187,7 @@ test.describe("Ambient Now decision ledger", () => {
     await expect(now.locator('[data-attention-position="2"]')).toContainText("Overdue follow-up");
     await expect(now.locator('[data-attention-position="3"]')).toContainText("Admin decision");
     await expect(now.locator(".ambient-now-priority__number")).toHaveCount(0);
+    await expectPriorityRowsUseAvailableWidth(now);
     await expect(now.getByTestId("now-temporal-horizon").locator("li")).toHaveCount(7);
     await expect(now.getByText("Autumn Benefit Dinner", { exact: true }).first()).toBeVisible();
     await expect(now.getByText("Recently handled", { exact: true })).toBeVisible();
@@ -192,6 +225,7 @@ test.describe("Ambient Now decision ledger", () => {
       await gotoNow(page);
       await expect(page.locator('[data-attention-position="1"]')).toBeVisible();
       await expect(page.getByTestId("now-temporal-horizon")).toBeVisible();
+      await expectPriorityRowsUseAvailableWidth(page.locator(".ambient-now"));
       await expectNoHorizontalOverflow(page);
       await capture(page, `ambient-now-${viewport.name}.png`);
     }
