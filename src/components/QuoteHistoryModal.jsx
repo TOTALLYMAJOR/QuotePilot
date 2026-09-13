@@ -2890,6 +2890,12 @@ export function QuoteHistoryView({
               quoteNumber={focusedQuote.quoteNumber}
               available={Boolean(organizationId)}
               canReconcile
+              onOpenKitchenBeo={beoAvailable
+                ? () => handleOpenKitchenBeo(focusedQuote)
+                : undefined}
+              onOpenProductionChecklist={scheduleAvailable && typeof onOpenSchedule === "function"
+                ? () => onOpenSchedule(focusedQuote.id)
+                : undefined}
             />
           )}
           {focusedQuote && state.source === "firebase" && (
@@ -3225,6 +3231,12 @@ export function QuoteHistoryView({
             quoteNumber={focusedQuote.quoteNumber}
             available={Boolean(organizationId)}
             canReconcile
+            onOpenKitchenBeo={beoAvailable
+              ? () => handleOpenKitchenBeo(focusedQuote)
+              : undefined}
+            onOpenProductionChecklist={scheduleAvailable && typeof onOpenSchedule === "function"
+              ? () => onOpenSchedule(focusedQuote.id)
+              : undefined}
           />
         )}
         {focusedQuoteIsVisible && !administrationFocusActive && state.source === "firebase" && (

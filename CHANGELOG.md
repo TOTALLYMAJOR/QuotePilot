@@ -6,6 +6,11 @@ All notable project changes are documented in this file.
 
 ## Unreleased — Event and Commercial activation receipt correction
 
+- Turn stale Kitchen BEO and production-plan invalidations into exact recovery
+  actions. Operators can open the current quote's Kitchen BEO or event
+  production checklist directly from Commercial Change Intelligence; neither
+  handoff regenerates an artifact, changes checklist state, nor reconciles the
+  invalidation without a separate reviewed action.
 - Make blocked quote saves recoverable in place: each supported blocker now
   opens and focuses its exact event, customer, or menu control instead of
   leaving the operator to search the proposal. Tablet and mobile surfaces put
