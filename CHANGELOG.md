@@ -32,6 +32,11 @@ All notable project changes are documented in this file.
   bounds, and mismatched purchasing-pack units. The editor invents no ratios or
   production policy, and a checked draft is not described as saved, hosted, or
   human accepted.
+- Include the Library's separately loaded menu inventory when validating a
+  Delivery Planning draft. Valid component IDs now pass the same publication
+  checks whether menu records live in the catalog shell or the managed Menu
+  workspace; the validation snapshot is transient and does not duplicate or
+  persist menu authority.
 - Add the safe-off Delivery Planning Phase 1 source slice. Offers and Event
   Templates can preserve exact Delivery Blueprint references; published
   tenant-declared quantity policies compile staffed-buffet work blocks,

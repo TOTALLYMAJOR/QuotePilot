@@ -219,6 +219,13 @@ function configurationRuleMenuItems(catalog = {}) {
   return [...byId.values()];
 }
 
+export function buildCatalogDeliveryPlanningValidationSnapshot(catalog = {}, menuItems = []) {
+  return {
+    ...(catalog || {}),
+    menuItems: configurationRuleMenuItems({ ...(catalog || {}), menuItems })
+  };
+}
+
 function configurationRuleComponentRecords(catalog = {}, componentType = "") {
   if (componentType === "menu_item") return configurationRuleMenuItems(catalog);
   if (componentType === "addon") return Array.isArray(catalog?.addons) ? catalog.addons : [];
@@ -792,7 +799,7 @@ function countInvalidJsonArrayDrafts(jsonDrafts = {}, fields = []) {
   }, 0);
 }
 
-function buildPersistableCatalogDraft(draft, jsonDrafts) {
+function buildPersistableCatalogDraft(draft, jsonDrafts, menuItems = []) {
   const parseArray = (field, label) => {
     const parsed = JSON.parse(jsonDrafts?.[field] || "[]");
     if (!Array.isArray(parsed)) throw new Error(`${label}: Must be a JSON array.`);
@@ -817,7 +824,9 @@ function buildPersistableCatalogDraft(draft, jsonDrafts) {
     }
   }, jsonDrafts);
   validateCommercialPublication({ ...nextCatalog, menuInventoryComplete: false });
-  validateDeliveryPlanningConfiguration(nextCatalog);
+  validateDeliveryPlanningConfiguration(
+    buildCatalogDeliveryPlanningValidationSnapshot(nextCatalog, menuItems)
+  );
   return nextCatalog;
 }
 
@@ -1700,10 +1709,11 @@ export function AdminCatalogView({
   useEffect(() => {
     if (!open || !hasUnsavedChanges || shouldInitializeView || !scopedOrganizationId) return;
     try {
-      const nextDraft = buildPersistableCatalogDraft(draft, jsonDrafts);
+      const nextDraft = buildPersistableCatalogDraft(draft, jsonDrafts, menuItems);
       const normalizedBaseline = buildPersistableCatalogDraft(
         savedCatalogSnapshot,
-        buildJsonDrafts(savedCatalogSnapshot)
+        buildJsonDrafts(savedCatalogSnapshot),
+        menuItems
       );
       const changes = buildCatalogSetupChanges({
         catalog: nextDraft,
@@ -2653,10 +2663,11 @@ export function AdminCatalogView({
       return;
     }
     try {
-      const nextDraft = buildPersistableCatalogDraft(draft, jsonDrafts);
+      const nextDraft = buildPersistableCatalogDraft(draft, jsonDrafts, menuItems);
       const normalizedBaseline = buildPersistableCatalogDraft(
         savedCatalogSnapshot,
-        buildJsonDrafts(savedCatalogSnapshot)
+        buildJsonDrafts(savedCatalogSnapshot),
+        menuItems
       );
       const changes = buildCatalogSetupChanges({
         catalog: nextDraft,

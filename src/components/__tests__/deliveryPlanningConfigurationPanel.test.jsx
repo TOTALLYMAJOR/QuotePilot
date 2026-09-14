@@ -4,6 +4,8 @@ import { createRoot } from "react-dom/client";
 import { act } from "react";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import DeliveryPlanningConfigurationPanel from "../DeliveryPlanningConfigurationPanel";
+import { buildCatalogDeliveryPlanningValidationSnapshot } from "../AdminCatalogModal";
+import { validateDeliveryPlanningConfiguration } from "../../lib/deliveryPlanningConfiguration";
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -117,6 +119,19 @@ function clickButton(label) {
 }
 
 describe("DeliveryPlanningConfigurationPanel", () => {
+  test("validates against menu records loaded separately from the catalog shell", () => {
+    const input = fixture();
+    input.catalog.settings.menuSections = [];
+
+    const validationCatalog = buildCatalogDeliveryPlanningValidationSnapshot(
+      input.catalog,
+      [{ id: "roasted-chicken", name: "Roasted chicken" }]
+    );
+
+    expect(validateDeliveryPlanningConfiguration(validationCatalog).eligibleBlueprints).toHaveLength(1);
+    expect(input.catalog.menuItems).toBeUndefined();
+  });
+
   test("keeps activation blocked and offers source recovery when no reviewed Blueprint is available", () => {
     const input = fixture({ bound: false });
     input.catalog.settings.deliveryBlueprints = [];
