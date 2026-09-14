@@ -1,6 +1,6 @@
 # Version Control Playbook
 
-Last updated: 2026-09-13 17:24:50 CDT
+Last updated: 2026-09-13 19:09:08 CDT
 
 ## Goals
 - Keep `main` stable and deployable.
@@ -78,6 +78,10 @@ explicit owner promotion after real-run review.
   `roles/cloudscheduler.admin` for scheduled-function lifecycle. Cloud
   Functions Admin does not include either authority; their provider readback is
   a release prerequisite, not an emergency bypass.
+  Separately, every Function-bound Secret Manager value must grant
+  `roles/secretmanager.secretAccessor` to the exact runtime service account
+  before dispatch. Do not give the CI deployer broad secret-policy mutation
+  authority to compensate for a missing runtime binding.
 - Protect `main` and configure exactly one release approval mode. Team-owned
   repositories use `production` with a directly assigned independent reviewer
   and self-review prevention. Solo-owned repositories use the reviewless

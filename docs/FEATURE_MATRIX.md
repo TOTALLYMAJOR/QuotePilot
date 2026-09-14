@@ -1,6 +1,6 @@
 # Feature Matrix
 
-Last updated: 2026-09-13 17:24:50 CDT
+Last updated: 2026-09-13 19:09:08 CDT
 
 This matrix maps the master feature checklist to current implementation and source locations.
 It is an inventory and chronology index, not the canonical detailed history or
@@ -12,19 +12,18 @@ release, deployment, provider, risk, and acceptance state.
 
 | Evidence surface | Current state |
 |---|---|
-| Merged source | Commercial-platform and corrected Inventory Phases 2–8 are contained in the v0.18 source line. |
-| Firebase backend | `v0.18.1` at `8bada8d1` is deployed with 128 active Functions, but current provider readback found both Commercial Change and Event Spine runtime authority false. The exact tenant settings are true; a protected `ragnakok-operations` profile correction is source-qualified but not yet deployed. |
-| Public browser | Vercel remains `v0.16.6`; Firebase Hosting remains `v0.16.3`. Current v0.18 frontend exposure is not established. |
-| Tenant data | `ragnakok-realistic-v1` Inventory/menu-cost data is applied and read back in both live targets; the larger `ragnakok-operations-v1` twin remains local source/test work. |
+| Merged source | `v0.19.0` is tagged at exact protected-main SHA `bf9f48a00547e305fdf155c8d64bf3646198b705` after PR `#145` and exact-main CI `34787753902` attempt 2 passed all nine jobs. |
+| Firebase backend | Governed all-surface workflow `34790618395` deployed `v0.19.0`; provider readback found 142 active `us-central1` Functions with the exact coordinated runtime profile, active Inquiry and Model Assist callables, and the enabled hourly Inquiry purge schedule. |
+| Public browser | Governed Vercel workflow `34791516818` promoted immutable deployment `quoteflow-bgq2wztfk-mbmapps.vercel.app`; Firebase Hosting was deployed by the paired Firebase workflow. Both origins returned HTTP 200 and served the reviewed Inquiry route chunk and public Turnstile configuration. |
+| Tenant data | `ragnakok-realistic-v1` and `ragnakok-operations-v1` synthetic founder-pilot records are applied and read back in production. They remain fixtures rather than physical, provider, customer, or human truth. |
 | Acceptance | Hosted role journeys, successful Inventory operator retry, assistive-technology review, and human acceptance remain open. |
-| Coordinated candidate profile | `all-qualified-features` is source-implemented for Firebase-all plus Vercel and is fenced to `mm05366-sandbox`. It enables the qualified staff/browser presentation, Resend, Commercial Change, Event Spine, Staffing, Inventory, Guided Inquiry, and review-only Model Assist while keeping Buyer Access, SMS, Revenue sends, test bypasses, and hard App Check enforcement off. No production deployment is recorded; a fresh integrated exact-head CI run and both protected provider receipts remain required. |
+| Coordinated production profile | `all-qualified-features` is deployed on Firebase and Vercel and fenced to `mm05366-sandbox`. It enables the qualified staff/browser presentation, Resend, Commercial Change, Event Spine, Staffing, Inventory, Guided Inquiry, and review-only Model Assist while keeping Buyer Access, SMS, Revenue sends, test bypasses, and hard App Check enforcement off. Deployment/configuration evidence is not authenticated use or human acceptance. |
 
 Rows 85–90 preserve their slice-level technical boundaries while recording the
-current merged/backend delivery state. Neither that state nor the historical
-slice evidence establishes public-browser availability or human acceptance.
-Commercial Change and Event Spine are not end-to-end active until a protected
-Functions deployment and provider readback prove both runtime gates true on
-the exact tenant-restricted profile.
+current merged/backend delivery state. The coordinated provider readback proves
+the Commercial Change and Event Spine runtime gates on the exact
+tenant-restricted profile, but neither that configuration nor historical slice
+evidence establishes an authenticated command outcome or human acceptance.
 
 ## Commercial platform and pricing-v2 candidate (September 4, 2026)
 
@@ -44,10 +43,10 @@ See the complete [commercial platform acceptance matrix](acceptance/commercial-p
 | Capability | Source status | Evidence boundary |
 |---|---|---|
 | Inquiry Showcase publication | Implemented as one administrator-owned Library surface with a tenant gate, Draft/Published/Paused lifecycle, exact unique slug, immutable versions, customer-safe reference projection, publish/pause receipts, preview, and rollback by creating a new publication from a prior version. | The Showcase owns public copy, HTTPS images, labels, order, and visibility only. Offer/component/menu/template identity, active state, item version, catalog revision, price, cost, inclusion, rule, staffing, inventory, and availability remain under the existing catalog and pricing authorities. No second catalog or price book exists. |
-| Public guided inquiry | Implemented at `/inquire/:slug` with `noindex`, allowlisted branding, contact/event/preference guidance, exact review, distinct Turnstile action and abuse-control configuration, version-fenced submission, opaque session recovery, and a non-commercial receipt. The protected coordinated profile compiles this route only with the reviewed public site key and binds the runtime to `mm05366-sandbox`. | Source/local tests and a release profile do not establish a hosted route, configured provider widget/secret, production submission, or accessibility/human acceptance. Deployment never auto-publishes a slug. The page never displays price or claims availability, allergen safety, reservation, proposal, acceptance, or booking. Submission creates no customer, quote, portal, Calendar event, or payment request. |
+| Public guided inquiry | Implemented at `/inquire/:slug` with `noindex`, allowlisted branding, contact/event/preference guidance, exact review, distinct Turnstile action and abuse-control configuration, version-fenced submission, opaque session recovery, and a non-commercial receipt. The coordinated production profile compiles this route with the reviewed public site key and binds the runtime to `mm05366-sandbox`; both browser origins and the safe unpublished-slug callable path are live. | Deployment never auto-publishes a slug, and no production Showcase or real customer submission exists yet. Fresh browser token, hostname/action rejection, replay, accessibility, and human acceptance remain open. The page never displays price or claims availability, allergen safety, reservation, proposal, acceptance, or booking. Submission creates no customer, quote, portal, Calendar event, or payment request. |
 | Inquiry operations and quote conversion | Implemented in Opportunities with Received/Acknowledged/Converted/Dismissed state, assignment, age, notification-failure isolation, current-catalog drift review, explicit same-tenant identity choice, exact quote prefill, and transaction-bound creation through the existing authoritative quote/customer/portal/version path. | Customer preferences are preserved on the quote as unconfirmed provenance. Every drift and identity choice must be resolved. Quote creation and the Converted receipt commit together; source tests are not production-data or commercial-outcome proof. |
-| Inquiry privacy and retention | Direct browser access to drafts, publications, inquiries, request recovery, abuse state, analytics aggregates, lifecycle receipts, and deletion receipts is denied. Unconverted content receives a 90-day expiry and scheduled deletion; only a content-free deletion receipt remains. | Scheduler deployment/execution, provider retention configuration, and production deletion proof remain open. Analytics are aggregate lifecycle counters without contact data, text, selections, or inquiry/customer identifiers. Attachments and marketing consent are unsupported. |
-| Model-assisted CREATE review | The coordinated profile enables browser/server Model Assist only for authenticated staff in `mm05366-sandbox`, using the Secret Manager key with `openai` / `gpt-5-mini`. Deterministic CREATE remains the fallback and every returned fact remains review-only and confirm-before-apply. | The current live probe returned `credit_balance_exhausted`; therefore source configuration, an enabled secret version, or successful deployment cannot establish provider availability. No model output becomes pricing, catalog, availability, booking, or quote-save authority. |
+| Inquiry privacy and retention | Direct browser access to drafts, publications, inquiries, request recovery, abuse state, analytics aggregates, lifecycle receipts, and deletion receipts is denied. Unconverted content receives a 90-day expiry and scheduled deletion; only a content-free deletion receipt remains. | The purge function is active and its hourly scheduler is enabled, but no actual production deletion receipt exists yet. Analytics are aggregate lifecycle counters without contact data, text, selections, or inquiry/customer identifiers. Attachments and marketing consent are unsupported. |
+| Model-assisted CREATE review | The coordinated production profile enables browser/server Model Assist only for authenticated staff in `mm05366-sandbox`, using Secret Manager version 2 with `openai` / `gpt-5-mini`. A fresh minimal Responses probe returned HTTP 200, and Function readback proved the exact runtime binding. Deterministic CREATE remains the fallback and every returned fact remains review-only and confirm-before-apply. | Provider-key health and active runtime configuration do not prove an authenticated model-assisted staff journey or accepted output. No model output becomes pricing, catalog, availability, booking, or quote-save authority. |
 
 ## Scope and Evidence (August 19, 2026)
 
