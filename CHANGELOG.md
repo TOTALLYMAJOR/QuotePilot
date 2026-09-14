@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-09-14 03:51:37 CDT
+Last updated: 2026-09-14 04:06:56 CDT
 
 All notable project changes are documented in this file.
 
@@ -14,7 +14,7 @@ All notable project changes are documented in this file.
   and make arrival focus tolerant of environments without `scrollIntoView`.
 - Recalibrate the existing expiring graph-specific bundle exception to the
   literal combined-candidate CI matrices: 3,652,845 / 385,181 bytes for
-  compatibility and 4,947,952 / 445,422 bytes for Ambient. The ceilings add no
+  compatibility and 4,947,989 / 445,422 bytes for Ambient. The ceilings add no
   future-growth allowance; exact-PR CI, Core Web Vitals, hosted timing, and
   human acceptance remain separate gates.
 

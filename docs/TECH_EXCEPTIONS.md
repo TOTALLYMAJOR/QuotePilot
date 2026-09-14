@@ -1,6 +1,6 @@
 # Technology Exceptions
 
-Last updated: 2026-09-14 03:51:37 CDT
+Last updated: 2026-09-14 04:06:56 CDT
 
 Use this log when a change intentionally departs from stable-first policy or requires temporary governance/performance exception handling.
 
@@ -66,7 +66,7 @@ Use this log when a change intentionally departs from stable-first policy or req
   queue, conversion, and model-gating source without adding discretionary
   headroom; exact-PR CI must confirm both graphs before release. The v0.20.0
   combined-open-work update measures 3,652,845 / 385,181 bytes for
-  compatibility and 4,947,952 / 445,422 bytes for Ambient after adding the
+  compatibility and 4,947,989 / 445,422 bytes for Ambient after adding the
   review-only Delivery Planning slice and the already-lazy Calendar,
   event-note, attendance, commercial-observation, progressive-client, and
   Commercial Decision surfaces. Its aggregate ceilings and Ambient
@@ -219,7 +219,7 @@ Use this log when a change intentionally departs from stable-first policy or req
   constrained separately to exactly 1,667,684 runtime bytes, a 1,232,303-byte
   largest asset, and three pinned files with exact SHA-256 digests.
   The combined v0.20.0 source is 135,478 aggregate compatibility bytes and
-  151,267 aggregate Ambient bytes above the v0.19.0 ceilings. The Ambient
+  151,304 aggregate Ambient bytes above the v0.19.0 ceilings. The Ambient
   largest chunk increases 1,859 bytes from the last measured 443,563-byte
   graph. The affected capabilities remain route-lazy where their owning
   workflows permit, but the aggregate and authenticated-workspace cost remains

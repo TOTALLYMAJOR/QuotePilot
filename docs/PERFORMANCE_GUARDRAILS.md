@@ -1,6 +1,6 @@
 # Performance Guardrails
 
-Last updated: 2026-09-14 03:51:37 CDT
+Last updated: 2026-09-14 04:06:56 CDT
 
 ## Objectives
 Keep delivery speed high while protecting end-user experience and predictable performance.
@@ -27,7 +27,7 @@ Threshold policy:
   `bundle-budget.json`.
 - The current compatibility graph has a temporary 3,652,845-byte aggregate
   and 399,665-byte largest-chunk ceiling. The production-equivalent Ambient
-  graph has a separate temporary 4,947,952-byte aggregate ceiling and
+  graph has a separate temporary 4,947,989-byte aggregate ceiling and
   445,422-byte largest-chunk ceiling. The pre-authority local
   measurements were 2,769,824 / 391,596 bytes for compatibility and 3,700,202
   / 391,596 bytes for Ambient. The deduplicated owner-provisioning recovery
@@ -157,7 +157,7 @@ Threshold policy:
   Calendar operations, event notes and attendance, server-bound commercial
   Staffing and Inventory observations, progressive client loading, and the
   Commercial Decision Surface. Exact local CI-matrix builds measure
-  3,652,845 / 385,181 bytes for compatibility and 4,947,952 / 445,422 bytes
+  3,652,845 / 385,181 bytes for compatibility and 4,947,989 / 445,422 bytes
   for Ambient. The aggregate ceilings and Ambient largest-chunk ceiling are
   pinned to those literal graphs; the compatibility largest-chunk ceiling
   remains unchanged. This is reviewed combined-candidate cost with no future
