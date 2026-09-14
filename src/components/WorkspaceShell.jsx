@@ -327,7 +327,7 @@ export default function WorkspaceShell({
           aria-pressed={sound ? sounds.enabled === true : undefined}
           onClick={() => {
             if (!sound) close();
-            workspaceToolsActionRef.current = workspaceToolsOpen && !sound;
+            workspaceToolsActionRef.current = true;
             if (operation) call(action, triggerRefs[openMenu]);
             else call(action);
             workspaceToolsActionRef.current = false;
@@ -436,9 +436,7 @@ export default function WorkspaceShell({
       requestDismiss: (_reason, continuation = null) => {
         if (accountSettingsOpen) closeAccountSettings();
         else call(menu.onOpenChange, "");
-        if (workspaceToolsActionRef.current && typeof continuation === "function") {
-          return continuation();
-        }
+        if (workspaceToolsActionRef.current) return continuation?.();
         // Browser/mobile Back is consumed by this overlay. The history
         // continuation intentionally remains untouched until a later Back.
         return { status: "guarded" };
