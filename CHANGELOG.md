@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-09-14 08:30:32 CDT
+Last updated: 2026-09-14 15:10:39 CDT
 
 All notable project changes are documented in this file.
 
@@ -37,6 +37,10 @@ All notable project changes are documented in this file.
   checks whether menu records live in the catalog shell or the managed Menu
   workspace; the validation snapshot is transient and does not duplicate or
   persist menu authority.
+- Let actions launched from the Workspace & tools drawer continue through that
+  drawer's own browser-navigation guard. Workflow, Messages, Pilot, Operations,
+  Clear the Deck, Inventory, and Staff now reach their existing role-safe
+  routes while Back still dismisses the overlay without changing route.
 - Add the safe-off Delivery Planning Phase 1 source slice. Offers and Event
   Templates can preserve exact Delivery Blueprint references; published
   tenant-declared quantity policies compile staffed-buffet work blocks,

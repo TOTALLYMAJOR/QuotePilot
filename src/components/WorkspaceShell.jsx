@@ -69,7 +69,8 @@ const EMPTY_ACCOUNT_SETTINGS_FEEDBACK = Object.freeze({
 });
 
 function call(action, ...args) {
-  if (typeof action === "function") action(...args);
+  if (typeof action === "function") return action(...args);
+  return undefined;
 }
 
 function assignRef(ref, value) {
@@ -113,6 +114,7 @@ export default function WorkspaceShell({
   const shellRef = useRef(null);
   const workspaceToolsLayerRef = useRef(null);
   const workspaceToolsDialogRef = useRef(null);
+  const workspaceToolsActionRef = useRef(false);
   const accountSettingsLayerRef = useRef(null);
   const accountSettingsDialogRef = useRef(null);
   const accountSettingsReturnFocusRef = useRef(null);
@@ -326,8 +328,13 @@ export default function WorkspaceShell({
           aria-pressed={sound ? sounds.enabled === true : undefined}
           onClick={() => {
             if (!sound) close();
-            if (operation) call(action, triggerRefs[openMenu]);
-            else call(action);
+            workspaceToolsActionRef.current = workspaceToolsOpen && !sound;
+            try {
+              if (operation) call(action, triggerRefs[openMenu]);
+              else call(action);
+            } finally {
+              workspaceToolsActionRef.current = false;
+            }
           }}
         >
           {item.attention ? (
@@ -430,9 +437,12 @@ export default function WorkspaceShell({
       open: true,
       dirty: false,
       busy: false,
-      requestDismiss: () => {
+      requestDismiss: (_reason, continuation = null) => {
         if (accountSettingsOpen) closeAccountSettings();
         else call(menu.onOpenChange, "");
+        if (workspaceToolsActionRef.current && typeof continuation === "function") {
+          return continuation();
+        }
         // Browser/mobile Back is consumed by this overlay. The history
         // continuation intentionally remains untouched until a later Back.
         return { status: "guarded" };
