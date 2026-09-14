@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 
 async function fillRequiredQuoteFields(page) {
   const eventDate = new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-  const eventType = page.getByLabel(/Event type/i);
+  const eventType = page.getByLabel("Event type", { exact: true });
   await expect(eventType).toBeVisible();
   await eventType.selectOption({ index: 1 });
   await page.getByLabel(/Event date/i).fill(eventDate);

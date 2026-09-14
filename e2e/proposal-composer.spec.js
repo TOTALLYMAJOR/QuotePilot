@@ -141,8 +141,8 @@ test("guided mode reaches the wizard and returns", async ({ page }) => {
 test("collapses to the mobile pulse flow at phone width", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(page.getByTestId("pc-pulse")).toBeHidden();
-  await expect(page.getByRole("button", { name: /Review quote/ })).toBeVisible();
-  await page.getByRole("button", { name: /Review quote/ }).click();
+  await expect(page.getByRole("button", { name: "Quote details", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Quote details", exact: true }).click();
   await expect(page.getByTestId("pc-pulse")).toBeVisible();
   await page.getByRole("button", { name: "Close", exact: true }).click();
   await expect(page.getByTestId("pc-pulse")).toBeHidden();

@@ -50,7 +50,7 @@ async function gotoGovernedOpportunity(page, quoteId) {
 }
 
 async function fillRequiredQuoteFields(page) {
-  const eventType = page.getByLabel(/Event type/i);
+  const eventType = page.getByLabel("Event type", { exact: true });
   await expect(eventType).toBeVisible();
   await eventType.selectOption({ index: 1 });
   await page.getByLabel(/Event date/i).fill("2027-06-12");
