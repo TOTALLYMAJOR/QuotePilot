@@ -1461,7 +1461,9 @@ export function QuoteHistoryView({
       if (actionDisclosure && !actionDisclosure.open) actionDisclosure.open = true;
       const focusTarget = actionTarget || handoff;
       focusTarget.focus({ preventScroll: true });
-      focusTarget.scrollIntoView({ block: "nearest", inline: "nearest" });
+      if (typeof focusTarget.scrollIntoView === "function") {
+        focusTarget.scrollIntoView({ block: "nearest", inline: "nearest" });
+      }
       focusedHandoffIdRef.current = focusKey;
     });
     return () => window.cancelAnimationFrame(frame);
@@ -2883,7 +2885,7 @@ export function QuoteHistoryView({
                 : setConversationQuote(focusedQuote)}
             />
           ) : null}
-          {focusedQuote && AMBIENT_UI_ENABLED && permissions.canExportBeo ? (
+          {focusedQuote && permissions.canExportBeo ? (
             <section
               className="admin-section staff-capability-state"
               data-capability-id="cwf-15-kitchen-beo-entry"
