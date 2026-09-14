@@ -114,7 +114,7 @@ test("package choice reprices the pulse from the document", async ({ page }) => 
 });
 
 test("menu composing stays inside the proposal", async ({ page }) => {
-  const eventType = page.getByLabel("Event type", { exact: true });
+  const eventType = page.getByRole("combobox", { name: /^Event type\b/ });
   await eventType.selectOption({ index: 1 });
 
   await openWorkbenchDomain(page, "experience");
@@ -195,7 +195,7 @@ test("staffing rate overrides reprice the quote from the staffing section", asyn
 
 test("editing a saved quote surfaces the change-impact preview in the composer", async ({ page }) => {
   test.setTimeout(180_000);
-  await page.getByLabel("Event type", { exact: true }).selectOption({ index: 1 });
+  await page.getByRole("combobox", { name: /^Event type\b/ }).selectOption({ index: 1 });
   await commitInline(page, "Event name", "Composer Impact Quote");
   await commitInline(page, "Date", "2027-09-12");
   await commitInline(page, "Guests", "60");

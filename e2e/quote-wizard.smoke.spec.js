@@ -19,7 +19,7 @@ async function fillRequiredQuoteFields(page, {
   venue = "Birmingham Civic Hall",
   date = futureDateISO()
 } = {}) {
-  const eventType = page.getByLabel("Event type", { exact: true });
+  const eventType = page.getByRole("combobox", { name: /^Event type\b/ });
   await expect(eventType).toBeVisible();
   const optionCount = await eventType.locator("option").count();
   if (optionCount > 1) {
@@ -385,8 +385,8 @@ test("menu loading and empty states lead admins to the selected Catalog Admin me
   });
   await page.reload();
   await fillRequiredQuoteFields(page, { guests: 54, eventName: "Menu State Test", venue: "Menu Hall" });
-  const selectedEventTypeId = await page.getByLabel("Event type", { exact: true }).inputValue();
-  const selectedEventType = await page.getByLabel("Event type", { exact: true }).locator("option:checked").textContent();
+  const selectedEventTypeId = await page.getByRole("combobox", { name: /^Event type\b/ }).inputValue();
+  const selectedEventType = await page.getByRole("combobox", { name: /^Event type\b/ }).locator("option:checked").textContent();
   await page.getByRole("button", { name: /^Next:/ }).click();
   await expect(page.locator(".menu-skeleton-row")).toHaveCount(3);
   await expect(page.locator(".menu-state")).toHaveAttribute("aria-busy", "true");
@@ -446,7 +446,7 @@ test("a menu item stages immediately without activating the current quote", asyn
     eventName: "Staged Menu Change",
     venue: "Refresh Hall"
   });
-  const selectedEventTypeId = await page.getByLabel("Event type", { exact: true }).inputValue();
+  const selectedEventTypeId = await page.getByRole("combobox", { name: /^Event type\b/ }).inputValue();
   await page.getByRole("button", { name: /^Next:/ }).click();
 
   await page.getByRole("button", { name: "Operations" }).click();
@@ -501,7 +501,7 @@ test("menu retry repeats the selected event request without clearing selections"
 
   await page.getByRole("button", { name: "Back" }).click();
   await page.evaluate(() => { window.__menuShouldFail = true; });
-  const eventType = page.getByLabel("Event type", { exact: true });
+  const eventType = page.getByRole("combobox", { name: /^Event type\b/ });
   const optionCount = await eventType.locator("option").count();
   await eventType.selectOption({ index: Math.min(2, optionCount - 1) });
   await page.getByRole("button", { name: /^Next:/ }).click();
@@ -1468,7 +1468,7 @@ test("Catalog Admin menu browsing never mutates the clean quote being edited", a
   const row = quoteRows(page).first();
   await row.getByRole("button", { name: "Edit" }).click();
   await expect(page.getByText(/Editing quote/i)).toBeVisible();
-  const quoteEventType = page.getByLabel("Event type", { exact: true });
+  const quoteEventType = page.getByRole("combobox", { name: /^Event type\b/ });
   const originalEventType = await quoteEventType.inputValue();
   expect(originalEventType).toBeTruthy();
 
