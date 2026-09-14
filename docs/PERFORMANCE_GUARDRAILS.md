@@ -1,6 +1,6 @@
 # Performance Guardrails
 
-Last updated: 2026-09-13 16:07:03 CDT
+Last updated: 2026-09-14 03:51:37 CDT
 
 ## Objectives
 Keep delivery speed high while protecting end-user experience and predictable performance.
@@ -25,10 +25,10 @@ Threshold policy:
   rejects a requested-profile mismatch, and accepts an exception only when its
   active ID and pinned baseline date and metrics exactly match
   `bundle-budget.json`.
-- The current compatibility graph has a temporary 3,478,714-byte aggregate
+- The current compatibility graph has a temporary 3,652,845-byte aggregate
   and 399,665-byte largest-chunk ceiling. The production-equivalent Ambient
-  graph has a separate temporary 4,444,836-byte aggregate ceiling and
-  435,565-byte largest-chunk ceiling. The pre-authority local
+  graph has a separate temporary 4,947,952-byte aggregate ceiling and
+  445,422-byte largest-chunk ceiling. The pre-authority local
   measurements were 2,769,824 / 391,596 bytes for compatibility and 3,700,202
   / 391,596 bytes for Ambient. The deduplicated owner-provisioning recovery
   states add 2,651 Ambient aggregate bytes, for a reviewed 3,702,853-byte local
@@ -153,6 +153,15 @@ Threshold policy:
   Library administration, Opportunities queue, recovery, and conversion
   surfaces; it is reviewed feature cost, not future growth headroom. Exact-PR
   CI must still confirm both graphs before release.
+  The v0.20.0 combined-open-work candidate adds Delivery Planning, Google
+  Calendar operations, event notes and attendance, server-bound commercial
+  Staffing and Inventory observations, progressive client loading, and the
+  Commercial Decision Surface. Exact local CI-matrix builds measure
+  3,652,845 / 385,181 bytes for compatibility and 4,947,952 / 445,422 bytes
+  for Ambient. The aggregate ceilings and Ambient largest-chunk ceiling are
+  pinned to those literal graphs; the compatibility largest-chunk ceiling
+  remains unchanged. This is reviewed combined-candidate cost with no future
+  growth allowance, and exact-PR CI remains required.
   Searchable-PDF inspection additionally emits 1,667,684 raw runtime bytes in
   `dist/vendor/pdfjs-5.7.284`, with a 1,232,303-byte worker as its largest file.
   These assets are same-origin and load only after PDF inspection begins; they

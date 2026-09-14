@@ -9,6 +9,11 @@ All notable project changes are documented in this file.
 - Reconcile the combined commercial test contract with the exact server-bound
   Inventory and attendance preview payload, and keep advanced pricing-source
   assertions stable when independent cost-evidence warnings are also present.
+- Recalibrate the existing expiring graph-specific bundle exception to the
+  literal combined-candidate CI matrices: 3,652,845 / 385,181 bytes for
+  compatibility and 4,947,952 / 445,422 bytes for Ambient. The ceilings add no
+  future-growth allowance; exact-PR CI, Core Web Vitals, hosted timing, and
+  human acceptance remain separate gates.
 
 - Add **Library → Delivery** as the governed activation-authoring path for the
   staffed-buffet pilot. Administrators can review versioned Blueprint,
