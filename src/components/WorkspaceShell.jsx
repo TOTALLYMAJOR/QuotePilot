@@ -328,8 +328,7 @@ export default function WorkspaceShell({
           onClick={() => {
             if (!sound) close();
             workspaceToolsActionRef.current = true;
-            if (operation) call(action, triggerRefs[openMenu]);
-            else call(action);
+            call(action, operation ? triggerRefs[openMenu] : undefined);
             workspaceToolsActionRef.current = false;
           }}
         >
@@ -433,10 +432,10 @@ export default function WorkspaceShell({
       open: true,
       dirty: false,
       busy: false,
-      requestDismiss: (_reason, continuation = null) => {
+      requestDismiss: (_reason, continuation) => {
         if (accountSettingsOpen) closeAccountSettings();
         else call(menu.onOpenChange, "");
-        if (workspaceToolsActionRef.current) return continuation?.();
+        if (workspaceToolsActionRef.current) return continuation();
         // Browser/mobile Back is consumed by this overlay. The history
         // continuation intentionally remains untouched until a later Back.
         return { status: "guarded" };
