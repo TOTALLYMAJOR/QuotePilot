@@ -2,6 +2,7 @@ import { lazy, Suspense, useEffect, useId, useMemo, useRef, useState } from "rea
 import AdaptiveChoiceField from "./AdaptiveChoiceField";
 import InlineValue from "./ambient/InlineValue";
 import DigitRoll from "./DigitRoll";
+import DeliveryProposal from "./DeliveryProposal";
 import { currency } from "../lib/quoteCalculator";
 import { normalizeBrandLogoUrl } from "../lib/brandLogoUrl";
 import { normalizeProposalDocumentFontScale } from "../lib/proposalDocumentPreferences";
@@ -445,6 +446,9 @@ export default function ProposalComposer({
   statusNotes = null,
   changeImpactSurface = null,
   livingCommercialTwin = null,
+  deliveryPlanningEvidence = null,
+  deliveryPlanningOperatorId = "",
+  onDeliveryPlanningHandoff = null,
   impactWatch = null,
   isAdmin = false,
   onOpenCatalogPricing = null
@@ -1288,6 +1292,17 @@ export default function ProposalComposer({
           <LivingCommercialTwin {...livingCommercialTwin} />
         </Suspense>
       ) : null}
+
+      <DeliveryProposal
+        form={form}
+        catalog={catalog}
+        settings={settings}
+        editingQuote={editingQuote}
+        staffingEvidence={deliveryPlanningEvidence?.staffing || null}
+        inventoryEvidence={deliveryPlanningEvidence?.inventory || null}
+        operatorId={deliveryPlanningOperatorId}
+        onHandoff={onDeliveryPlanningHandoff}
+      />
 
       <div className="pc-columns">
         <nav className="pc-quote-plan" aria-label="Quote plan" data-testid="commercial-workbench-plan">

@@ -1,6 +1,6 @@
 # Performance Guardrails
 
-Last updated: 2026-09-13 16:07:03 CDT
+Last updated: 2026-09-14 10:30:01 CDT
 
 ## Objectives
 Keep delivery speed high while protecting end-user experience and predictable performance.
@@ -153,6 +153,15 @@ Threshold policy:
   Library administration, Opportunities queue, recovery, and conversion
   surfaces; it is reviewed feature cost, not future growth headroom. Exact-PR
   CI must still confirm both graphs before release.
+  The Delivery Planning staffed-buffet slice measures 3,555,056 / 385,181
+  bytes for compatibility and 4,834,373 / 443,847 bytes for the exact local CI
+  matrices. Exact-PR CI runs `34860595658` and `34861523773` measure the graphs
+  at 3,555,374 / 385,181 bytes and 4,834,691 / 443,866 bytes respectively, a
+  318-byte aggregate runner delta in each profile. Both ceilings are pinned to
+  those larger literal CI graphs. Against the preceding ceilings, the reviewed
+  aggregate costs are 38,007 and 38,006 bytes respectively; neither graph
+  increases its existing largest-chunk ceiling or receives discretionary
+  growth headroom.
   Searchable-PDF inspection additionally emits 1,667,684 raw runtime bytes in
   `dist/vendor/pdfjs-5.7.284`, with a 1,232,303-byte worker as its largest file.
   These assets are same-origin and load only after PDF inspection begins; they

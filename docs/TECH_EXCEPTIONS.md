@@ -1,6 +1,6 @@
 # Technology Exceptions
 
-Last updated: 2026-09-13 16:07:03 CDT
+Last updated: 2026-09-14 10:30:01 CDT
 
 Use this log when a change intentionally departs from stable-first policy or requires temporary governance/performance exception handling.
 
@@ -64,7 +64,16 @@ Use this log when a change intentionally departs from stable-first policy or req
   graphs, while the existing largest-chunk ceilings remain unchanged. This
   admits the reviewed public inquiry, Library administration, recovery, staff
   queue, conversion, and model-gating source without adding discretionary
-  headroom; exact-PR CI must confirm both graphs before release. The Proposal
+  headroom; exact-PR CI must confirm both graphs before release. Delivery
+  Planning update: the exact local CI matrices measure 3,555,056 / 385,181
+  bytes for compatibility and 4,834,373 / 443,847 bytes for Ambient. Exact-PR
+  CI runs `34860595658` and `34861523773` measure the graphs at 3,555,374 /
+  385,181 bytes and 4,834,691 / 443,866 bytes respectively, a 318-byte aggregate
+  runner delta in each profile. Both ceilings are pinned to those larger
+  literal CI graphs. The corresponding 38,007-byte and 38,006-byte aggregate
+  increases are the reviewed staffed-buffet blueprint configuration and
+  session-only proposal cost. Existing largest-chunk ceilings remain unchanged
+  and neither graph receives discretionary growth headroom. The Proposal
   Composer quote-builder candidate (measured 2,943,941 local compatibility bytes, largest chunk
   unchanged), the first Live planning and Staff People presentation slice
   (measured 2,963,542 compatibility bytes, largest chunk unchanged), and the

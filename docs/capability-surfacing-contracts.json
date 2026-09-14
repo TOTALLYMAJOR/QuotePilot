@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "catalogVersion": 84,
+  "catalogVersion": 86,
   "contracts": [
     {
       "id": "bounded-security-operations-audit",
@@ -10089,6 +10089,90 @@
       ],
       "stateExceptions": {},
       "safeOutcome": "With the separate global and tenant gates enabled and one version deliberately published, a customer can submit only version-pinned event preferences and receive a content-free outcome receipt. Same-tenant staff can acknowledge and review the durable inquiry, explicitly resolve current-catalog and customer-email identity drift, and create one authoritative quote draft whose quote, customer binding, portal, first version, inquiry transition, and conversion receipt commit atomically. No submission prices, books, reserves, accepts, schedules, charges, markets to, or confirms allergen safety for the customer."
+    },
+    {
+      "id": "delivery-planning-advisory-proposal",
+      "reviewRevision": 2,
+      "status": "active",
+      "deliveryType": "headless",
+      "capabilityKind": "headless_operational",
+      "audiences": [
+        "organization_admins",
+        "owner_operators",
+        "staff"
+      ],
+      "summary": "A governed Library activation surface accepts operator-authored, exact-revision Delivery Blueprints, quantity policies, purchasing packs, and Offer bindings. A safe-off deterministic compiler then converts only qualifying published sources into a session-only staffed-buffet Delivery Proposal with proposed work, production output, ingredient demand, separately bound Staffing and Inventory evidence, and prefill-only handoff contracts.",
+      "backendPaths": [
+        "src/data/mockCatalog.js",
+        "src/lib/catalogWriteShapes.js",
+        "src/lib/deliveryPlanning.js",
+        "src/lib/deliveryPlanningConfiguration.js"
+      ],
+      "backendExports": [],
+      "affectedBackendExports": [],
+      "frontendPaths": [
+        "src/components/DeliveryProposal.jsx",
+        "src/components/DeliveryPlanningConfigurationPanel.jsx",
+        "src/components/AdminCatalogModal.jsx",
+        "src/components/ProposalComposer.jsx",
+        "src/components/deliveryProposal.css",
+        "src/styles.css"
+      ],
+      "entryPointLocators": [
+        {
+          "path": "src/components/DeliveryProposal.jsx",
+          "locator": "data-testid=\"delivery-proposal\""
+        },
+        {
+          "path": "src/components/DeliveryPlanningConfigurationPanel.jsx",
+          "locator": "data-testid=\"delivery-planning-configuration\""
+        }
+      ],
+      "testPaths": [
+        "src/lib/__tests__/deliveryPlanning.test.js",
+        "src/lib/__tests__/deliveryPlanningConfiguration.test.js",
+        "src/components/__tests__/deliveryProposal.test.jsx",
+        "src/components/__tests__/deliveryPlanningConfigurationPanel.test.jsx"
+      ],
+      "testLocators": [
+        {
+          "path": "src/lib/__tests__/deliveryPlanning.test.js",
+          "locator": "deterministically compiles declared work, production, and ingredient demand without assuming stock"
+        },
+        {
+          "path": "src/components/__tests__/deliveryProposal.test.jsx",
+          "locator": "shows a progressive, session-only staffed-buffet proposal with independent evidence axes"
+        },
+        {
+          "path": "src/lib/__tests__/deliveryPlanningConfiguration.test.js",
+          "locator": "blocks an ID-only quantity-policy reference before activation"
+        },
+        {
+          "path": "src/components/__tests__/deliveryPlanningConfigurationPanel.test.jsx",
+          "locator": "lets a fully bound draft enable Delivery Planning without claiming persistence"
+        }
+      ],
+      "documentationPaths": [
+        "docs/DELIVERY_PLANNING_PROGRAM.md",
+        "docs/FEATURE_MATRIX.md",
+        "docs/USER_MANUAL.md"
+      ],
+      "documentationLocators": [
+        {
+          "path": "docs/DELIVERY_PLANNING_PROGRAM.md",
+          "locator": "## Phase 1 staffed-buffet behavior"
+        },
+        {
+          "path": "docs/FEATURE_MATRIX.md",
+          "locator": "Delivery Planning Phase 1"
+        },
+        {
+          "path": "docs/USER_MANUAL.md",
+          "locator": "### Delivery Proposal (safe-off Phase 1 source contract)"
+        }
+      ],
+      "headlessReason": "The backend-classified paths are synchronous, credential-free, network-free validation, advisory compilation, and compatibility serialization seams. They expose no callable, direct database write, provider action, or durable coordination record. Library uses its existing administrator-gated catalog save authority, while the configuration panel and Proposal Composer supply the safe operator-visible outcomes.",
+      "safeOutcome": "When an approved tenant configuration is deliberately enabled, staff can review explicitly proposed work and demand while Staffing and physical Inventory remain unchecked until exact current evidence exists. Conflicts, stale results, and session overrides remain visible, and no quote, price, assignment, allocation, purchase, BEO, provider, publication, or readiness state changes."
     }
   ]
 }

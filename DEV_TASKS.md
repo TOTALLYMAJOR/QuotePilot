@@ -1,6 +1,6 @@
 # QuotePilot Development Tasks
 
-Last updated: 2026-09-13 19:09:08 CDT
+Last updated: 2026-09-14 09:45:30 CDT
 
 This file contains open work only. Completed delivery belongs in
 [`CHANGELOG.md`](CHANGELOG.md), current evidence in
@@ -59,6 +59,25 @@ This file contains open work only. Completed delivery belongs in
 
 ## P1 — Operational coherence
 
+- [ ] Run the Delivery Planning evidence baseline with at least five owner-
+  operators and two recent staffed-buffet events each; freeze the reviewable-
+  quote-plus-proposal milestone, 30% median-time target, and material-
+  correction definition before pilot acceptance.
+- [ ] Use **Library → Delivery** to enter and bind one real operator-reviewed
+  tenant `delivery-blueprint-v1`, bounded `quantity-policy-v1` set, and exact
+  purchasing-pack revisions; capture the connected catalog-save and pricing-
+  confirmation receipt, then connect exact saved-revision Staffing and
+  Inventory projections without inferring missing stock, role ratios, or
+  production quantities. The source/local activation editor is implemented;
+  no tenant declaration or connected activation receipt exists yet.
+- [ ] Connect `delivery-handoff-v1` to role-safe Staffing, Production, and
+  Purchasing workflows only after each target rereads current authority,
+  rejects stale inputs, obtains its own approval, issues its own receipt, and
+  returns current/stale/rejected/pending evidence without losing the quote's
+  session proposal.
+- [ ] Specify separate Staffing work-block authority, Inventory prepared-batch
+  semantics, purchasing-provider authority, and approved-Blueprint alternative
+  comparison before activating those later Delivery Planning phases.
 - [ ] Verify Commercial Change and Event Spine tenant activation only through
   their protected coupled workflow; Inventory or Staffing activation must not
   imply either mutation authority.
