@@ -3270,7 +3270,7 @@ export function AdminCatalogView({
 
         {resolvedActiveTab === "delivery" && (
           <DeliveryPlanningConfigurationPanel
-            catalog={draft}
+            catalog={buildCatalogDeliveryPlanningValidationSnapshot(draft, menuItems)}
             jsonDrafts={jsonDrafts}
             onPatchJson={patchJsonDraft}
             onPatchSetting={patchToggleSetting}
