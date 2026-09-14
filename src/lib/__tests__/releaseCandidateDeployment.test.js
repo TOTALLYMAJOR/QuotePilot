@@ -231,7 +231,12 @@ describe("governed release candidate deployment", () => {
       "STRIPE_SECRET_KEY",
       "TWILIO_AUTH_TOKEN",
       "INQUIRY_TURNSTILE_SECRET",
-      "INQUIRY_RATE_LIMIT_SECRET"
+      "INQUIRY_RATE_LIMIT_SECRET",
+      "GOOGLE_CALENDAR_OAUTH_CLIENT_ID",
+      "GOOGLE_CALENDAR_OAUTH_CLIENT_SECRET",
+      "GOOGLE_CALENDAR_OAUTH_STATE_SECRET",
+      "GOOGLE_CALENDAR_TOKEN_ENCRYPTION_KEY",
+      "INTENT_PARSER_OPENAI_KEY"
     ]));
     const source = fs.readFileSync(SCRIPT, "utf8");
     expect(source).toContain('"functions:secrets:get"');
@@ -321,6 +326,12 @@ describe("governed release candidate deployment", () => {
     }))).toThrow(/must be empty/i);
     expect(() => validateCandidateFunctionsEnvironment(functionsEnvironment({
       INQUIRY_TURNSTILE_SECRET: "plaintext-fixture"
+    }))).toThrow(/Secret Manager/i);
+    expect(() => validateCandidateFunctionsEnvironment(functionsEnvironment({
+      GOOGLE_CALENDAR_OAUTH_CLIENT_SECRET: "plaintext-fixture"
+    }))).toThrow(/Secret Manager/i);
+    expect(() => validateCandidateFunctionsEnvironment(functionsEnvironment({
+      INTENT_PARSER_OPENAI_KEY: "plaintext-fixture"
     }))).toThrow(/Secret Manager/i);
   });
 

@@ -1,11 +1,16 @@
 # Changelog
 
-Last updated: 2026-09-14 04:06:56 CDT
+Last updated: 2026-09-14 08:30:32 CDT
 
 All notable project changes are documented in this file.
 
 ## Unreleased — Event and Commercial activation receipt correction
 
+- Make candidate preflight verify enabled Secret Manager metadata for every
+  Google Calendar and Model Assist binding before it can reserve an immutable
+  receipt or attempt a Firebase mutation. The preflight still never reads or
+  creates secret values, and the same names are rejected from Functions
+  dotenv and runtime plaintext evidence.
 - Reconcile the combined commercial test contract with the exact server-bound
   Inventory and attendance preview payload, and keep advanced pricing-source
   assertions stable when independent cost-evidence warnings are also present.
