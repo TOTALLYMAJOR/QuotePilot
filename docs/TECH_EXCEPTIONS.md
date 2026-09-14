@@ -1,6 +1,6 @@
 # Technology Exceptions
 
-Last updated: 2026-09-14 10:19:54 CDT
+Last updated: 2026-09-14 10:30:01 CDT
 
 Use this log when a change intentionally departs from stable-first policy or requires temporary governance/performance exception handling.
 
@@ -67,13 +67,13 @@ Use this log when a change intentionally departs from stable-first policy or req
   headroom; exact-PR CI must confirm both graphs before release. Delivery
   Planning update: the exact local CI matrices measure 3,555,056 / 385,181
   bytes for compatibility and 4,834,373 / 443,847 bytes for Ambient. Exact-PR
-  CI run `34860595658` measures compatibility at 3,555,374 / 385,181 bytes, a
-  318-byte runner delta. The compatibility ceiling is pinned to that larger
-  literal CI graph; Ambient remains pinned to its literal local graph pending
-  exact-PR confirmation. The corresponding 38,007-byte and 37,688-byte
-  aggregate increases are the reviewed staffed-buffet blueprint configuration
-  and session-only proposal cost. Existing largest-chunk ceilings remain
-  unchanged and neither graph receives discretionary growth headroom. The Proposal
+  CI runs `34860595658` and `34861523773` measure the graphs at 3,555,374 /
+  385,181 bytes and 4,834,691 / 443,866 bytes respectively, a 318-byte aggregate
+  runner delta in each profile. Both ceilings are pinned to those larger
+  literal CI graphs. The corresponding 38,007-byte and 38,006-byte aggregate
+  increases are the reviewed staffed-buffet blueprint configuration and
+  session-only proposal cost. Existing largest-chunk ceilings remain unchanged
+  and neither graph receives discretionary growth headroom. The Proposal
   Composer quote-builder candidate (measured 2,943,941 local compatibility bytes, largest chunk
   unchanged), the first Live planning and Staff People presentation slice
   (measured 2,963,542 compatibility bytes, largest chunk unchanged), and the
