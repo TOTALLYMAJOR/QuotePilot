@@ -5058,14 +5058,14 @@
     },
     {
       "id": "model-assisted-intent-parse",
-      "reviewRevision": 3,
+      "reviewRevision": 4,
       "status": "active",
       "deliveryType": "user_relevant",
       "capabilityKind": "read_surface",
       "audiences": [
         "staff"
       ],
-      "summary": "Staff-only model-assisted intake lane (docs/INTENT_INTAKE_ADR.md; owner-approved 2026-08-11, OpenAI + Anthropic): the stateless, same-organization parseIntentDraft callable plus a Model assist affordance in the CREATE canvas. Dormant three ways until the owner enables it \u2014 INTENT_PARSER_ENABLED, a provider mode, and the required Secret Manager key or keys must all exist; the designed dormant reply surfaces as the recovery state ('lane is off, typed structuring keeps working') and the deterministic extractor remains the availability floor. The core now supports explicit provider pinning or cheap-first `auto` routing across a configured provider:model candidate order, with bounded demand profiling, per-request completion-token budgets, and at most one retry/escalation on provider failure or unreadable/empty output. Model output is untrusted: strict-JSON parse, fact allowlist mirroring the deterministic extractor, bounded values, every surviving fact forced to low confidence with a model source, and the UI requires per-fact human confirmation before anything touches the draft. Persists nothing.",
+      "summary": "Staff-only model-assisted intake lane (docs/INTENT_INTAKE_ADR.md; owner-approved 2026-08-11, OpenAI + Anthropic): the stateless, same-organization parseIntentDraft callable plus a separately browser-gated Model assist affordance in the CREATE canvas. Dormant until VITE_PILOT_MODEL_ENABLED, INTENT_PARSER_ENABLED, a provider mode, the required callable-bound Secret Manager key, and provider capacity all exist; the deterministic extractor remains the availability floor. The core supports explicit provider pinning or cheap-first `auto` routing across a configured provider:model candidate order, with bounded demand profiling, per-request completion-token budgets, and at most one retry/escalation on provider failure or unreadable/empty output. Model output is untrusted: strict-JSON parse, fact allowlist mirroring the deterministic extractor, bounded values, every surviving fact forced to low confidence with a model source, and the UI requires per-fact human confirmation before anything touches the draft. Persists nothing.",
       "backendPaths": [
         "functions/index.js",
         "functions/intentParserCore.cjs",
@@ -5076,7 +5076,9 @@
         "functions/index.js#parseIntentDraft"
       ],
       "frontendPaths": [
-        "src/components/CreateIntake.jsx"
+        "src/components/CreateIntake.jsx",
+        "src/App.jsx",
+        "src/LegacyApp.jsx"
       ],
       "entryPointLocators": [
         {
@@ -5086,12 +5088,17 @@
       ],
       "testPaths": [
         "src/lib/__tests__/intentParser.server.test.js",
+        "src/lib/__tests__/pilotBuildFlags.test.js",
         "src/components/__tests__/createIntakeModelAssist.test.jsx"
       ],
       "testLocators": [
         {
           "path": "src/lib/__tests__/intentParser.server.test.js",
-          "locator": "forces every surviving fact to low confidence with a model source, allowlisting fields"
+          "locator": "binds the OpenAI key through Firebase Secret Manager when runWith is available"
+        },
+        {
+          "path": "src/lib/__tests__/pilotBuildFlags.test.js",
+          "locator": "offers model-assisted CREATE parsing only behind an explicit true browser gate"
         },
         {
           "path": "src/components/__tests__/createIntakeModelAssist.test.jsx",
@@ -5122,12 +5129,12 @@
           "locator": "## Model assist in CREATE"
         }
       ],
-      "safeOutcome": "Disabled (the shipped default), the affordance reports the lane as off and typed structuring is untouched; enabled, staff see only bounded, allowlisted, low-confidence suggestions that each require explicit confirmation before touching the draft, and no provider ever becomes pricing or saving authority.",
+      "safeOutcome": "Disabled (the shipped default), the provider affordance is absent and typed deterministic structuring is untouched; enabled and provider-ready, staff see only bounded, allowlisted, low-confidence suggestions that each require explicit confirmation before touching the draft, and no provider ever becomes pricing or saving authority.",
       "affectedBackendExports": [
         "functions/index.js#parseIntentDraft"
       ],
       "surfaceReview": "verified_existing",
-      "surfaceReviewNote": "Revision 1 shipped the pure core module only. Revision 2 shipped the whole reachable surface together, as the gate requires: the functions/ runtime twin of the core module, the parseIntentDraft callable (staff-only, same-org, env-keyed until the Secret Manager secrets exist and are bound), the client boundary that distinguishes the designed dormant precondition from retryable unavailability, and the CREATE canvas Model assist section with literal data-capability-state markers for every required read state. Revision 3 is a backend-and-client-boundary refinement with no new user-visible state: it keeps the existing six-state Model assist surface, but upgrades the callable/core contract to support explicit provider pinning or cheap-first auto routing across a configured provider:model candidate order, per-request completion-token budgets, returned routing metadata, and at most one bounded retry/escalation on provider failure or unreadable/empty output. stale is still excepted: the parse is stateless and freshly computed per request, so no cached/stale variant can exist.",
+      "surfaceReviewNote": "Revision 1 shipped the pure core module only. Revision 2 shipped the whole reachable surface together, as the gate requires. Revision 3 added explicit provider pinning or cheap-first auto routing, per-request completion-token budgets, routing metadata, and one bounded retry/escalation. Revision 4 binds INTENT_PARSER_OPENAI_KEY only to parseIntentDraft through Firebase Secret Manager and makes VITE_PILOT_MODEL_ENABLED the real browser affordance gate in both app variants. The six provider-read states remain inside CreateIntake when the gate is on; with it off, the provider affordance is absent and deterministic intake remains available. stale is still excepted because the parse is stateless and freshly computed per request.",
       "stateEvidence": [
         {
           "state": "loading",

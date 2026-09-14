@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-09-13 14:49:08 CDT
+Last updated: 2026-09-13 19:09:08 CDT
 
 ## Current evidence boundary
 
@@ -10,10 +10,14 @@ evidence receipts and must not be described as one artifact.
 
 | Surface | Current recorded evidence | Boundary |
 |---|---|---|
-| Public Vercel edge | `v0.18.2`, exact SHA `3fb1443bb6e394133340ede3716548c92b24beea`, exact-main CI `34530609347`, production workflow `34532297958`, immutable deployment `quoteflow-c8t2j8jk0-mbmapps.vercel.app` | The protected workflow verified `https://quotepilot.mbmapps.com`, and an independent staff-portrait request returned HTTP 200 `image/png`. Authenticated role journeys and human acceptance remain open. |
-| Firebase Functions | `v0.18.1`, exact SHA `8bada8d16300a9f897df5f7a640e07b4830ab7ce`, CI `34430375712`, production deployment `34431964494` | Provider readback found 128 active Functions on the `ragnakok-operations` profile. This does not prove browser reachability or operator success. |
-| Firebase Hosting fallback | `v0.16.3` static release | It is an origin/fallback, not the current public edge or backend version. |
-| Repository `origin/main` | Contains the v0.18.2 release source plus protected PR `#137` customer-claim provenance and PR `#138` receipt-safe staff-retry corrections | Repository state is not runtime state; the two post-release corrections affect the privileged population script, not the deployed browser runtime. |
+| Public Vercel edge | `v0.19.0`, exact SHA `bf9f48a00547e305fdf155c8d64bf3646198b705`, exact-main CI `34787753902` attempt 2, production workflow `34791516818`, immutable deployment `quoteflow-bgq2wztfk-mbmapps.vercel.app` | The protected workflow promoted the `all-qualified-features` browser build and verified `https://quotepilot.mbmapps.com`. A subsequent public request returned HTTP 200 and the deployed Inquiry chunk contained the reviewed site key, action, and customer-safe route copy. Authenticated role journeys and human acceptance remain open. |
+| Firebase Functions | `v0.19.0`, exact SHA `bf9f48a00547e305fdf155c8d64bf3646198b705`, exact-main CI `34787753902` attempt 2, production workflow `34790618395` | Provider readback found 142 active Functions in `us-central1`. Inquiry callables, the hourly purge function, and `parseIntentDraft` are active; runtime readback pins the coordinated authorities and OpenAI `gpt-5-mini` to `mm05366-sandbox`, with Buyer Access, SMS, Revenue Autopilot sends, test bypasses, and hard App Check enforcement off. |
+| Firebase Hosting fallback | `v0.19.0`, exact SHA and workflow shared with the Firebase Functions receipt above | `https://tonicatering.web.app` returned HTTP 200 and served the same reviewed Inquiry chunk. It remains the origin/fallback rather than the canonical Vercel public edge. |
+| Production tenant authority | Protected workflow `34551712371` on main merge `2f4246846496f066e909d16fb46886cd0cc193fc` verified the exact current Firebase backend and Vercel browser receipts, then read back both `commercialChangeAuthorityEnabled` and `eventOperatingSpineEnabled` as `true` for `mm05366-sandbox` | Both fields were already true at the verified operation, so the run rebound the activation to current split-surface evidence without changing tenant data. It did not execute a commercial amendment, event command, provider send, payment, or automatic transition. |
+| Isolated staging Event/Commercial profile | Exact SHA `2f5d123d9ba06153823def6f44b3f5ff89183023`, CI `34420973414`, Firebase Hosting version `31a0bcbf39d65ec2`, profile `staging-event-operating-spine` | The original deployment and recovery readback proved both runtime gates true, but a later Functions deployment replaced that runtime. Current readback at `2026-09-11T05:31Z` found Commercial Change false; the tenant fields remain true. Staging must be redeployed and read back before it is described as active. |
+| Repository `origin/main` | Protected PR `#145` merged as exact tagged SHA `bf9f48a00547e305fdf155c8d64bf3646198b705` (`v0.19.0`) after all nine exact-head checks passed; exact-main CI run `34787753902` attempt 2 also passed all nine jobs | Repository, CI, deployment, hosted/provider behavior, production data, and human acceptance remain separate evidence classes. |
+| Guided Inquiry and Model Assist | The dedicated managed Inquiry Turnstile widget is restricted to the two approved production hosts, its public site key is compiled on both browser targets, and its secret is bound only through Secret Manager. A fresh OpenAI Responses probe using the rotated production key returned HTTP 200; `parseIntentDraft` is active with secret version 2 and the exact tenant/model runtime fence. | This proves provider-key health and deployed configuration, not a model-authored customer or quote result. No Inquiry Showcase slug was automatically published, and no real Turnstile token, inquiry submission, staff conversion, notification, accessibility, or human-acceptance receipt exists yet. |
+| Coordinated all-qualified production profile | Firebase workflow `34790618395` and Vercel workflow `34791516818` deployed the exact `v0.19.0` SHA for `mm05366-sandbox`, using separate rollback ancestors `b90fb5d539077c27e640ca58ee1438632d665cf9` and `3fb1443bb6e394133340ede3716548c92b24beea`. | The profile is active on both providers. Deployment did not publish a Showcase, execute an inquiry, invoke a model for a user, send a notification, mutate a quote/event, charge a payment, or establish human acceptance. |
 
 The first production Inventory request exposed an App Check rollout mismatch:
 the browser had no reviewed provider registration while the callable enforced a
@@ -50,8 +54,10 @@ and PR `#138` made complete receipt-backed fixture staff pairs replay-safe.
   16 quotes, eight Staffing plans, four workflow definitions, six workflow
   instances, and six event-operating ledgers.
 - Both targets read back current catalog-pricing confirmation and enabled
-  Inventory and operational Staffing tenant settings. A post-apply dry run in
-  each target reported zero event quotes left to create.
+  Inventory and operational Staffing tenant settings. Commercial Change and
+  Event Spine tenant settings are now also enabled for the exact founder-pilot
+  tenant in both targets. A post-apply dry run in each target reported zero
+  event quotes left to create.
 - Twenty generated staff portraits are published under
   `/fixtures/ragnakok-staff/`; the fixture contributes eight Offers, eight
   add-ons, five rentals, eight Event Templates, four Configuration Rules, 20
@@ -84,7 +90,7 @@ human acceptance.
 - Library owns Offers, components, Event Templates, Configuration Rules,
   versioned recipes, and menu-cost projections. It does not own physical stock
   or quote lifecycle.
-- Current source adds an off-by-default **Library → Inquiry page** Showcase,
+- The coordinated production profile exposes **Library → Inquiry page** Showcase,
   public `/inquire/:slug` request, and callable-owned Opportunities inquiry
   queue. The Showcase is a presentation/reference layer over the existing
   catalog, not a second commercial catalog. Conversion reuses the existing
@@ -101,30 +107,44 @@ BEO currentness.
 ## Open proof and operational risk
 
 - Authenticated hosted role journeys, responsive and assistive-technology
-  acceptance, and founder acceptance are not recorded for v0.18.2.
+  acceptance, and founder acceptance are not recorded for v0.19.0.
 - App Check hard enforcement remains blocked until reviewed browser provider
   registration and hosted token evidence exist.
-- Commercial Change and Event Spine mutation gates remain independent and off;
-  neither the Vercel release nor either fixture population activated them.
+- Commercial Change and Event Spine runtime and tenant gates are enabled only
+  for exact tenant `mm05366-sandbox`. Provider readback proves configuration,
+  not a successful amendment or Event command; those authenticated journeys
+  and resulting receipts remain open.
+- The isolated staging candidate's original receipt remains `partial` because
+  the deploy process failed during its post-deploy Functions listing. Exact
+  Hosting and Functions provider state was recovered through independent
+  readback before the tenant transaction, but the original artifact was not
+  rewritten as a completed receipt.
 - Provider delivery, recipient behavior, payment settlement, usage, revenue,
   retention, and business outcomes remain separate and unverified where no
   corresponding receipt exists.
-- Guided Inquiry is source/local candidate work only. No deployment, global or
-  tenant gate activation, unique production slug, Inquiry-specific Turnstile
-  secret/hostname, notification-provider outcome, scheduled 90-day deletion,
-  authenticated hosted conversion, cross-tenant emulator acceptance,
-  accessibility scan, assistive-technology review, customer/staff human
-  acceptance, or commercial outcome is recorded.
+- Guided Inquiry is deployed and its global/runtime gates, dedicated Turnstile
+  configuration, secret bindings, public route chunk, and hourly purge schedule
+  are present. No unique production slug, fresh browser challenge, wrong-host
+  or replay rejection, customer submission, notification-provider outcome,
+  actual 90-day deletion, authenticated hosted conversion, accessibility scan,
+  assistive-technology review, customer/staff human acceptance, or commercial
+  outcome is recorded. An administrator must still curate and publish an
+  immutable customer-safe Showcase version.
 
 ## Next proof event
 
-Complete an authenticated `mm05366-sandbox` administrator journey on v0.18.2
+First complete an authenticated `mm05366-sandbox` administrator journey
 across Living Opportunity, Quote administration, Operations, Inventory,
-Library pricing review, and exact readback. The receipt must identify the source
-SHA and deployment, exercise role and cross-tenant denial, show the Inventory
-App Check outcome, and keep provider, human, usage, and commercial evidence
-separate. No further fixture population or tenant-setting mutation is
-authorized by this document.
+Library pricing review, one governed Commercial Change simulation/authorization
+path, one explicit Event Spine command, and exact readback. The receipt must
+identify the source SHA and deployment, exercise role and cross-tenant denial,
+show the Inventory App Check outcome, and keep provider, human, usage, and
+commercial evidence separate. Then curate and preview one customer-safe Inquiry
+Showcase, publish its immutable slug, and run a bounded customer/staff journey
+that proves a fresh Turnstile token, wrong-host/action and replay rejection,
+durable receipt/recovery, notification isolation, catalog/identity drift review,
+and atomic conversion. No further fixture population or tenant-setting mutation
+is authorized by this document.
 
 Historical release narrative belongs in [`CHANGELOG.md`](CHANGELOG.md). Open
 work belongs in [`DEV_TASKS.md`](DEV_TASKS.md), and complete source capability

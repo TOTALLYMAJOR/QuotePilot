@@ -888,7 +888,14 @@ describe("isolated Event Operating Spine candidate profile", () => {
     expect(() => validateCandidateFunctionsEnvironment({ ...candidateFunctionsRuntimeExpected(RELEASE_CANDIDATE_PROVIDER_UAT_PROFILE), EVENT_OPERATING_SPINE_ENABLED: "true" }, RELEASE_CANDIDATE_PROVIDER_UAT_PROFILE)).toThrow(/unreviewed variables/);
     expect(() => validateCandidateFunctionsEnvironment(functionsEnvironment({ EVENT_OPERATING_SPINE_ENABLED: "true" }))).toThrow(/unreviewed variables/);
     const runtime = candidateFunctionsRuntimeExpected(RELEASE_CANDIDATE_EVENT_SPINE_UAT_PROFILE);
-    expect(runtime).toEqual({ ...oldRuntime, EVENT_OPERATING_SPINE_ENABLED: "true", COMMERCIAL_CHANGE_AUTHORITY_ENABLED: "true" });
+    expect(runtime).toEqual({
+      ...oldRuntime,
+      OPERATIONAL_STAFFING_AUTHORITY_ENABLED: "true",
+      EVENT_OPERATING_SPINE_ENABLED: "true",
+      COMMERCIAL_CHANGE_AUTHORITY_ENABLED: "true",
+      INVENTORY_AUTHORITY_ENABLED: "true",
+      TENANT_WORKFLOW_ORGANIZATION_ID: "mm05366-sandbox"
+    });
     expect(runtime).toMatchObject({ NOTIFICATIONS_EMAIL_PROVIDER: "none", NOTIFICATIONS_SMS_PROVIDER: "none", REVENUE_AUTOPILOT_SENDS_ENABLED: "false", BUYER_ACCESS_ENABLED: "false", COMMERCIAL_CHANGE_AUTHORITY_ENABLED: "true" });
     const oldBrowser = validateCandidateBrowserEnvironment(browserEnvironment());
     expect(validateCandidateBrowserEnvironment(browserEnvironment(), RELEASE_CANDIDATE_STAFFING_UAT_PROFILE)).toEqual(oldBrowser);
@@ -896,7 +903,17 @@ describe("isolated Event Operating Spine candidate profile", () => {
     expect(validateCandidateBrowserEnvironment(browserEnvironment(), RELEASE_CANDIDATE_EVENT_SPINE_UAT_PROFILE)).toEqual({ ...oldBrowser, VITE_EVENT_OPERATING_SPINE_ENABLED: "true" });
     expect(validateCandidateBrowserEnvironment(browserEnvironment(), RELEASE_CANDIDATE_EVENT_SPINE_UAT_PROFILE).VITE_AMBIENT_UI_ENABLED).toBe("true");
     expect(() => validateCandidateFunctionsEnvironment(functionsEnvironment(), RELEASE_CANDIDATE_EVENT_SPINE_UAT_PROFILE)).toThrow(/COMMERCIAL_CHANGE_AUTHORITY_ENABLED|EVENT_OPERATING_SPINE_ENABLED/);
-    expect(validateCandidateFunctionsEnvironment(functionsEnvironment({ EVENT_OPERATING_SPINE_ENABLED: "true", COMMERCIAL_CHANGE_AUTHORITY_ENABLED: "true" }), RELEASE_CANDIDATE_EVENT_SPINE_UAT_PROFILE)).toMatchObject({ EVENT_OPERATING_SPINE_ENABLED: "true" });
+    expect(validateCandidateFunctionsEnvironment({ ...runtime }, RELEASE_CANDIDATE_EVENT_SPINE_UAT_PROFILE)).toMatchObject({
+      EVENT_OPERATING_SPINE_ENABLED: "true",
+      COMMERCIAL_CHANGE_AUTHORITY_ENABLED: "true",
+      OPERATIONAL_STAFFING_AUTHORITY_ENABLED: "true",
+      INVENTORY_AUTHORITY_ENABLED: "true",
+      TENANT_WORKFLOW_ORGANIZATION_ID: "mm05366-sandbox"
+    });
+    expect(() => validateCandidateFunctionsEnvironment({
+      ...runtime,
+      TENANT_WORKFLOW_ORGANIZATION_ID: "another-organization"
+    }, RELEASE_CANDIDATE_EVENT_SPINE_UAT_PROFILE)).toThrow(/TENANT_WORKFLOW_ORGANIZATION_ID/);
     const requirements = candidateEventSpineRequirements(RELEASE_CANDIDATE_EVENT_SPINE_UAT_PROFILE);
     expect(requirements).toMatchObject({ tenantActivationIncluded: false, tenantSelectionRequired: true, operatorAcceptanceEstablished: false,
       tenantGate: { field: "eventOperatingSpineEnabled", requiredValue: true, availability: "not_yet_available", observedValue: null } });
@@ -904,7 +921,10 @@ describe("isolated Event Operating Spine candidate profile", () => {
     expect(requirements.commercialTenantGate).toMatchObject({ field: "commercialChangeAuthorityEnabled", requiredValue: true, observedValue: null, availability: "not_yet_available" });
     expect(oldRuntime.COMMERCIAL_CHANGE_AUTHORITY_ENABLED).toBe("false");
     expect(staffing.COMMERCIAL_CHANGE_AUTHORITY_ENABLED).toBe("false");
-    expect(() => validateCandidateFunctionsEnvironment(functionsEnvironment({ EVENT_OPERATING_SPINE_ENABLED: "true" }), RELEASE_CANDIDATE_EVENT_SPINE_UAT_PROFILE)).toThrow(/COMMERCIAL_CHANGE_AUTHORITY_ENABLED/);
+    expect(() => validateCandidateFunctionsEnvironment({
+      ...runtime,
+      COMMERCIAL_CHANGE_AUTHORITY_ENABLED: "false"
+    }, RELEASE_CANDIDATE_EVENT_SPINE_UAT_PROFILE)).toThrow(/COMMERCIAL_CHANGE_AUTHORITY_ENABLED/);
     expect(candidateEventSpineRequirements(RELEASE_CANDIDATE_UAT_PROFILE)).toBeNull();
   });
   test("event candidate manifest and reserved receipt keep rollout requirements separate from activation proof", () => {

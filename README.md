@@ -1,6 +1,6 @@
 # QuotePilot by MBMApps
 
-Last updated: 2026-09-13 14:49:08 CDT
+Last updated: 2026-09-13 19:09:08 CDT
 
 Multi-tenant catering quote application built with React, Vite, Firebase, and jsPDF.
 
@@ -457,6 +457,11 @@ Optional:
   No new callable, message field, catalog exposure, direct quote mutation, or
   trust boundary.)
 
+- `VITE_PILOT_MODEL_ENABLED` (default off. Exposes the Model assist control in
+  CREATE only when the server lane is independently enabled and provider-ready.
+  When false or absent, CREATE retains its deterministic Structure it workflow
+  and does not render a provider action.)
+
 - `INTENT_PARSER_ENABLED` / `INTENT_PARSER_PROVIDER` / `INTENT_PARSER_MODEL`
   (server env, all dormant by default: `false` / `none` / per-provider
   default. The owner-approved model-assisted intake lane; providers
@@ -464,10 +469,12 @@ Optional:
   `provider:model` candidate order from `INTENT_PARSER_MODEL` or the
   built-in defaults, trims the completion-token budget by request
   complexity, and may escalate once to the next configured candidate.
-  Enabling later requires creating the
+  Enabling requires creating the
   `INTENT_PARSER_OPENAI_KEY` and/or `INTENT_PARSER_ANTHROPIC_KEY` secrets
-  in Firebase Secret Manager and binding them to the parse callable when
-  it ships with the CREATE integration; until every piece exists, parsing
+  in Firebase Secret Manager and binding them only to the parse callable;
+  the OpenAI binding is present in the current source candidate. Until the
+  browser gate, server gate, provider, enabled secret, and provider account
+  capacity all exist, parsing
   fails closed with a named precondition and the deterministic browser
   extractor remains the availability floor. See
   `docs/INTENT_INTAKE_ADR.md`.)
@@ -727,6 +734,7 @@ server-owned gates:
 
 ```dotenv
 COMMERCIAL_CHANGE_AUTHORITY_ENABLED=false
+EVENT_OPERATING_SPINE_ENABLED=false
 OPERATIONAL_STAFFING_AUTHORITY_ENABLED=false
 REVENUE_AUTOPILOT_ENABLED=false
 REVENUE_AUTOPILOT_SENDS_ENABLED=false
@@ -735,6 +743,10 @@ NOTIFICATIONS_EMAIL_PROVIDER=none
 
 Commercial Change additionally requires the trusted tenant setting
 `commercialChangeAuthorityEnabled=true`; browser principals cannot enable it.
+Event Spine additionally requires `eventOperatingSpineEnabled=true`. In
+production, only the exact-tenant `ragnakok-operations` deployment profile may
+set both server gates true, and it couples them with enabled Staffing and
+Inventory authority; every other profile retains the false defaults above.
 Operational staffing independently requires the trusted tenant setting
 `operationalStaffingAuthorityEnabled=true`; administrators alone manage staff
 profiles, full private staff records, operator-recorded availability and staff
@@ -1467,6 +1479,15 @@ Primary production deployment is manual-workflow-only:
   `backend`, or `all` surface to the fixed `tonicatering` project.
 - `Deploy Vercel Production` builds and promotes the exact release to the fixed
   `mbmapps/quoteflow` project and `quotepilot.mbmapps.com` production edge.
+- The protected `all-qualified-features` profile is the coordinated
+  founder-tenant path and is accepted only for Firebase `all` and Vercel. It
+  pins both compiled and server access to `mm05366-sandbox`; enables the
+  qualified workspace, Resend, Commercial Change, Event Spine, Staffing,
+  Inventory, Guided Inquiry, and review-only Model Assist; and keeps Buyer
+  Access, SMS, Revenue Autopilot sends, test bypasses, and hard App Check
+  enforcement off. It requires the dedicated Inquiry Turnstile public site key
+  plus enabled Secret Manager metadata for Inquiry, rate limiting, OpenAI, and
+  Resend before Firebase mutation. Deployment never publishes an Inquiry slug.
 - `Release UAT Attestation` remains available when a release needs a separately
   recorded human acceptance receipt. Its v4 receipt binds the exact tracked
   candidate profile and that profile's fixed SMS provider in addition to the
@@ -1488,6 +1509,16 @@ allowlisted human dispatcher. The same live evidence is checked again after
 the build and immediately before provider mutation. The Vercel token and the
 Firebase workload-identity ADC file are scoped to their final mutation steps;
 Firebase production rejects the legacy `FIREBASE_TOKEN` path.
+
+`v0.19.0` deployed the coordinated profile through Firebase workflow
+`34790618395` and Vercel workflow `34791516818` at exact SHA
+`bf9f48a00547e305fdf155c8d64bf3646198b705`. Provider readback proved the
+dedicated Inquiry widget configuration on both browser targets, active
+Inquiry/retention callables, and active `gpt-5-mini` Model Assist configuration;
+a fresh minimal OpenAI Responses probe returned HTTP 200. Deployment did not
+publish an Inquiry slug or prove a customer submission, authenticated model
+result, provider notification, retention deletion, accessibility, or human
+acceptance.
 
 The pre-merge candidate path is narrower than the production workflows. It
 uses the checksum-verified official Firebase v15.24.0 binary for every Firebase

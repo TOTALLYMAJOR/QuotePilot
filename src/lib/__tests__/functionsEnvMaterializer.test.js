@@ -99,6 +99,7 @@ describe("Firebase Functions env materializer", { timeout: 30_000 }, () => {
     expect(output).toContain("NOTIFICATIONS_SMS_PROVIDER=none");
     expect(output).toContain("STRIPE_MODE=live");
     expect(output).toContain("COMMERCIAL_CHANGE_AUTHORITY_ENABLED=false");
+    expect(output).toContain("EVENT_OPERATING_SPINE_ENABLED=false");
     expect(output).toContain("OPERATIONAL_STAFFING_AUTHORITY_ENABLED=false");
     expect(output).toContain("INVENTORY_AUTHORITY_ENABLED=false");
     expect(output).toContain("REVENUE_AUTOPILOT_ENABLED=false");
@@ -106,6 +107,9 @@ describe("Firebase Functions env materializer", { timeout: 30_000 }, () => {
     expect(output).toContain("BUYER_ACCESS_ENABLED=false");
     expect(output).toContain("BUYER_ACCESS_STRIPE_MODE=test");
     expect(output).toContain("INQUIRY_SHOWCASE_ENABLED=false");
+    expect(output).toContain("INTENT_PARSER_ENABLED=false");
+    expect(output).toContain("INTENT_PARSER_PROVIDER=none");
+    expect(output).toContain("INTENT_PARSER_MODEL=");
     expect(output).toContain(
       "BUYER_ACCESS_APP_BASE_URL=https://quotepilot.mbmapps.com/app"
     );
@@ -145,21 +149,33 @@ describe("Firebase Functions env materializer", { timeout: 30_000 }, () => {
     expect(testMode.stderr).toMatch(/requires STRIPE_MODE=live/i);
   });
 
-  test("keeps Commercial Change Authority enforcement explicit and fail closed", () => {
+  test("keeps coupled Commercial Change and Event Spine authority explicit and fail closed", () => {
     const enabled = runMaterializer({
-      COMMERCIAL_CHANGE_AUTHORITY_ENABLED: "true"
+      TENANT_WORKFLOW_ORGANIZATION_ID: "mm05366-sandbox",
+      COMMERCIAL_CHANGE_AUTHORITY_ENABLED: "true",
+      EVENT_OPERATING_SPINE_ENABLED: "true",
+      OPERATIONAL_STAFFING_AUTHORITY_ENABLED: "true",
+      INVENTORY_AUTHORITY_ENABLED: "true"
     });
     expect(enabled.result.status).toBe(0);
-    expect(fs.readFileSync(
+    const output = fs.readFileSync(
       path.join(enabled.cwd, "functions", ".env.tonicatering"),
       "utf8"
-    )).toContain("COMMERCIAL_CHANGE_AUTHORITY_ENABLED=true");
+    );
+    expect(output).toContain("COMMERCIAL_CHANGE_AUTHORITY_ENABLED=true");
+    expect(output).toContain("EVENT_OPERATING_SPINE_ENABLED=true");
 
     const invalid = runMaterializer({
       COMMERCIAL_CHANGE_AUTHORITY_ENABLED: "enabled"
     }).result;
     expect(invalid.status).not.toBe(0);
     expect(invalid.stderr).toMatch(/COMMERCIAL_CHANGE_AUTHORITY_ENABLED must be true or false/i);
+
+    const invalidEvent = runMaterializer({
+      EVENT_OPERATING_SPINE_ENABLED: "enabled"
+    }).result;
+    expect(invalidEvent.status).not.toBe(0);
+    expect(invalidEvent.stderr).toMatch(/EVENT_OPERATING_SPINE_ENABLED must be true or false/i);
   });
 
   test("keeps operational staffing authority explicit and fail closed", () => {
@@ -363,6 +379,7 @@ describe("Firebase Functions env materializer", { timeout: 30_000 }, () => {
 
   test("materializes Inquiry Showcase configuration only with an explicit approved hostname allowlist", () => {
     const enabled = runMaterializer({
+      TENANT_WORKFLOW_ORGANIZATION_ID: "mm05366-sandbox",
       INQUIRY_SHOWCASE_ENABLED: "true",
       INQUIRY_TURNSTILE_HOSTNAMES: "quotepilot.mbmapps.com, tonicatering.web.app"
     });
@@ -379,6 +396,7 @@ describe("Firebase Functions env materializer", { timeout: 30_000 }, () => {
     expect(output).not.toContain("INQUIRY_RATE_LIMIT_SECRET");
 
     const missingHostnames = runMaterializer({
+      TENANT_WORKFLOW_ORGANIZATION_ID: "mm05366-sandbox",
       INQUIRY_SHOWCASE_ENABLED: "true"
     }).result;
     expect(missingHostnames.status).not.toBe(0);
@@ -391,6 +409,7 @@ describe("Firebase Functions env materializer", { timeout: 30_000 }, () => {
     expect(disabledResidue.stderr).toMatch(/allowed only while INQUIRY_SHOWCASE_ENABLED=true/i);
 
     const unapprovedHostname = runMaterializer({
+      TENANT_WORKFLOW_ORGANIZATION_ID: "mm05366-sandbox",
       INQUIRY_SHOWCASE_ENABLED: "true",
       INQUIRY_TURNSTILE_HOSTNAMES: "inquiry.example.invalid"
     }).result;
@@ -401,12 +420,67 @@ describe("Firebase Functions env materializer", { timeout: 30_000 }, () => {
   test("rejects Inquiry Showcase secrets in dotenv because Secret Manager owns them", () => {
     for (const [name, value] of [
       ["INQUIRY_TURNSTILE_SECRET", "turnstile-secret-fixture"],
-      ["INQUIRY_RATE_LIMIT_SECRET", "rate-limit-secret-fixture"]
+      ["INQUIRY_RATE_LIMIT_SECRET", "rate-limit-secret-fixture"],
+      ["INTENT_PARSER_OPENAI_KEY", "openai-secret-fixture"],
+      ["INTENT_PARSER_ANTHROPIC_KEY", "anthropic-secret-fixture"]
     ]) {
       const { result } = runMaterializer({ [name]: value });
       expect(result.status).not.toBe(0);
       expect(result.stderr).toMatch(/Firebase Secret Manager/i);
       expect(result.stderr).toContain(name);
+    }
+  });
+
+  test("materializes only the exact tenant-fenced production Model Assist tuple", () => {
+    const exact = runMaterializer({
+      TENANT_WORKFLOW_ORGANIZATION_ID: "mm05366-sandbox",
+      COMMERCIAL_CHANGE_AUTHORITY_ENABLED: "true",
+      EVENT_OPERATING_SPINE_ENABLED: "true",
+      OPERATIONAL_STAFFING_AUTHORITY_ENABLED: "true",
+      INVENTORY_AUTHORITY_ENABLED: "true",
+      INQUIRY_SHOWCASE_ENABLED: "true",
+      INQUIRY_TURNSTILE_HOSTNAMES: "quotepilot.mbmapps.com,tonicatering.web.app",
+      INTENT_PARSER_ENABLED: "true",
+      INTENT_PARSER_PROVIDER: "openai",
+      INTENT_PARSER_MODEL: "gpt-5-mini",
+      INTENT_PARSER_ORGANIZATION_ID: "mm05366-sandbox"
+    });
+    expect(exact.result.status).toBe(0);
+    const output = fs.readFileSync(
+      path.join(exact.cwd, "functions", ".env.tonicatering"),
+      "utf8"
+    );
+    for (const binding of [
+      "TENANT_WORKFLOW_ORGANIZATION_ID=mm05366-sandbox",
+      "INQUIRY_SHOWCASE_ENABLED=true",
+      "INTENT_PARSER_ENABLED=true",
+      "INTENT_PARSER_PROVIDER=openai",
+      "INTENT_PARSER_MODEL=gpt-5-mini",
+      "INTENT_PARSER_ORGANIZATION_ID=mm05366-sandbox"
+    ]) {
+      expect(output).toContain(binding);
+    }
+    expect(output).not.toContain("INTENT_PARSER_OPENAI_KEY");
+
+    for (const override of [
+      { INTENT_PARSER_PROVIDER: "anthropic" },
+      { INTENT_PARSER_MODEL: "gpt-5" },
+      { INTENT_PARSER_ORGANIZATION_ID: "other" },
+      { TENANT_WORKFLOW_ORGANIZATION_ID: "" },
+      { INQUIRY_SHOWCASE_ENABLED: "false", INQUIRY_TURNSTILE_HOSTNAMES: "" }
+    ]) {
+      const result = runMaterializer({
+        TENANT_WORKFLOW_ORGANIZATION_ID: "mm05366-sandbox",
+        INQUIRY_SHOWCASE_ENABLED: "true",
+        INQUIRY_TURNSTILE_HOSTNAMES: "quotepilot.mbmapps.com,tonicatering.web.app",
+        INTENT_PARSER_ENABLED: "true",
+        INTENT_PARSER_PROVIDER: "openai",
+        INTENT_PARSER_MODEL: "gpt-5-mini",
+        INTENT_PARSER_ORGANIZATION_ID: "mm05366-sandbox",
+        ...override
+      }).result;
+      expect(result.status).not.toBe(0);
+      expect(result.stderr).toMatch(/exact openai\/gpt-5-mini\/mm05366-sandbox profile|TENANT_WORKFLOW_ORGANIZATION_ID/i);
     }
   });
 
@@ -593,7 +667,7 @@ describe("Firebase Functions env materializer", { timeout: 30_000 }, () => {
 });
 
 
-test("materializes only the approved tenant runtime with global workflow authority off", () => {
+test("materializes only the approved tenant runtime and couples the complete operations authority", () => {
   const result = runMaterializer({ TENANT_WORKFLOW_ORGANIZATION_ID: "mm05366-sandbox" });
   expect(result.result.status).toBe(0);
   expect(fs.readFileSync(path.join(result.cwd, "functions/.env.tonicatering"), "utf8")).toContain("TENANT_WORKFLOW_ORGANIZATION_ID=mm05366-sandbox");
@@ -602,4 +676,25 @@ test("materializes only the approved tenant runtime with global workflow authori
   expect(runMaterializer({ TENANT_WORKFLOW_ORGANIZATION_ID: "other" }).result.status).not.toBe(0);
   expect(runMaterializer({ TENANT_WORKFLOW_ORGANIZATION_ID: "mm05366-sandbox", COMMERCIAL_CHANGE_AUTHORITY_ENABLED: "true" }).result.status).not.toBe(0);
   expect(runMaterializer({ EVENT_OPERATING_SPINE_ENABLED: "true" }).result.status).not.toBe(0);
+
+  const completeOperations = runMaterializer({
+    TENANT_WORKFLOW_ORGANIZATION_ID: "mm05366-sandbox",
+    COMMERCIAL_CHANGE_AUTHORITY_ENABLED: "true",
+    EVENT_OPERATING_SPINE_ENABLED: "true",
+    OPERATIONAL_STAFFING_AUTHORITY_ENABLED: "true",
+    INVENTORY_AUTHORITY_ENABLED: "true"
+  });
+  expect(completeOperations.result.status).toBe(0);
+  const completeEnvironment = fs.readFileSync(
+    path.join(completeOperations.cwd, "functions/.env.tonicatering"),
+    "utf8"
+  );
+  expect(completeEnvironment).toContain("COMMERCIAL_CHANGE_AUTHORITY_ENABLED=true");
+  expect(completeEnvironment).toContain("EVENT_OPERATING_SPINE_ENABLED=true");
+  expect(runMaterializer({
+    TENANT_WORKFLOW_ORGANIZATION_ID: "mm05366-sandbox",
+    COMMERCIAL_CHANGE_AUTHORITY_ENABLED: "true",
+    EVENT_OPERATING_SPINE_ENABLED: "true",
+    OPERATIONAL_STAFFING_AUTHORITY_ENABLED: "true"
+  }).result.stderr).toMatch(/requires Staffing and Inventory server authority/i);
 });

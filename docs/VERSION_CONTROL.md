@@ -1,6 +1,6 @@
 # Version Control Playbook
 
-Last updated: 2026-09-10 20:25:10 CDT
+Last updated: 2026-09-13 19:09:08 CDT
 
 ## Goals
 - Keep `main` stable and deployable.
@@ -46,26 +46,42 @@ explicit owner promotion after real-run review.
   It preserves `STRIPE_MODE=live` solely for the established quote-payment
   rail; the separate buyer-invoice rail remains disabled with test mode bound.
 - The `ragnakok-operations` profile is the only production profile that may
-  enable both `OPERATIONAL_STAFFING_AUTHORITY_ENABLED` and
+  enable the coupled Commercial Change and Event Spine gates together with
+  `OPERATIONAL_STAFFING_AUTHORITY_ENABLED` and
   `INVENTORY_AUTHORITY_ENABLED`. It is restricted to a Functions-bearing
   Firebase deployment and binds `TENANT_WORKFLOW_ORGANIZATION_ID` to the exact
-  founder-pilot organization. After the successful tagged all-surface deploy,
+  founder-pilot organization. Every other profile keeps all four authorities
+  off. After the successful tagged all-surface deploy,
   the Staffing, Inventory, and coupled Event/Commercial tenant workflows must
   each verify that deploy receipt, update only their declared setting fields,
   and prove provider readback. Do not substitute a console edit or direct
   Firestore write.
+- The coordinated `all-qualified-features` profile supersedes the split
+  founder-pilot release path only for an explicitly authorized full promotion.
+  It is accepted exclusively by Firebase `all` and Vercel, pins the compiled
+  and runtime organization to `mm05366-sandbox`, and enables the qualified
+  staff workspace, Resend, Commercial Change, Event Spine, Staffing,
+  Inventory, Guided Inquiry, and review-only Model Assist. It still keeps
+  Buyer Access, SMS, Revenue Autopilot sends, test bypasses, and hard App Check
+  enforcement off. The exact Inquiry Turnstile site key and Secret Manager
+  bindings plus the tenant-scoped OpenAI provider configuration are required
+  profile evidence, not optional post-deploy setup.
 - Firebase Functions production mutation is quota-aware and fail-closed. The
   deployer derives the exact tracked export inventory, submits no more than 35
   function writes per batch, waits a complete provider quota window between
   batches, and rejects Firebase's textual create/update failure even if the CLI
   exits zero. A backend/all workflow succeeds only after `functions:list`
   proves the exact inventory active in `us-central1` with every function bound
-  to the expected safe-off runtime values and no disabled-provider residue.
+  to the exact selected runtime profile and no disabled-provider residue.
   The dedicated deployer also requires `roles/iam.serviceAccountUser` on the
   exact Functions runtime service account and project-scoped
   `roles/cloudscheduler.admin` for scheduled-function lifecycle. Cloud
   Functions Admin does not include either authority; their provider readback is
   a release prerequisite, not an emergency bypass.
+  Separately, every Function-bound Secret Manager value must grant
+  `roles/secretmanager.secretAccessor` to the exact runtime service account
+  before dispatch. Do not give the CI deployer broad secret-policy mutation
+  authority to compensate for a missing runtime binding.
 - Protect `main` and configure exactly one release approval mode. Team-owned
   repositories use `production` with a directly assigned independent reviewer
   and self-review prevention. Solo-owned repositories use the reviewless
@@ -336,6 +352,14 @@ If a topic changes, only update the owning doc and cross-link from others.
     deployment alone is not message-delivery evidence. One separately
     authorized controlled send must keep QuotePilot provider acceptance,
     Resend delivery/bounce, recipient inbox receipt, and human review distinct.
+  - `all-qualified-features` is restricted to `firebase-all` and `vercel` and
+    must be used for both targets when coordinating this release. It does not
+    create a cross-provider rollback unit: each dispatch retains its own
+    target-specific last-known-good ancestor and provider receipt. The profile
+    is blocked unless the Inquiry Turnstile public key is reviewed and every
+    required Firebase secret has an enabled metadata version. An enabled
+    OpenAI key version does not prove usable provider credit or a successful
+    model request.
 - Firebase workflow input: `firebase_scope`
   - Default operator selection: `hosting`.
   - `backend` deploys `firestore,functions:default`; `backend` and `all` never

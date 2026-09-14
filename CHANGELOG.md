@@ -32,27 +32,6 @@ All notable project changes are documented in this file.
   is source/local candidate evidence only, not hosted, production-data, or
   human-acceptance proof.
 
-- Add an off-by-default Guided Inquiry Page backed by one immutable Inquiry
-  Showcase rather than a second commercial catalog. Administrators curate and
-  preview customer-safe references in Library, publish/pause/republish exact
-  versions with slug and receipt fences, and never copy pricing, cost, margin,
-  inclusion, rule, staffing, inventory, or availability authority. Customers
-  use `/inquire/:slug` to review and submit event preferences through distinct
-  Turnstile and bounded abuse controls; stale publications fail closed,
-  uncertain outcomes resolve with an opaque session recovery secret, and the
-  on-screen receipt explicitly creates no customer, quote, portal, Calendar
-  event, payment, availability claim, proposal, or booking. Opportunities owns
-  the Received/Acknowledged/Converted/Dismissed queue, notification failure is
-  isolated after durable recording, current-catalog and customer-identity
-  drift require explicit staff resolution, and the existing authoritative
-  quote transaction commits quote/customer/portal/version plus the Converted
-  receipt atomically. Unconverted content receives a 90-day deletion time;
-  scheduled cleanup retains only a content-free receipt. Direct browser access
-  to all Showcase, inquiry, abuse, recovery, analytics, and receipt records is
-  denied. This is source/local candidate evidence only; deployment, secrets,
-  gates, hosted/provider behavior, production data, accessibility, human
-  acceptance, and commercial outcomes remain open.
-
 - Add a revision-bound Google Calendar event-copy workflow to Integrations Ops
   and the focused Operations event. An administrator connects an independently
   consented primary calendar, then deliberately publishes, updates, checks, or
@@ -170,11 +149,31 @@ All notable project changes are documented in this file.
   presentation was retired. Priority identity, saved commercial context,
   consequence, and its one continuation now stay together without overlap;
   responsive browser coverage rejects collapsed review rows.
-- Bind the protected founder-tenant activation to the exact current
-  `ragnakok-operations` Firebase backend receipt and the exact safe-off Vercel
-  browser receipt. This supports the intentionally split production surfaces
-  without weakening the tenant, tag, workflow, profile, or provider-readback
-  checks and without treating an older all-surface deployment as current.
+## v0.19.0 coordinated Inquiry and Model Assist production release - 2026-09-13
+
+- Published protected PR `#145` as exact tagged `main` SHA
+  `bf9f48a00547e305fdf155c8d64bf3646198b705` (`v0.19.0`) after its nine PR
+  checks and exact-main CI run `34787753902` attempt 2 passed. Governed Firebase
+  workflow `34790618395` deployed Hosting, Firestore, and all 142 then-current
+  Functions; governed Vercel workflow `34791516818` promoted immutable
+  deployment `quoteflow-bgq2wztfk-mbmapps.vercel.app`.
+- Activated the protected `all-qualified-features` release profile for the
+  qualified staff workspace, Inquiry Showcase, and review-only Model Assist
+  presentation, bound to organization `mm05366-sandbox`. Buyer Access, owner
+  SMS, Revenue Autopilot sends, local/test bypasses, and hard App Check remained
+  closed. Model output remained low-confidence, confirm-before-apply, stateless,
+  and non-authoritative.
+- Provider readback proved both public origins, reviewed Inquiry and Turnstile
+  configuration, 142 active `us-central1` Functions, the hourly purge scheduler,
+  and `parseIntentDraft` using OpenAI `gpt-5-mini` with its managed secret. It
+  did not prove a published Inquiry slug, real customer submission,
+  model-authored operator outcome, notification delivery, retention deletion,
+  accessibility, human acceptance, or commercial outcomes.
+- Protected workflow `34551712371` also bound the founder-tenant activation to
+  exact current Firebase and safe-off Vercel receipts and read back Commercial
+  Change and Event Spine as enabled only for `mm05366-sandbox`; this established
+  evidence and did not mutate quote, event, provider, payment, or completion
+  state.
 
 ## v0.18.2 public release and operating-twin population - 2026-09-10
 

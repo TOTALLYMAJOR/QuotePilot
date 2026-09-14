@@ -153,7 +153,8 @@ export const PRODUCTION_RELEASE_PROFILES = Object.freeze([
   "safe-off",
   "email-active",
   "ragnakok-workflows",
-  "ragnakok-operations"
+  "ragnakok-operations",
+  "all-qualified-features"
 ]);
 
 function evidenceError(message) {
@@ -181,6 +182,14 @@ export function parseProductionReleaseProfile(value) {
 export function validateProductionReleaseProfileTarget(profileValue, targetValue) {
   const profile = parseProductionReleaseProfile(profileValue);
   const target = String(targetValue || "").trim();
+  if (
+    profile === "all-qualified-features"
+    && !new Set(["firebase-all", "vercel"]).has(target)
+  ) {
+    throw evidenceError(
+      "the all-qualified-features production profile requires firebase-all or vercel."
+    );
+  }
   if (
     ["email-active", "ragnakok-workflows", "ragnakok-operations"].includes(profile)
     && !new Set(["firebase-backend", "firebase-all"]).has(target)

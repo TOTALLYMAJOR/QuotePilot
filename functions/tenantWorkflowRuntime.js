@@ -15,6 +15,12 @@ const WORKFLOW_FLAGS = new Set([
 function tenantWorkflowRuntimeEnabled(flag, organizationId, environment = process.env) {
   if (!WORKFLOW_FLAGS.has(flag)) return false;
   const scopedOrganization = String(environment.TENANT_WORKFLOW_ORGANIZATION_ID || "").trim();
+  if (
+    flag === "INQUIRY_SHOWCASE_ENABLED"
+    && environment.INQUIRY_SHOWCASE_ENABLED !== "true"
+  ) {
+    return false;
+  }
   if (scopedOrganization) {
     return scopedOrganization === "mm05366-sandbox" && organizationId === scopedOrganization;
   }

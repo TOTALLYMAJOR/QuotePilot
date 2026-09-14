@@ -1,6 +1,6 @@
 # QuotePilot Development Tasks
 
-Last updated: 2026-09-13 00:25:57 CDT
+Last updated: 2026-09-13 19:09:08 CDT
 
 This file contains open work only. Completed delivery belongs in
 [`CHANGELOG.md`](CHANGELOG.md), current evidence in
@@ -9,9 +9,6 @@ This file contains open work only. Completed delivery belongs in
 
 ## P0 — Reconcile the current release surface
 
-- [ ] Build, qualify, and separately authorize promotion of one exact frontend
-  candidate compatible with the deployed `v0.18.1` Firebase backend. Record the
-  source SHA, exact CI, immutable deployment, public route probes, and rollback.
 - [ ] Run an authenticated `mm05366-sandbox` administrator acceptance journey
   across Living Opportunity, Quote administration, Operations, Inventory,
   Library pricing review, and exact readback. Include sales/non-admin and
@@ -47,12 +44,13 @@ This file contains open work only. Completed delivery belongs in
   separate evidence.
 - [ ] Keep buyer access closed until restricted test credentials, webhook
   checks, Turnstile checks, and a bounded hosted acceptance plan pass.
-- [ ] Qualify Guided Inquiry without auto-publication: deploy one exact source
-  revision, bind the distinct Inquiry Turnstile and rate-limit secrets, verify
-  the hostname allowlist and scheduled deletion function, enable one consenting
-  tenant, publish one reviewed slug, and preserve source/local, CI, hosted,
-  provider, production-data, accessibility, human, and commercial-outcome
-  receipts separately.
+- [ ] Qualify Guided Inquiry without auto-publication: curate and preview one
+  customer-safe Showcase, publish one reviewed slug, then prove a fresh browser
+  challenge plus wrong-host/action and replay rejection, durable submission and
+  recovery, notification isolation, authenticated conversion, and one actual
+  scheduled retention deletion. Preserve source/local, CI, hosted, provider,
+  production-data, accessibility, human, and commercial-outcome receipts
+  separately.
 - [ ] Add emulator acceptance for anonymous direct-Firestore denial, tenant
   isolation, exact-slug lookup, IP/tenant quotas, replay/recovery, stale
   publication rejection, concurrent duplicate conversion, and atomic

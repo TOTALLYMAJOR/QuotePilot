@@ -1459,6 +1459,13 @@ approvals, and workflow/event ledgers. Use these records to exercise Library,
 Opportunities, Operations, Staff, Workflow, approvals, pricing, and margin
 presentation as one connected system.
 
+The production `ragnakok-operations` deployment profile is also the only
+profile allowed to expose the coupled Commercial Change and Event Spine server
+authorities. Those runtime gates do not bypass the exact tenant settings,
+verified staff identity, role checks, current quote revision, approvals,
+idempotency, or immutable receipts. Enabling the profile does not itself amend
+a quote or advance an event.
+
 The operating-twin loader is a privileged exact-tenant fixture migration. It
 may enable Inventory and Staffing settings and reconfirm the exact current
 catalog revision. Do not run a hosted apply unless those transitions have been
@@ -3444,9 +3451,11 @@ gates.
 
 On New quote, next to Structure it, a Model assist button can ask a
 configured AI provider (OpenAI or Anthropic) to read the same note. This
-lane ships off: until your administrator enables it and configures a
-provider key, the button reports that the lane is off and typed
-structuring keeps working exactly the same. When it is on, model
+lane ships off: until an administrator explicitly enables both its browser
+control and server/provider rail, the button is not shown and typed structuring
+keeps working exactly the same. If the control is visible but the provider
+later becomes unavailable, the lane reports that recoverable outcome without
+changing the note or deterministic result. When it is on, model
 suggestions appear in their own list and every one requires your explicit
 Confirm before it touches the draft — the model never fills the form,
 never prices, and never saves. Anything the model could not read is
@@ -3455,6 +3464,13 @@ or use an internal `auto` route that tries the configured cheaper-first
 provider:model order and may retry once when the first attempt is
 unreadable or unavailable; this routing detail never changes the review-
 only boundary.
+
+For the coordinated founder-tenant production profile, Model Assist is pinned
+to OpenAI `gpt-5-mini` and `mm05366-sandbox`; the general provider/auto controls
+above do not widen that release. The current provider probe reports
+`credit_balance_exhausted`, so this lane must be treated as unavailable until
+capacity is restored and reverified. The deterministic **Structure it** path
+remains available and is the safe recovery.
 
 After `Add details to the draft`, CREATE compresses the completed reading into
 an `Inquiry added` handoff so the proposal becomes the next visible task,
