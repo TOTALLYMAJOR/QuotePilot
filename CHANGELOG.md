@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-09-14 10:08:15 CDT
+Last updated: 2026-09-14 10:19:54 CDT
 
 All notable project changes are documented in this file.
 
@@ -77,10 +77,11 @@ All notable project changes are documented in this file.
   responsive proof, CI, hosted use, human acceptance, and the 30% pilot outcome
   remain open.
 - Record the Delivery Planning source cost against the active governed bundle
-  exception: 3,555,056 bytes in the compatibility graph and 4,834,373 bytes in
-  the production-equivalent Ambient graph. Both ceilings are exact local
-  measurements with unchanged largest-chunk limits and no future-growth
-  headroom; exact-PR CI remains required before release.
+  exception: exact-PR CI run `34860595658` measures the compatibility graph at
+  3,555,374 bytes, while the production-equivalent Ambient graph measures
+  4,834,373 bytes locally. Both retain unchanged largest-chunk limits and no
+  future-growth headroom; exact-PR Ambient confirmation remains required before
+  release.
 - Add an off-by-default Guided Inquiry Page backed by one immutable Inquiry
   Showcase rather than a second commercial catalog. Administrators curate and
   preview customer-safe references in Library, publish/pause/republish exact
