@@ -1,6 +1,6 @@
 # User Manual
 
-Last updated: 2026-09-13 14:49:08 CDT
+Last updated: 2026-09-14 01:31:14 CDT
 
 ## Purpose
 This guide explains day-to-day usage of QuotePilot for staff users and admins.
@@ -129,6 +129,43 @@ mode edits the same draft and uses the same save authority. Quote plan remains a
 sticky left rail at desktop and compact-desktop widths, including 1008px. At
 tablet and phone widths it becomes a horizontal navigator above the same
 proposal document so domain context is adapted, never omitted.
+
+### Delivery Proposal (safe-off Phase 1 source contract)
+
+When an administrator has enabled Delivery Planning and the selected Offer
+references a published, service-compatible **Delivery Blueprint**, the Proposal
+Composer assembles a **Delivery Proposal** above the quote document.
+
+- Read **Required work** as proposed blocks and capability needs, not staff
+  assignments or completed tasks.
+- Read **Production** as tenant-policy-generated output. **Billing quantity**
+  remains the commercial guest basis; it is not interchangeable with the
+  generated production quantity.
+- Read **Purchasing** as ingredient demand. Before an exact saved-revision
+  Inventory projection returns, shortage, purchase packs, and expected
+  remainder say **Unchecked**. QuotePilot does not treat missing stock evidence
+  as zero stock.
+- Use **Adjust quantity** only for a deliberate session override and enter a
+  reason. After guests, menu, or service changes, the override stays visible.
+  If its prior generated basis changed, choose **Keep override** or **Use
+  generated**.
+- Use **Remove optional** to omit an optional Blueprint component from this
+  session proposal; use **Restore** to return it. A missing required component
+  appears under **Needs operator review**.
+- Treat Production, Staffing, Inventory, and Purchasing evidence separately.
+  **Proposed work assembled** is not event readiness.
+
+**Review staffing**, **Review production**, and **Review purchasing** prepare
+prefill-only handoff contracts only after a saved quote revision exists. Their
+target routes remain unavailable until each owning workflow can reread current
+authority, reject stale input, and issue its own receipt. These controls never
+save or send the quote, assign a person, allocate stock, place an order, publish
+configuration, change price, or generate a BEO.
+
+No tenant Blueprint or quantity policy is enabled by default. If the Delivery
+Proposal is absent, continue the ordinary quote workflow and ask an
+administrator to review the tenant's Delivery Planning configuration rather
+than assuming a default buffet ratio.
 
 ### Calendar-first Operations (current source contract)
 

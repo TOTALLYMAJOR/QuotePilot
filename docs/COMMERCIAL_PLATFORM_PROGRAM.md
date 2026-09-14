@@ -1,6 +1,6 @@
 # QuotePilot Commercial Platform Program
 
-Last updated: 2026-09-13 14:49:08 CDT
+Last updated: 2026-09-14 01:31:14 CDT
 
 ## Program status
 
@@ -100,6 +100,16 @@ Commercial Workbench consumes one quote draft and one pricing projection.
 Library is the business-facing place to understand Packages/Offers, Event
 Templates, components, pricing, and rules. UI presentation grants no pricing,
 payment, catalog, or lifecycle authority.
+
+### Delivery Planning relationship
+
+An Offer or Event Template may reference an exact versioned Delivery Blueprint
+without embedding it. The [Delivery Planning Program](DELIVERY_PLANNING_PROGRAM.md)
+owns that Blueprint, its declared quantity-policy references, and the
+session-only Delivery Proposal contract. Commercial retains Offer, Template,
+catalog revision, quote, price, proposal, acceptance, and change authority.
+Delivery Planning cannot make a quote valid or invalid, alter a total, publish
+catalog configuration, or turn operational advice into customer commitment.
 
 ## Reuse and change ledger
 
