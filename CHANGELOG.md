@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-09-13 19:09:08 CDT
+Last updated: 2026-09-14 09:40:23 CDT
 
 All notable project changes are documented in this file.
 
@@ -52,6 +52,21 @@ All notable project changes are documented in this file.
   readiness note while preserving the same automatic-publication, customer,
   provider-outcome, and human-acceptance boundaries.
 
+- Add the safe-off Delivery Planning Phase 1 source slice. Offers and Event
+  Templates can preserve exact Delivery Blueprint references; published
+  tenant-declared quantity policies compile staffed-buffet work blocks,
+  production output, ingredient demand, and exact-evidence-bound purchasing
+  quantities into a session-only Delivery Proposal inside quote creation.
+  Missing policy, policy bounds, required components, retained override
+  conflicts, and late domain results fail visibly. Optional removal and
+  deliberate overrides remain session-only and recoverable. The surface keeps
+  Commercial, Production, Staffing, Inventory, and Purchasing evidence
+  separate, never changes pricing or quote save eligibility, and performs no
+  assignment, allocation, ordering, publication, provider, BEO, or readiness
+  action. Focused compiler/component tests are local automated evidence;
+  tenant configuration, connected domain evidence, routed handoffs, rendered
+  responsive proof, CI, hosted use, human acceptance, and the 30% pilot outcome
+  remain open.
 - Add an off-by-default Guided Inquiry Page backed by one immutable Inquiry
   Showcase rather than a second commercial catalog. Administrators curate and
   preview customer-safe references in Library, publish/pause/republish exact
