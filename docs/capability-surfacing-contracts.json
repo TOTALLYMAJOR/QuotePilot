@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "catalogVersion": 85,
+  "catalogVersion": 86,
   "contracts": [
     {
       "id": "bounded-security-operations-audit",
@@ -10092,36 +10092,47 @@
     },
     {
       "id": "delivery-planning-advisory-proposal",
-      "reviewRevision": 1,
+      "reviewRevision": 2,
       "status": "active",
       "deliveryType": "headless",
       "capabilityKind": "headless_operational",
       "audiences": [
+        "organization_admins",
         "owner_operators",
         "staff"
       ],
-      "summary": "A safe-off deterministic compiler converts an Offer-referenced published tenant Delivery Blueprint and declared quantity policies into a session-only staffed-buffet Delivery Proposal. The Proposal Composer exposes proposed work, production output, ingredient demand, separately bound Staffing and Inventory evidence, and prefill-only handoff contracts without creating cross-domain authority.",
+      "summary": "A governed Library activation surface accepts operator-authored, exact-revision Delivery Blueprints, quantity policies, purchasing packs, and Offer bindings. A safe-off deterministic compiler then converts only qualifying published sources into a session-only staffed-buffet Delivery Proposal with proposed work, production output, ingredient demand, separately bound Staffing and Inventory evidence, and prefill-only handoff contracts.",
       "backendPaths": [
         "src/data/mockCatalog.js",
         "src/lib/catalogWriteShapes.js",
-        "src/lib/deliveryPlanning.js"
+        "src/lib/deliveryPlanning.js",
+        "src/lib/deliveryPlanningConfiguration.js"
       ],
       "backendExports": [],
       "affectedBackendExports": [],
       "frontendPaths": [
         "src/components/DeliveryProposal.jsx",
+        "src/components/DeliveryPlanningConfigurationPanel.jsx",
+        "src/components/AdminCatalogModal.jsx",
         "src/components/ProposalComposer.jsx",
-        "src/components/deliveryProposal.css"
+        "src/components/deliveryProposal.css",
+        "src/styles.css"
       ],
       "entryPointLocators": [
         {
           "path": "src/components/DeliveryProposal.jsx",
           "locator": "data-testid=\"delivery-proposal\""
+        },
+        {
+          "path": "src/components/DeliveryPlanningConfigurationPanel.jsx",
+          "locator": "data-testid=\"delivery-planning-configuration\""
         }
       ],
       "testPaths": [
         "src/lib/__tests__/deliveryPlanning.test.js",
-        "src/components/__tests__/deliveryProposal.test.jsx"
+        "src/lib/__tests__/deliveryPlanningConfiguration.test.js",
+        "src/components/__tests__/deliveryProposal.test.jsx",
+        "src/components/__tests__/deliveryPlanningConfigurationPanel.test.jsx"
       ],
       "testLocators": [
         {
@@ -10131,6 +10142,14 @@
         {
           "path": "src/components/__tests__/deliveryProposal.test.jsx",
           "locator": "shows a progressive, session-only staffed-buffet proposal with independent evidence axes"
+        },
+        {
+          "path": "src/lib/__tests__/deliveryPlanningConfiguration.test.js",
+          "locator": "blocks an ID-only quantity-policy reference before activation"
+        },
+        {
+          "path": "src/components/__tests__/deliveryPlanningConfigurationPanel.test.jsx",
+          "locator": "lets a fully bound draft enable Delivery Planning without claiming persistence"
         }
       ],
       "documentationPaths": [
@@ -10152,7 +10171,7 @@
           "locator": "### Delivery Proposal (safe-off Phase 1 source contract)"
         }
       ],
-      "headlessReason": "The new backend-classified paths are a synchronous, credential-free, network-free advisory compiler and compatibility serialization seam. They expose no callable, database read, database write, provider action, or durable coordination record; the existing Proposal Composer supplies the safe operator-visible outcome.",
+      "headlessReason": "The backend-classified paths are synchronous, credential-free, network-free validation, advisory compilation, and compatibility serialization seams. They expose no callable, direct database write, provider action, or durable coordination record. Library uses its existing administrator-gated catalog save authority, while the configuration panel and Proposal Composer supply the safe operator-visible outcomes.",
       "safeOutcome": "When an approved tenant configuration is deliberately enabled, staff can review explicitly proposed work and demand while Staffing and physical Inventory remain unchecked until exact current evidence exists. Conflicts, stale results, and session overrides remain visible, and no quote, price, assignment, allocation, purchase, BEO, provider, publication, or readiness state changes."
     }
   ]

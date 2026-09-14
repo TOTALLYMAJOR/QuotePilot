@@ -1,6 +1,6 @@
 # QuotePilot Delivery Planning Program
 
-Last updated: 2026-09-14 01:31:14 CDT
+Last updated: 2026-09-14 02:59:23 CDT
 
 ## Purpose and status
 
@@ -18,15 +18,19 @@ Staffing review  Inventory demand and shortages
 ```
 
 The current source slice supplies a safe-off, session-only staffed-buffet
-compiler and a Proposal Composer surface. It activates only when the tenant
-sets `deliveryPlanningEnabled: true`, the selected Offer references an exact
-published Delivery Blueprint, and that Blueprint references published tenant
-quantity policies. No default Blueprint, portion ratio, stock quantity, or
-supplier assumption is embedded in product code.
+compiler, a Proposal Composer surface, and an administrator-facing **Library →
+Delivery** activation surface. It activates only when the tenant sets
+`deliveryPlanningEnabled: true`, the selected Offer references an exact
+published Delivery Blueprint revision, and that Blueprint references exact
+published tenant quantity-policy and purchasing-pack revisions. No default
+Blueprint, portion ratio, stock quantity, or supplier assumption is embedded
+in product code.
 
-This is source and local automated evidence only. No tenant activation,
-connected Staffing or Inventory evidence, hosted role journey, provider
-action, human acceptance, or commercial outcome is established by this slice.
+This is source and local automated evidence only. The Library surface makes a
+reviewed tenant declaration possible but does not supply one. No connected
+tenant save, tenant activation, Staffing or Inventory evidence, hosted role
+journey, provider action, human acceptance, or commercial outcome is
+established by this slice.
 
 ## Authority map
 
@@ -56,8 +60,9 @@ Template. It is separate from those records and contains:
 - compatible service formats;
 - broad work blocks with relative timing, duration, and required capabilities;
 - required or optional production components with `quantity-policy-v1`
-  references;
-- purchasing-pack references carried by ingredient requirements; and
+  `{ id, revision }` references;
+- exact `{ id, revision }` purchasing-pack references carried by ingredient
+  requirements; and
 - exact compatible alternative Blueprint references for a later comparison
   phase.
 
@@ -95,6 +100,20 @@ ratio from history, free text, menu names, defaults, or another tenant.
 Billing quantity, generated production quantity, retained operator override,
 required ingredient quantity, current available quantity, raw shortage,
 purchasable pack count, and expected remainder remain distinct fields.
+
+Blueprint components and ingredient requirements use exact versioned
+references:
+
+```json
+{
+  "quantityPolicyRef": { "id": "chicken-portions", "revision": "4" },
+  "purchasingPackRef": { "id": "chicken-case", "revision": "2" }
+}
+```
+
+An ID-only compatibility reference resolves only when exactly one matching
+published source exists. Library activation requires the exact form and blocks
+ambiguous or stale references.
 
 ### `delivery-proposal-v1`
 
@@ -144,6 +163,26 @@ it safely.
 6. Delivery conflicts do not enter the commercial save blockers. Existing
    Commercial authority remains the only source of quote validity.
 
+## Library activation workflow
+
+**Library → Delivery** is the bounded authoring surface for the pilot:
+
+1. An administrator enters tenant-reviewed Blueprint, quantity-policy, and
+   purchasing-pack sources under **Reviewed source**. Draft sources may remain
+   incomplete only while their publication state is `draft` and Delivery
+   Planning remains off.
+2. QuotePilot validates published metadata, guest bounds, work blocks,
+   capabilities, current menu component IDs, and exact policy/pack revisions.
+   Invalid published claims block catalog save rather than becoming runtime
+   assumptions.
+3. The administrator binds one eligible Blueprint revision to an active Offer.
+   QuotePilot does not select a nearby Blueprint or match by label.
+4. **Enable Delivery Planning after save** becomes available only when at least
+   one published Blueprint is valid and exactly bound to an active Offer.
+5. The existing Library save and pricing-confirmation workflow remains the
+   persistence authority. Checking the box changes only the current Library
+   draft; it is not a saved, published, hosted, or human-review receipt.
+
 ## Program phases and independent gates
 
 ### 0. Evidence baseline — open
@@ -155,12 +194,13 @@ a usable quote and manual operating plan. Freeze the 30% speed target and the
 definition of material correction before pilot testing. No current repository
 artifact proves this human baseline.
 
-### 1. Staffed-buffet assembly — source slice implemented
+### 1. Staffed-buffet assembly — source and activation-authoring slice implemented
 
-The compiler, safe-off catalog seam, Proposal Composer presentation, session
-override handling, evidence fencing, and focused automated tests exist in
-source. Tenant-reviewed configuration, connected role evidence, and human use
-remain gated.
+The compiler, safe-off catalog seam, Library activation authoring, exact
+revision validation, Proposal Composer presentation, session override handling,
+evidence fencing, and focused automated tests exist in source. A real
+operator-declared configuration, connected tenant save, connected role
+evidence, and human use remain gated.
 
 ### 2. Explicit domain handoffs — contract only
 

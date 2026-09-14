@@ -35,12 +35,12 @@ function fixture(overrides = {}) {
       componentId: "chicken",
       label: "Roasted chicken",
       required: true,
-      quantityPolicyRef: "chicken-portions"
+      quantityPolicyRef: { id: "chicken-portions", revision: "4" }
     }, {
       componentId: "tea",
       label: "Sweet tea",
       required: false,
-      quantityPolicyRef: "tea-servings"
+      quantityPolicyRef: { id: "tea-servings", revision: "2" }
     }],
     compatibleAlternativeBlueprintRefs: [{ id: "approved-drop-off", revision: "3" }]
   };
@@ -59,7 +59,7 @@ function fixture(overrides = {}) {
       label: "Chicken breast",
       unitId: "lb",
       quantityPerOutputMicros: 100_000,
-      purchasingPackRef: "chicken-case"
+      purchasingPackRef: { id: "chicken-case", revision: "2" }
     }]
   }, {
     schemaVersion: "quantity-policy-v1",
@@ -190,6 +190,31 @@ describe("Delivery Planning compiler", () => {
     expect(buildDeliveryPlanningContext(outOfBounds).conflicts).toEqual(expect.arrayContaining([
       expect.objectContaining({ id: "quantity_policy_out_of_bounds", componentId: "chicken" })
     ]));
+  });
+
+  test("rejects an ambiguous ID-only policy reference when multiple revisions exist", () => {
+    const input = fixture();
+    const priorRevision = {
+      ...input.catalog.settings.quantityPolicies[0],
+      revision: "3",
+      output: {
+        ...input.catalog.settings.quantityPolicies[0].output,
+        numerator: 1,
+        denominator: 1
+      }
+    };
+    input.catalog.settings.quantityPolicies.push(priorRevision);
+    input.catalog.settings.deliveryBlueprints[0].productionComponents[0].quantityPolicyRef = "chicken-portions";
+
+    expect(buildDeliveryPlanningContext(input).conflicts).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: "quantity_policy_missing", componentId: "chicken" })
+    ]));
+
+    input.catalog.settings.deliveryBlueprints[0].productionComponents[0].quantityPolicyRef = {
+      id: "chicken-portions",
+      revision: "4"
+    };
+    expect(buildDeliveryPlanningContext(input).productionOutputs[0].generatedQuantity).toBe(60);
   });
 
   test("retains an explicit override across recalculation until the operator resolves the conflict", () => {

@@ -97,6 +97,31 @@ function normalizeBlueprintReference(value) {
   };
 }
 
+function normalizeVersionedReference(value) {
+  if (typeof value === "string") return { id: text(value), revision: "" };
+  if (!record(value)) return { id: "", revision: "" };
+  return {
+    id: text(value.id || value.sourceId),
+    revision: text(value.revision || value.sourceRevision)
+  };
+}
+
+function findReferencedSource(sources, value) {
+  const reference = normalizeVersionedReference(value);
+  if (!reference.id) return null;
+  const matches = (Array.isArray(sources) ? sources : []).filter((source) => (
+    text(source?.id) === reference.id
+    && (!reference.revision || text(source?.revision) === reference.revision)
+  ));
+  return matches.length === 1 ? matches[0] : null;
+}
+
+function exactSourceReference(source, fallback) {
+  return source
+    ? { id: text(source.id), revision: text(source.revision) }
+    : normalizeVersionedReference(fallback);
+}
+
 function policyQuantity(policy, guestCount) {
   const minimumGuestCount = exactInteger(policy?.input?.minimumGuestCount, { minimum: 1 }) ?? 1;
   const maximumGuestCount = exactInteger(policy?.input?.maximumGuestCount, { minimum: minimumGuestCount });
@@ -277,8 +302,8 @@ export function compileDeliveryProposal({
   const workBlocks = publishedSource(blueprint, DELIVERY_BLUEPRINT_VERSION)
     ? normalizedWorkBlocks(blueprint, conflicts)
     : [];
-  const policies = new Map((Array.isArray(quantityPolicies) ? quantityPolicies : []).map((policy) => [text(policy?.id), policy]));
-  const packs = new Map((Array.isArray(purchasingPacks) ? purchasingPacks : []).map((pack) => [text(pack?.id), pack]));
+  const policySources = Array.isArray(quantityPolicies) ? quantityPolicies : [];
+  const packSources = Array.isArray(purchasingPacks) ? purchasingPacks : [];
   const menuItems = new Map(
     (catalog?.settings?.menuSections || [])
       .flatMap((section) => section?.items || [])
@@ -303,9 +328,9 @@ export function compileDeliveryProposal({
       return;
     }
     if ((!required && (!selected || removedOptionalIds.has(componentId))) || !componentId) return;
-    const policyRef = text(component?.quantityPolicyRef);
-    const policy = policies.get(policyRef);
-    if (!policyRef || !publishedSource(policy, QUANTITY_POLICY_VERSION)) {
+    const policyRef = normalizeVersionedReference(component?.quantityPolicyRef);
+    const policy = findReferencedSource(policySources, policyRef);
+    if (!policyRef.id || !publishedSource(policy, QUANTITY_POLICY_VERSION)) {
       conflicts.push(issue(
         "quantity_policy_missing",
         `${text(component?.label) || componentId} has no current published quantity policy.`,
@@ -364,7 +389,8 @@ export function compileDeliveryProposal({
       const ingredientId = text(ingredient?.ingredientId);
       const unitId = text(ingredient?.unitId);
       const perOutputMicros = exactInteger(ingredient?.quantityPerOutputMicros, { minimum: 1 });
-      const purchasingPackRef = text(ingredient?.purchasingPackRef);
+      const purchasingPack = findReferencedSource(packSources, ingredient?.purchasingPackRef);
+      const purchasingPackRef = exactSourceReference(purchasingPack, ingredient?.purchasingPackRef);
       if (!ingredientId || !unitId || perOutputMicros === null) {
         conflicts.push(issue("ingredient_requirement_invalid", `${output.label} has an invalid ingredient requirement.`, { componentId }));
         return;
@@ -383,11 +409,15 @@ export function compileDeliveryProposal({
         purchasingPackRef,
         sourceComponentIds: []
       };
-      if (current.purchasingPackRef && purchasingPackRef && current.purchasingPackRef !== purchasingPackRef) {
+      if (
+        current.purchasingPackRef?.id
+        && purchasingPackRef.id
+        && canonicalDeliveryValue(current.purchasingPackRef) !== canonicalDeliveryValue(purchasingPackRef)
+      ) {
         conflicts.push(issue("purchasing_pack_conflict", `${current.label} references more than one purchasing pack.`, { ingredientId }));
       }
       current.requiredQuantityMicros += requiredQuantityMicros;
-      current.purchasingPackRef ||= purchasingPackRef;
+      if (!current.purchasingPackRef?.id) current.purchasingPackRef = purchasingPackRef;
       current.sourceComponentIds.push(componentId);
       ingredientDemand.set(key, current);
     });
@@ -434,7 +464,7 @@ export function compileDeliveryProposal({
     const shortageQuantityMicros = availableQuantityMicros === null
       ? null
       : Math.max(0, entry.requiredQuantityMicros - availableQuantityMicros);
-    const pack = packs.get(entry.purchasingPackRef);
+    const pack = findReferencedSource(packSources, entry.purchasingPackRef);
     const packQuantityMicros = exactInteger(pack?.quantityMicros, { minimum: 1 });
     const packCurrent = record(pack)
       && text(pack.publicationState) === "published"
