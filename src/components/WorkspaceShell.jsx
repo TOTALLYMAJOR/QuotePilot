@@ -113,7 +113,6 @@ export default function WorkspaceShell({
   const shellRef = useRef(null);
   const workspaceToolsLayerRef = useRef(null);
   const workspaceToolsDialogRef = useRef(null);
-  const workspaceToolsActionRef = useRef(false);
   const accountSettingsLayerRef = useRef(null);
   const accountSettingsDialogRef = useRef(null);
   const accountSettingsReturnFocusRef = useRef(null);
@@ -327,9 +326,7 @@ export default function WorkspaceShell({
           aria-pressed={sound ? sounds.enabled === true : undefined}
           onClick={() => {
             if (!sound) close();
-            workspaceToolsActionRef.current = true;
             call(action, operation ? triggerRefs[openMenu] : undefined);
-            workspaceToolsActionRef.current = false;
           }}
         >
           {item.attention ? (
@@ -432,10 +429,10 @@ export default function WorkspaceShell({
       open: true,
       dirty: false,
       busy: false,
-      requestDismiss: (_reason, continuation) => {
+      requestDismiss: (reason, continuation) => {
         if (accountSettingsOpen) closeAccountSettings();
         else call(menu.onOpenChange, "");
-        if (workspaceToolsActionRef.current) return continuation();
+        if (reason === "navigation") return continuation();
         // Browser/mobile Back is consumed by this overlay. The history
         // continuation intentionally remains untouched until a later Back.
         return { status: "guarded" };
