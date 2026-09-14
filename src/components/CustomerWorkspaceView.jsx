@@ -51,6 +51,7 @@ const EMPTY_WORKSPACE_STATE = {
   loading: true,
   error: "",
   stale: false,
+  phase: "initial",
   loadedAt: 0,
   scopeKey: "",
   workspace: null,
@@ -495,33 +496,61 @@ export default function CustomerWorkspaceView({
     setState((current) => current.scopeKey === requestedScopeKey
       ? { ...current, loading: true, error: "", stale: false }
       : { ...EMPTY_WORKSPACE_STATE, scopeKey: requestedScopeKey });
-    getCustomerWorkspace({ organizationId, customerId })
+    const projectWorkspace = (workspace, loadedAt) => {
+      let revenueRadar = null;
+      let revenueRadarError = "";
+      if (workspace) {
+        try {
+          revenueRadar = buildCustomerRevenueOpportunityRead({
+            workspace,
+            organizationId,
+            loadedAt,
+            tenantTimeZone
+          });
+        } catch (error) {
+          revenueRadarError = error?.message || "Follow-ups could not be checked.";
+        }
+      }
+      return { revenueRadar, revenueRadarError };
+    };
+    getCustomerWorkspace({
+      organizationId,
+      customerId,
+      onCoreWorkspace: (workspace) => {
+        if (generation !== generationRef.current || !workspace) return;
+        const loadedAt = Date.now();
+        const derived = projectWorkspace(workspace, loadedAt);
+        setState((current) => {
+          if (
+            generation !== generationRef.current
+            || (current.scopeKey === requestedScopeKey && current.phase === "complete" && current.workspace)
+          ) return current;
+          return {
+            loading: true,
+            error: "",
+            stale: false,
+            phase: "core",
+            loadedAt,
+            scopeKey: requestedScopeKey,
+            workspace,
+            ...derived
+          };
+        });
+      }
+    })
       .then((workspace) => {
         if (generation !== generationRef.current) return;
         const loadedAt = Date.now();
-        let revenueRadar = null;
-        let revenueRadarError = "";
-        if (workspace) {
-          try {
-            revenueRadar = buildCustomerRevenueOpportunityRead({
-              workspace,
-              organizationId,
-              loadedAt,
-              tenantTimeZone
-            });
-          } catch (error) {
-            revenueRadarError = error?.message || "Follow-ups could not be checked.";
-          }
-        }
+        const derived = projectWorkspace(workspace, loadedAt);
         setState({
           loading: false,
           error: "",
           stale: false,
+          phase: "complete",
           loadedAt,
           scopeKey: requestedScopeKey,
           workspace,
-          revenueRadar,
-          revenueRadarError
+          ...derived
         });
       })
       .catch((error) => {
@@ -529,7 +558,12 @@ export default function CustomerWorkspaceView({
         setState((current) => ({
           ...current,
           loading: false,
-          stale: current.scopeKey === requestedScopeKey && Number(current.loadedAt) > 0,
+          stale: current.scopeKey === requestedScopeKey
+            && current.phase === "complete"
+            && Number(current.loadedAt) > 0,
+          phase: current.scopeKey === requestedScopeKey && current.phase === "core"
+            ? "core-error"
+            : current.phase,
           error: error?.message || "Failed to load client overview.",
           scopeKey: requestedScopeKey,
           workspace: current.scopeKey === requestedScopeKey ? current.workspace : null
@@ -663,9 +697,15 @@ export default function CustomerWorkspaceView({
 
   const workspace = workspaceForScope;
   const customer = workspace.customer;
+  const supplementalPending = state.phase === "core";
+  const supplementalError = state.phase === "core-error";
   const workspaceTruncated = workspace.quotePageInfo.truncated
     || workspace.versionPageInfo.truncatedQuoteIds.length > 0;
-  const readOutcome = state.loading
+  const readOutcome = supplementalPending
+    ? "The client record and linked opportunities are ready; retained proposal history and private controls are still loading."
+    : supplementalError
+      ? "The client record and linked opportunities are available, but retained proposal history or private controls did not finish loading."
+      : state.loading
     ? "Refreshing client overview; the previous completed view remains visible."
     : state.error
       ? "The latest client overview refresh failed; the previous completed view remains visible."
@@ -676,6 +716,8 @@ export default function CustomerWorkspaceView({
     ? "stale"
     : state.loading
       ? "loading"
+      : supplementalError
+        ? "partial"
       : workspaceTruncated
         ? "partial"
         : "success";
@@ -685,6 +727,7 @@ export default function CustomerWorkspaceView({
       className="container workspace-route-main"
       aria-labelledby={ambientClientViewEnabled ? "ambient-client-overview-title" : "customer-workspace-title"}
       data-capability-state={rootReadState}
+      data-client-profile-phase={state.phase}
     >
       <section className={`panel customer-workspace${ambientClientViewEnabled ? " ambient-client-host" : ""}`}>
         {ambientClientViewEnabled ? (
@@ -765,6 +808,28 @@ export default function CustomerWorkspaceView({
         )}
 
         <ClientRecordDisclosure ambientMode={ambientClientViewEnabled} disclosureRef={recordDisclosureRef}>
+        {(supplementalPending || supplementalError) ? (
+          <section
+            className="customer-workspace-supplemental-state"
+            data-capability-state={supplementalPending ? "loading" : "partial"}
+          >
+            <h2>Client history and controls</h2>
+            {supplementalPending ? (
+              <p role="status">
+                Loading retained proposal history and private controls. The client overview above is ready to use.
+              </p>
+            ) : (
+              <>
+                <p role="alert" className="error-note">
+                  Retained proposal history or private controls could not be loaded. The client record and linked opportunities remain available above.
+                </p>
+                <button type="button" className="ghost" onClick={() => setRefreshToken((value) => value + 1)}>
+                  Retry client details
+                </button>
+              </>
+            )}
+          </section>
+        ) : <>
         <div className="customer-workspace-tabs" role="tablist" aria-label="Customer workspace sections">
           {TABS.map(([id, label]) => (
             <button
@@ -959,6 +1024,7 @@ export default function CustomerWorkspaceView({
             ))}
           </div>
         </section>
+        </>}
         </ClientRecordDisclosure>
       </section>
     </main>

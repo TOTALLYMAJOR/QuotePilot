@@ -1,10 +1,36 @@
 # Changelog
 
-Last updated: 2026-09-13 14:49:08 CDT
+Last updated: 2026-09-13 22:50:39 CDT
 
 All notable project changes are documented in this file.
 
 ## Unreleased — Event and Commercial activation receipt correction
+
+- Make the populated client profile progressively available instead of
+  withholding the relationship overview behind retained proposal-history and
+  private email-control reads. The exact customer record and bounded linked
+  opportunities now load in parallel and render first; proposal-version reads
+  and the Revenue Autopilot control projection then settle concurrently behind
+  an explicit loading or recoverable partial state. Initial supplemental
+  failure keeps the exact client and current opportunities visible, while a
+  later refresh continues to preserve the last completed profile.
+
+- Reframe the existing session-only Commercial Scenario Workbench as a
+  production-grade Commercial Decision Surface. The responsive hierarchy now
+  moves from the Current commitment through the proposed scenario to one
+  support answer and four ordered consequence clauses:
+  Commercial, People, Supply, and Execution. Exact quote totals, staffing gaps,
+  and ingredient shortages remain bound to their existing records; margin is
+  labeled unavailable without an exact paired model, BEO remains a review
+  dependency rather than a regeneration claim, and final-count impact is
+  explicitly not checked. Current/Scenario comparison and the explanation for
+  the answer remain available without exposing internal source, revision, or
+  authority terminology. Compare Current, Scenario B, Review change, and
+  Discard reuse the existing temporary scenario actions and introduce no new
+  persistence or apply path. Focused unit and Playwright coverage exercise the
+  real saved-quote editor at 390, 768, 1008, and 1440 CSS-pixel viewports; this
+  is source/local candidate evidence only, not hosted, production-data, or
+  human-acceptance proof.
 
 - Add an off-by-default Guided Inquiry Page backed by one immutable Inquiry
   Showcase rather than a second commercial catalog. Administrators curate and

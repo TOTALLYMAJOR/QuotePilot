@@ -1,4 +1,4 @@
-import StatusChip from "./StatusChip";
+import { CurrencyDollar, FileText, Package, UsersThree } from "./ProductIcons";
 import "./fulfillmentIntelligence.css";
 
 const ROLE_LABELS = Object.freeze({
@@ -11,19 +11,19 @@ const ROLE_LABELS = Object.freeze({
 const EVIDENCE_STATE_LABELS = Object.freeze({
   available: "Available",
   current: "Current",
-  complete: "Complete evidence",
+  complete: "Ready",
   supported: "Supported",
   conditional: "Conditional",
-  unverifiable: "Unverifiable",
-  partial: "Partial evidence",
-  loading: "Loading",
-  stale: "Stale",
-  missing: "Missing",
-  not_applicable: "Not applicable",
-  not_yet_available: "Not yet available",
-  blocked_by_integration: "Blocked by integration",
-  contradictory: "Contradictory",
-  schema_drift: "Schema drift",
+  unverifiable: "More information needed",
+  partial: "Some details missing",
+  loading: "Checking",
+  stale: "Needs refresh",
+  missing: "Unavailable",
+  not_applicable: "Not needed",
+  not_yet_available: "Still checking",
+  blocked_by_integration: "Connection needs attention",
+  contradictory: "Details conflict",
+  schema_drift: "Update needed",
   failed: "Failed",
   error: "Failed",
   unavailable: "Unavailable",
@@ -51,14 +51,6 @@ function stateLabel(value, availableLabel = "Available") {
   return EVIDENCE_STATE_LABELS[state] || "Unknown";
 }
 
-function rootChip({ fulfillment, updating, retained }) {
-  if (retained) return { family: "action", label: "Retained · not current" };
-  if (updating) return { family: "action", label: "Updating" };
-  if (fulfillment?.state === "complete") return { family: "confirmed", label: "Complete evidence" };
-  if (fulfillment?.state === "unavailable") return { family: "blocked", label: "Unavailable" };
-  return { family: "action", label: "Partial evidence" };
-}
-
 function capabilityState({ fulfillment, updating, retained }) {
   if (retained) return "stale";
   if (updating) return "loading";
@@ -72,7 +64,7 @@ function pluralGuests(value) {
 
 function formatMoney(value) {
   const amountMinor = exactCount(value?.amountMinor);
-  if (amountMinor === null) return "Not verified";
+  if (amountMinor === null) return "Unavailable";
   const currency = /^[A-Z]{3}$/u.test(text(value?.currency).toUpperCase())
     ? text(value.currency).toUpperCase()
     : "USD";
@@ -83,16 +75,16 @@ function formatMoney(value) {
       maximumFractionDigits: 2
     }).format(amountMinor / 100);
   } catch {
-    return "Not verified";
+    return "Unavailable";
   }
 }
 
 function formatMajorMoney(amount, currencyValue) {
-  if (typeof amount !== "number" || !Number.isFinite(amount)) return "Not verified";
+  if (typeof amount !== "number" || !Number.isFinite(amount)) return "Unavailable";
   const currency = /^[A-Z]{3}$/u.test(text(currencyValue).toUpperCase())
     ? text(currencyValue).toUpperCase()
     : null;
-  if (!currency) return "Not verified";
+  if (!currency) return "Unavailable";
   try {
     return new Intl.NumberFormat("en-US", {
       style: "currency",
@@ -101,13 +93,19 @@ function formatMajorMoney(amount, currencyValue) {
       maximumFractionDigits: 2
     }).format(amount);
   } catch {
-    return "Not verified";
+    return "Unavailable";
   }
+}
+
+function formatSignedMajorMoney(amount, currencyValue) {
+  if (typeof amount !== "number" || !Number.isFinite(amount)) return "Impact unavailable";
+  if (amount === 0) return "No change";
+  return `${amount > 0 ? "+" : "−"}${formatMajorMoney(Math.abs(amount), currencyValue)}`;
 }
 
 function formatMicros(value, unitId = "") {
   const exact = exactCount(value);
-  if (exact === null) return "Not verified";
+  if (exact === null) return "Unavailable";
   const formatted = new Intl.NumberFormat("en-US", {
     maximumFractionDigits: 6
   }).format(exact / 1_000_000);
@@ -115,67 +113,67 @@ function formatMicros(value, unitId = "") {
 }
 
 function coverageValue(scenario) {
-  if (!scenario || scenario.coverageState === "unknown") return "Not verified";
+  if (!scenario || scenario.coverageState === "unknown") return "Still checking";
   const assigned = exactCount(scenario.totalAssigned);
   const required = exactCount(scenario.totalRequired);
-  return assigned === null || required === null ? "Not verified" : `${assigned} / ${required}`;
+  return assigned === null || required === null ? "Still checking" : `${assigned} / ${required}`;
 }
 
 function proposedCoverageValue(scenario) {
   const assigned = exactCount(scenario?.totalAssigned);
   const required = exactCount(scenario?.totalRequired);
   return assigned === null || required === null
-    ? "Not verified"
+    ? "Still checking"
     : `${assigned} current / ${required} required`;
 }
 
 function coverageCaption(scenario, domain) {
   if (!scenario || scenario.coverageState === "unknown") {
-    return domain === "people" ? "No exact assignment conclusion" : "No exact stock conclusion";
+    return domain === "people" ? "Staffing has not been checked" : "Stock has not been checked";
   }
   if (["shortage", "gap", "attention"].includes(scenario.coverageState)) {
     const gap = exactCount(scenario.totalGap ?? scenario.shortageCount);
     if (gap === null) return `${domain === "people" ? "Coverage" : "Supply"} needs attention`;
     return `${gap} ${domain === "people" ? "role" : "ingredient"} gap${gap === 1 ? "" : "s"}`;
   }
-  if (scenario.coverageState === "not_required") return "No roles required by the exact source";
-  return domain === "people" ? "Required roles assigned" : "Declared demand covered";
+  if (scenario.coverageState === "not_required") return "No additional roles required";
+  return domain === "people" ? "Required roles assigned" : "Required amount covered";
 }
 
 function supplyCoverage(scenario) {
   if (scenario?.coverageState === "covered") return "Covered";
   if (scenario?.coverageState === "shortage") return "Shortage";
-  return "Not verified";
+  return "Still checking";
 }
 
 function headroomValue(headroom) {
-  if (stateOf(headroom) !== "available") return "Not verified";
+  if (stateOf(headroom) !== "available") return "Unavailable";
   const safeIncrease = exactCount(headroom?.safeGuestIncrease);
-  return safeIncrease === null ? "Not verified" : `+${pluralGuests(safeIncrease)}`;
+  return safeIncrease === null ? "Unavailable" : `+${pluralGuests(safeIncrease)}`;
 }
 
 function headroomCaption(headroom) {
   const state = stateOf(headroom);
   if (state !== "available") {
     return ({
-      missing: "No exact boundary was supplied.",
-      not_applicable: "No boundary applies to this scenario.",
-      not_yet_available: "Boundary evidence has not been produced yet.",
-      blocked_by_integration: "The boundary source is not connected.",
-      contradictory: "Boundary sources disagree and need review.",
-      schema_drift: "The boundary schema changed and needs review.",
-      stale: "The last boundary is stale.",
-      failed: "The boundary read failed.",
-      unavailable: "A current declared boundary is unavailable."
-    })[state] || "A current declared boundary is required.";
+      missing: "Guest limit is not available.",
+      not_applicable: "No guest limit applies.",
+      not_yet_available: "Guest limit is still being checked.",
+      blocked_by_integration: "Guest limit cannot be checked right now.",
+      contradictory: "Guest limits conflict and need review.",
+      schema_drift: "Guest limit needs an update.",
+      stale: "Guest limit needs a refresh.",
+      failed: "Guest limit could not be checked.",
+      unavailable: "Guest limit is unavailable."
+    })[state] || "A current guest limit is required.";
   }
   const nextAt = exactCount(headroom?.nextBoundary?.atGuestCount);
   const distance = exactCount(headroom?.guestsUntilBoundary);
   if (nextAt !== null && distance !== null) {
-    return `Next step at ${nextAt} · ${pluralGuests(distance)} away`;
+    return `Next change at ${nextAt} · ${pluralGuests(distance)} away`;
   }
   const safeThrough = exactCount(headroom?.safeThroughGuestCount);
-  return safeThrough === null ? "Exact boundary supplied" : `Safe through ${safeThrough} guests`;
+  return safeThrough === null ? "Guest limit available" : `Covered through ${safeThrough} guests`;
 }
 
 function evidenceDetail(state, availableCopy, unknownCopy) {
@@ -220,7 +218,7 @@ function constraintResource(constraint) {
     || ROLE_LABELS[constraint?.role]
     || constraint?.role
     || constraint?.domain
-  ) || "Operational evidence";
+  ) || "Item needing review";
 }
 
 function firstSupplyConstraint(projection) {
@@ -269,22 +267,9 @@ function limitingCaption(fulfillment) {
     || ROLE_LABELS[fulfillment?.limitingResource?.role]
     || fulfillment?.limitingResource?.role
   );
-  if (fulfillment?.limitingDomain === "supply") return `${resource || "Supply"} is the limiting constraint.`;
-  if (fulfillment?.limitingDomain === "people") return `${resource || "People"} is the limiting constraint.`;
-  return "Overall headroom is withheld until both independent boundaries are current.";
-}
-
-function revisionLabel(value, preferredKeys = []) {
-  if (!value || typeof value !== "object") return text(value) || "Not supplied";
-  const sources = [value, value.proposedAfter, value.before]
-    .filter((entry) => entry && typeof entry === "object");
-  for (const source of sources) {
-    for (const key of preferredKeys) {
-      const candidate = source[key];
-      if (candidate !== null && candidate !== undefined && text(candidate)) return text(candidate);
-    }
-  }
-  return "Not supplied";
+  if (fulfillment?.limitingDomain === "supply") return `${resource || "Supply"} sets the current limit.`;
+  if (fulfillment?.limitingDomain === "people") return `${resource || "People"} sets the current limit.`;
+  return "A guest limit is unavailable until both staffing and supply are current.";
 }
 
 function EvidenceState({ value, availableLabel = "Available" }) {
@@ -299,7 +284,7 @@ function EvidenceState({ value, availableLabel = "Available" }) {
 function BoundaryQuality({ label, headroom }) {
   return (
     <div className="fulfillment-intelligence__boundary-quality" data-boundary-state={stateOf(headroom)}>
-      <span>{label} boundary</span>
+      <span>{label} capacity</span>
       <strong>{headroomValue(headroom)}</strong>
       <small>{stateLabel(headroom, "Current")}</small>
     </div>
@@ -310,12 +295,12 @@ function decisionHeadline(answer) {
   const guestCount = exactCount(answer?.guestCount);
   const guestLabel = guestCount === null ? "This scenario" : pluralGuests(guestCount);
   if (answer?.state === "supported") {
-    return `${guestLabel} is supported by the current fulfillment evidence`;
+    return `${guestLabel} is supported by the current staffing and supply details`;
   }
   if (answer?.state === "conditional") {
     return `${guestLabel} is conditionally supportable`;
   }
-  return `${guestLabel} is not yet verifiable`;
+  return `${guestLabel} cannot be confirmed yet`;
 }
 
 function supplyDecisionCopy(answer) {
@@ -325,7 +310,7 @@ function supplyDecisionCopy(answer) {
   const shortageLabel = shortage === null
     ? "an unquantified amount"
     : formatMicros(shortage, constraint?.unitId);
-  if (!constraint) return "No exact Supply constraint is present in this decision answer.";
+  if (!constraint) return "No supply issue is listed for this option.";
   const contributions = constraint?.causalityState === "available"
     && Array.isArray(constraint?.contributingMenuItems)
     ? constraint.contributingMenuItems.map((item) => text(item?.label)).filter(Boolean)
@@ -337,7 +322,7 @@ function supplyDecisionCopy(answer) {
     return `${contributions.join(", ")} together leave ${ingredient} ${shortageLabel} short.`;
   }
   const guestCount = exactCount(answer?.guestCount);
-  return `${guestCount === null ? "This scenario" : `At ${pluralGuests(guestCount)}`}, ${ingredient} is ${shortageLabel} short. Exact menu attribution is not available.`;
+  return `${guestCount === null ? "This option" : `At ${pluralGuests(guestCount)}`}, ${ingredient} is ${shortageLabel} short. The menu item causing the shortage is not available.`;
 }
 
 function sourcingDecisionCopy(resolution) {
@@ -369,7 +354,7 @@ function sourcingDecisionCopy(resolution) {
   if (resolution?.selectionState === "no_eligible_offer") {
     return "No current eligible sourcing offer covers this shortfall.";
   }
-  return "A preferred resolution is not yet evidenced. Review Inventory.";
+  return "No preferred replacement has been selected. Review Inventory.";
 }
 
 function staffingDecisionCopy(staffing) {
@@ -382,17 +367,37 @@ function staffingDecisionCopy(staffing) {
       ? "Additional staffing assignments are required."
       : `${gap} additional staffing assignment${gap === 1 ? " is" : "s are"} required.`;
   }
-  return "The staffing effect is not yet verified.";
+  return "Still checking staffing.";
 }
 
 function beoDecisionCopy(beo) {
   if (["stale", "review_required"].includes(beo?.effect)) return "BEO review is required.";
-  if (beo?.effect === "no_declared_dependency") return "No BEO dependency was declared.";
-  return "The BEO review effect is not yet verified.";
+  if (beo?.effect === "no_declared_dependency") return "No BEO update is listed.";
+  return "BEO impact has not been checked.";
 }
 
-function DecisionAnswer({ answer, retained, onOpenInventory, onOpenStaffing }) {
-  if (!answer || typeof answer !== "object") return null;
+function staffingPrimary(answer, proposedPeople) {
+  const deltas = Array.isArray(answer?.staffing?.requirementDeltaByRole)
+    ? answer.staffing.requirementDeltaByRole
+    : [];
+  if (deltas.length) {
+    for (const entry of deltas) {
+      const role = text(entry?.role);
+      const delta = exactCount(entry?.delta);
+      if (delta !== null && delta > 0) {
+        const label = ROLE_LABELS[role] || `${role}s`;
+        return `+${delta} ${label.toLowerCase()} required`;
+      }
+    }
+  }
+  const gap = exactCount(answer?.staffing?.assignmentGap)
+    ?? exactCount(proposedPeople?.totalGap);
+  if (gap === 0) return "Current assignments are sufficient";
+  if (gap !== null) return `${gap} additional assignment${gap === 1 ? "" : "s"} required`;
+  return staffingDecisionCopy(answer?.staffing);
+}
+
+function DecisionAnswer({ answer, projection, updating, retained, onOpenInventory, onOpenStaffing }) {
   if (retained) {
     return (
       <section
@@ -404,14 +409,32 @@ function DecisionAnswer({ answer, retained, onOpenInventory, onOpenStaffing }) {
       >
         <header>
           <div>
-            <p className="csw-kicker">Decision answer · retained evidence</p>
-            <h4 id="fulfillment-decision-answer-title">Current answer withheld</h4>
+            <p className="csw-kicker">Can we support this change?</p>
+            <h4 id="fulfillment-decision-answer-title">Checking</h4>
           </div>
           <EvidenceState value="stale" />
         </header>
         <p className="fulfillment-intelligence__decision-boundary">
-          The prior projection remains visible below for comparison, but its supplier, staffing, value, and document conclusions do not apply to the active scenario. Wait for the exact current result.
+          The previous result does not apply to this option. Please wait for the updated price, staffing, supply, and BEO review.
         </p>
+      </section>
+    );
+  }
+  if (!answer || typeof answer !== "object") {
+    return (
+      <section
+        className="fulfillment-intelligence__decision"
+        data-decision-state={updating ? "updating" : "unverifiable"}
+        aria-labelledby="fulfillment-decision-answer-title"
+        aria-live="polite"
+      >
+        <header><div>
+          <p className="csw-kicker">Can we support this change?</p>
+          <h4 id="fulfillment-decision-answer-title">{updating ? "Checking" : "Not yet"}</h4>
+          <p className="fulfillment-intelligence__decision-reason">
+            {updating ? "Checking price, staffing, supply, and BEO impact." : "More information is needed before this change can be reviewed."}
+          </p>
+        </div></header>
       </section>
     );
   }
@@ -420,12 +443,30 @@ function DecisionAnswer({ answer, retained, onOpenInventory, onOpenStaffing }) {
   const commercialValue = answer.commercialValue || {};
   const commercialValueLabel = commercialValue.evidenceState === "available"
     ? formatMajorMoney(commercialValue.amount, commercialValue.currency)
-    : "Not verified";
+    : "Unavailable";
   const addedCostLabel = sourcing.evidenceState === "available"
     && exactCount(sourcing.addedCostMinor) !== null
     ? formatMoney({ amountMinor: sourcing.addedCostMinor, currency: sourcing.currency })
     : null;
   const conditions = Array.isArray(sourcing.conditions) ? sourcing.conditions.filter(Boolean) : [];
+  const commercial = projection?.consequences?.commercial || {};
+  const proposedSupply = projection?.fulfillment?.supply?.proposed || {};
+  const proposedPeople = projection?.fulfillment?.people?.proposed || {};
+  const answerState = ["supported", "conditional"].includes(answer.state)
+    ? answer.state
+    : "unverifiable";
+  const answerLabel = answerState === "supported"
+    ? "Supported"
+    : answerState === "conditional" ? "Conditional" : "Not yet";
+  const commercialDelta = commercial.evidenceState === "available"
+    ? formatSignedMajorMoney(commercial.total?.delta, commercial.currency)
+    : "Impact unavailable";
+  const shortage = answer.supplyConstraint;
+  const supplyPrimary = shortage
+    ? supplyDecisionCopy(answer)
+    : proposedSupply.coverageState === "covered"
+      ? "Required ingredients are covered"
+      : "Still checking supply";
 
   return (
     <section
@@ -437,66 +478,71 @@ function DecisionAnswer({ answer, retained, onOpenInventory, onOpenStaffing }) {
     >
       <header>
         <div>
-          <p className="csw-kicker">Decision answer · cross-authority synthesis</p>
-          <h4 id="fulfillment-decision-answer-title">{decisionHeadline(answer)}</h4>
+          <p className="csw-kicker">Can we support this change?</p>
+          <h4 id="fulfillment-decision-answer-title">{answerLabel}</h4>
+          <p className="fulfillment-intelligence__decision-reason">{decisionHeadline(answer)}</p>
         </div>
         <EvidenceState value={answer.state === "supported" ? "available" : answer.state} availableLabel="Supported" />
       </header>
       <p className="fulfillment-intelligence__decision-boundary">
-        Governed review only. This is not customer acceptance, booking, or event readiness.
+        For planning only. The quote is not accepted or booked, and the event is not marked ready.
       </p>
 
       <div className="fulfillment-intelligence__decision-grid">
-        <article data-decision-clause="supply">
-          <span>Supply constraint</span>
-          <strong>{supplyDecisionCopy(answer)}</strong>
-          {supplyConstraint ? (
-            <small>Inventory remains short until received stock is recorded and the projection refreshes.</small>
-          ) : null}
-        </article>
-
-        {supplyConstraint ? (
-          <article data-decision-clause="sourcing" data-evidence-state={stateOf(sourcing)}>
-            <span>Sourcing resolution</span>
-            <strong>{sourcingDecisionCopy(sourcing)}</strong>
-            {addedCostLabel ? <small>Recorded added cost: {addedCostLabel}.</small> : null}
-            {conditions.length ? (
-              <ul aria-label="Sourcing conditions">
-                {conditions.map((condition, index) => <li key={`${condition}-${index}`}>{condition}</li>)}
-              </ul>
-            ) : null}
-          </article>
-        ) : null}
-
-        <article data-decision-clause="commercial-value">
-          <span>Commercial value</span>
-          <strong>Proposed quote total: {commercialValueLabel}</strong>
-          <small>Quoted value, not earned revenue or a guaranteed amount preserved.</small>
+        <article
+          data-decision-clause="commercial"
+          data-value-state={commercial.evidenceState === "available" ? "available" : "unavailable"}
+        >
+          <div className="fulfillment-intelligence__clause-icon" aria-hidden="true"><CurrencyDollar size={22} /></div>
+          <div><span>Commercial</span>
+          <strong>{commercialDelta}</strong>
+          <small>Proposed quote: {commercialValueLabel}</small>
+          <small>Margin unavailable because costs are incomplete.</small></div>
         </article>
 
         <article data-decision-clause="staffing">
-          <span>Staffing effect</span>
-          <strong>{staffingDecisionCopy(answer.staffing)}</strong>
+          <div className="fulfillment-intelligence__clause-icon" aria-hidden="true"><UsersThree size={22} /></div>
+          <div><span>People</span>
+          <strong>{staffingPrimary(answer, proposedPeople)}</strong>
+          <small>{answer?.staffing?.assignmentGap === null || answer?.staffing?.assignmentGap === undefined
+            ? "No staffing conclusion yet."
+            : staffingDecisionCopy(answer.staffing)}</small>
           {answer?.staffing?.reviewEffect && ["stale", "review_required"].includes(answer.staffing.reviewEffect) ? (
-            <small>A separate staffing review remains required.</small>
-          ) : null}
+            <small>Staffing needs review.</small>
+          ) : null}</div>
         </article>
 
-        <article data-decision-clause="beo">
-          <span>BEO effect</span>
+        <article data-decision-clause="supply" data-evidence-state={stateOf(sourcing)}>
+          <div className="fulfillment-intelligence__clause-icon" aria-hidden="true"><Package size={22} /></div>
+          <div><span>Supply</span>
+          <strong>{supplyPrimary}</strong>
+          {shortage ? <small>Stock remains short until the missing amount is received.</small> : null}
+          {shortage ? <small>{sourcingDecisionCopy(sourcing)}</small> : null}
+          {addedCostLabel ? <small>Recorded added cost: {addedCostLabel}.</small> : null}
+          {conditions.length ? (
+            <ul aria-label="Sourcing conditions">
+              {conditions.map((condition, index) => <li key={`${condition}-${index}`}>{condition}</li>)}
+            </ul>
+          ) : null}</div>
+        </article>
+
+        <article data-decision-clause="execution">
+          <div className="fulfillment-intelligence__clause-icon" aria-hidden="true"><FileText size={22} /></div>
+          <div><span>Execution</span>
           <strong>{beoDecisionCopy(answer.beo)}</strong>
           {Array.isArray(answer?.beo?.dependentNodeIds) && answer.beo.dependentNodeIds.length ? (
-            <small>{answer.beo.dependentNodeIds.length} governed document dependenc{answer.beo.dependentNodeIds.length === 1 ? "y" : "ies"} affected.</small>
+            <small>{answer.beo.dependentNodeIds.length} BEO item{answer.beo.dependentNodeIds.length === 1 ? "" : "s"} affected.</small>
           ) : null}
+          <small>Final count has not been checked for this change.</small></div>
         </article>
       </div>
 
       <div className="fulfillment-intelligence__decision-actions">
         {supplyConstraint && typeof onOpenInventory === "function" ? (
-          <button type="button" onClick={onOpenInventory}>Review Inventory resolution</button>
+          <button type="button" onClick={onOpenInventory}>Open inventory</button>
         ) : null}
         {typeof onOpenStaffing === "function" ? (
-          <button type="button" onClick={onOpenStaffing}>Review Staffing evidence</button>
+          <button type="button" onClick={onOpenStaffing}>Open staffing</button>
         ) : null}
       </div>
     </section>
@@ -506,11 +552,11 @@ function DecisionAnswer({ answer, retained, onOpenInventory, onOpenStaffing }) {
 function RoleCoverage({ people }) {
   const rows = roleRows(people);
   if (!rows.length) {
-    return <p className="fulfillment-intelligence__quiet">Role-level evidence is not available.</p>;
+    return <p className="fulfillment-intelligence__quiet">Staffing by role is not available.</p>;
   }
   return (
     <details className="fulfillment-intelligence__details">
-      <summary>Role coverage and backup evidence</summary>
+      <summary>Staffing by role and backups</summary>
       <table className="fulfillment-intelligence__role-table">
         <caption className="visually-hidden">Current and proposed staffing coverage by role</caption>
         <thead>
@@ -560,10 +606,10 @@ function ConstraintStack({ constraints }) {
     <section className="fulfillment-intelligence__constraint-stack" aria-labelledby="fulfillment-constraint-stack-title">
       <header>
         <div>
-          <p className="csw-kicker">Ordered constraint stack</p>
-          <h4 id="fulfillment-constraint-stack-title">What governs next</h4>
+          <p className="csw-kicker">Priorities</p>
+          <h4 id="fulfillment-constraint-stack-title">What needs attention first</h4>
         </div>
-        <span>{ordered.length ? `${ordered.length} known` : "None declared"}</span>
+        <span>{ordered.length ? `${ordered.length} item${ordered.length === 1 ? "" : "s"}` : "Nothing listed"}</span>
       </header>
       {ordered.length ? (
         <ol className="fulfillment-intelligence__constraints">
@@ -586,7 +632,9 @@ function ConstraintStack({ constraints }) {
                 <span aria-hidden="true">{rank}</span>
                 <div>
                   <strong>{constraintResource(constraint)}</strong>
-                  <p>{text(constraint?.kind).replaceAll("_", " ") || "Review required"}</p>
+                  <p>{constraint?.domain === "supply"
+                    ? "Inventory shortage"
+                    : constraint?.domain === "people" ? "Staffing gap" : "Review required"}</p>
                   {quantityLabel || atGuestCount !== null ? (
                     <small>
                       {[quantityLabel, atGuestCount !== null ? `at ${atGuestCount} guests` : ""]
@@ -599,7 +647,7 @@ function ConstraintStack({ constraints }) {
           })}
         </ol>
       ) : (
-        <p className="fulfillment-intelligence__quiet">No exact constraint is currently declared.</p>
+        <p className="fulfillment-intelligence__quiet">No current issue is listed.</p>
       )}
     </section>
   );
@@ -634,21 +682,21 @@ function ConstraintExplanation({
       <h4>Why {constraint.resourceLabel} is limiting</h4>
       <p>
         {required !== null
-          ? `Declared demand is ${formatMicros(required, constraint.unitId)}. `
-          : "The exact inventory projection declares a shortage. "}
+          ? `Required amount: ${formatMicros(required, constraint.unitId)}. `
+          : "Inventory shows a shortage. "}
         {shortage !== null
           ? `The recorded shortfall is ${formatMicros(shortage, constraint.unitId)}.`
-          : "The current evidence does not include a usable shortage quantity."}
+          : "The shortage amount is unavailable."}
       </p>
       {safeThrough !== null ? (
         <p>
-          The declared evidence is safe through {safeThrough} guests
-          {firstBoundary !== null ? `; the first failing boundary is ${firstBoundary}` : ""}.
+          Stock is covered through {safeThrough} guests
+          {firstBoundary !== null ? `; the first shortage appears at ${firstBoundary}` : ""}.
         </p>
       ) : (
-        <p>No exact clear-through guest boundary is available, so the workbench will not invent one.</p>
+        <p>A covered guest count is not available.</p>
       )}
-      <p>This read model does not reserve stock, choose a substitute, or create a purchase order.</p>
+      <p>This review does not reserve stock, choose a substitute, or create a purchase order.</p>
       {safeThrough !== null
         && safeThrough !== activeGuestCount
         && typeof onUseSafeThrough === "function" ? (
@@ -663,27 +711,10 @@ function ConstraintExplanation({
 }
 
 function SourceRevisions({ fulfillment }) {
-  const people = fulfillment?.sourceRevisions?.people || {};
-  const supply = fulfillment?.sourceRevisions?.supply || {};
-  const items = [
-    ["Commercial", text(fulfillment?.identity?.quoteRevisionId) || "Not supplied"],
-    ["Staffing plan", revisionLabel(people, ["planRevision", "authorityVersion", "quoteRevisionId"])],
-    ["Staffing policy", people.staffingPolicySourceId && people.staffingPolicyRevision
-      ? `${text(people.staffingPolicySourceId)} · revision ${people.staffingPolicyRevision}`
-      : revisionLabel(people, ["staffingPolicySourceId", "staffingPolicyRevision"])],
-    ["Supply current", revisionLabel(supply?.before, ["eventRequirementRevisionId", "projectionDigest", "sourceFingerprint"])],
-    ["Supply working", revisionLabel(supply?.proposedAfter, ["eventRequirementRevisionId", "projectionDigest", "sourceFingerprint"])],
-    ["Inventory boundary", revisionLabel(supply, ["inventoryHeadroomSourceRevisionId"])]
-  ];
   return (
     <details className="fulfillment-intelligence__authority">
-      <summary>Projection boundary and source revisions</summary>
-      <p>{fulfillment?.boundary || "Commercial, Staffing, and Inventory remain separate authorities; Fulfillment is a rebuildable presentation-only read model."}</p>
-      <dl>
-        {items.map(([label, value]) => (
-          <div key={label}><dt>{label}</dt><dd>{value}</dd></div>
-        ))}
-      </dl>
+      <summary>What this review can change</summary>
+      <p>This comparison does not change the quote, assign staff, reserve stock, update the BEO, or contact the customer.</p>
     </details>
   );
 }
@@ -723,46 +754,44 @@ export default function FulfillmentIntelligence({
       aria-labelledby="fulfillment-intelligence-title"
       aria-busy={updating || undefined}
     >
-      <header className="csw-rail-heading fulfillment-intelligence__header">
-        <div>
-          <p className="csw-kicker">Consequence rail · composed read model</p>
-          <h3 id="fulfillment-intelligence-title">Fulfillment</h3>
-          <p>Independent People and Supply authority. One rebuildable consequence view.</p>
-        </div>
-        <StatusChip {...rootChip({ fulfillment, updating, retained })} />
-      </header>
+      <h3 id="fulfillment-intelligence-title" className="visually-hidden">Change review</h3>
 
       <DecisionAnswer
         answer={projection?.decisionAnswer}
+        projection={projection}
+        updating={updating}
         retained={retained}
         onOpenInventory={onOpenInventory}
         onOpenStaffing={onOpenStaffing}
       />
 
-      <section
-        className="fulfillment-intelligence__overall"
-        data-domain="overall"
-        data-evidence-state={stateOf(fulfillment.fulfillmentHeadroom)}
-        aria-live="polite"
-      >
+      <details className="fulfillment-intelligence__evidence-shell">
+        <summary>Why this answer</summary>
+        <div className="fulfillment-intelligence__evidence-body">
+          <section
+            className="fulfillment-intelligence__overall"
+            data-domain="overall"
+            data-evidence-state={stateOf(fulfillment.fulfillmentHeadroom)}
+            aria-live="polite"
+          >
         <header>
-          <span>Overall guest-count headroom</span>
+          <span>Guest-count flexibility</span>
           <EvidenceState value={fulfillment.fulfillmentHeadroom} availableLabel="Current" />
         </header>
         <strong className="fulfillment-intelligence__primary">{overallValue(fulfillment)}</strong>
         <p>{limitingCaption(fulfillment)}</p>
-        <div className="fulfillment-intelligence__boundary-grid" aria-label="Independent boundary quality">
+        <div className="fulfillment-intelligence__boundary-grid" aria-label="Staffing and supply limits">
           <BoundaryQuality label="People" headroom={people.staffingHeadroom} />
           <BoundaryQuality label="Supply" headroom={supply.inventoryHeadroom} />
         </div>
         <small>
           {stateOf(fulfillment.fulfillmentHeadroom) === "available"
-            ? "The smaller current boundary governs. This projection reserves neither people nor stock."
-            : "Missing or partial evidence is not a zero-capacity conclusion."}
+            ? "The smaller current limit applies. This review reserves neither people nor stock."
+            : "Unavailable details do not mean there is no capacity."}
         </small>
-      </section>
+          </section>
 
-      <div className="fulfillment-intelligence__domains">
+          <div className="fulfillment-intelligence__domains">
         <section className="fulfillment-intelligence__domain" data-domain="people" data-limiting={fulfillment.limitingDomain === "people" || undefined}>
           <header>
             <div>
@@ -785,25 +814,24 @@ export default function FulfillmentIntelligence({
                 : "Current confirmed assignments compared with the proposed requirement"}</small>
             </div>
             <div>
-              <span>People headroom</span>
+              <span>Additional guest capacity</span>
               <strong>{headroomValue(people.staffingHeadroom)}</strong>
               <small>{headroomCaption(people.staffingHeadroom)}</small>
             </div>
             <div>
-              <span>Resilience</span>
-              <strong>{backupCount === null ? "Not verified" : `${backupCount} eligible`}</strong>
-              <small>{evidenceDetail(people?.resilience?.evidenceState, "Eligible backup profiles", "backup capacity not verified")}</small>
+              <span>Backups</span>
+              <strong>{backupCount === null ? "Still checking" : `${backupCount} eligible`}</strong>
+              <small>{evidenceDetail(people?.resilience?.evidenceState, "Eligible backups", "backup staffing is still checking")}</small>
             </div>
           </div>
           <RoleCoverage people={people} />
-          <p className="fulfillment-intelligence__boundary-copy">{people.boundary}</p>
           <div className="fulfillment-intelligence__actions">
             {typeof onOpenStaffing === "function" ? (
               <button type="button" onClick={onOpenStaffing}>Review staffing in event</button>
             ) : null}
             {typeof onRefreshStaffing === "function"
               && ["stale", "unavailable"].includes(people.freshness) ? (
-                <button type="button" onClick={onRefreshStaffing}>Refresh People evidence</button>
+                <button type="button" onClick={onRefreshStaffing}>Refresh staffing</button>
               ) : null}
           </div>
         </section>
@@ -828,14 +856,14 @@ export default function FulfillmentIntelligence({
               <small>{coverageCaption(supply.proposed, "supply")}</small>
             </div>
             <div>
-              <span>Supply headroom</span>
+              <span>Additional guest capacity</span>
               <strong>{headroomValue(supply.inventoryHeadroom)}</strong>
               <small>{headroomCaption(supply.inventoryHeadroom)}</small>
             </div>
             <div>
-              <span>Projected cost</span>
+              <span>Ingredient cost</span>
               <strong>{formatMoney(supply?.proposed?.projectedCost)}</strong>
-              <small>{evidenceDetail(supply?.proposed?.projectedCost?.state, "Exact proposed ingredient cost", "cost evidence is not usable")}</small>
+              <small>{evidenceDetail(supply?.proposed?.projectedCost?.state, "Cost for this option", "ingredient cost is unavailable")}</small>
             </div>
           </div>
           <ShortageList supply={supply} />
@@ -850,14 +878,14 @@ export default function FulfillmentIntelligence({
               <strong>{constraint.resourceLabel} is the first known constraint</strong>
               <span>
                 {constraint.shortageQuantityMicros === null
-                  ? "Open the exact causal evidence"
+                  ? "See the shortage details"
                   : `${formatMicros(constraint.shortageQuantityMicros, constraint.unitId)} short · See why`}
               </span>
             </button>
           ) : constraint ? (
             <p className="fulfillment-intelligence__quiet">{constraint.resourceLabel} is the first known constraint.</p>
           ) : (
-            <p className="fulfillment-intelligence__quiet">No exact working-scenario Supply constraint is declared.</p>
+            <p className="fulfillment-intelligence__quiet">No supply issue is listed for this option.</p>
           )}
           {constraintOpen ? (
             <ConstraintExplanation
@@ -867,17 +895,18 @@ export default function FulfillmentIntelligence({
               onUseSafeThrough={onUseSafeThrough}
             />
           ) : null}
-          <p className="fulfillment-intelligence__boundary-copy">{supply.boundary}</p>
           {typeof onOpenInventory === "function" ? (
             <div className="fulfillment-intelligence__actions">
-              <button type="button" onClick={onOpenInventory}>Review inventory evidence</button>
+              <button type="button" onClick={onOpenInventory}>Open inventory</button>
             </div>
           ) : null}
         </section>
-      </div>
+          </div>
 
-      <ConstraintStack constraints={fulfillment.constraints} />
-      <SourceRevisions fulfillment={fulfillment} />
+          <ConstraintStack constraints={fulfillment.constraints} />
+          <SourceRevisions fulfillment={fulfillment} />
+        </div>
+      </details>
     </aside>
   );
 }

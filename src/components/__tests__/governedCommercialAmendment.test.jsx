@@ -215,15 +215,15 @@ describe("Governed Commercial Amendment Experience", () => {
     const twin = container.querySelector('[data-capability-id="commercial-scenario-workbench"]');
     expect(twin).not.toBeNull();
     expect(twin.getAttribute("data-authority")).toBe("session-only-non-authoritative");
-    expect(twin.textContent).toContain("Scenario Workbench");
-    expect(twin.textContent).toContain("Current125 guests · saved");
-    expect(twin.textContent).toContain("Working175+50 guests");
+    expect(twin.textContent).toContain("Commercial reviewHenderson DinnerScenario A · 175 guests");
+    expect(twin.textContent).toContain("Current commitment · 125 guests");
+    expect(twin.textContent).toContain("Current vs Scenario AWhat changes+50 guests");
     expect(twin.textContent).not.toContain("Chicken Alfredo");
     expect(twin.textContent).toContain("People");
     expect(twin.textContent).toContain("Supply");
-    expect(twin.textContent).toContain("Overall");
-    expect(twin.textContent).toContain("Not verified");
-    expect(twin.textContent).toMatch(/Nothing here has changed Commercial, Staffing, Inventory, or BEO authority/i);
+    expect(twin.textContent).toContain("Guest-count flexibility");
+    expect(twin.textContent).toContain("Unavailable");
+    expect(twin.textContent).toMatch(/Pricing, staffing, inventory, and the BEO are unchanged/i);
     expect(twin.textContent).not.toMatch(/staffing covered|schedule clear|BEO regenerated/i);
 
     act(() => vi.runAllTimers());

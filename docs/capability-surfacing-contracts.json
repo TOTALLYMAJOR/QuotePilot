@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "catalogVersion": 89,
+  "catalogVersion": 90,
   "contracts": [
     {
       "id": "bounded-security-operations-audit",
@@ -539,14 +539,14 @@
     },
     {
       "id": "customer-directory-and-360",
-      "reviewRevision": 10,
+      "reviewRevision": 11,
       "status": "active",
       "deliveryType": "user_relevant",
       "capabilityKind": "read_surface",
       "audiences": [
         "staff"
       ],
-      "summary": "Bounded same-tenant client directory and relationship reads are exposed through opaque client routes, surface-scoped read context, one ranked next step, a recorded relationship timeline, advisory immutable-version comparison, and separately labeled quote, booking, and provider-confirmed payment totals. The Ambient presentation reuses that authority in a sparse start state, a populated relationship-led directory, and an internal relationship ledger composed from existing Client, Opportunity, Proposal, Event, request, conversation-summary, and lifecycle evidence. It does not add relationship memory, activity, urgency, or consequence authority. Explicit local authentication-bypass review may load a development-only local_fixture page without a Firebase or provider write. When browser acceptance explicitly supplies a tenant-scoped quote directory, those exact records, including an explicit empty list, take precedence over the generic review fixture.",
+      "summary": "Bounded same-tenant client directory and relationship reads are exposed through opaque client routes, surface-scoped read context, one ranked next step, a recorded relationship timeline, advisory immutable-version comparison, and separately labeled quote, booking, and provider-confirmed payment totals. The exact customer record and bounded linked-opportunity query settle in parallel and may render the relationship overview before retained proposal versions and private email controls finish; those supplemental reads remain explicitly loading or recoverably partial rather than being presented as complete. The Ambient presentation reuses that authority in a sparse start state, a populated relationship-led directory, and an internal relationship ledger composed from existing Client, Opportunity, Proposal, Event, request, conversation-summary, and lifecycle evidence. It does not add relationship memory, activity, urgency, or consequence authority. Explicit local authentication-bypass review may load a development-only local_fixture page without a Firebase or provider write. When browser acceptance explicitly supplies a tenant-scoped quote directory, those exact records, including an explicit empty list, take precedence over the generic review fixture.",
       "backendPaths": [
         "firestore.indexes.json",
         "firestore.rules",
@@ -612,6 +612,7 @@
         "src/components/__tests__/customerCommercialMeasuresPresentation.test.jsx",
         "src/components/__tests__/customerCommercialTimelinePresentation.test.jsx",
         "src/components/__tests__/customerWorkspaceStates.test.jsx",
+        "src/components/__tests__/customerWorkspaceView.test.jsx",
         "src/components/__tests__/quoteVersionComparisonPresentation.test.jsx",
         "src/lib/__tests__/customerCommercialTimeline.test.js",
         "src/lib/__tests__/customerCommercialMeasures.test.js",
@@ -660,6 +661,18 @@
           "locator": "fails closed across local tenant, customer, quote, and version collisions"
         },
         {
+          "path": "src/lib/__tests__/customerWorkspace.test.js",
+          "locator": "loads retained local proposal versions for Customer 360"
+        },
+        {
+          "path": "src/components/__tests__/customerWorkspaceView.test.jsx",
+          "locator": "renders the exact client overview while retained history and private controls continue loading"
+        },
+        {
+          "path": "src/components/__tests__/customerWorkspaceView.test.jsx",
+          "locator": "keeps the core client overview recoverable when supplemental reads fail"
+        },
+        {
           "path": "e2e/staff-app-return-context.spec.js",
           "locator": "Client 360 restores its exact opportunity action, tab, disclosure, and scroll"
         },
@@ -699,7 +712,7 @@
         }
       ],
       "surfaceReview": "changed",
-      "surfaceReviewNote": "Revision 9 converges the internal Client 360 presentation into the selected relationship ledger: identity and one evidence-supported next step lead; the existing Client, Opportunity, Proposal, and Event facts form a relationship spine; exact lifecycle and request activity follows; same-quote same-time request and conversation summaries are displayed once; and deeper conversations, source detail, additional opportunities, and record controls remain available under disclosure. Production Firebase reads, Customer 360 correction paths, exact arrival, role gates, tenant scope, immutable comparison, separately labeled commercial evidence, keyboard behavior, and recovery controls remain intact. Tenant workflow integration also preserves exact accepted-version and acceptance-receipt identifiers on closeout projections; missing references stay unavailable without current-quote fallbacks.",
+      "surfaceReviewNote": "Revision 11 preserves the relationship-led Client 360 while removing supplemental reads from its first-useful-view critical path. The exact customer and bounded linked opportunities load in parallel; that core relationship can render while retained proposal versions and private email controls settle concurrently. Supplemental loading is named, failure keeps the core view visible with one retry, and completed refreshes continue to preserve the prior exact profile. Identity, tenant scope, role gates, immutable comparison, commercial evidence, exact arrival, correction paths, and provider boundaries remain unchanged.",
       "stateEvidence": [
         {
           "state": "loading",
@@ -745,7 +758,7 @@
         }
       ],
       "stateExceptions": {},
-      "safeOutcome": "Staff see a truthful sparse starting point when the completed same-tenant read has no clients, or a relationship-led populated view with search and filtering only when records exist. They can open one exact client, correct remembered context through existing Client 360 controls, inspect recorded milestones and immutable versions, and review separately labeled quoted, accepted, booked, and Firebase-source-gated provider-confirmed payment measures. Explicit browser acceptance seeds cannot be replaced by a nearby generic fixture identity. Browser-local records remain visibly non-authoritative and cannot be treated as production clients, provider evidence, engagement, booking, payment, or accounting revenue."
+      "safeOutcome": "Staff see a truthful sparse starting point when the completed same-tenant read has no clients, or a relationship-led populated view with search and filtering only when records exist. They can open one exact client and use the current linked-opportunity context without waiting for retained history or private controls; those supplemental reads remain visibly incomplete until they settle and their failure does not erase the exact core relationship. Staff can then correct remembered context through existing Client 360 controls, inspect recorded milestones and immutable versions, and review separately labeled quoted, accepted, booked, and Firebase-source-gated provider-confirmed payment measures. Explicit browser acceptance seeds cannot be replaced by a nearby generic fixture identity. Browser-local records remain visibly non-authoritative and cannot be treated as production clients, provider evidence, engagement, booking, payment, or accounting revenue."
     },
     {
       "id": "bounded-commercial-search",

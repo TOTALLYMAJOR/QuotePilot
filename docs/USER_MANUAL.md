@@ -1,6 +1,6 @@
 # User Manual
 
-Last updated: 2026-09-13 14:49:08 CDT
+Last updated: 2026-09-13 22:51:39 CDT
 
 ## Purpose
 This guide explains day-to-day usage of QuotePilot for staff users and admins.
@@ -763,6 +763,12 @@ code.
 - Select **Review client** to open
   `/app/customers/<customerId>`. A missing or other-tenant ID does not reveal a
   customer and offers a safe return to the directory.
+- The client identity and bounded linked opportunities become available first.
+  While retained proposal history and private customer controls are still
+  loading, the relationship overview remains usable and **More client history
+  and controls** names the unfinished read. If that supplemental read fails,
+  the exact client and current opportunities remain visible; use **Retry client
+  details** to request a fresh complete profile read without changing records.
 - `Customer directory read context` and `Customer 360 read context` name the
   exact tenant, source, bounded contract, device-time last complete read, and
   loading/current/partial/retained-stale/error outcome. A fresh staff read does
