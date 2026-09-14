@@ -1,10 +1,35 @@
 # Changelog
 
-Last updated: 2026-09-13 22:50:39 CDT
+Last updated: 2026-09-14 02:59:23 CDT
 
 All notable project changes are documented in this file.
 
 ## Unreleased — Event and Commercial activation receipt correction
+
+- Add **Library → Delivery** as the governed activation-authoring path for the
+  staffed-buffet pilot. Administrators can review versioned Blueprint,
+  quantity-policy, and purchasing-pack source, bind an exact Blueprint revision
+  to an active Offer, and enable Delivery Planning only after validation. The
+  save path rejects invalid published declarations, stale or ambiguous
+  references, missing menu components, malformed work blocks, invalid guest
+  bounds, and mismatched purchasing-pack units. The editor invents no ratios or
+  production policy, and a checked draft is not described as saved, hosted, or
+  human accepted.
+- Add the safe-off Delivery Planning Phase 1 source slice. Offers and Event
+  Templates can preserve exact Delivery Blueprint references; published
+  tenant-declared quantity policies compile staffed-buffet work blocks,
+  production output, ingredient demand, and exact-evidence-bound purchasing
+  quantities into a session-only Delivery Proposal inside quote creation.
+  Missing policy, policy bounds, required components, retained override
+  conflicts, and late domain results fail visibly. Optional removal and
+  deliberate overrides remain session-only and recoverable. The surface keeps
+  Commercial, Production, Staffing, Inventory, and Purchasing evidence
+  separate, never changes pricing or quote save eligibility, and performs no
+  assignment, allocation, ordering, publication, provider, BEO, or readiness
+  action. Focused compiler/component tests are local automated evidence;
+  tenant configuration, connected domain evidence, routed handoffs, rendered
+  responsive proof, CI, hosted use, human acceptance, and the 30% pilot outcome
+  remain open.
 
 - Make the populated client profile progressively available instead of
   withholding the relationship overview behind retained proposal-history and

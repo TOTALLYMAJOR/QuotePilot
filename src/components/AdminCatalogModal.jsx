@@ -29,6 +29,7 @@ import {
   stageCatalogSetupPreset
 } from "../lib/catalogSetupDraftService";
 import PackageWorkspace from "./PackageWorkspace";
+import DeliveryPlanningConfigurationPanel from "./DeliveryPlanningConfigurationPanel";
 import CatalogDraftStateBar, { catalogDraftCapabilityState } from "./CatalogDraftStateBar";
 import AdaptiveChoiceField from "./AdaptiveChoiceField";
 import FieldStateIndicator from "./FieldStateIndicator";
@@ -37,6 +38,10 @@ import {
   validateCommercialPublication,
   validateConfigurationRule
 } from "../lib/commercialPlatform";
+import {
+  buildDeliveryPlanningDraftCatalog,
+  validateDeliveryPlanningConfiguration
+} from "../lib/deliveryPlanningConfiguration";
 
 const AMBIENT_UI_ENABLED = import.meta.env.VITE_AMBIENT_UI_ENABLED === "1"
   || import.meta.env.VITE_AMBIENT_UI_ENABLED === "true"
@@ -110,6 +115,7 @@ const ADMIN_TABS = [
   { id: "rentals", label: "Rentals" },
   { id: "menu", label: "Menu" },
   ...(AMBIENT_UI_ENABLED ? [{ id: "templates", label: "Templates" }] : []),
+  { id: "delivery", label: "Delivery" },
   { id: "rules", label: "Rules" },
   { id: "pricing", label: "Pricing" }
 ];
@@ -768,6 +774,9 @@ function buildJsonDrafts(catalog) {
     taxRegions: JSON.stringify(settings.taxRegions || [], null, 2),
     eventTemplates: JSON.stringify(settings.eventTemplates || [], null, 2),
     configurationRules: JSON.stringify(settings.configurationRules || [], null, 2),
+    deliveryBlueprints: JSON.stringify(settings.deliveryBlueprints || [], null, 2),
+    quantityPolicies: JSON.stringify(settings.quantityPolicies || [], null, 2),
+    purchasingPacks: JSON.stringify(settings.purchasingPacks || [], null, 2),
     seasonalProfiles: JSON.stringify(settings.seasonalProfiles || [], null, 2),
     brandCrew: JSON.stringify(settings.brandCrew || [], null, 2)
   };
@@ -792,7 +801,7 @@ function buildPersistableCatalogDraft(draft, jsonDrafts) {
   const featureFlagsLocked = draft?.settings?.featureFlagsLocked === true;
   const featureFlags = { ...(draft?.settings?.featureFlags || {}) };
   if (!featureFlagsLocked && featureFlags.aiAssist === false) featureFlags.aiAutopilot = false;
-  const nextCatalog = {
+  const nextCatalog = buildDeliveryPlanningDraftCatalog({
     ...draft,
     settings: {
       ...(draft?.settings || {}),
@@ -806,8 +815,9 @@ function buildPersistableCatalogDraft(draft, jsonDrafts) {
       seasonalProfiles: parseArray("seasonalProfiles", "Seasonal Profiles JSON"),
       brandCrew: parseArray("brandCrew", "Brand Crew JSON")
     }
-  };
+  }, jsonDrafts);
   validateCommercialPublication({ ...nextCatalog, menuInventoryComplete: false });
+  validateDeliveryPlanningConfiguration(nextCatalog);
   return nextCatalog;
 }
 
@@ -3245,6 +3255,17 @@ export function AdminCatalogView({
               )}
             </div>
           </>
+        )}
+
+        {resolvedActiveTab === "delivery" && (
+          <DeliveryPlanningConfigurationPanel
+            catalog={draft}
+            jsonDrafts={jsonDrafts}
+            onPatchJson={patchJsonDraft}
+            onPatchSetting={patchToggleSetting}
+            onPatchPackageField={patchPackageField}
+            onReviewOffers={() => setActiveTab("packages")}
+          />
         )}
 
         {resolvedActiveTab === "addons" && (

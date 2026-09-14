@@ -1,6 +1,6 @@
 # Documentation System
 
-Last updated: 2026-09-12 14:51:07 CDT
+Last updated: 2026-09-14 01:31:14 CDT
 
 ## Purpose
 This repository uses a layered canonical documentation model.
@@ -17,6 +17,10 @@ Each major topic has one source of truth. Other docs should link to that source 
   blocker, and proof-event ledger for representative cross-functional cohorts.
 - `docs/COMMERCIAL_PLATFORM_PROGRAM.md`: commercial-kernel, vertical-pack,
   tenant-configuration, contextual-UX, migration, and delivery-slice authority.
+- `docs/DELIVERY_PLANNING_PROGRAM.md`: cross-domain Delivery Blueprint,
+  quantity-policy, session-only Delivery Proposal, evidence-binding, handoff,
+  phase-gate, pilot-measurement, and release-proof authority. Commercial,
+  Staffing, Inventory, BEO, and provider sources retain their own ownership.
 - `docs/PRICING_CONSTITUTION.md`: pricing policy, version, exact-money,
   waterfall, historical-compatibility, and payment-provenance authority.
 - `docs/INVENTORY_AUTHORITY_ADR.md`: ingredient stock and purchase-cost
@@ -43,6 +47,10 @@ Each major topic has one source of truth. Other docs should link to that source 
   copy a generated digest into another canonical status authority.
 - Commercial kernel, offer, template, rule, vertical-pack, or migration changes:
   update `docs/COMMERCIAL_PLATFORM_PROGRAM.md` and its accepted ADR.
+- Delivery Blueprint, production quantity-policy, Delivery Proposal,
+  delivery-handoff, fulfillment-alternative, or Delivery Planning pilot changes:
+  update `docs/DELIVERY_PLANNING_PROGRAM.md` and link affected domain authorities
+  rather than copying them.
 - Pricing policy, arithmetic, rounding, receipt, waterfall, or payment amount
   provenance changes: update `docs/PRICING_CONSTITUTION.md`.
 - Ingredient definitions, stock/cost evidence, recipes, requirement mappings,
@@ -149,6 +157,7 @@ for operator review.
 | Development task evidence capture | `docs/DEVELOPMENT_EVIDENCE_COMPILER.md` | Local ignored evidence-record contract for request, validation, proof-boundary, residual-risk, and learning capture. |
 | Product truth observability and drift policy | `docs/adr/ADR-0002-product-truth-observability.md`, `docs/design/product-truth-observability-design.md` | Accepted decision and implementation contract for the read-only owner digest and advisory drift gate. `PROJECT_STATUS.md`, the Feature Matrix, release receipts, and other named inputs retain authority; generated digests are projections only. |
 | Commercial kernel, vertical packs, offers, templates, rules, and compatibility migration | `docs/COMMERCIAL_PLATFORM_PROGRAM.md` and `docs/adr/ADR-0003-commercial-platform-vertical-pack.md` | Catering remains the reference vertical and natural UX; shared contracts cannot replace quote, catalog, server-pricing, or payment authority. |
+| Cross-domain Delivery Blueprint, declared production quantities, session-only Delivery Proposal, domain handoffs, fulfillment alternatives, pilot gates, and outcome measurement | `docs/DELIVERY_PLANNING_PROGRAM.md` | The program composes Commercial, Staffing, Inventory, BEO, and provider references without replacing their authority or creating event-wide readiness. |
 | Pricing policy, v1/v2 semantics, exact money, waterfalls, and payment amount provenance | `docs/PRICING_CONSTITUTION.md` | Historical v1 receipts stay immutable; v2 behavior changes require Golden Corpus and differential evidence. |
 | Ingredient inventory, recorded purchase cost, versioned recipes, menu/event demand and food cost, consumable availability, allocation, consumption, and projections | `docs/INVENTORY_AUTHORITY_ADR.md` | Inventory owns ingredient stock/cost evidence and bounded operational consequences; Library owns recipe editing against the existing menu catalog, commercial revisions remain historical authority, menu cost and stock promise remain independent rails, and overall event readiness stays separate. |
 | Execution/domain classification, model tier, dependency reads, domain-reference routing, doc obligations, and validation mapping | `docs/task-orchestration-contracts.json` | Policy rationale lives in `docs/AGENT_GOVERNANCE.md`; commands live in the orchestration runbook. Domain references remain advisory, and the external runner owns actual model switching. |

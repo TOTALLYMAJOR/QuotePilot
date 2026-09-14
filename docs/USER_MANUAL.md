@@ -1,6 +1,6 @@
 # User Manual
 
-Last updated: 2026-09-13 22:51:39 CDT
+Last updated: 2026-09-14 02:59:23 CDT
 
 ## Purpose
 This guide explains day-to-day usage of QuotePilot for staff users and admins.
@@ -129,6 +129,67 @@ mode edits the same draft and uses the same save authority. Quote plan remains a
 sticky left rail at desktop and compact-desktop widths, including 1008px. At
 tablet and phone widths it becomes a horizontal navigator above the same
 proposal document so domain context is adapted, never omitted.
+
+### Configure Delivery Planning in Library
+
+Administrators use **Library → Delivery** to prepare the first staffed-buffet
+activation. This is deliberate policy entry, not an automatic setup preset.
+
+1. Open **Reviewed source** and enter the reviewed `delivery-blueprint-v1`,
+   `quantity-policy-v1`, and purchasing-pack arrays. Keep unfinished sources in
+   `draft`; do not label them `published` until the named operator, declaration
+   time, provenance, guest bounds, work blocks, capability requirements, and
+   quantities have been reviewed.
+2. Use exact `{ id, revision }` references from each Blueprint component to its
+   quantity policy and from each ingredient requirement to its purchasing pack.
+   Ambiguous ID-only or stale references cannot activate the feature.
+3. Choose an active Offer and select **Bind Blueprint to Offer**. A Blueprint
+   is never chosen by a similar name.
+4. When the panel says **Ready to enable**, select **Enable Delivery Planning
+   after save**.
+5. Save the Library draft and complete the existing pricing review. The saved
+   catalog revision—not the checkbox click—is the persistence boundary.
+
+The panel supplies no default portions, work times, staffing ratios, ingredient
+usage, stock, or supplier commitment. If those declarations are unavailable,
+leave Delivery Planning off and continue the ordinary quote workflow.
+
+### Delivery Proposal (safe-off Phase 1 source contract)
+
+When an administrator has enabled Delivery Planning and the selected Offer
+references a published, service-compatible **Delivery Blueprint**, the Proposal
+Composer assembles a **Delivery Proposal** above the quote document.
+
+- Read **Required work** as proposed blocks and capability needs, not staff
+  assignments or completed tasks.
+- Read **Production** as tenant-policy-generated output. **Billing quantity**
+  remains the commercial guest basis; it is not interchangeable with the
+  generated production quantity.
+- Read **Purchasing** as ingredient demand. Before an exact saved-revision
+  Inventory projection returns, shortage, purchase packs, and expected
+  remainder say **Unchecked**. QuotePilot does not treat missing stock evidence
+  as zero stock.
+- Use **Adjust quantity** only for a deliberate session override and enter a
+  reason. After guests, menu, or service changes, the override stays visible.
+  If its prior generated basis changed, choose **Keep override** or **Use
+  generated**.
+- Use **Remove optional** to omit an optional Blueprint component from this
+  session proposal; use **Restore** to return it. A missing required component
+  appears under **Needs operator review**.
+- Treat Production, Staffing, Inventory, and Purchasing evidence separately.
+  **Proposed work assembled** is not event readiness.
+
+**Review staffing**, **Review production**, and **Review purchasing** prepare
+prefill-only handoff contracts only after a saved quote revision exists. Their
+target routes remain unavailable until each owning workflow can reread current
+authority, reject stale input, and issue its own receipt. These controls never
+save or send the quote, assign a person, allocate stock, place an order, publish
+configuration, change price, or generate a BEO.
+
+No tenant Blueprint or quantity policy is enabled by default. If the Delivery
+Proposal is absent, continue the ordinary quote workflow and ask an
+administrator to review the tenant's Delivery Planning configuration rather
+than assuming a default buffet ratio.
 
 ### Calendar-first Operations (current source contract)
 
