@@ -639,7 +639,9 @@ describe("published commercial approval review", () => {
     expect(html).toContain("Apply all");
     expect(html).toContain("Apply reviewed guest count");
     expect(html).toContain("This exact response remains proposed");
-    expect(APP_SOURCE).toMatch(/form: candidateForm,\s*\.\.\.\(attendanceChange \? \{ attendanceSubmissionReceiptId: attendanceChange\.submissionReceiptId \} : \{\}\)/);
+    expect(APP_SOURCE).toContain("form: candidateForm,");
+    expect(APP_SOURCE).toContain("...(attendanceChange ? { attendanceSubmissionReceiptId: attendanceChange.submissionReceiptId } : {})");
+    expect(APP_SOURCE).toContain("...(inventoryObservationRequested ? {");
   });
   test("shows inclusive zero threshold and participant role without exposing raw policy JSON", () => {
     const model = simulation({ workflowPolicy: { definitionPin: { version: 2 }, approvalPolicy: { thresholdCents: 0, allowedRoles: ["admin", "sales"] } }, approvalEvaluation: { absoluteTotalDeltaCents: 0, impactApprovalRequired: false, thresholdApprovalRequired: true } });

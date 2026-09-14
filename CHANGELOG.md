@@ -1,10 +1,14 @@
 # Changelog
 
-Last updated: 2026-09-14 02:59:23 CDT
+Last updated: 2026-09-14 03:51:37 CDT
 
 All notable project changes are documented in this file.
 
 ## Unreleased — Event and Commercial activation receipt correction
+
+- Reconcile the combined commercial test contract with the exact server-bound
+  Inventory and attendance preview payload, and keep advanced pricing-source
+  assertions stable when independent cost-evidence warnings are also present.
 
 - Add **Library → Delivery** as the governed activation-authoring path for the
   staffed-buffet pilot. Administrators can review versioned Blueprint,
