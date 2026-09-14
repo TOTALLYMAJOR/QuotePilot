@@ -69,8 +69,7 @@ const EMPTY_ACCOUNT_SETTINGS_FEEDBACK = Object.freeze({
 });
 
 function call(action, ...args) {
-  if (typeof action === "function") return action(...args);
-  return undefined;
+  if (typeof action === "function") action(...args);
 }
 
 function assignRef(ref, value) {
@@ -329,12 +328,9 @@ export default function WorkspaceShell({
           onClick={() => {
             if (!sound) close();
             workspaceToolsActionRef.current = workspaceToolsOpen && !sound;
-            try {
-              if (operation) call(action, triggerRefs[openMenu]);
-              else call(action);
-            } finally {
-              workspaceToolsActionRef.current = false;
-            }
+            if (operation) call(action, triggerRefs[openMenu]);
+            else call(action);
+            workspaceToolsActionRef.current = false;
           }}
         >
           {item.attention ? (

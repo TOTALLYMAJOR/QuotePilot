@@ -405,7 +405,9 @@ describe("WorkspaceShell", () => {
     });
 
     const tools = container.querySelector('[role="dialog"][aria-labelledby="workspace-tools-title"]');
-    act(() => buttonsByText(tools, "Operations")[0].click());
+    const operations = buttonsByText(tools, "Operations")[0];
+    operations.focus();
+    act(() => operations.click());
 
     expect(onOperations).toHaveBeenCalledTimes(1);
     expect(continuation).toHaveBeenCalledTimes(1);
