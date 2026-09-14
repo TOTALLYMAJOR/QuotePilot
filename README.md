@@ -1,6 +1,6 @@
 # QuotePilot by MBMApps
 
-Last updated: 2026-09-13 17:24:50 CDT
+Last updated: 2026-09-13 19:09:08 CDT
 
 Multi-tenant catering quote application built with React, Vite, Firebase, and jsPDF.
 
@@ -1510,12 +1510,15 @@ the build and immediately before provider mutation. The Vercel token and the
 Firebase workload-identity ADC file are scoped to their final mutation steps;
 Firebase production rejects the legacy `FIREBASE_TOKEN` path.
 
-The coordinated profile is currently source-only and has not been deployed.
-Its Inquiry prerequisite is blocked until the dedicated managed Turnstile
-widget is created and verified. Its Model Assist configuration is also not
-provider-ready: the latest live OpenAI probe returned
-`credit_balance_exhausted`. Restore capacity and pass a fresh minimal probe
-before dispatch; an enabled secret version alone is not AI availability.
+`v0.19.0` deployed the coordinated profile through Firebase workflow
+`34790618395` and Vercel workflow `34791516818` at exact SHA
+`bf9f48a00547e305fdf155c8d64bf3646198b705`. Provider readback proved the
+dedicated Inquiry widget configuration on both browser targets, active
+Inquiry/retention callables, and active `gpt-5-mini` Model Assist configuration;
+a fresh minimal OpenAI Responses probe returned HTTP 200. Deployment did not
+publish an Inquiry slug or prove a customer submission, authenticated model
+result, provider notification, retention deletion, accessibility, or human
+acceptance.
 
 The pre-merge candidate path is narrower than the production workflows. It
 uses the checksum-verified official Firebase v15.24.0 binary for every Firebase

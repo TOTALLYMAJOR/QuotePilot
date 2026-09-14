@@ -1,6 +1,6 @@
 # Launch Runbook
 
-Last updated: 2026-09-13 17:24:50 CDT
+Last updated: 2026-09-13 19:09:08 CDT
 
 ## Coordinated all-qualified founder-tenant release
 
@@ -22,10 +22,15 @@ Before either dispatch:
 2. Confirm enabled Secret Manager metadata for `INQUIRY_TURNSTILE_SECRET`,
    `INQUIRY_RATE_LIMIT_SECRET`, `INTENT_PARSER_OPENAI_KEY`, and
    `RESEND_API_KEY` without reading or logging secret values.
-3. Probe the configured OpenAI account with the pinned `gpt-5-mini` model. A
+3. Confirm the exact Functions runtime service account has
+   `roles/secretmanager.secretAccessor` on every secret bound by a Function.
+   The GitHub deploy identity should not receive secret-policy mutation
+   authority; pre-bind the runtime account narrowly so Firebase does not need
+   to grant access during a production batch.
+4. Probe the configured OpenAI account with the pinned `gpt-5-mini` model. A
    `credit_balance_exhausted` response blocks promotion even when the key has
    an enabled secret version; restore capacity and rerun the probe.
-4. Publish the integrated source head, require new exact-head PR checks, merge
+5. Publish the integrated source head, require new exact-head PR checks, merge
    through protected `main`, wait for the successful exact-main push CI, and
    tag that same SHA. Do not reuse checks from a superseded PR head.
 
@@ -223,6 +228,11 @@ scheduled functions. Cloud Functions administration alone does not grant
 `iam.serviceAccounts.actAs` or `cloudscheduler.jobs.update`. Verify both
 bindings by provider readback; never grant them to the GitHub principal or a
 general human identity as a deployment workaround.
+Every Secret Manager value declared by `runWith({ secrets: [...] })` must also
+grant `roles/secretmanager.secretAccessor` to that exact runtime service
+account before dispatch. Keep `secretmanager.secrets.setIamPolicy` away from the
+CI deployer; a missing runtime binding otherwise produces a partial multi-batch
+release when Firebase attempts to repair secret IAM during deployment.
 
 The Firebase deploy workflow prepares the official Linux v15.24.0 standalone
 CLI before authentication and verifies SHA-256

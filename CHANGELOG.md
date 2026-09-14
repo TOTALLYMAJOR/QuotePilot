@@ -1,10 +1,36 @@
 # Changelog
 
-Last updated: 2026-09-13 17:24:50 CDT
+Last updated: 2026-09-13 19:09:08 CDT
 
 All notable project changes are documented in this file.
 
-## Unreleased — Event and Commercial activation receipt correction
+## v0.19.0 coordinated Inquiry and Model Assist production release - 2026-09-13
+
+- Published protected PR `#145` as exact tagged `main` SHA
+  `bf9f48a00547e305fdf155c8d64bf3646198b705` (`v0.19.0`) after its nine PR
+  checks and exact-main CI run `34787753902` attempt 2 passed. Governed Firebase
+  all-surface workflow `34790618395` deployed Hosting, Firestore, and all 142
+  active Functions with rollback SHA
+  `b90fb5d539077c27e640ca58ee1438632d665cf9`; governed Vercel workflow
+  `34791516818` promoted immutable deployment
+  `quoteflow-bgq2wztfk-mbmapps.vercel.app` with rollback SHA
+  `3fb1443bb6e394133340ede3716548c92b24beea`.
+- The first Firebase dispatch `34790010719` partially updated Hosting,
+  Firestore, and early Function batches before the deployer lacked permission
+  to grant the new AI secret binding. The runtime service account then received
+  narrow `secretAccessor` bindings on the exact Inquiry, rate-limit, AI, and
+  email secrets; the repository correctly rejected a workflow rerun, and the
+  fresh dispatch above converged and recorded the complete release.
+- Provider readback found both public origins HTTP 200, the reviewed Inquiry
+  chunk and public Turnstile configuration on both builds, 142 active
+  `us-central1` Functions, active Inquiry/admin/queue/conversion callables, an
+  active hourly purge function and enabled scheduler, and active
+  `parseIntentDraft` with OpenAI `gpt-5-mini`, tenant `mm05366-sandbox`, and
+  secret version 2. A safe anonymous unpublished-slug probe returned `NOT_FOUND`.
+  A fresh minimal OpenAI Responses probe returned HTTP 200. These receipts do
+  not prove a published Inquiry slug, real customer submission, model-authored
+  operator outcome, notification delivery, retention deletion, authenticated
+  conversion, accessibility, or human acceptance.
 
 - Add a protected `all-qualified-features` production release profile for one
   coordinated Firebase-all and Vercel promotion. The profile compiles the
@@ -22,10 +48,9 @@ All notable project changes are documented in this file.
   Check enforcement. Inquiry requires its own managed Turnstile widget, exact
   production hostname allowlist, browser-visible site key, and Secret Manager
   secret. Model Assist uses `openai` / `gpt-5-mini` only for
-  `mm05366-sandbox`, but provider readiness is currently blocked by a live
-  `credit_balance_exhausted` response. No production deployment, automatic
-  Inquiry publication, model response, customer submission, provider send, or
-  human acceptance is claimed by this source change.
+  `mm05366-sandbox`. The production receipt above supersedes the source-only
+  readiness note while preserving the same automatic-publication, customer,
+  provider-outcome, and human-acceptance boundaries.
 
 - Add an off-by-default Guided Inquiry Page backed by one immutable Inquiry
   Showcase rather than a second commercial catalog. Administrators curate and
@@ -44,9 +69,11 @@ All notable project changes are documented in this file.
   receipt atomically. Unconverted content receives a 90-day deletion time;
   scheduled cleanup retains only a content-free receipt. Direct browser access
   to all Showcase, inquiry, abuse, recovery, analytics, and receipt records is
-  denied. This is source/local candidate evidence only; deployment, secrets,
-  gates, hosted/provider behavior, production data, accessibility, human
-  acceptance, and commercial outcomes remain open. Release validation also
+  denied. The production/configuration evidence recorded above now proves the
+  deployed gates, secret bindings, public chunks, and scheduler, while an
+  actual Showcase publication, customer submission, production-data journey,
+  accessibility, human acceptance, and commercial outcomes remain open.
+  Release validation also
   inventories the exact current-main Functions exports and evaluates portal
   expiry against a deterministic test clock, without changing fail-closed
   production expiry behavior.
@@ -55,8 +82,9 @@ All notable project changes are documented in this file.
   bind the OpenAI key only through Firebase Secret Manager on the parse
   callable. Deterministic intake remains available with either gate off, and
   model facts remain low-confidence, confirm-before-apply, stateless, and
-  non-authoritative. Production activation is not claimed: the current live
-  provider probe reports exhausted credit capacity.
+  non-authoritative. The production receipt above proves the active runtime
+  binding and fresh provider-key health, but no authenticated model-assisted
+  result or accepted operator outcome.
 
 - Correct the `staging-event-operating-spine` candidate envelope so enabling
   Commercial Change and Event Spine preserves Staffing and Inventory and binds
