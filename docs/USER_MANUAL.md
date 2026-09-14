@@ -1,6 +1,6 @@
 # User Manual
 
-Last updated: 2026-09-14 01:31:14 CDT
+Last updated: 2026-09-14 02:59:23 CDT
 
 ## Purpose
 This guide explains day-to-day usage of QuotePilot for staff users and admins.
@@ -129,6 +129,30 @@ mode edits the same draft and uses the same save authority. Quote plan remains a
 sticky left rail at desktop and compact-desktop widths, including 1008px. At
 tablet and phone widths it becomes a horizontal navigator above the same
 proposal document so domain context is adapted, never omitted.
+
+### Configure Delivery Planning in Library
+
+Administrators use **Library → Delivery** to prepare the first staffed-buffet
+activation. This is deliberate policy entry, not an automatic setup preset.
+
+1. Open **Reviewed source** and enter the reviewed `delivery-blueprint-v1`,
+   `quantity-policy-v1`, and purchasing-pack arrays. Keep unfinished sources in
+   `draft`; do not label them `published` until the named operator, declaration
+   time, provenance, guest bounds, work blocks, capability requirements, and
+   quantities have been reviewed.
+2. Use exact `{ id, revision }` references from each Blueprint component to its
+   quantity policy and from each ingredient requirement to its purchasing pack.
+   Ambiguous ID-only or stale references cannot activate the feature.
+3. Choose an active Offer and select **Bind Blueprint to Offer**. A Blueprint
+   is never chosen by a similar name.
+4. When the panel says **Ready to enable**, select **Enable Delivery Planning
+   after save**.
+5. Save the Library draft and complete the existing pricing review. The saved
+   catalog revision—not the checkbox click—is the persistence boundary.
+
+The panel supplies no default portions, work times, staffing ratios, ingredient
+usage, stock, or supplier commitment. If those declarations are unavailable,
+leave Delivery Planning off and continue the ordinary quote workflow.
 
 ### Delivery Proposal (safe-off Phase 1 source contract)
 

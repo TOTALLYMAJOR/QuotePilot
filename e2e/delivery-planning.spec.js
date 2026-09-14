@@ -49,7 +49,7 @@ const deliveryCatalog = {
         componentId: "roasted-chicken",
         label: "Roasted chicken",
         required: true,
-        quantityPolicyRef: "chicken-portions"
+        quantityPolicyRef: { id: "chicken-portions", revision: "4" }
       }]
     }],
     quantityPolicies: [{
@@ -67,7 +67,7 @@ const deliveryCatalog = {
         label: "Chicken breast",
         unitId: "lb",
         quantityPerOutputMicros: 100000,
-        purchasingPackRef: "chicken-case"
+        purchasingPackRef: { id: "chicken-case", revision: "2" }
       }]
     }],
     purchasingPacks: [{
@@ -113,6 +113,41 @@ test("keeps advisory evidence and conflicts explicit without blocking the commer
   await expect(page.getByTestId("pc-save")).toBeEnabled();
   await page.getByRole("button", { name: "Review production" }).click();
   await expect(proposal.getByRole("status")).toContainText("Save the quote before opening production review");
+});
+
+test("keeps tenant activation in Library behind exact reviewed source", async ({ page }) => {
+  await page.goto("/app/catalog");
+  const deliveryTab = page.getByRole("tab", { name: "Delivery" });
+  await expect(deliveryTab).toBeVisible({ timeout: 30_000 });
+  await deliveryTab.click();
+
+  const configuration = page.getByTestId("delivery-planning-configuration");
+  await expect(configuration).toBeVisible();
+  await expect(configuration).toContainText("Enabled in this draft");
+  await expect(configuration).toContainText("QuotePilot will not infer them");
+  await expect(configuration).toContainText("Exact published revisions only");
+  await expect(configuration.getByRole("checkbox")).toBeChecked();
+
+  const catalogCard = page.locator(".admin-catalog-card");
+  await catalogCard.evaluate((element) => { element.scrollTop = 0; });
+  await page.screenshot({
+    path: "output/playwright/delivery-planning/delivery-configuration-1440.png"
+  });
+  await configuration.getByText("Reviewed source", { exact: true }).scrollIntoViewIfNeeded();
+  await page.screenshot({
+    path: "output/playwright/delivery-planning/delivery-configuration-1440-bottom.png"
+  });
+  await page.setViewportSize({ width: 390, height: 900 });
+  await catalogCard.evaluate((element) => { element.scrollTop = 0; });
+  await expect(page.locator("body")).toHaveJSProperty("scrollWidth", 390);
+  expect(await configuration.evaluate((element) => element.scrollWidth - element.clientWidth)).toBeLessThanOrEqual(1);
+  await page.screenshot({
+    path: "output/playwright/delivery-planning/delivery-configuration-390.png"
+  });
+  await configuration.getByText("Reviewed source", { exact: true }).scrollIntoViewIfNeeded();
+  await page.screenshot({
+    path: "output/playwright/delivery-planning/delivery-configuration-390-bottom.png"
+  });
 });
 
 test("survives responsive, keyboard, forced-colors, and 200 percent layout pressure", async ({ page }, testInfo) => {

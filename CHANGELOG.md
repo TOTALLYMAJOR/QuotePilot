@@ -1,11 +1,20 @@
 # Changelog
 
-Last updated: 2026-09-14 01:31:14 CDT
+Last updated: 2026-09-14 02:59:23 CDT
 
 All notable project changes are documented in this file.
 
 ## Unreleased — Event and Commercial activation receipt correction
 
+- Add **Library → Delivery** as the governed activation-authoring path for the
+  staffed-buffet pilot. Administrators can review versioned Blueprint,
+  quantity-policy, and purchasing-pack source, bind an exact Blueprint revision
+  to an active Offer, and enable Delivery Planning only after validation. The
+  save path rejects invalid published declarations, stale or ambiguous
+  references, missing menu components, malformed work blocks, invalid guest
+  bounds, and mismatched purchasing-pack units. The editor invents no ratios or
+  production policy, and a checked draft is not described as saved, hosted, or
+  human accepted.
 - Add the safe-off Delivery Planning Phase 1 source slice. Offers and Event
   Templates can preserve exact Delivery Blueprint references; published
   tenant-declared quantity policies compile staffed-buffet work blocks,

@@ -225,6 +225,16 @@
       "testPath": "src/components/__tests__/deliveryProposal.test.jsx"
     },
     {
+      "id": "delivery-planning-configuration-states",
+      "path": "src/components/DeliveryPlanningConfigurationPanel.jsx",
+      "markers": [
+        "data-field-state-surface=\"delivery-planning-configuration\"",
+        "AdaptiveChoiceField",
+        "FieldStateIndicator"
+      ],
+      "testPath": "src/components/__tests__/deliveryPlanningConfigurationPanel.test.jsx"
+    },
+    {
       "id": "quote-comparison-choice-states",
       "path": "src/components/QuoteCompareModal.jsx",
       "markers": [
