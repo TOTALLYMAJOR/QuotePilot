@@ -6,14 +6,17 @@ const require = createRequire(import.meta.url);
 const {
   PORTAL_CONVERSATION_BODY_MAX_LENGTH,
   PORTAL_CONVERSATION_RATE_LIMIT,
+  PORTAL_CONVERSATION_PAGE_SIZE,
   PORTAL_CONVERSATION_TOTAL_MESSAGE_LIMIT,
   assertPortalConversationActivation,
   assertPortalConversationTotal,
   buildPortalConversationActor,
+  buildPortalConversationPage,
   buildPortalConversationMessage,
   buildPortalConversationRateKey,
   buildPortalConversationRequestKey,
   normalizePortalConversationRequest,
+  normalizePortalConversationCursor,
   planPortalConversationRate,
   projectPortalConversationMessage
 } = require("../../../functions/portalConversation.js");
@@ -124,6 +127,69 @@ describe("server-owned quote portal conversation", () => {
       body: "hello",
       clientRequestId: `${"r".repeat(96)}extra`
     }, { requireBody: true })).toThrow(/client request id/i);
+  });
+
+  test("validates opaque history cursors and builds a latest-50 chronological page", () => {
+    expect(normalizePortalConversationCursor({
+      createdAtMs: NOW_MS,
+      messageId: "message_1234567890abcdef"
+    })).toEqual({ createdAtMs: NOW_MS, messageId: "message_1234567890abcdef" });
+    expect(() => normalizePortalConversationCursor({ createdAtMs: -1, messageId: "bad/id" }))
+      .toThrow(/cursor is invalid/i);
+
+    const documents = Array.from({ length: PORTAL_CONVERSATION_PAGE_SIZE + 1 }, (_, index) => ({
+      id: `message_${String(100 - index).padStart(4, "0")}`,
+      data: {
+        messageId: `message_${String(100 - index).padStart(4, "0")}`,
+        actorType: index % 2 ? "customer" : "staff",
+        actorName: "Participant",
+        body: `Message ${100 - index}`,
+        createdAtISO: new Date(NOW_MS - index * 1000).toISOString(),
+        createdAtMs: NOW_MS - index * 1000
+      }
+    }));
+    const result = buildPortalConversationPage(documents);
+    expect(result.messages).toHaveLength(PORTAL_CONVERSATION_PAGE_SIZE);
+    expect(result.messages[0].messageId).toBe("message_0051");
+    expect(result.messages.at(-1).messageId).toBe("message_0100");
+    expect(result.page).toMatchObject({
+      pageSize: PORTAL_CONVERSATION_PAGE_SIZE,
+      returned: PORTAL_CONVERSATION_PAGE_SIZE,
+      hasOlder: true,
+      oldestCursor: { messageId: "message_0051" },
+      newestCursor: { messageId: "message_0100" }
+    });
+
+    const catchUp = buildPortalConversationPage(documents.slice(0, 2).reverse(), {
+      direction: "newer"
+    });
+    expect(catchUp.messages.map(({ messageId }) => messageId))
+      .toEqual(["message_0099", "message_0100"]);
+    expect(catchUp.page).toMatchObject({
+      hasOlder: false,
+      hasNewer: false,
+      oldestCursor: { messageId: "message_0099" },
+      newestCursor: { messageId: "message_0100" }
+    });
+  });
+
+  test("accepts one history direction and rejects ambiguous cursor requests", () => {
+    const cursor = { createdAtMs: NOW_MS, messageId: "message_1234567890abcdef" };
+    expect(normalizePortalConversationRequest({
+      accessMode: "staff",
+      organizationId: "org-a",
+      quoteId: "quote-conversation",
+      after: cursor
+    })).toMatchObject({ after: cursor, before: null });
+    expect(() => normalizePortalConversationRequest({
+      accessMode: "staff",
+      organizationId: "org-a",
+      quoteId: "quote-conversation",
+      before: cursor,
+      after: cursor
+    })).toThrow(/cannot be combined/i);
+    expect(FUNCTIONS_INDEX_SOURCE).toMatch(/catchUp \? "asc" : "desc"/);
+    expect(FUNCTIONS_INDEX_SOURCE).toMatch(/input\.after\.createdAtMs, input\.after\.messageId/);
   });
 
   test.each(["sent", "viewed", "accepted", "booked"])(
@@ -252,6 +318,8 @@ describe("server-owned quote portal conversation", () => {
     const getSource = FUNCTIONS_INDEX_SOURCE.slice(getStart, sendStart);
     const sendSource = FUNCTIONS_INDEX_SOURCE.slice(sendStart, nextStart);
     expect(getSource.match(/readBoundPortalConversationScope/g)).toHaveLength(2);
+    expect(getSource).toContain('.limit(PORTAL_CONVERSATION_PAGE_SIZE + 1)');
+    expect(getSource).toContain('startAfter(input.before.createdAtMs, input.before.messageId)');
     expect(sendSource).toContain("db.runTransaction");
     expect(sendSource).toContain('operation: "send"');
     expect(sendSource).toContain("randomUUID()");

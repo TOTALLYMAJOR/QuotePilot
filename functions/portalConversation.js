@@ -2,6 +2,7 @@ const { createHash } = require("node:crypto");
 
 const PORTAL_CONVERSATION_BODY_MAX_LENGTH = 1200;
 const PORTAL_CONVERSATION_TOTAL_MESSAGE_LIMIT = 500;
+const PORTAL_CONVERSATION_PAGE_SIZE = 50;
 const PORTAL_CONVERSATION_RATE_LIMIT = 8;
 const PORTAL_CONVERSATION_RATE_WINDOW_MS = 5 * 60 * 1000;
 const PORTAL_CONVERSATION_VISIBLE_STATUSES = new Set([
@@ -47,6 +48,19 @@ function normalizePortalKey(value) {
 function normalizeClientRequestId(value) {
   const normalized = strictText(value, 96);
   return /^[A-Za-z0-9][A-Za-z0-9._:-]{15,95}$/.test(normalized) ? normalized : "";
+}
+
+function normalizePortalConversationCursor(value) {
+  if (value === undefined || value === null || value === "") return null;
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new PortalConversationError("invalid-argument", "Conversation page cursor is invalid.");
+  }
+  const createdAtMs = Number(value.createdAtMs);
+  const messageId = normalizeDocumentId(value.messageId);
+  if (!Number.isSafeInteger(createdAtMs) || createdAtMs < 0 || !messageId) {
+    throw new PortalConversationError("invalid-argument", "Conversation page cursor is invalid.");
+  }
+  return { createdAtMs, messageId };
 }
 
 function normalizeActorName(value, fallback = "Quote participant") {
@@ -97,13 +111,57 @@ function normalizePortalConversationRequest(data = {}, { requireBody = false } =
     );
   }
 
+  const before = requireBody ? null : normalizePortalConversationCursor(data?.before);
+  const after = requireBody ? null : normalizePortalConversationCursor(data?.after);
+  if (before && after) {
+    throw new PortalConversationError(
+      "invalid-argument",
+      "Conversation history and catch-up cursors cannot be combined."
+    );
+  }
+
   return {
     accessMode,
     portalKey,
     organizationId,
     quoteId,
     clientRequestId,
+    before,
+    after,
     body: requireBody ? normalizeBody(data?.body) : ""
+  };
+}
+
+function buildPortalConversationPage(documents = [], { direction = "older" } = {}) {
+  const catchUp = direction === "newer";
+  const bounded = (Array.isArray(documents) ? documents : [])
+    .slice(0, PORTAL_CONVERSATION_PAGE_SIZE + 1);
+  const hasContinuation = bounded.length > PORTAL_CONVERSATION_PAGE_SIZE;
+  const pageDocuments = bounded.slice(0, PORTAL_CONVERSATION_PAGE_SIZE);
+  const projected = pageDocuments
+    .map((document) => projectPortalConversationMessage(document?.data || {}))
+    .filter(Boolean);
+  const messages = catchUp ? projected : projected.reverse();
+  const oldest = catchUp
+    ? pageDocuments[0] || null
+    : pageDocuments[pageDocuments.length - 1] || null;
+  const newest = catchUp
+    ? pageDocuments[pageDocuments.length - 1] || null
+    : pageDocuments[0] || null;
+  const cursor = (document) => document ? {
+    createdAtMs: Number(document.data?.createdAtMs),
+    messageId: normalizeDocumentId(document.id)
+  } : null;
+  return {
+    messages,
+    page: {
+      pageSize: PORTAL_CONVERSATION_PAGE_SIZE,
+      returned: messages.length,
+      hasOlder: catchUp ? false : hasContinuation,
+      hasNewer: catchUp ? hasContinuation : false,
+      oldestCursor: cursor(oldest),
+      newestCursor: cursor(newest)
+    }
   };
 }
 
@@ -343,14 +401,17 @@ module.exports = {
   PORTAL_CONVERSATION_RATE_LIMIT,
   PORTAL_CONVERSATION_RATE_WINDOW_MS,
   PORTAL_CONVERSATION_TOTAL_MESSAGE_LIMIT,
+  PORTAL_CONVERSATION_PAGE_SIZE,
   PortalConversationError,
   assertPortalConversationActivation,
   assertPortalConversationTotal,
   buildPortalConversationActor,
+  buildPortalConversationPage,
   buildPortalConversationMessage,
   buildPortalConversationRateKey,
   buildPortalConversationRequestKey,
   normalizePortalConversationRequest,
+  normalizePortalConversationCursor,
   planPortalConversationRate,
   projectPortalConversationMessage,
   sha256

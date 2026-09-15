@@ -739,6 +739,7 @@ service cloud.firestore {
         "commercialChangeAuthorityEnabled",
         "operationalStaffingAuthorityEnabled",
         "inventoryAuthorityEnabled",
+        "googleCalendarIntegrationEnabled",
         "eventOperatingSpineEnabled",
         "orderId",
         "onboarding"
@@ -762,6 +763,7 @@ service cloud.firestore {
         "commercialChangeAuthorityEnabled",
         "operationalStaffingAuthorityEnabled",
         "inventoryAuthorityEnabled",
+        "googleCalendarIntegrationEnabled",
         "eventOperatingSpineEnabled",
         "orderId",
         "onboarding"
@@ -846,6 +848,12 @@ service cloud.firestore {
     }
 
     match /organizationRoleAuthorityReceipts/{requestId} {
+      allow read, create, update, delete: if false;
+    }
+
+    // Google OAuth state contains a short-lived encrypted verifier and exact
+    // actor/tenant bindings. Only trusted Functions may read or mutate it.
+    match /googleCalendarOAuthStates/{stateId} {
       allow read, create, update, delete: if false;
     }
 
@@ -1110,6 +1118,10 @@ service cloud.firestore {
     }
 
     match /organizations/{orgId}/postEventCloseouts/{closeoutId}/actionReceipts/{receiptId} {
+      allow read, write: if false;
+    }
+
+    match /organizations/{orgId}/postEventCloseouts/{closeoutId}/attendanceReceipts/{receiptId} {
       allow read, write: if false;
     }
 
@@ -1429,6 +1441,32 @@ service cloud.firestore {
     }
 
     match /organizations/{orgId}/kitchenBeoGenerationReceipts/{receiptId} {
+      allow read, write: if false;
+    }
+
+    // Operational note journals and correction receipts can contain private
+    // venue, kitchen, service, and staffing instructions. Staff access only
+    // bounded callable projections; customer and browser reads stay denied.
+    match /organizations/{orgId}/eventOperationalNotes/{quoteId} {
+      allow read, write: if false;
+    }
+
+    match /organizations/{orgId}/eventOperationalNotes/{quoteId}/receipts/{receiptId} {
+      allow read, write: if false;
+    }
+
+    // Calendar connections, external-copy links, and operation receipts can
+    // contain encrypted provider authorization or private reconciliation
+    // evidence. Browser roles use the bounded callable projections only.
+    match /organizations/{orgId}/googleCalendarConnections/{connectionId} {
+      allow read, write: if false;
+    }
+
+    match /organizations/{orgId}/googleCalendarEventLinks/{quoteId} {
+      allow read, write: if false;
+    }
+
+    match /organizations/{orgId}/googleCalendarOperations/{operationId} {
       allow read, write: if false;
     }
 

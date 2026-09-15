@@ -68,7 +68,7 @@ async function signInAsStaff(page) {
   }
   await expect(quoteButton).toBeVisible({ timeout: 45_000 });
   await quoteButton.click();
-  await expect(page.getByLabel(/Event type/i)).toBeVisible({ timeout: 45_000 });
+  await expect(page.getByRole("combobox", { name: /^Event type\b/ })).toBeVisible({ timeout: 45_000 });
 }
 
 test("firebase auth and firestore rules load the organization catalog", async ({ page }) => {
@@ -77,14 +77,14 @@ test("firebase auth and firestore rules load the organization catalog", async ({
   const accountMenu = page.getByRole("menu", { name: "Account" });
   await expect(accountMenu).toContainText(STAFF_EMAIL);
   await expect(accountMenu).toContainText("admin");
-  await expect(page.getByLabel(/Event type/i).locator("option")).toHaveCount(5);
+  await expect(page.getByRole("combobox", { name: /^Event type\b/ }).locator("option")).toHaveCount(5);
 });
 
 test("switching authenticated principals destroys the prior tenant workspace state", async ({ page }) => {
   test.setTimeout(180_000);
   await signInAsStaff(page);
 
-  const eventType = page.getByLabel(/Event type/i);
+  const eventType = page.getByRole("combobox", { name: /^Event type\b/ });
   await eventType.selectOption({ index: 1 });
   expect(await eventType.inputValue()).not.toBe("");
 
@@ -156,7 +156,9 @@ test("switching authenticated principals destroys the prior tenant workspace sta
   if (await restoredGuidedMode.isVisible()) {
     await restoredGuidedMode.click();
   }
-  await expect(page.getByLabel(/Event type/i)).toHaveValue("");
+  await expect(page.getByRole("combobox", { name: "Event type", exact: true })).toHaveValue("", {
+    timeout: 45_000
+  });
   await expect(page.getByRole("textbox", { name: /Your name/i })).toHaveValue("");
   await expect(page.getByRole("textbox", { name: /^Email$/i })).toHaveValue("");
 });

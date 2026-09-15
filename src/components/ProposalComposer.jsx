@@ -2,6 +2,7 @@ import { lazy, Suspense, useEffect, useId, useMemo, useRef, useState } from "rea
 import AdaptiveChoiceField from "./AdaptiveChoiceField";
 import InlineValue from "./ambient/InlineValue";
 import DigitRoll from "./DigitRoll";
+import DeliveryProposal from "./DeliveryProposal";
 import { currency } from "../lib/quoteCalculator";
 import { normalizeBrandLogoUrl } from "../lib/brandLogoUrl";
 import { normalizeProposalDocumentFontScale } from "../lib/proposalDocumentPreferences";
@@ -41,6 +42,70 @@ const PILOT_MARGINS_ENABLED = ["1", "true", "yes", "on"].includes(
 
 const FLASH_CLEAR_MS = 620;
 const ACTIVITY_LOG_LIMIT = 30;
+
+const SAVE_BLOCKER_RECOVERY_TARGETS = Object.freeze({
+  "guest-count": Object.freeze({ domainId: "event", targetSelector: '[data-ambient-action-id="pc-edit-guests"]', activate: true }),
+  "event-type": Object.freeze({ domainId: "event", targetSelector: '#proposal-event-type, [aria-labelledby="proposal-event-type-label"]' }),
+  "event-date": Object.freeze({ domainId: "event", targetSelector: '[data-ambient-action-id="pc-edit-date"]', activate: true }),
+  "event-name": Object.freeze({ domainId: "event", targetSelector: '[data-ambient-action-id="pc-edit-event-name"]', activate: true }),
+  venue: Object.freeze({ domainId: "event", targetSelector: '[data-ambient-action-id="pc-edit-venue"]', activate: true }),
+  "client-name": Object.freeze({ domainId: "customer", targetSelector: '[data-ambient-action-id="pc-edit-client-name"]', activate: true }),
+  "client-email": Object.freeze({ domainId: "customer", targetSelector: '[data-ambient-action-id="pc-edit-client-email"]', activate: true }),
+  "client-email-format": Object.freeze({ domainId: "customer", targetSelector: '[data-ambient-action-id="pc-edit-client-email"]', activate: true }),
+  "menu-selection": Object.freeze({
+    domainId: "experience",
+    targetSelector: '[data-testid="pc-edit-menu"]',
+    activate: true,
+    editor: "menu",
+    focusSelector: "#pc-menu-search"
+  }),
+  "pilot-scenario-review": Object.freeze({
+    domainId: "commercials",
+    targetSelector: '[data-ambient-pilot-scenario-review="available"]'
+  }),
+  "draft-intent-review": Object.freeze({
+    domainId: "experience",
+    targetSelector: '[data-ambient-draft-intent-review="package_menu"]'
+  }),
+  "change-impact-review": Object.freeze({
+    domainId: "commercials",
+    targetSelector: '[data-capability-id="commercial-scenario-workbench"] .csw-review-button'
+  }),
+  "change-impact-authorization": Object.freeze({
+    domainId: "commercials",
+    targetSelector: '[data-capability-id="cwf-15c-commercial-change-authority"]'
+  })
+});
+
+export function buildSaveBlockerRecovery(blocker = {}) {
+  const blockerId = String(blocker?.id || "").trim();
+  const target = SAVE_BLOCKER_RECOVERY_TARGETS[blockerId];
+  return target ? { blockerId, ...target } : null;
+}
+
+function nextUiFrame(callback) {
+  if (typeof window !== "undefined" && typeof window.requestAnimationFrame === "function") {
+    return window.requestAnimationFrame(callback);
+  }
+  return setTimeout(callback, 0);
+}
+
+function focusRecoveryTarget(selector, { activate = false, focusSelector = "" } = {}) {
+  const target = document.querySelector(selector);
+  if (!target) return false;
+  target.scrollIntoView?.({ behavior: "smooth", block: "center" });
+  const focusable = target.matches?.("button, input, select, textarea, [tabindex]")
+    ? target
+    : target.querySelector?.('button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])');
+  focusable?.focus?.({ preventScroll: true });
+  if (activate && typeof focusable?.click === "function") {
+    focusable.click();
+    if (focusSelector) {
+      nextUiFrame(() => document.querySelector(focusSelector)?.focus?.({ preventScroll: true }));
+    }
+  }
+  return true;
+}
 
 const ACTIVITY_FIELD_LABELS = {
   eventTypeId: "Event type",
@@ -445,6 +510,9 @@ export default function ProposalComposer({
   statusNotes = null,
   changeImpactSurface = null,
   livingCommercialTwin = null,
+  deliveryPlanningEvidence = null,
+  deliveryPlanningOperatorId = "",
+  onDeliveryPlanningHandoff = null,
   impactWatch = null,
   isAdmin = false,
   onOpenCatalogPricing = null
@@ -687,6 +755,35 @@ export default function ProposalComposer({
     }
     window.requestAnimationFrame?.(() => {
       document.querySelector(`[data-workbench-panel="${domainId}"]`)?.focus({ preventScroll: true });
+    });
+  };
+
+  const revealSaveBlocker = (blocker) => {
+    const recovery = buildSaveBlockerRecovery(blocker);
+    if (!recovery) return;
+    setPulseOpen(false);
+    openDomain(recovery.domainId);
+    if (recovery.editor === "menu") {
+      const selectedIds = new Set((form.menuItems || []).map(String));
+      const initialGroups = (menuSections || [])
+        .filter((section, index) => index === 0 || (section?.items || [])
+          .some((item) => selectedIds.has(String(item?.id))))
+        .map((section) => String(section?.id ?? section?.name));
+      setOpenMenuGroups(new Set(initialGroups));
+      setMenuEditorOpen(true);
+    }
+    nextUiFrame(() => {
+      focusRecoveryTarget(recovery.targetSelector, {
+        activate: recovery.activate && !recovery.editor,
+        focusSelector: recovery.focusSelector
+      });
+      if (recovery.editor && recovery.focusSelector) {
+        nextUiFrame(() => {
+          const editorTarget = document.querySelector(recovery.focusSelector);
+          editorTarget?.scrollIntoView?.({ behavior: "smooth", block: "center" });
+          editorTarget?.focus?.({ preventScroll: true });
+        });
+      }
     });
   };
 
@@ -1003,9 +1100,17 @@ export default function ProposalComposer({
           <ul>
             {workbench.blockerTargets.map((blocker) => (
               <li key={blocker.id || blocker.message}>
-                <button type="button" onClick={() => openDomain(blocker.domainId)}>
+                <button
+                  type="button"
+                  onClick={() => revealSaveBlocker(blocker)}
+                  disabled={!buildSaveBlockerRecovery(blocker)}
+                >
                   <span>{blocker.message}</span>
-                  <small>Review {workbench.domains.find((domain) => domain.id === blocker.domainId)?.label}</small>
+                  <small>
+                    {buildSaveBlockerRecovery(blocker)
+                      ? `Fix in ${workbench.domains.find((domain) => domain.id === blocker.domainId)?.label}`
+                      : "Waiting for current evidence"}
+                  </small>
                 </button>
               </li>
             ))}
@@ -1160,7 +1265,18 @@ export default function ProposalComposer({
             <ul className="pc-save-blockers" aria-label="Reasons this draft cannot be saved yet">
               {currentSaveBlockers.map((blocker) => (
                 <li key={blocker.id || blocker.message} data-testid="pc-save-blocker">
-                  {blocker.message}
+                  <span>{blocker.message}</span>
+                  {buildSaveBlockerRecovery(blocker) ? (
+                    <button
+                      type="button"
+                      className="pc-save-blocker-action"
+                      onClick={() => revealSaveBlocker(blocker)}
+                      aria-label={`Fix now: ${blocker.message}`}
+                      data-testid={`pc-save-blocker-action-${blocker.id}`}
+                    >
+                      Fix now
+                    </button>
+                  ) : null}
                 </li>
               ))}
             </ul>
@@ -1288,6 +1404,17 @@ export default function ProposalComposer({
           <LivingCommercialTwin {...livingCommercialTwin} />
         </Suspense>
       ) : null}
+
+      <DeliveryProposal
+        form={form}
+        catalog={catalog}
+        settings={settings}
+        editingQuote={editingQuote}
+        staffingEvidence={deliveryPlanningEvidence?.staffing || null}
+        inventoryEvidence={deliveryPlanningEvidence?.inventory || null}
+        operatorId={deliveryPlanningOperatorId}
+        onHandoff={onDeliveryPlanningHandoff}
+      />
 
       <div className="pc-columns">
         <nav className="pc-quote-plan" aria-label="Quote plan" data-testid="commercial-workbench-plan">
@@ -1662,6 +1789,7 @@ export default function ProposalComposer({
                   <label className="pc-quiet-field pc-menu-search">
                     <span className="pc-field-label">Search menu</span>
                     <input
+                      id="pc-menu-search"
                       type="search"
                       value={menuQuery}
                       placeholder="Find a dish…"
@@ -2157,14 +2285,31 @@ export default function ProposalComposer({
         ) : null}
       </div>
 
-      <div className="pc-mobile-bar">
+      <div className="pc-mobile-bar" data-testid="pc-mobile-save-bar">
         <p className="pc-mobile-total">
           <DigitRoll value={currency(investment.total)} />
           {investment.perGuest !== null ? <small>{currency(investment.perGuest)} / guest</small> : null}
         </p>
-        <button type="button" className="pc-cta pc-compact" onClick={() => setPulseOpen(true)}>
-          Review quote →
-        </button>
+        <div className="pc-mobile-actions">
+          <button
+            type="button"
+            className="pc-cta pc-compact"
+            onClick={requestSave}
+            disabled={saveAction.disabled}
+            title={saveAction.disabled && saveDisabledReason ? saveDisabledReason : undefined}
+            data-testid="pc-save-mobile"
+          >
+            {saveAction.label}
+          </button>
+          <button
+            type="button"
+            className="pc-mobile-details"
+            onClick={() => setPulseOpen(true)}
+            data-testid="pc-quote-details-mobile"
+          >
+            Quote details
+          </button>
+        </div>
       </div>
 
       <ClientPreviewDialog

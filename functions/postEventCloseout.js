@@ -21,9 +21,18 @@ const CLOSEOUT_STATE_SET = new Set([
 ]);
 const STAFF_ROLE_SET = new Set(["admin", "sales"]);
 const ACTION_SET = new Set(["review", "reopen"]);
+const ACTUAL_ATTENDANCE_ACTION_SET = new Set(["record", "correct"]);
+const ACTUAL_ATTENDANCE_SOURCE_TYPE_SET = new Set([
+  "staff_observed",
+  "customer_reported",
+  "venue_reported",
+  "imported_record"
+]);
+const ACTUAL_ATTENDANCE_COUNT_MAX = 400;
 const OPAQUE_ID_PATTERN = /^[^\s/?#\\\u0000]{1,256}$/u;
 const REQUEST_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:@-]{19,159}$/;
 const DATE_ONLY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+const ACTUAL_ATTENDANCE_RECEIPT_PATTERN = /^closeout_attendance_[a-f0-9]{48}$/;
 
 class PostEventCloseoutError extends Error {
   constructor(code, message) {
@@ -46,6 +55,33 @@ function deepFreeze(value) {
   Object.freeze(value);
   Object.values(value).forEach(deepFreeze);
   return value;
+}
+
+function canonical(value) {
+  if (Array.isArray(value)) return value.map(canonical);
+  if (isRecord(value)) {
+    return Object.fromEntries(
+      Object.keys(value).sort().map((key) => [key, canonical(value[key])])
+    );
+  }
+  return value;
+}
+
+function digestValue(value) {
+  return createHash("sha256").update(JSON.stringify(canonical(value))).digest("hex");
+}
+
+function assertExactKeys(value, expected, label) {
+  if (
+    !isRecord(value)
+    || Object.keys(value).length !== expected.length
+    || expected.some((key) => !Object.hasOwn(value, key))
+  ) {
+    throw new PostEventCloseoutError(
+      "invalid-argument",
+      `${label} contains missing or unsupported fields.`
+    );
+  }
 }
 
 function opaqueId(value, label) {
@@ -434,11 +470,386 @@ function buildPostEventCloseoutRecord({
     policy,
     state: derivePostEventCloseoutState({ reviewItems, policy }),
     reviewItems,
+    actualAttendance: null,
     completedAtISO: "",
     completedBy: null,
     createdAtISO,
     createdBy,
     updatedAtISO: createdAtISO
+  });
+}
+
+function normalizeActualAttendanceRecord(value) {
+  if (value === null || value === undefined) return null;
+  assertExactKeys(value, [
+    "schemaVersion",
+    "revision",
+    "count",
+    "sourceType",
+    "note",
+    "sourceReferenceId",
+    "recordedAtISO",
+    "recordedBy",
+    "lastReceiptId"
+  ], "Actual attendance record");
+  const revision = Number(value.revision);
+  const count = Number(value.count);
+  const sourceType = text(value.sourceType).toLowerCase();
+  const note = text(value.note);
+  const sourceReferenceId = opaqueId(
+    value.sourceReferenceId,
+    "actual attendance sourceReferenceId"
+  );
+  const lastReceiptId = opaqueId(
+    value.lastReceiptId,
+    "actual attendance lastReceiptId"
+  );
+  if (
+    Number(value.schemaVersion) !== POST_EVENT_CLOSEOUT_SCHEMA_VERSION
+    || !Number.isSafeInteger(revision)
+    || revision < 1
+    || !Number.isSafeInteger(count)
+    || count < 1
+    || count > ACTUAL_ATTENDANCE_COUNT_MAX
+    || !ACTUAL_ATTENDANCE_SOURCE_TYPE_SET.has(sourceType)
+    || !note
+    || note.length > 240
+    || /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/u.test(note)
+    || !ACTUAL_ATTENDANCE_RECEIPT_PATTERN.test(sourceReferenceId)
+    || sourceReferenceId !== lastReceiptId
+  ) {
+    throw new PostEventCloseoutError(
+      "failed-precondition",
+      "The retained actual-attendance evidence is invalid."
+    );
+  }
+  return {
+    schemaVersion: POST_EVENT_CLOSEOUT_SCHEMA_VERSION,
+    revision,
+    count,
+    sourceType,
+    note,
+    sourceReferenceId,
+    recordedAtISO: validISO(value.recordedAtISO, "actual attendance recordedAtISO"),
+    recordedBy: normalizeActor(value.recordedBy, "actual attendance recorder"),
+    lastReceiptId
+  };
+}
+
+function normalizePostEventActualAttendanceRequest(input = {}) {
+  assertExactKeys(input, [
+    "organizationId",
+    "quoteId",
+    "closeoutId",
+    "action",
+    "requestId",
+    "expectedRevision",
+    "count",
+    "sourceType",
+    "note"
+  ], "Actual attendance request");
+  const organizationId = opaqueId(input.organizationId, "organizationId");
+  const quoteId = opaqueId(input.quoteId, "quoteId");
+  const closeoutId = opaqueId(input.closeoutId, "closeoutId");
+  const action = text(input.action).toLowerCase();
+  const requestId = text(input.requestId);
+  const expectedRevision = Number(input.expectedRevision);
+  const count = Number(input.count);
+  const sourceType = text(input.sourceType).toLowerCase();
+  const note = text(input.note);
+  if (!ACTUAL_ATTENDANCE_ACTION_SET.has(action)) {
+    throw new PostEventCloseoutError(
+      "invalid-argument",
+      "Actual attendance action must be record or correct."
+    );
+  }
+  if (!REQUEST_ID_PATTERN.test(requestId) || /^[^@\s]+@[^@\s]+$/.test(requestId)) {
+    throw new PostEventCloseoutError(
+      "invalid-argument",
+      "Actual attendance requestId is invalid."
+    );
+  }
+  if (!Number.isSafeInteger(expectedRevision) || expectedRevision < 0) {
+    throw new PostEventCloseoutError(
+      "invalid-argument",
+      "Actual attendance requires a nonnegative expected revision."
+    );
+  }
+  if (!Number.isSafeInteger(count) || count < 1 || count > ACTUAL_ATTENDANCE_COUNT_MAX) {
+    throw new PostEventCloseoutError(
+      "invalid-argument",
+      `Actual attendance must be a whole number from 1 to ${ACTUAL_ATTENDANCE_COUNT_MAX}.`
+    );
+  }
+  if (!ACTUAL_ATTENDANCE_SOURCE_TYPE_SET.has(sourceType)) {
+    throw new PostEventCloseoutError(
+      "invalid-argument",
+      "Choose a supported actual-attendance source."
+    );
+  }
+  if (
+    !note
+    || note.length > 240
+    || /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/u.test(note)
+  ) {
+    throw new PostEventCloseoutError(
+      "invalid-argument",
+      "Actual attendance requires a plain-text source note of 240 characters or fewer."
+    );
+  }
+  const receiptId = `closeout_attendance_${digestValue({
+    organizationId,
+    closeoutId,
+    requestId
+  }).slice(0, 48)}`;
+  return deepFreeze({
+    organizationId,
+    quoteId,
+    closeoutId,
+    action,
+    requestId,
+    expectedRevision,
+    count,
+    sourceType,
+    note,
+    receiptId
+  });
+}
+
+const ACTUAL_ATTENDANCE_RECEIPT_KEYS = Object.freeze([
+  "schemaVersion",
+  "receiptId",
+  "requestId",
+  "organizationId",
+  "quoteId",
+  "closeoutId",
+  "sourceVersionId",
+  "acceptanceReceiptId",
+  "action",
+  "expectedRevision",
+  "priorRevision",
+  "resultRevision",
+  "count",
+  "sourceType",
+  "note",
+  "recordedAtISO",
+  "recordedBy",
+  "commandDigest",
+  "priorActualAttendance",
+  "resultActualAttendance"
+]);
+
+function verifyPostEventActualAttendanceReceipt(value) {
+  const receipt = isRecord(value) ? value : {};
+  const body = Object.fromEntries(
+    ACTUAL_ATTENDANCE_RECEIPT_KEYS.map((key) => [key, receipt[key]])
+  );
+  const request = normalizePostEventActualAttendanceRequest({
+    organizationId: body.organizationId,
+    quoteId: body.quoteId,
+    closeoutId: body.closeoutId,
+    action: body.action,
+    requestId: body.requestId,
+    expectedRevision: body.expectedRevision,
+    count: body.count,
+    sourceType: body.sourceType,
+    note: body.note
+  });
+  const actor = normalizeActor(body.recordedBy, "actual attendance receipt actor");
+  const prior = normalizeActualAttendanceRecord(body.priorActualAttendance);
+  const result = normalizeActualAttendanceRecord(body.resultActualAttendance);
+  const receiptDigest = text(receipt.receiptDigest);
+  if (
+    Number(body.schemaVersion) !== POST_EVENT_CLOSEOUT_SCHEMA_VERSION
+    || body.receiptId !== request.receiptId
+    || !ACTUAL_ATTENDANCE_RECEIPT_PATTERN.test(body.receiptId)
+    || body.commandDigest !== digestValue({ request, actor })
+    || body.priorRevision !== (prior?.revision || 0)
+    || body.expectedRevision !== body.priorRevision
+    || body.resultRevision !== body.priorRevision + 1
+    || result.revision !== body.resultRevision
+    || result.count !== body.count
+    || result.sourceType !== body.sourceType
+    || result.note !== body.note
+    || result.lastReceiptId !== body.receiptId
+    || result.sourceReferenceId !== body.receiptId
+    || result.recordedAtISO !== validISO(body.recordedAtISO, "receipt recordedAtISO")
+    || digestValue(result.recordedBy) !== digestValue(actor)
+    || !text(body.sourceVersionId)
+    || !text(body.acceptanceReceiptId)
+    || !/^[a-f0-9]{64}$/.test(receiptDigest)
+    || receiptDigest !== digestValue(body)
+  ) {
+    throw new PostEventCloseoutError(
+      "failed-precondition",
+      "The actual-attendance receipt failed integrity validation."
+    );
+  }
+  return deepFreeze({ ...body, recordedBy: actor, receiptDigest });
+}
+
+function planPostEventActualAttendance({
+  request: input,
+  record,
+  source,
+  actor,
+  nowISO,
+  existingReceipt = null
+} = {}) {
+  const request = normalizePostEventActualAttendanceRequest(input);
+  if (existingReceipt) {
+    const receipt = verifyPostEventActualAttendanceReceipt(existingReceipt);
+    if (
+      receipt.receiptId !== request.receiptId
+      || receipt.commandDigest !== digestValue({
+        request,
+        actor: receipt.recordedBy
+      })
+    ) {
+      throw new PostEventCloseoutError(
+        "already-exists",
+        "The actual-attendance request identity belongs to another immutable command."
+      );
+    }
+    if (record || source) {
+      const closeout = isRecord(record) ? record : {};
+      assertPostEventCloseoutMatchesSource(closeout, source);
+      const retained = normalizeActualAttendanceRecord(closeout.actualAttendance);
+      if (
+        receipt.sourceVersionId !== text(source?.sourceVersionId)
+        || receipt.acceptanceReceiptId !== text(source?.acceptanceReceiptId)
+        || digestValue(retained) !== digestValue(receipt.resultActualAttendance)
+      ) {
+        throw new PostEventCloseoutError(
+          "failed-precondition",
+          "The retained actual attendance does not match its immutable receipt."
+        );
+      }
+    }
+    return deepFreeze({
+      kind: "reconcile",
+      idempotent: true,
+      request,
+      nextRecord: null,
+      receipt
+    });
+  }
+
+  const closeout = isRecord(record) ? record : {};
+  assertPostEventCloseoutMatchesSource(closeout, source);
+  if (
+    text(closeout.organizationId) !== request.organizationId
+    || text(closeout.quoteId) !== request.quoteId
+    || text(closeout.closeoutId) !== request.closeoutId
+  ) {
+    throw new PostEventCloseoutError(
+      "permission-denied",
+      "The actual-attendance command is outside the reviewed closeout scope."
+    );
+  }
+  if (text(closeout.policy?.state) !== "configured") {
+    throw new PostEventCloseoutError(
+      "failed-precondition",
+      "Configure a valid tenant business time zone before recording actual attendance."
+    );
+  }
+  const recordedAtISO = validISO(nowISO, "recordedAtISO");
+  const recordedBy = normalizeActor(actor, "actual attendance recorder");
+  const tenantDate = calendarDateAtISO(recordedAtISO, closeout.policy?.timeZone);
+  const dueDate = dateOnly(closeout.dueDate, "closeout dueDate");
+  if (tenantDate < dueDate) {
+    throw new PostEventCloseoutError(
+      "failed-precondition",
+      `Actual attendance can be recorded when post-event closeout begins on ${dueDate}.`
+    );
+  }
+  const priorActualAttendance = normalizeActualAttendanceRecord(
+    closeout.actualAttendance
+  );
+  const priorRevision = priorActualAttendance?.revision || 0;
+  if (request.expectedRevision !== priorRevision) {
+    throw new PostEventCloseoutError(
+      "aborted",
+      "Actual attendance changed. Refresh the closeout before trying again."
+    );
+  }
+  if (request.action === "record" && priorActualAttendance) {
+    throw new PostEventCloseoutError(
+      "failed-precondition",
+      "Actual attendance is already recorded. Use a correction with the current revision."
+    );
+  }
+  if (request.action === "correct" && !priorActualAttendance) {
+    throw new PostEventCloseoutError(
+      "failed-precondition",
+      "Record actual attendance before attempting a correction."
+    );
+  }
+  if (
+    request.action === "correct"
+    && priorActualAttendance.count === request.count
+    && priorActualAttendance.sourceType === request.sourceType
+    && priorActualAttendance.note === request.note
+  ) {
+    throw new PostEventCloseoutError(
+      "failed-precondition",
+      "The correction does not change the retained actual-attendance evidence."
+    );
+  }
+  if (
+    priorActualAttendance?.recordedAtISO
+    && recordedAtISO < priorActualAttendance.recordedAtISO
+  ) {
+    throw new PostEventCloseoutError(
+      "failed-precondition",
+      "Server recording time precedes the retained actual-attendance evidence."
+    );
+  }
+  const resultActualAttendance = {
+    schemaVersion: POST_EVENT_CLOSEOUT_SCHEMA_VERSION,
+    revision: priorRevision + 1,
+    count: request.count,
+    sourceType: request.sourceType,
+    note: request.note,
+    sourceReferenceId: request.receiptId,
+    recordedAtISO,
+    recordedBy,
+    lastReceiptId: request.receiptId
+  };
+  const nextRecord = {
+    ...closeout,
+    actualAttendance: resultActualAttendance,
+    updatedAtISO: recordedAtISO
+  };
+  const body = {
+    schemaVersion: POST_EVENT_CLOSEOUT_SCHEMA_VERSION,
+    receiptId: request.receiptId,
+    requestId: request.requestId,
+    organizationId: request.organizationId,
+    quoteId: request.quoteId,
+    closeoutId: request.closeoutId,
+    sourceVersionId: text(source.sourceVersionId),
+    acceptanceReceiptId: text(source.acceptanceReceiptId),
+    action: request.action,
+    expectedRevision: request.expectedRevision,
+    priorRevision,
+    resultRevision: resultActualAttendance.revision,
+    count: request.count,
+    sourceType: request.sourceType,
+    note: request.note,
+    recordedAtISO,
+    recordedBy,
+    commandDigest: digestValue({ request, actor: recordedBy }),
+    priorActualAttendance,
+    resultActualAttendance
+  };
+  const receipt = { ...body, receiptDigest: digestValue(body) };
+  return deepFreeze({
+    kind: request.action,
+    idempotent: false,
+    request,
+    nextRecord,
+    receipt
   });
 }
 
@@ -826,9 +1237,12 @@ module.exports = {
   calendarDateAtISO,
   derivePostEventCloseoutState,
   normalizeIanaTimeZone,
+  normalizePostEventActualAttendanceRequest,
   normalizePostEventCloseoutActionRequest,
   normalizePostEventCloseoutPolicyRefreshRequest,
   planPostEventCloseoutAction,
+  planPostEventActualAttendance,
   planPostEventCloseoutPolicyRefresh,
-  resolvePostEventCloseoutSource
+  resolvePostEventCloseoutSource,
+  verifyPostEventActualAttendanceReceipt
 };

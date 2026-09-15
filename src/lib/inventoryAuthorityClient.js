@@ -2291,38 +2291,54 @@ function normalizePreviewRequirement(value, projection) {
   return deepFreeze(canonicalClone(value, "Event ingredient preview requirement"));
 }
 
-export async function previewEventInventory(input = {}) {
-  const payload = normalizeEventPreviewInput(input);
-  const call = httpsCallable(cloudFunctions, INVENTORY_AUTHORITY_CALLABLES.previewEvent);
-  const response = await call(canonicalClone(payload, "Event ingredient preview request"));
-  const value = response?.data;
+export function normalizeEventInventoryPreviewResult(
+  value,
+  expectedOrganizationId,
+  expectedQuoteId,
+  expectedQuoteRevisionId
+) {
+  const organizationId = identifier(expectedOrganizationId, "expected organizationId", "data-loss");
+  const quoteId = identifier(expectedQuoteId, "expected quoteId", "data-loss");
+  const quoteRevisionId = identifier(expectedQuoteRevisionId, "expected quote revision", "data-loss");
   exactKeys(value, [
     "ok", "schemaVersion", "organizationId", "quoteId", "quoteRevisionId", "preview",
     "requirementRevision", "ingredientLabels", "projection"
   ], "Event ingredient preview result", "data-loss");
   if (value.ok !== true || value.schemaVersion !== INVENTORY_AUTHORITY_SCHEMA_VERSION
-    || value.organizationId !== payload.organizationId || value.quoteId !== payload.quoteId
-    || value.quoteRevisionId !== payload.quoteRevisionId || value.preview !== true) {
+    || value.organizationId !== organizationId || value.quoteId !== quoteId
+    || value.quoteRevisionId !== quoteRevisionId || value.preview !== true) {
     throw clientError("data-loss", "Event ingredient preview crossed its authority boundary.");
   }
-  const projection = normalizeEventProjection(value.projection, payload.organizationId, payload.quoteId, {
+  const projection = normalizeEventProjection(value.projection, organizationId, quoteId, {
     persisted: false,
     ingredientLabels: value.ingredientLabels
   });
-  if (projection.quoteRevisionId !== payload.quoteRevisionId) {
+  if (projection.quoteRevisionId !== quoteRevisionId) {
     throw clientError("data-loss", "Event ingredient preview returned a different quote revision.");
   }
   const requirementRevision = normalizePreviewRequirement(value.requirementRevision, projection);
   return deepFreeze({
     ok: true,
     schemaVersion: INVENTORY_AUTHORITY_SCHEMA_VERSION,
-    organizationId: payload.organizationId,
-    quoteId: payload.quoteId,
-    quoteRevisionId: payload.quoteRevisionId,
+    organizationId,
+    quoteId,
+    quoteRevisionId,
     preview: true,
     requirementRevision,
     projection
   });
+}
+
+export async function previewEventInventory(input = {}) {
+  const payload = normalizeEventPreviewInput(input);
+  const call = httpsCallable(cloudFunctions, INVENTORY_AUTHORITY_CALLABLES.previewEvent);
+  const response = await call(canonicalClone(payload, "Event ingredient preview request"));
+  return normalizeEventInventoryPreviewResult(
+    response?.data,
+    payload.organizationId,
+    payload.quoteId,
+    payload.quoteRevisionId
+  );
 }
 
 export function subscribeToEventIngredientProjection(input = {}) {

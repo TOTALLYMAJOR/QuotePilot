@@ -56,8 +56,29 @@ describe("Commercial Change Authority callable integration", () => {
     expect(simulation).toContain("buildTrustedQuoteEditDocuments({");
     expect(simulation).toContain("commercialChangeAuthority.simulate({");
     expect(simulation).toContain("tx.create(receiptRef");
+    expect(simulation).toContain("inventoryAuthorityRuntime.previewProjectedEventInventory({");
+    expect(simulation).toContain("projectedVersion: result.projectedVersion");
+    expect(simulation).toContain("outputRows: data.eventIngredientOutputs");
+    expect(simulation).toContain('authority: "inventory_read_only_observation"');
+    expect(simulation).toContain('state: "not_requested"');
+    expect(simulation).toContain('state: "unavailable"');
+    expect(simulation).toContain("inventoryObservation,");
+    expect(simulation).toContain('data.staffingObservationVersion === "v1"');
+    expect(simulation).toContain("tx.get(refs.staffingPlanRef)");
+    expect(simulation).toContain("buildProjectedOperationalStaffingObservation({");
+    expect(simulation).toContain("projectedVersion: projectedEditDocuments.version");
+    expect(simulation).toContain('authority: "operational_staffing_read_only_observation"');
+    expect(simulation).toContain("...(staffingObservation ? { staffingObservation } : {})");
     expect(simulation).toContain("simulation: projectCommercialChangeSimulation");
     expect(simulation).toContain("persistedEffects: projectCommercialChangePersistedEffects({");
+    expect(simulation.indexOf("inventoryAuthorityRuntime.previewProjectedEventInventory({"))
+      .toBeGreaterThan(simulation.indexOf("await db.runTransaction(async (tx) =>"));
+    const receiptWrite = simulation.slice(
+      simulation.indexOf("tx.create(receiptRef"),
+      simulation.indexOf("coordinator?.commit()")
+    );
+    expect(receiptWrite).not.toContain("inventoryObservation");
+    expect(receiptWrite).not.toContain("staffingObservation");
 
     const approvalRequest = sourceBetween(
       "exports.requestCommercialQuoteChangeAuthorization =",

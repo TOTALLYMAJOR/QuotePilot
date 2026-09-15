@@ -53,7 +53,7 @@ async function advanceBlankOwnerToPopulatedMenu(page) {
   if (await guidedMode.isVisible()) {
     await guidedMode.click();
   }
-  const eventType = page.getByLabel(/Event type/i);
+  const eventType = page.getByRole("combobox", { name: /^Event type\b/ });
   await eventType.selectOption("wedding-events");
   await page.getByLabel(/Event date/i).fill("2026-10-17");
   await page.getByRole("spinbutton", { name: /Guests \(max 400\)/i }).fill("80");

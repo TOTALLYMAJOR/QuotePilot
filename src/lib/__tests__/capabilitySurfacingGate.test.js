@@ -299,7 +299,14 @@ describe("capability surfacing delivery gate", () => {
 
   test("inventories every explicit Functions export without swallowing later declarations", () => {
     const currentExports = parseFunctionExports(functionsEntrypointSource);
-    expect(currentExports).toHaveLength(142);
+    expect(currentExports).toHaveLength(150);
+    expect(currentExports).toContain("functions/index.js#getEventOperationalNotesSnapshot");
+    expect(currentExports).toContain("functions/index.js#applyEventOperationalNoteCommand");
+    expect(currentExports).toContain("functions/index.js#getGoogleCalendarStatus");
+    expect(currentExports).toContain("functions/index.js#startGoogleCalendarConnection");
+    expect(currentExports).toContain("functions/index.js#googleCalendarOAuthCallback");
+    expect(currentExports).toContain("functions/index.js#applyGoogleCalendarEventCommand");
+    expect(currentExports).toContain("functions/index.js#disconnectGoogleCalendar");
     expect(currentExports).toContain("functions/index.js#getInventoryWorkspace");
     expect(currentExports).toContain("functions/index.js#applyInventoryCommand");
     expect(currentExports).toContain("functions/index.js#previewEventInventory");
@@ -308,6 +315,7 @@ describe("capability surfacing delivery gate", () => {
     expect(currentExports).toContain("functions/index.js#invalidateEventIngredientsOnMenuCostChange");
     expect(currentExports).toContain("functions/index.js#getEventOperatingSnapshot");
     expect(currentExports).toContain("functions/index.js#applyEventOperatingCommand");
+    expect(currentExports).toContain("functions/index.js#recordPostEventActualAttendance");
     expect(currentExports).toContain("functions/index.js#getEventOperatingWorkSnapshot");
     expect(currentExports).toContain("functions/index.js#applyEventOperatingWorkCommand");
     expect(currentExports).toContain("functions/index.js#getEventOperatingActualsSnapshot");

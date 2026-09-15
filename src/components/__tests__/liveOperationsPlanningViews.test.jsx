@@ -197,6 +197,9 @@ describe("EventPlanningView recovery journeys", () => {
     expect(markup).toContain('data-execution-surface="event-focus"');
     expect(markup).toContain('aria-label="Current commitment"');
     expect(markup).toContain("Event plan");
+    expect(markup).toContain("Priced guests");
+    expect(markup).toContain("Guest-count source");
+    expect(markup).toContain("96 priced guests · revision revision-4");
     expect(markup).toContain("Saved total");
     expect(markup).toContain("Payment context");
     expect(markup).toContain("Version 4");
@@ -264,6 +267,92 @@ describe("EventPlanningView recovery journeys", () => {
     expect(markup).not.toContain("Ingredient demand is not planned");
     expect(markup).not.toContain("Review ingredient plan");
     expect(markup).not.toContain(">Replay</button>");
+  });
+
+  test("shows exact-source closeout attendance without promoting it into live phase or readiness", () => {
+    const receiptId = `closeout_attendance_${"a".repeat(48)}`;
+    const markup = renderToStaticMarkup(
+      <EventPlanningView
+        snapshot={snapshot({
+          quotes: [{
+            id: "event-a",
+            organizationId: "org-a",
+            status: "booked",
+            activeVersionId: "revision-a",
+            acceptanceReceipt: { receiptId: "acceptance-a" },
+            event: { name: "Available event", date: "2027-09-12", guests: 118 },
+            workflow: {
+              postEventCloseout: {
+                sourceVersionId: "revision-a",
+                acceptanceReceiptId: "acceptance-a",
+                actualAttendance: {
+                  schemaVersion: 1,
+                  revision: 1,
+                  count: 116,
+                  sourceType: "venue_reported",
+                  note: "Venue captain reconciled the final door count.",
+                  sourceReferenceId: receiptId,
+                  recordedAtISO: "2027-09-20T15:30:00.000Z",
+                  recordedBy: { email: "owner@example.test", role: "admin" },
+                  lastReceiptId: receiptId
+                }
+              }
+            }
+          }]
+        })}
+        routeMode="live"
+        quoteId="event-a"
+      />
+    );
+
+    expect(markup).toContain('data-actual-attendance-state="recorded"');
+    expect(markup).toContain("116 actual guests recorded");
+    expect(markup).toContain("118 priced guests · revision revision-a");
+    expect(markup).toContain(receiptId);
+    expect(markup).toContain("does not establish live phase");
+    expect(markup).toContain("Unknown / unavailable");
+    expect(markup).not.toContain("Operationally ready");
+  });
+
+  test("withholds an actual count when the retained closeout belongs to another accepted source", () => {
+    const receiptId = `closeout_attendance_${"b".repeat(48)}`;
+    const markup = renderToStaticMarkup(
+      <EventPlanningView
+        snapshot={snapshot({
+          quotes: [{
+            id: "event-a",
+            status: "booked",
+            activeVersionId: "revision-current",
+            acceptanceReceipt: { receiptId: "acceptance-current" },
+            event: { name: "Available event", date: "2027-09-12", guests: 118 },
+            workflow: {
+              postEventCloseout: {
+                sourceVersionId: "revision-old",
+                acceptanceReceiptId: "acceptance-old",
+                actualAttendance: {
+                  schemaVersion: 1,
+                  revision: 1,
+                  count: 116,
+                  sourceType: "staff_observed",
+                  note: "Retained historical count.",
+                  sourceReferenceId: receiptId,
+                  recordedAtISO: "2027-09-20T15:30:00.000Z",
+                  recordedBy: { email: "owner@example.test", role: "admin" },
+                  lastReceiptId: receiptId
+                }
+              }
+            }
+          }]
+        })}
+        routeMode="live"
+        quoteId="event-a"
+      />
+    );
+
+    expect(markup).toContain('data-actual-attendance-state="stale"');
+    expect(markup).toContain("Actual attendance source needs review");
+    expect(markup).toContain("revision-old");
+    expect(markup).not.toContain("116 actual guests recorded");
   });
 
   test("mounts ingredient usage from its independent inventory gate without requiring Event Operating Spine", () => {

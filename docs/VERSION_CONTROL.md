@@ -1,6 +1,6 @@
 # Version Control Playbook
 
-Last updated: 2026-09-13 19:09:08 CDT
+Last updated: 2026-09-14 08:30:32 CDT
 
 ## Goals
 - Keep `main` stable and deployable.
@@ -250,6 +250,11 @@ all-surface receipt cannot stand in for a newer backend deployment.
    is not passed; blocked is not N/A and prevents production qualification.
    Candidate receipt filenames include both target and profile so same-SHA
    safe-off and bounded positive evidence cannot overwrite one another.
+   Firebase candidate preflight must verify enabled metadata for every secret
+   bound by the current Functions source before it reserves that immutable
+   receipt; it never reads or creates secret values. If a reserved attempt
+   becomes `partial`, preserve it without replacement or retry and correct the
+   failure on a fresh source SHA with new exact-head CI evidence.
    `npm run release:uat:items -- --target <profile> --sms-provider <provider>`
    remains the all-positive target contract. The exact-main v4 attestation
    accepts only an eligible profile's complete set, binds the profile and its

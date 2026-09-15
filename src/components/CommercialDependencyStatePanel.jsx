@@ -253,22 +253,50 @@ function nextActionForInvalidation(invalidation) {
     return "Complete the dependent decision and record the staff rationale below.";
   }
   if (invalidation.nodeId === "artifact.kitchen_beo") {
-    return "Generate a CURRENT Kitchen BEO, then reconcile this exact invalidation.";
+    return "Review the current Kitchen BEO and generate a revision-bound artifact if this evidence is stale.";
   }
   if (invalidation.nodeId === "projection.customer_decision_center") {
     return "Confirm the server projection matches the active revision, then reconcile.";
   }
-  if (["artifact.contract", "artifact.production_plan"].includes(invalidation.nodeId)) {
+  if (invalidation.nodeId === "artifact.production_plan") {
+    return "Review the exact event checklist and update only the work affected by this change.";
+  }
+  if (invalidation.nodeId === "artifact.contract") {
     return "Regenerate this artifact with revision-bound evidence before reconciliation when an artifact already exists.";
   }
   return "Complete the trusted adapter requirement for this dependency before reconciliation.";
+}
+
+function recoveryActionForInvalidation(invalidation, {
+  onOpenKitchenBeo,
+  onOpenProductionChecklist
+}) {
+  if (invalidation.nodeId === "artifact.kitchen_beo" && typeof onOpenKitchenBeo === "function") {
+    return {
+      label: "Review Kitchen BEO",
+      action: onOpenKitchenBeo,
+      actionId: "review-kitchen-beo"
+    };
+  }
+  if (
+    invalidation.nodeId === "artifact.production_plan"
+    && typeof onOpenProductionChecklist === "function"
+  ) {
+    return {
+      label: "Open production checklist",
+      action: onOpenProductionChecklist,
+      actionId: "review-production-checklist"
+    };
+  }
+  return null;
 }
 
 function DependencyInvalidation({
   invalidation,
   checked,
   disabled,
-  onToggle
+  onToggle,
+  recoveryAction
 }) {
   const label = nodeLabel(invalidation.nodeId);
   const classification = invalidation.classification === "STALE"
@@ -297,6 +325,20 @@ function DependencyInvalidation({
           <small>{nextActionForInvalidation(invalidation)}</small>
         </span>
       </label>
+      {recoveryAction && (
+        <div className="workspace-inline-actions">
+          <button
+            type="button"
+            className="ghost compact"
+            data-capability-action={recoveryAction.actionId}
+            data-commercial-node-id={invalidation.nodeId}
+            onClick={() => recoveryAction.action()}
+          >
+            {recoveryAction.label}
+          </button>
+          <small>Opens the owning workspace; reconciliation remains a separate reviewed action.</small>
+        </div>
+      )}
       <details className="commercial-dependency-provenance">
         <summary>Exact provenance</summary>
         <dl>
@@ -408,7 +450,9 @@ export default function CommercialDependencyStatePanel({
   quoteId = "",
   quoteNumber = "",
   available = true,
-  canReconcile = true
+  canReconcile = true,
+  onOpenKitchenBeo,
+  onOpenProductionChecklist
 }) {
   const headingId = useId();
   const receiptHeadingId = useId();
@@ -774,6 +818,10 @@ export default function CommercialDependencyStatePanel({
                 checked={selectedIds.includes(invalidation.invalidationId)}
                 disabled={selectionLocked}
                 onToggle={toggleInvalidation}
+                recoveryAction={recoveryActionForInvalidation(invalidation, {
+                  onOpenKitchenBeo,
+                  onOpenProductionChecklist
+                })}
               />
             ))}
           </ul>

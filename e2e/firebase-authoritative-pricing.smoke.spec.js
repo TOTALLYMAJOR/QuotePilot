@@ -17,29 +17,33 @@ async function signInAsStaff(page) {
   await expect(quoteButton).toBeVisible({ timeout: 45_000 });
   await quoteButton.click();
   const guidedMode = page.getByRole("button", { name: "Guided mode" });
-  if (await guidedMode.isVisible()) {
-    await guidedMode.click();
-  }
-  await expect(page.getByLabel(/Event type/i)).toBeVisible({ timeout: 45_000 });
+  const eventType = page.getByRole("combobox", { name: "Event type", exact: true });
+  await expect(page.getByTestId("proposal-composer")).toBeVisible({ timeout: 45_000 });
+  await expect(guidedMode).toBeVisible({ timeout: 45_000 });
+  await guidedMode.click();
+  await expect(page.getByRole("button", { name: "Composer view", exact: true })).toBeVisible({
+    timeout: 45_000
+  });
+  await expect(eventType).toBeVisible({ timeout: 45_000 });
 }
 
 async function fillRequiredQuoteFields(page) {
-  const eventType = page.getByLabel(/Event type/i);
+  const eventType = page.getByRole("combobox", { name: "Event type", exact: true });
   const optionCount = await eventType.locator("option").count();
   if (optionCount > 1) {
     await eventType.selectOption({ index: 1 });
   }
 
-  await page.getByLabel(/Event date/i).fill("2026-09-12");
-  await page.getByLabel(/Start time/i).fill("19:00");
-  await page.getByRole("spinbutton", { name: /Event hours/i }).fill("5");
+  await page.locator('input[data-ambient-field="date"]').fill("2026-09-12");
+  await page.locator('input[data-ambient-field="time"]').fill("19:00");
+  await page.getByRole("spinbutton", { name: "Event hours", exact: true }).fill("5");
   await page.getByRole("spinbutton", { name: /Guests \(max 400\)/i }).fill("96");
-  await page.getByRole("textbox", { name: /Event name/i }).fill("Authoritative Pricing E2E");
-  await page.getByRole("textbox", { name: /Venue/i }).first().fill("Birmingham Authority Hall");
-  await page.getByRole("textbox", { name: /Venue address/i }).fill("500 Authority Ave, Birmingham, AL");
-  await page.getByRole("textbox", { name: /Your name/i }).fill("E2E Admin");
-  await page.getByRole("textbox", { name: /Phone/i }).fill("205-555-0196");
-  await page.getByRole("textbox", { name: /Email/i }).fill("client@example.com");
+  await page.getByRole("textbox", { name: "Event name", exact: true }).fill("Authoritative Pricing E2E");
+  await page.getByRole("textbox", { name: "Venue", exact: true }).fill("Birmingham Authority Hall");
+  await page.getByRole("textbox", { name: "Venue address", exact: true }).fill("500 Authority Ave, Birmingham, AL");
+  await page.getByRole("textbox", { name: "Your name", exact: true }).fill("E2E Admin");
+  await page.getByRole("textbox", { name: "Phone", exact: true }).fill("205-555-0196");
+  await page.getByRole("textbox", { name: "Email", exact: true }).fill("client@example.com");
 }
 
 async function advanceToSave(page, saveLabel = "Save draft") {

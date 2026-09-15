@@ -346,7 +346,10 @@ const EMPTY_CHANGE_IMPACT_PREVIEW = Object.freeze({
   applyOutcome: null,
   catalogRevision: null,
   appliedQuote: null,
-  workbenchRequest: null
+  workbenchRequest: null,
+  inventoryObservation: null,
+  inventoryScenarioFingerprint: "",
+  staffingObservation: null
 });
 const EMPTY_EVENT_INGREDIENT_PREVIEW_INPUT = Object.freeze({ valid: false, selections: [] });
 
@@ -1580,22 +1583,67 @@ function LegacyAppCore({
     form.chefs,
     form.servers
   ]);
+  const proposedStaffingEventWindowState = useMemo(() => (
+    ["date", "time", "hours"].every((field) => (
+      String(editingQuote.baseForm?.[field] ?? "") === String(form[field] ?? "")
+    )) ? "current" : "changed_unchecked"
+  ), [editingQuote.baseForm, form.date, form.hours, form.time]);
+  const authoritativeStaffingObservation = changeImpactPreview.formKey === currentChangeImpactFormKey
+    && changeImpactPreview.staffingObservation?.state === "available"
+    ? changeImpactPreview.staffingObservation
+    : null;
+  const effectiveProposedStaffingRequirements = authoritativeStaffingObservation
+    ?.preview?.proposed?.requirementsByRole || proposedStaffingRequirements;
+  const effectiveProposedStaffingEventWindowState = authoritativeStaffingObservation
+    ? authoritativeStaffingObservation.preview?.comparison?.windowState === "changed"
+      ? "changed_unchecked"
+      : "current"
+    : proposedStaffingEventWindowState;
+  const commercialInventoryScenarioPreview = useMemo(() => {
+    const observation = changeImpactPreview.inventoryObservation;
+    if (observation?.state === "available" && observation.preview?.projection) {
+      return {
+        state: "current",
+        projection: observation.preview.projection,
+        scenarioFingerprint: changeImpactPreview.inventoryScenarioFingerprint
+      };
+    }
+    if (observation?.state === "unavailable") {
+      return {
+        state: "unavailable",
+        projection: null,
+        scenarioFingerprint: changeImpactPreview.inventoryScenarioFingerprint
+      };
+    }
+    return {
+      state: "not_evaluated",
+      projection: null,
+      scenarioFingerprint: changeImpactPreview.inventoryScenarioFingerprint
+    };
+  }, [
+    changeImpactPreview.inventoryObservation,
+    changeImpactPreview.inventoryScenarioFingerprint
+  ]);
   const commercialInventoryConsequences = useMemo(() => buildCommercialInventoryConsequences({
     savedRead: getSavedInventoryComparisonRead(eventIngredientProjection.read),
-    scenarioPreview: eventIngredientProjection.preview,
+    scenarioPreview: commercialInventoryScenarioPreview,
     organizationId: authSession.organizationId,
     quoteId: editingQuote.id,
     savedQuoteRevisionId: String(
       editingQuote.activeVersionId || editingQuote.versionMeta?.versionId || ""
     ).trim(),
+    proposedQuoteRevisionId: String(
+      changeImpactPreview.inventoryObservation?.proposedQuoteRevisionId || ""
+    ).trim(),
     scenarioFingerprint: currentInventoryScenarioFingerprint
   }), [
     authSession.organizationId,
+    changeImpactPreview.inventoryObservation?.proposedQuoteRevisionId,
+    commercialInventoryScenarioPreview,
     currentInventoryScenarioFingerprint,
     editingQuote.activeVersionId,
     editingQuote.id,
     editingQuote.versionMeta?.versionId,
-    eventIngredientProjection.preview,
     eventIngredientProjection.read
   ]);
   const changeImpactPresentationError = changeImpactPreview.error || (
@@ -1645,10 +1693,13 @@ function LegacyAppCore({
     inventoryPreviewAvailable: eventIngredientProjection.canPreview,
     inventoryInputReady: eventIngredientPreviewInput.valid,
     inventoryConsequences: commercialInventoryConsequences,
-    inventoryPreview: eventIngredientProjection.preview,
+    inventoryPreview: commercialInventoryScenarioPreview,
     staffingRead: fulfillmentStaffing.read,
-    proposedStaffingRequirements,
-    proposedStaffingRequirementsSource: "proposed_commercial_and_canonical_counts",
+    proposedStaffingRequirements: effectiveProposedStaffingRequirements,
+    proposedStaffingRequirementsSource: authoritativeStaffingObservation
+      ? "server_authoritative_commercial_preview"
+      : "proposed_commercial_and_canonical_counts",
+    proposedStaffingEventWindowState: effectiveProposedStaffingEventWindowState,
     appliedQuote: changeImpactPreview.appliedQuote,
     workbenchRequest: changeImpactPreview.workbenchRequest
   }), [
@@ -1672,12 +1723,16 @@ function LegacyAppCore({
     eventIngredientPreviewInput.valid,
     eventIngredientProjection.access.readEnabled,
     eventIngredientProjection.canPreview,
-    eventIngredientProjection.preview,
+    commercialInventoryScenarioPreview,
     eventIngredientSelections,
     form.guests,
     inventoryGuestScenarioEligible,
     livingTwinBaseQuoteRevisionId,
+    authoritativeStaffingObservation,
+    effectiveProposedStaffingEventWindowState,
+    effectiveProposedStaffingRequirements,
     proposedStaffingRequirements,
+    proposedStaffingEventWindowState,
     fulfillmentStaffing.read,
     quoteDirty
   ]);
@@ -2281,23 +2336,15 @@ function LegacyAppCore({
       currentForm: editingQuote.baseForm,
       proposedForm: candidateForm
     });
-    if (
-      formKey === currentChangeImpactFormKey
+    const inventoryObservationRequested = formKey === currentChangeImpactFormKey
       && inventoryScenarioEligibleForRequest
       && eventIngredientProjection.access.readEnabled
       && eventIngredientProjection.canPreview
-      && eventIngredientPreviewInput.valid
-    ) {
-      void eventIngredientProjection.previewCurrent({
-        selections: eventIngredientPreviewInput.selections
-      }).catch((error) => {
-        recordDiagnosticError(error, {
-          surface: "quote-builder",
-          action: "preview-commercial-twin-inventory",
-          quoteId: editingQuote.id
-        });
-      });
-    }
+      && eventIngredientPreviewInput.valid;
+    const inventoryScenarioFingerprintForRequest = buildLivingCommercialTwinInventoryFingerprint({
+      commercialFormFingerprint: formKey,
+      selections: eventIngredientPreviewInput.selections
+    });
     const priorRequestId = recovery && changeImpactPreview.mutationState === "uncertain"
       ? changeImpactPreview.simulationRequestId
       : "";
@@ -2330,7 +2377,13 @@ function LegacyAppCore({
         quoteId: editingQuote.id,
         expectedActiveVersionId: editingQuote.activeVersionId,
         requestId: simulationRequestId,
-        form: candidateForm
+        form: candidateForm,
+        ...(inventoryObservationRequested ? {
+          eventIngredientOutputs: eventIngredientPreviewInput.selections.map((selection) => ({
+            menuItemId: selection.menuItemId,
+            requiredOutputQuantity: selection.requiredOutputQuantity
+          }))
+        } : {})
       });
       if (changeImpactPreviewGenerationRef.current !== generation) return;
       setChangeImpactPreview({
@@ -2356,7 +2409,10 @@ function LegacyAppCore({
         applyOutcome: null,
         catalogRevision: Number(catalog.settings?.catalogRevision),
         appliedQuote: null,
-        workbenchRequest: exactWorkbenchRequest
+        workbenchRequest: exactWorkbenchRequest,
+        inventoryObservation: result.inventoryObservation,
+        inventoryScenarioFingerprint: inventoryScenarioFingerprintForRequest,
+        staffingObservation: result.staffingObservation
       });
     } catch (error) {
       if (changeImpactPreviewGenerationRef.current !== generation) return;
@@ -4572,9 +4628,13 @@ function LegacyAppCore({
             open={scheduleRouteOpen}
             onClose={() => navigateWorkspace(WORKSPACE_PATHS.home)}
             organizationId={authSession.organizationId}
+            role={authSession.role}
             staffLeads={scheduleStaffLeads}
             capacityLimit={scheduleCapacityLimit}
             currentUserEmail={authSession.user?.email || ""}
+            onOpenIntegrations={integrationsEnabled
+              ? () => navigateWorkspace(WORKSPACE_PATHS.integrations)
+              : undefined}
           />
         </WorkspaceLazyRoute>
       )}
@@ -5192,9 +5252,17 @@ function LegacyAppCore({
             onClose={() => closeWorkspaceToolRoute(WORKSPACE_ROUTE_IDS.SCHEDULE, setScheduleOpen)}
             returnFocusRef={workspaceToolReturnFocusRef}
             organizationId={authSession.organizationId}
+            role={authSession.role}
             staffLeads={scheduleStaffLeads}
             capacityLimit={scheduleCapacityLimit}
             currentUserEmail={authSession.user?.email || ""}
+            onOpenIntegrations={integrationsEnabled
+              ? () => openRoutedWorkspaceTool(
+                  WORKSPACE_PATHS.integrations,
+                  setIntegrationsOpen,
+                  { menuTriggerRef: operationsMenuTriggerRef }
+                )
+              : undefined}
           />
         </WorkspaceLazyTool>
       )}

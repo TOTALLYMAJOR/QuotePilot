@@ -55,7 +55,13 @@ function message(messageId, createdAtISO, body, actorType = "customer") {
   };
 }
 
-function result(messages) {
+function result(messages, pageOverrides = {}) {
+  const oldest = messages[0] || null;
+  const newest = messages.at(-1) || null;
+  const cursor = (entry) => entry ? {
+    createdAtMs: Date.parse(entry.createdAtISO),
+    messageId: entry.messageId
+  } : null;
   return {
     organizationId: ACCESS.organizationId,
     quoteId: ACCESS.quoteId,
@@ -63,7 +69,16 @@ function result(messages) {
     readOnly: false,
     readOnlyReason: "",
     messages,
-    limits: {}
+    limits: {},
+    page: {
+      pageSize: 50,
+      returned: messages.length,
+      hasOlder: false,
+      hasNewer: false,
+      oldestCursor: cursor(oldest),
+      newestCursor: cursor(newest),
+      ...pageOverrides
+    }
   };
 }
 
@@ -157,7 +172,7 @@ describe("QuoteConversationPanel selected-thread signal", () => {
     );
     clients.load
       .mockResolvedValueOnce(result([first]))
-      .mockResolvedValueOnce(result([first, second]));
+      .mockResolvedValueOnce(result([second]));
 
     await renderPanel();
 
@@ -192,6 +207,10 @@ describe("QuoteConversationPanel selected-thread signal", () => {
     await settle();
 
     expect(clients.load).toHaveBeenCalledTimes(2);
+    expect(clients.load.mock.calls[1][1]).toMatchObject({
+      after: { createdAtMs: Date.parse(first.createdAtISO), messageId: first.messageId },
+      forceRefresh: true
+    });
     expect(container.textContent).toContain("The west entrance is confirmed.");
     expect(container.textContent).toContain("Conversation updated.");
   });
@@ -210,6 +229,34 @@ describe("QuoteConversationPanel selected-thread signal", () => {
     expect(container.textContent).toContain("Updates paused");
     expect(container.textContent).toContain("Keep this authoritative message visible.");
     expect(clients.load).toHaveBeenCalledTimes(1);
+  });
+
+  test("continues a bounded delta burst without replacing loaded history", async () => {
+    const first = message("message-one", "2026-08-09T18:00:00.000Z", "Original detail.");
+    const second = message("message-two", "2026-08-09T18:01:00.000Z", "First new detail.");
+    const third = message("message-three", "2026-08-09T18:02:00.000Z", "Second new detail.");
+    clients.load
+      .mockResolvedValueOnce(result([first]))
+      .mockResolvedValueOnce(result([second], { hasNewer: true }))
+      .mockResolvedValueOnce(result([third]));
+
+    await renderPanel();
+    const { onSignal } = clients.subscribe.mock.calls[0][1];
+    act(() => onSignal(signal(third, 3)));
+    await settle();
+
+    expect(clients.load).toHaveBeenCalledTimes(3);
+    expect(clients.load.mock.calls[1][1].after).toEqual({
+      createdAtMs: Date.parse(first.createdAtISO),
+      messageId: first.messageId
+    });
+    expect(clients.load.mock.calls[2][1].after).toEqual({
+      createdAtMs: Date.parse(second.createdAtISO),
+      messageId: second.messageId
+    });
+    expect(container.textContent).toContain("Original detail.");
+    expect(container.textContent).toContain("First new detail.");
+    expect(container.textContent).toContain("Second new detail.");
   });
 
   test("does not allow a signal reload to supersede an unresolved send request", () => {
@@ -258,7 +305,7 @@ describe("QuoteConversationPanel selected-thread signal", () => {
     const sendAttempt = deferred();
     clients.load
       .mockResolvedValueOnce(result([first]))
-      .mockResolvedValueOnce(result([first, intervening, localReceipt]));
+      .mockResolvedValueOnce(result([intervening, localReceipt]));
     clients.send.mockReturnValue(sendAttempt.promise);
 
     await renderPanel();

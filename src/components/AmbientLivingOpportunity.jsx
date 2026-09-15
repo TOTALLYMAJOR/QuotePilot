@@ -147,16 +147,39 @@ function attendanceSourceLabel(value) {
 }
 
 function deriveAttendanceRead(quote, decisionDebtSnapshot) {
+  const closeout = quote?.workflow?.postEventCloseout;
+  const closeoutActual = closeout?.actualAttendance || null;
+  const currentRevisionId = String(
+    quote?.activeVersionId || quote?.versionMeta?.versionId || ""
+  ).trim();
+  const currentAcceptanceReceiptId = String(
+    quote?.acceptanceReceipt?.receiptId || ""
+  ).trim();
+  const actualSourceMatches = !closeoutActual || (
+    String(closeout?.sourceVersionId || "").trim() === currentRevisionId
+    && String(closeout?.acceptanceReceiptId || "").trim() === currentAcceptanceReceiptId
+  );
+  const actualAttendance = actualSourceMatches && closeoutActual ? {
+    count: closeoutActual.count,
+    recordedAtISO: closeoutActual.recordedAtISO,
+    sourceReferenceId: closeoutActual.sourceReferenceId
+  } : null;
   try {
     return {
-      state: deriveAttendanceState({ quote, decisionDebtSnapshot }),
-      errorScope: ""
+      state: deriveAttendanceState({
+        quote,
+        decisionDebtSnapshot,
+        actualAttendance
+      }),
+      errorScope: actualSourceMatches ? "" : "actual_source",
+      actualSourceVersionId: String(closeout?.sourceVersionId || "").trim()
     };
   } catch {
     try {
       return {
-        state: deriveAttendanceState({ quote }),
-        errorScope: "decision_timing"
+        state: deriveAttendanceState({ quote, actualAttendance }),
+        errorScope: actualSourceMatches ? "decision_timing" : "actual_source",
+        actualSourceVersionId: String(closeout?.sourceVersionId || "").trim()
       };
     } catch {
       const event = quote?.event && typeof quote.event === "object"
@@ -166,9 +189,11 @@ function deriveAttendanceRead(quote, decisionDebtSnapshot) {
       try {
         return {
           state: deriveAttendanceState({
-            quote: { ...(quote || {}), event: legacyEvent }
+            quote: { ...(quote || {}), event: legacyEvent },
+            actualAttendance
           }),
-          errorScope: "attendance"
+          errorScope: actualSourceMatches ? "attendance" : "actual_source",
+          actualSourceVersionId: String(closeout?.sourceVersionId || "").trim()
         };
       } catch {
         return { state: null, errorScope: "attendance" };
@@ -210,9 +235,13 @@ function attendancePresentation(read) {
   let evidenceDetail = "This quote has one exact priced count, but no separate planning, final-count, or actual-attendance source record.";
   let tone = "teal";
 
-  if (actual) {
+  if (read.errorScope === "actual_source") {
+    evidenceLabel = "Actual attendance source needs review";
+    evidenceDetail = `The retained closeout is bound to accepted revision ${read.actualSourceVersionId || "not recorded"}, not this quote's current accepted source. No current actual-attendance claim is shown.`;
+    tone = "coral";
+  } else if (actual) {
     evidenceLabel = `Actual attendance: ${actual.count} guests`;
-    evidenceDetail = `Post-event closeout evidence recorded ${attendanceDate(actual.recordedAtISO) || "at the recorded time"}.`;
+    evidenceDetail = `Post-event closeout evidence recorded ${attendanceDate(actual.recordedAtISO) || "at the recorded time"} and bound to receipt ${actual.sourceReferenceId}.`;
   } else if (["received", "applied", "superseded"].includes(confirmation.state)) {
     evidenceLabel = confirmation.state === "applied"
       ? `Final count applied: ${confirmation.submittedCount} guests`
@@ -4877,6 +4906,16 @@ const AmbientLivingOpportunity = forwardRef(function AmbientLivingOpportunity({
                 <dd>{model.staffingObject.guidance.available
                   ? staffingLabel(model.staffingObject.recommended)
                   : "Unavailable"}</dd>
+              </div>
+              <div>
+                <dt>Attendance basis</dt>
+                <dd>
+                  Saved priced count {model.staffingObject.guestCount} · revision{" "}
+                  {attendanceRead.state?.commercialBasis?.currentRevisionId || "not recorded"}.
+                  {attendanceRead.state?.actual
+                    ? ` Actual attendance ${attendanceRead.state.actual.count} was recorded after service and does not rewrite this staffing plan.`
+                    : " Actual attendance is not recorded for this exact accepted source."}
+                </dd>
               </div>
             </dl>
           </section>

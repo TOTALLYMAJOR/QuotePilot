@@ -149,6 +149,15 @@ describe("AmbientLibraryRoute", () => {
     expect(container.querySelector('[data-library-section="policy"]')).not.toBeNull();
     expect(container.querySelector('[data-library-record-kind="event-template"][data-library-record-id="wedding"]')).not.toBeNull();
     expect(container.textContent).toContain("Starts with Plated dinner");
+    expect(container.querySelector('[data-library-overview-section="packages"]')).not.toBeNull();
+    expect(container.querySelector('[data-library-overview-section="packages"]').textContent).toContain("Plated dinnerActive");
+    expect(container.querySelector('[data-library-overview-section="addons"]').textContent).toContain("DessertActive");
+    expect(container.querySelector('[data-library-overview-section="rentals"]').textContent).toContain("LinensActive");
+    expect(container.querySelector('[data-library-overview-section="templates"]').textContent).toContain("WeddingPlated · Linked items");
+    expect(container.querySelector('[data-library-overview-section="pricing"]').textContent).toContain("Catalog version 7");
+    expect(container.querySelector('[data-library-overview-section="pricing"]').textContent).toContain("Confirmed for current catalog");
+    expect(container.querySelector('[data-library-overview-section="menu"]').getAttribute("data-library-overview-count")).toBe("0");
+    expect(container.querySelector('[data-library-overview-section="menu"]').textContent).toContain("full menu is not available");
     expect(container.querySelector("[data-library-return-context]")).toBeNull();
     expect(container.querySelector("#catalog-admin-title")).toBeNull();
   });
@@ -335,7 +344,7 @@ describe("AmbientLibraryRoute", () => {
   test("gives sales one read-only Library main without mounting an editor", () => {
     mount({ currentUserRole: "sales" });
     expect(container.querySelectorAll("main")).toHaveLength(1);
-    expect(container.textContent).toContain("Before the next quote");
+    expect(container.textContent).toContain("Your path to the first quote");
     expect(container.textContent).toContain("An administrator manages changes and publishing");
     expect(container.querySelector('[data-library-action-id="review-library-menu"]')).toBeNull();
     expect(container.textContent).not.toContain("View only");

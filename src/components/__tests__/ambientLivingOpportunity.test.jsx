@@ -657,6 +657,48 @@ describe("AmbientLivingOpportunity", () => {
     expect(dialog.textContent).not.toContain("Final count applied");
   });
 
+  test("uses only exact-source closeout attendance and keeps staffing tied to the priced revision", async () => {
+    const receiptId = `closeout_attendance_${"a".repeat(48)}`;
+    mount({
+      quote: {
+        ...QUOTE,
+        status: "booked",
+        acceptanceReceipt: { receiptId: "accept-alpha" },
+        workflow: {
+          postEventCloseout: {
+            sourceVersionId: "version-alpha",
+            acceptanceReceiptId: "accept-alpha",
+            actualAttendance: {
+              schemaVersion: 1,
+              revision: 1,
+              count: 116,
+              sourceType: "staff_observed",
+              note: "Lead server confirmed the final served headcount.",
+              sourceReferenceId: receiptId,
+              recordedAtISO: "2026-09-27T15:30:00.000Z",
+              recordedBy: { email: "owner@example.test", role: "admin" },
+              lastReceiptId: receiptId
+            }
+          }
+        }
+      }
+    });
+
+    act(() => button("See connections").click());
+    let dialog = container.querySelector('[role="dialog"]');
+    expect(dialog.textContent).toContain("Actual attendance: 116 guests");
+    expect(dialog.textContent).toContain(receiptId);
+    act(() => dialog.querySelector('[aria-label="Close context"]').click());
+    await settle();
+
+    act(() => button("Review staffing").click());
+    dialog = container.querySelector('[role="dialog"]');
+    expect(dialog.textContent).toContain("Attendance basis");
+    expect(dialog.textContent).toContain("Saved priced count 120 · revision version-alpha");
+    expect(dialog.textContent).toContain("Actual attendance 116 was recorded after service");
+    expect(dialog.textContent).toContain("does not rewrite this staffing plan");
+  });
+
   test("opens populated five-domain Money evidence and restores its exact trigger", async () => {
     mount();
 

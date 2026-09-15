@@ -74,9 +74,11 @@ const {
   assertPostEventCloseoutMatchesSource,
   buildPostEventCloseoutPolicySnapshot,
   buildPostEventCloseoutRecord,
+  normalizePostEventActualAttendanceRequest,
   normalizePostEventCloseoutActionRequest,
   normalizePostEventCloseoutPolicyRefreshRequest,
   planPostEventCloseoutAction,
+  planPostEventActualAttendance,
   planPostEventCloseoutPolicyRefresh,
   resolvePostEventCloseoutSource
 } = require("./postEventCloseout");
@@ -84,11 +86,13 @@ const eventOperations = require("./eventOperations");
 const eventOperatingWork = require("./eventOperatingWork");
 const eventOperatingActuals = require("./eventOperatingActuals");
 const eventOperatingHistory = require("./eventOperatingHistory");
+const eventOperationalNotes = require("./eventOperationalNotes");
 const workflowDefinitions = require("./workflowDefinitions");
 const workflowExecution = require("./workflowExecution");
 const eventWorkflowAdapter = require("./eventWorkflowAdapter");
 const workflowPackAdapters = require("./workflowPackAdapters");
 const quoteAttendance = require("./quoteAttendance");
+const googleCalendarIntegration = require("./googleCalendarIntegration");
 const commercialDependencyGraphCore = require("./commercialDependencyGraphCore.cjs");
 const {
   KITCHEN_BEO_FRESHNESS_STATES,
@@ -264,7 +268,9 @@ const {
 const {
   OperationalStaffingRuntimeError,
   assertOperationalStaffingAuthorityEnabled,
+  authorityState: operationalStaffingAuthorityState,
   buildOperationalStaffingSnapshotEnvelope,
+  buildProjectedOperationalStaffingObservation,
   buildSnapshotScheduleFenceRefs,
   dedupeScheduleFenceAssignments,
   deriveCanonicalOperationalStaffingEvidence,
@@ -332,11 +338,13 @@ const {
 const {
   PORTAL_CONVERSATION_RATE_LIMIT,
   PORTAL_CONVERSATION_RATE_WINDOW_MS,
+  PORTAL_CONVERSATION_PAGE_SIZE,
   PORTAL_CONVERSATION_TOTAL_MESSAGE_LIMIT,
   PortalConversationError,
   assertPortalConversationActivation,
   assertPortalConversationTotal,
   buildPortalConversationActor,
+  buildPortalConversationPage,
   buildPortalConversationMessage,
   buildPortalConversationRateKey,
   buildPortalConversationRequestKey,
@@ -532,6 +540,7 @@ const PORTAL_CONVERSATION_STATE_COLLECTION = "portalConversationState";
 const POST_EVENT_CLOSEOUTS_COLLECTION = "postEventCloseouts";
 const KITCHEN_BEO_ARTIFACTS_COLLECTION = "kitchenBeoArtifacts";
 const KITCHEN_BEO_RECEIPTS_COLLECTION = "kitchenBeoGenerationReceipts";
+const EVENT_OPERATIONAL_NOTES_COLLECTION = "eventOperationalNotes";
 const KITCHEN_BEO_RECEIPT_HISTORY_SCHEMA_VERSION = 1;
 const KITCHEN_BEO_RECEIPT_HISTORY_LIMIT = 10;
 const COMMERCIAL_CHANGE_SIMULATIONS_COLLECTION = "commercialChangeSimulations";
@@ -565,6 +574,12 @@ const OWNER_SMS_OUTBOX_COLLECTION = "ownerSmsOutbox";
 const RESEND_ACCEPTANCE_RECEIPTS_COLLECTION = "resendAcceptanceReceipts";
 const BUYER_ACCESS_ORDERS_COLLECTION = "buyerAccessOrders";
 const BUYER_ACCESS_RATE_LIMITS_COLLECTION = "buyerAccessRateLimits";
+const GOOGLE_CALENDAR_CONNECTIONS_COLLECTION = "googleCalendarConnections";
+const GOOGLE_CALENDAR_OAUTH_STATES_COLLECTION = "googleCalendarOAuthStates";
+const GOOGLE_CALENDAR_EVENT_LINKS_COLLECTION = "googleCalendarEventLinks";
+const GOOGLE_CALENDAR_OPERATIONS_COLLECTION = "googleCalendarOperations";
+const GOOGLE_CALENDAR_OAUTH_CALLBACK_TIMEOUT_SECONDS = 60;
+const GOOGLE_CALENDAR_OAUTH_EXCHANGE_LEASE_MS = 75_000;
 const STRIPE_SECRET_NAME = "STRIPE_SECRET_KEY";
 const STRIPE_WEBHOOK_SECRET_NAME = "STRIPE_WEBHOOK_SECRET";
 const RESEND_API_KEY_SECRET_NAME = "RESEND_API_KEY";
@@ -581,6 +596,10 @@ const BUYER_ACCESS_TURNSTILE_SECRET_NAME = "BUYER_ACCESS_TURNSTILE_SECRET";
 const BUYER_ACCESS_RATE_LIMIT_SECRET_NAME = "BUYER_ACCESS_RATE_LIMIT_SECRET";
 const INQUIRY_TURNSTILE_SECRET_NAME = "INQUIRY_TURNSTILE_SECRET";
 const INQUIRY_RATE_LIMIT_SECRET_NAME = "INQUIRY_RATE_LIMIT_SECRET";
+const GOOGLE_CALENDAR_OAUTH_CLIENT_ID_SECRET_NAME = "GOOGLE_CALENDAR_OAUTH_CLIENT_ID";
+const GOOGLE_CALENDAR_OAUTH_CLIENT_SECRET_NAME = "GOOGLE_CALENDAR_OAUTH_CLIENT_SECRET";
+const GOOGLE_CALENDAR_OAUTH_STATE_SECRET_NAME = "GOOGLE_CALENDAR_OAUTH_STATE_SECRET";
+const GOOGLE_CALENDAR_TOKEN_ENCRYPTION_KEY_SECRET_NAME = "GOOGLE_CALENDAR_TOKEN_ENCRYPTION_KEY";
 const kitchenBeoAuthority = createKitchenBeoAuthority({
   graphCore: commercialDependencyGraphCore
 });
@@ -13142,13 +13161,22 @@ exports.getQuotePortalConversation = functions.region(REGION).https.onCall(async
     binding = await resolvePortalConversationBinding(input, context);
     const nowISO = new Date().toISOString();
     const firstScope = await readBoundPortalConversationScope({ binding, nowISO });
-    const messagesSnap = await firstScope.refs.messagesRef
-      .orderBy("createdAtMs", "asc")
-      .limit(PORTAL_CONVERSATION_TOTAL_MESSAGE_LIMIT)
+    const catchUp = Boolean(input.after);
+    let messagesQuery = firstScope.refs.messagesRef
+      .orderBy("createdAtMs", catchUp ? "asc" : "desc")
+      .orderBy(FieldPath.documentId(), catchUp ? "asc" : "desc");
+    if (input.after) {
+      messagesQuery = messagesQuery.startAfter(input.after.createdAtMs, input.after.messageId);
+    } else if (input.before) {
+      messagesQuery = messagesQuery.startAfter(input.before.createdAtMs, input.before.messageId);
+    }
+    const messagesSnap = await messagesQuery
+      .limit(PORTAL_CONVERSATION_PAGE_SIZE + 1)
       .get();
-    const messages = messagesSnap.docs
-      .map((snapshot) => projectPortalConversationMessage(snapshot.data() || {}))
-      .filter(Boolean);
+    const conversationPage = buildPortalConversationPage(messagesSnap.docs.map((snapshot) => ({
+      id: snapshot.id,
+      data: snapshot.data() || {}
+    })), { direction: catchUp ? "newer" : "older" });
 
     // A final authorization read prevents a token rotated while the message
     // query was in flight from receiving any quote-scoped history.
@@ -13162,7 +13190,9 @@ exports.getQuotePortalConversation = functions.region(REGION).https.onCall(async
         "The customer portal changed while the conversation loaded. Open the current link and try again."
       );
     }
-    return portalConversationResponse(finalScope, messages);
+    return portalConversationResponse(finalScope, conversationPage.messages, {
+      page: conversationPage.page
+    });
   } catch (err) {
     return throwPortalConversationFailure(err, "getQuotePortalConversation", binding);
   }
@@ -13531,6 +13561,9 @@ function commercialChangeRefs(organizationId, quoteId = "") {
     quoteRef: quoteId
       ? organizationRef.collection(QUOTES_COLLECTION).doc(quoteId)
       : null,
+    staffingPlanRef: quoteId
+      ? organizationRef.collection(OPERATIONAL_STAFFING_PLANS_COLLECTION).doc(quoteId)
+      : null,
     simulationsRef: organizationRef.collection(COMMERCIAL_CHANGE_SIMULATIONS_COLLECTION),
     authorizationsRef: organizationRef.collection(COMMERCIAL_CHANGE_AUTHORIZATIONS_COLLECTION),
     approvalRequestsRef: organizationRef.collection(COMMERCIAL_CHANGE_APPROVAL_REQUESTS_COLLECTION),
@@ -13834,7 +13867,14 @@ function throwCommercialChangeFailure(error, operation, context = {}) {
 }
 
 exports.simulateCommercialQuoteChange = functions.region(REGION).https.onCall(async (data, context) => {
-  if (!data || Object.keys(data).some((key) => !["organizationId", "quoteId", "expectedActiveVersionId", "requestId", "form", "attendanceSubmissionReceiptId"].includes(key))) throw new functions.https.HttpsError("invalid-argument", "Unsupported commercial simulation fields.");
+  if (!data || Object.keys(data).some((key) => !["organizationId", "quoteId", "expectedActiveVersionId", "requestId", "form", "attendanceSubmissionReceiptId", "eventIngredientOutputs", "staffingObservationVersion"].includes(key))) throw new functions.https.HttpsError("invalid-argument", "Unsupported commercial simulation fields.");
+  if (data.staffingObservationVersion !== undefined && data.staffingObservationVersion !== "v1") {
+    throw new functions.https.HttpsError(
+      "invalid-argument",
+      "Unsupported commercial Staffing observation version."
+    );
+  }
+  const staffingObservationRequested = data.staffingObservationVersion === "v1";
   const organizationId = normalizeOrganizationId(data?.organizationId);
   const quoteId = normalizeText(data?.quoteId);
   const expectedActiveVersionId = normalizeText(data?.expectedActiveVersionId);
@@ -13870,10 +13910,11 @@ exports.simulateCommercialQuoteChange = functions.region(REGION).https.onCall(as
     });
     const refs = commercialChangeRefs(organizationId, quoteId);
     const result = await db.runTransaction(async (tx) => {
-      const [quoteSnap, settingsSnap, organizationSnap] = await Promise.all([
+      const [quoteSnap, settingsSnap, organizationSnap, staffingPlanSnap] = await Promise.all([
         tx.get(refs.quoteRef),
         tx.get(refs.settingsRef),
-        tx.get(refs.organizationRef)
+        tx.get(refs.organizationRef),
+        staffingObservationRequested ? tx.get(refs.staffingPlanRef) : Promise.resolve(null)
       ]);
       if (!quoteSnap.exists) {
         throw new CommercialChangeAuthorityError("not-found", "Quote not found.");
@@ -13916,6 +13957,43 @@ exports.simulateCommercialQuoteChange = functions.region(REGION).https.onCall(as
         },
         nowISO
       });
+      let staffingObservationResult = null;
+      if (staffingObservationRequested) {
+        const gate = operationalStaffingAuthorityState(
+          tenantWorkflowRuntimeEnabled("OPERATIONAL_STAFFING_AUTHORITY_ENABLED", organizationId),
+          settingsSnap.data() || {}
+        );
+        if (!gate.enabled) {
+          staffingObservationResult = {
+            state: "unavailable",
+            reasonCode: "operational_staffing_authority_disabled"
+          };
+        } else {
+          try {
+            staffingObservationResult = {
+              state: "available",
+              ...buildProjectedOperationalStaffingObservation({
+                organizationId,
+                quoteId,
+                expectedBaseQuoteRevisionId: expectedActiveVersionId,
+                projectedVersion: projectedEditDocuments.version,
+                currentPlan: staffingPlanSnap?.exists ? staffingPlanSnap.data() || {} : null,
+                settings: settingsSnap.data() || {}
+              })
+            };
+          } catch (error) {
+            functions.logger.warn("Commercial Staffing observation unavailable", {
+              organizationId,
+              quoteId,
+              code: normalizeText(error?.code).slice(0, 80)
+            });
+            staffingObservationResult = {
+              state: "unavailable",
+              reasonCode: "staffing_observation_unavailable"
+            };
+          }
+        }
+      }
       const proposed = commercialChangeAuthority.simulate({
         request: { requestId, organizationId, quoteId, expectedActiveVersionId },
         canonicalQuote: quote,
@@ -13950,6 +14028,8 @@ exports.simulateCommercialQuoteChange = functions.region(REGION).https.onCall(as
       return {
         planned,
         evaluatedImpact,
+        projectedVersion: projectedEditDocuments.version,
+        staffingObservationResult,
         persistedEffects: projectCommercialChangePersistedEffects({
           receipt: planned.receipt,
           quote,
@@ -13958,6 +14038,82 @@ exports.simulateCommercialQuoteChange = functions.region(REGION).https.onCall(as
         enforcement: commercialChangeEnforcementState(settingsSnap.data() || {}, staff.organizationId)
       };
     });
+    const inventoryObservationBase = {
+      schemaVersion: "commercial-change-inventory-observation-v1",
+      authority: "inventory_read_only_observation",
+      organizationId,
+      quoteId,
+      baseQuoteRevisionId: expectedActiveVersionId,
+      proposedQuoteRevisionId: normalizeText(result.projectedVersion?.versionId),
+      commercialSimulationReceiptId: normalizeText(result.planned.receipt?.receiptId),
+      commercialSimulationReceiptDigest: normalizeText(result.planned.receipt?.receiptDigest),
+      commercialPreviewRevisionId: normalizeText(result.planned.receipt?.proposedRevisionId),
+      observedAtISO: nowISO,
+      boundary: "Read-only Inventory evidence only; no stock, allocation, ordering, pricing, authorization, or quote mutation."
+    };
+    let inventoryObservation;
+    if (!Array.isArray(data.eventIngredientOutputs) || data.eventIngredientOutputs.length === 0) {
+      inventoryObservation = {
+        ...inventoryObservationBase,
+        state: "not_requested",
+        reasonCode: "explicit_output_quantities_required"
+      };
+    } else {
+      try {
+        const preview = await inventoryAuthorityRuntime.previewProjectedEventInventory({
+          organizationId,
+          quoteId,
+          expectedBaseQuoteRevisionId: expectedActiveVersionId,
+          projectedVersion: result.projectedVersion,
+          outputRows: data.eventIngredientOutputs
+        }, context);
+        inventoryObservation = {
+          ...inventoryObservationBase,
+          state: "available",
+          inputDigest: normalizeText(preview?.inputDigest),
+          preview
+        };
+      } catch (error) {
+        functions.logger.warn("Commercial Inventory observation unavailable", {
+          organizationId,
+          quoteId,
+          code: normalizeText(error?.code).slice(0, 80)
+        });
+        inventoryObservation = {
+          ...inventoryObservationBase,
+          state: "unavailable",
+          reasonCode: "inventory_observation_unavailable"
+        };
+      }
+    }
+    const staffingObservationBase = {
+      schemaVersion: "commercial-change-staffing-observation-v1",
+      authority: "operational_staffing_read_only_observation",
+      organizationId,
+      quoteId,
+      baseQuoteRevisionId: expectedActiveVersionId,
+      proposedQuoteRevisionId: normalizeText(result.projectedVersion?.versionId),
+      commercialSimulationReceiptId: normalizeText(result.planned.receipt?.receiptId),
+      commercialSimulationReceiptDigest: normalizeText(result.planned.receipt?.receiptDigest),
+      commercialPreviewRevisionId: normalizeText(result.planned.receipt?.proposedRevisionId),
+      observedAtISO: nowISO,
+      boundary: "Read-only aggregate Staffing evidence only; no person, assignment, invitation, schedule fence, payroll, pricing, authorization, or quote state was written or disclosed."
+    };
+    const staffingObservation = staffingObservationRequested
+      ? result.staffingObservationResult?.state === "available"
+        ? {
+          ...staffingObservationBase,
+          state: "available",
+          inputDigest: normalizeText(result.staffingObservationResult.inputDigest),
+          preview: result.staffingObservationResult.preview
+        }
+        : {
+          ...staffingObservationBase,
+          state: "unavailable",
+          reasonCode: normalizeText(result.staffingObservationResult?.reasonCode)
+            || "staffing_observation_unavailable"
+        }
+      : null;
     return {
       ok: true,
       storage: "firebase",
@@ -13970,6 +14126,8 @@ exports.simulateCommercialQuoteChange = functions.region(REGION).https.onCall(as
         result.planned.receipt,
         result.evaluatedImpact
       ),
+      inventoryObservation,
+      ...(staffingObservation ? { staffingObservation } : {}),
       persistedEffects: result.persistedEffects
     };
   } catch (error) {
@@ -17326,6 +17484,41 @@ function projectPostEventCloseoutToQuote(record = {}) {
   const reviewItems = record?.reviewItems && typeof record.reviewItems === "object"
     ? record.reviewItems
     : {};
+  const actual = record?.actualAttendance && typeof record.actualAttendance === "object"
+    ? record.actualAttendance
+    : null;
+  const actualAttendance = (
+    Number.isSafeInteger(actual?.revision)
+    && actual.revision > 0
+    && Number.isSafeInteger(actual?.count)
+    && actual.count >= 1
+    && actual.count <= 400
+    && new Set([
+      "staff_observed",
+      "customer_reported",
+      "venue_reported",
+      "imported_record"
+    ]).has(normalizeText(actual?.sourceType))
+    && normalizeText(actual?.note)
+    && normalizeText(actual?.recordedAtISO)
+    && /^closeout_attendance_[a-f0-9]{48}$/.test(normalizeText(actual?.sourceReferenceId))
+    && normalizeText(actual?.sourceReferenceId) === normalizeText(actual?.lastReceiptId)
+  ) ? {
+      schemaVersion: Number(actual.schemaVersion || 0),
+      revision: actual.revision,
+      count: actual.count,
+      sourceType: normalizeText(actual.sourceType),
+      note: normalizeText(actual.note).slice(0, 240),
+      sourceReferenceId: normalizeText(actual.sourceReferenceId),
+      recordedAtISO: normalizeText(actual.recordedAtISO),
+      recordedBy: actual.recordedBy && typeof actual.recordedBy === "object"
+        ? {
+            email: normalizeEmail(actual.recordedBy.email),
+            role: normalizeText(actual.recordedBy.role)
+          }
+        : null,
+      lastReceiptId: normalizeText(actual.lastReceiptId)
+    } : null;
   return {
     schemaVersion: Number(record.schemaVersion || 0),
     closeoutId: normalizeText(record.closeoutId),
@@ -17346,6 +17539,7 @@ function projectPostEventCloseoutToQuote(record = {}) {
       blockedReason: normalizeText(record.policy?.blockedReason)
     },
     state: normalizeText(record.state),
+    actualAttendance,
     reviewItems: Object.fromEntries(Object.entries(reviewItems).map(([code, item]) => [
       code,
       {
@@ -18228,6 +18422,166 @@ exports.recordPostEventCloseoutReview = functions.region(REGION).https.onCall(as
   }
 });
 
+exports.recordPostEventActualAttendance = functions.region(REGION).https.onCall(async (data, context) => {
+  let request;
+  try {
+    request = normalizePostEventActualAttendanceRequest(data);
+  } catch (error) {
+    if (error instanceof PostEventCloseoutError) {
+      throw new functions.https.HttpsError(error.code, error.message);
+    }
+    throw error;
+  }
+  const staff = await assertStaff(context, {
+    expectedOrganizationId: request.organizationId
+  });
+  if (normalizeOrganizationId(staff.principalOrganizationId) !== request.organizationId) {
+    throw new functions.https.HttpsError(
+      "permission-denied",
+      "Actual attendance requires same-organization staff authority."
+    );
+  }
+
+  try {
+    const nowISO = new Date().toISOString();
+    const organizationRef = db
+      .collection(ORGANIZATIONS_COLLECTION)
+      .doc(request.organizationId);
+    const quoteRef = organizationRef.collection(QUOTES_COLLECTION).doc(request.quoteId);
+    const closeoutRef = organizationRef
+      .collection(POST_EVENT_CLOSEOUTS_COLLECTION)
+      .doc(request.closeoutId);
+    const receiptRef = closeoutRef
+      .collection("attendanceReceipts")
+      .doc(request.receiptId);
+    const result = await db.runTransaction(async (tx) => {
+      const [quoteSnap, closeoutSnap, receiptSnap] = await Promise.all([
+        tx.get(quoteRef),
+        tx.get(closeoutRef),
+        tx.get(receiptRef)
+      ]);
+      if (!quoteSnap.exists || !closeoutSnap.exists) {
+        throw new PostEventCloseoutError(
+          "not-found",
+          "The authoritative booked quote or closeout record is unavailable."
+        );
+      }
+      const quote = quoteSnap.data() || {};
+      const closeout = closeoutSnap.data() || {};
+      if (
+        normalizeOrganizationId(quote.organizationId) !== request.organizationId
+        || normalizeText(closeout.organizationId) !== request.organizationId
+        || normalizeText(closeout.quoteId) !== request.quoteId
+      ) {
+        throw new PostEventCloseoutError(
+          "permission-denied",
+          "The closeout record is outside this organization or quote scope."
+        );
+      }
+      const sourceVersionId = normalizeText(closeout.sourceVersionId);
+      const acceptanceReceiptDocumentId = normalizeText(closeout.acceptanceReceiptId);
+      if (!sourceVersionId || !acceptanceReceiptDocumentId) {
+        throw new PostEventCloseoutError(
+          "failed-precondition",
+          "The closeout record is missing its accepted proposal source or receipt."
+        );
+      }
+      const [sourceVersionSnap, acceptanceReceiptDocumentSnap] = await Promise.all([
+        tx.get(quoteRef.collection("versions").doc(sourceVersionId)),
+        tx.get(
+          organizationRef
+            .collection(PROPOSAL_ACCEPTANCE_RECEIPTS_COLLECTION)
+            .doc(acceptanceReceiptDocumentId)
+        )
+      ]);
+      if (!sourceVersionSnap.exists || !acceptanceReceiptDocumentSnap.exists) {
+        throw new PostEventCloseoutError(
+          "failed-precondition",
+          "The closeout accepted proposal source or private receipt is unavailable."
+        );
+      }
+      const source = resolvePostEventCloseoutSource({
+        organizationId: request.organizationId,
+        quoteId: request.quoteId,
+        sourceQuote: { id: quoteSnap.id, ...quote },
+        sourceVersion: {
+          id: sourceVersionSnap.id,
+          ...(sourceVersionSnap.data() || {})
+        },
+        acceptanceReceiptDocument: acceptanceReceiptDocumentSnap.data() || {}
+      });
+      const planned = planPostEventActualAttendance({
+        request: data,
+        record: closeout,
+        source,
+        actor: staff,
+        nowISO,
+        existingReceipt: receiptSnap.exists ? receiptSnap.data() || {} : null
+      });
+      const nextRecord = planned.nextRecord || closeout;
+      const quoteProjection = projectPostEventCloseoutToQuote(nextRecord);
+
+      if (!receiptSnap.exists) {
+        tx.create(receiptRef, {
+          ...planned.receipt,
+          createdAt: FieldValue.serverTimestamp()
+        });
+      }
+      if (planned.nextRecord) {
+        tx.set(closeoutRef, {
+          ...planned.nextRecord,
+          updatedAt: FieldValue.serverTimestamp()
+        }, { merge: true });
+        tx.update(quoteRef, {
+          "workflow.postEventCloseout": quoteProjection,
+          updatedAtISO: nowISO,
+          updatedAt: FieldValue.serverTimestamp()
+        });
+      }
+      return {
+        kind: planned.kind,
+        idempotent: planned.idempotent,
+        postEventCloseout: quoteProjection,
+        receipt: {
+          receiptId: normalizeText(planned.receipt.receiptId),
+          requestId: normalizeText(planned.receipt.requestId),
+          action: normalizeText(planned.receipt.action),
+          priorRevision: Number(planned.receipt.priorRevision),
+          resultRevision: Number(planned.receipt.resultRevision),
+          count: Number(planned.receipt.count),
+          sourceType: normalizeText(planned.receipt.sourceType),
+          recordedAtISO: normalizeText(planned.receipt.recordedAtISO),
+          recordedByEmail: normalizeEmail(planned.receipt.recordedBy?.email)
+        }
+      };
+    });
+    return {
+      ok: true,
+      storage: "firebase",
+      organizationId: request.organizationId,
+      quoteId: request.quoteId,
+      closeoutId: request.closeoutId,
+      ...result
+    };
+  } catch (error) {
+    if (error instanceof functions.https.HttpsError) throw error;
+    if (error instanceof PostEventCloseoutError) {
+      throw new functions.https.HttpsError(error.code, error.message);
+    }
+    functions.logger.error("Actual attendance recording failed", {
+      organizationId: request.organizationId,
+      quoteId: request.quoteId,
+      closeoutId: request.closeoutId,
+      actorUid: staff.uid,
+      error: normalizeText(error?.message)
+    });
+    throw new functions.https.HttpsError(
+      "internal",
+      "Failed to record actual attendance."
+    );
+  }
+});
+
 exports.refreshPostEventCloseoutConfiguration = functions.region(REGION).https.onCall(async (data, context) => {
   let request;
   try {
@@ -18416,9 +18770,243 @@ exports.refreshPostEventCloseoutConfiguration = functions.region(REGION).https.o
   }
 });
 
+function eventOperationalNotesRefs(organizationId, quoteId, receiptId = "") {
+  const organizationRef = db.collection(ORGANIZATIONS_COLLECTION).doc(organizationId);
+  const journalRef = organizationRef.collection(EVENT_OPERATIONAL_NOTES_COLLECTION).doc(quoteId);
+  return {
+    organizationRef,
+    quoteRef: organizationRef.collection(QUOTES_COLLECTION).doc(quoteId),
+    journalRef,
+    receiptRef: receiptId ? journalRef.collection("receipts").doc(receiptId) : null
+  };
+}
+
+function eventOperationalNotesSource({ organizationId, quoteId, quote = {} }) {
+  const sourceVersionId = normalizeText(
+    quote.activeVersionId || quote.versionMeta?.versionId
+  );
+  if (!sourceVersionId) {
+    throw new eventOperations.EventOperationsError(
+      "failed-precondition",
+      "A canonical active quote revision is required for operational notes."
+    );
+  }
+  if (normalizeOrganizationId(quote.organizationId) !== organizationId) {
+    throw new eventOperations.EventOperationsError(
+      "permission-denied",
+      "The operational-notes quote is outside the requested organization."
+    );
+  }
+  return { organizationId, quoteId, sourceVersionId };
+}
+
+function projectEventBriefReviewConsequences(quote = {}, snapshot = {}) {
+  const checklist = Array.isArray(quote.booking?.productionChecklist)
+    ? quote.booking.productionChecklist
+    : [];
+  const eventBrief = checklist.find((item) => normalizeText(item?.id) === "event-brief");
+  const completedAtISO = normalizeText(eventBrief?.completedAtISO);
+  const sourceUpdatedAtISO = normalizeText(snapshot.updatedAtISO);
+  if (
+    eventBrief?.completed === true
+    && Number.isFinite(Date.parse(completedAtISO))
+    && Number.isFinite(Date.parse(sourceUpdatedAtISO))
+    && sourceUpdatedAtISO > completedAtISO
+  ) {
+    return [{
+      code: "event_brief_review_required",
+      sourceUpdatedAtISO,
+      checklistCompletedAtISO: completedAtISO
+    }];
+  }
+  return [];
+}
+
+function throwEventOperationalNotesFailure(error, operation) {
+  if (error instanceof functions.https.HttpsError) throw error;
+  if (error instanceof eventOperations.EventOperationsError) {
+    throw new functions.https.HttpsError(error.code, error.message);
+  }
+  functions.logger.error(`${operation} failed`, {
+    error: normalizeText(error?.message).slice(0, 240)
+  });
+  throw new functions.https.HttpsError(
+    "internal",
+    "The authoritative event-notes operation did not complete."
+  );
+}
+
+exports.getEventOperationalNotesSnapshot = functions.region(REGION).https.onCall(async (data, context) => {
+  const organizationId = normalizeOrganizationId(data?.organizationId);
+  const staff = await assertStaff(context, { expectedOrganizationId: organizationId });
+  try {
+    const request = eventOperationalNotes.normalizeReadRequest(data);
+    if (staff.principalOrganizationId !== request.organizationId) {
+      throw new eventOperations.EventOperationsError(
+        "permission-denied",
+        "Operational notes require same-organization staff authority."
+      );
+    }
+    const refs = eventOperationalNotesRefs(request.organizationId, request.quoteId);
+    const result = await db.runTransaction(async (tx) => {
+      const [quoteSnap, journalSnap] = await Promise.all([
+        tx.get(refs.quoteRef),
+        tx.get(refs.journalRef)
+      ]);
+      if (!quoteSnap.exists) {
+        throw new eventOperations.EventOperationsError("not-found", "Quote not found.");
+      }
+      const quote = { id: request.quoteId, ...(quoteSnap.data() || {}) };
+      const source = eventOperationalNotesSource({
+        organizationId: request.organizationId,
+        quoteId: request.quoteId,
+        quote
+      });
+      if (source.sourceVersionId !== request.sourceVersionId) {
+        throw new eventOperations.EventOperationsError(
+          "aborted",
+          "The quote revision changed. Reload before reviewing operational notes."
+        );
+      }
+      const journal = journalSnap.exists ? journalSnap.data() || {} : null;
+      let latestReceipt = null;
+      if (journal) {
+        const lastReceiptId = normalizeText(journal.lastReceiptId);
+        if (!lastReceiptId) {
+          throw new eventOperations.EventOperationsError(
+            "data-loss",
+            "The operational-notes journal is missing its latest receipt pointer."
+          );
+        }
+        const receiptSnap = await tx.get(
+          refs.journalRef.collection("receipts").doc(lastReceiptId)
+        );
+        if (!receiptSnap.exists) {
+          throw new eventOperations.EventOperationsError(
+            "data-loss",
+            "The operational-notes journal receipt is unavailable."
+          );
+        }
+        latestReceipt = receiptSnap.data() || {};
+      }
+      const snapshot = eventOperationalNotes.projectStaffSnapshot({
+        source,
+        journal,
+        latestReceipt
+      });
+      return {
+        snapshot,
+        consequences: projectEventBriefReviewConsequences(quote, snapshot)
+      };
+    });
+    return {
+      ok: true,
+      storage: "firebase",
+      organizationId: request.organizationId,
+      quoteId: request.quoteId,
+      ...result
+    };
+  } catch (error) {
+    return throwEventOperationalNotesFailure(error, "getEventOperationalNotesSnapshot");
+  }
+});
+
+exports.applyEventOperationalNoteCommand = functions.region(REGION).https.onCall(async (data, context) => {
+  const organizationId = normalizeOrganizationId(data?.organizationId);
+  const staff = await assertStaff(context, { expectedOrganizationId: organizationId });
+  try {
+    const request = eventOperationalNotes.normalizeRequest(data);
+    if (staff.principalOrganizationId !== request.organizationId) {
+      throw new eventOperations.EventOperationsError(
+        "permission-denied",
+        "Operational notes require same-organization staff authority."
+      );
+    }
+    const requestedReceiptId = eventOperationalNotes.receiptIdFor(request);
+    const refs = eventOperationalNotesRefs(
+      request.organizationId,
+      request.quoteId,
+      requestedReceiptId
+    );
+    const recordedAtISO = new Date().toISOString();
+    const result = await db.runTransaction(async (tx) => {
+      const [quoteSnap, journalSnap, existingReceiptSnap] = await Promise.all([
+        tx.get(refs.quoteRef),
+        tx.get(refs.journalRef),
+        tx.get(refs.receiptRef)
+      ]);
+      if (!quoteSnap.exists) {
+        throw new eventOperations.EventOperationsError("not-found", "Quote not found.");
+      }
+      const quote = { id: request.quoteId, ...(quoteSnap.data() || {}) };
+      const source = eventOperationalNotesSource({
+        organizationId: request.organizationId,
+        quoteId: request.quoteId,
+        quote
+      });
+      const journal = journalSnap.exists ? journalSnap.data() || {} : null;
+      let currentReceipt = null;
+      if (journal && !existingReceiptSnap.exists) {
+        const lastReceiptId = normalizeText(journal.lastReceiptId);
+        if (!lastReceiptId) {
+          throw new eventOperations.EventOperationsError(
+            "data-loss",
+            "The operational-notes journal is missing its latest receipt pointer."
+          );
+        }
+        const currentReceiptSnap = await tx.get(
+          refs.journalRef.collection("receipts").doc(lastReceiptId)
+        );
+        if (!currentReceiptSnap.exists) {
+          throw new eventOperations.EventOperationsError(
+            "data-loss",
+            "The operational-notes journal receipt is unavailable."
+          );
+        }
+        currentReceipt = currentReceiptSnap.data() || {};
+      }
+      const planned = eventOperationalNotes.planCommand({
+        request,
+        actor: {
+          organizationId: request.organizationId,
+          uid: staff.uid,
+          role: staff.role
+        },
+        source,
+        journal,
+        currentReceipt,
+        existingReceipt: existingReceiptSnap.exists ? existingReceiptSnap.data() || {} : null,
+        nowISO: recordedAtISO
+      });
+      if (!planned.idempotent) {
+        tx.create(refs.receiptRef, planned.receipt);
+        tx.set(refs.journalRef, planned.nextJournal);
+      }
+      return {
+        idempotent: planned.idempotent,
+        snapshot: planned.snapshot,
+        receipt: eventOperationalNotes.publicReceipt(planned.receipt),
+        consequences: projectEventBriefReviewConsequences(quote, planned.snapshot)
+      };
+    });
+    return {
+      ok: true,
+      storage: "firebase",
+      organizationId: request.organizationId,
+      quoteId: request.quoteId,
+      ...result
+    };
+  } catch (error) {
+    return throwEventOperationalNotesFailure(error, "applyEventOperationalNoteCommand");
+  }
+});
+
 function kitchenBeoRefs(organizationId, quoteId, receiptId = "") {
   const organizationRef = db.collection(ORGANIZATIONS_COLLECTION).doc(organizationId);
   const artifactRef = organizationRef.collection(KITCHEN_BEO_ARTIFACTS_COLLECTION).doc(quoteId);
+  const operationalNotesRef = organizationRef
+    .collection(EVENT_OPERATIONAL_NOTES_COLLECTION)
+    .doc(quoteId);
   const dependencyStateRef = organizationRef
     .collection(COMMERCIAL_DEPENDENCY_STATE_COLLECTION)
     .doc(quoteId);
@@ -18430,6 +19018,7 @@ function kitchenBeoRefs(organizationId, quoteId, receiptId = "") {
     receiptRef: receiptId
       ? organizationRef.collection(KITCHEN_BEO_RECEIPTS_COLLECTION).doc(receiptId)
       : null,
+    operationalNotesRef,
     dependencyStateRef,
     invalidationsRef: dependencyStateRef.collection(COMMERCIAL_DEPENDENCY_INVALIDATIONS_COLLECTION),
     applyReceiptsRef: organizationRef.collection(COMMERCIAL_CHANGE_APPLY_RECEIPTS_COLLECTION),
@@ -18438,10 +19027,40 @@ function kitchenBeoRefs(organizationId, quoteId, receiptId = "") {
   };
 }
 
+function projectVerifiedOperationalNotesForBeo({
+  organizationId,
+  quoteId,
+  activeRevisionId,
+  journalRecord = null,
+  receiptRecord = null
+}) {
+  if (!journalRecord) {
+    return { projection: null, sourceReviewRequired: false };
+  }
+  const source = { organizationId, quoteId, sourceVersionId: activeRevisionId };
+  const snapshot = eventOperationalNotes.projectStaffSnapshot({
+    source,
+    journal: journalRecord,
+    latestReceipt: receiptRecord
+  });
+  if (snapshot.reasonCode === "source_revision_review_required") {
+    return { projection: null, sourceReviewRequired: true };
+  }
+  return {
+    projection: eventOperationalNotes.projectBeoProjection(journalRecord, {
+      organizationId,
+      quoteId,
+      activeRevisionId
+    }),
+    sourceReviewRequired: false
+  };
+}
+
 function throwKitchenBeoFailure(error, operation) {
   if (error instanceof functions.https.HttpsError) throw error;
   if (
     error instanceof KitchenBeoAuthorityError
+    || error instanceof eventOperations.EventOperationsError
     || error instanceof CommercialChangeAuthorityError
   ) {
     throw new functions.https.HttpsError(error.code, error.message);
@@ -18714,10 +19333,11 @@ async function readKitchenBeoReceiptHistory({
 
 async function readKitchenBeoStatus({ organizationId, quoteId, nowISO }) {
   const refs = kitchenBeoRefs(organizationId, quoteId);
-  const [quoteSnap, artifactSnap, invalidationsSnap] = await Promise.all([
+  const [quoteSnap, artifactSnap, invalidationsSnap, operationalNotesSnap] = await Promise.all([
     refs.quoteRef.get(),
     refs.artifactRef.get(),
-    refs.invalidationsRef.limit(101).get()
+    refs.invalidationsRef.limit(101).get(),
+    refs.operationalNotesRef.get()
   ]);
   if (!quoteSnap.exists) {
     throw new functions.https.HttpsError("not-found", "Quote not found.");
@@ -18727,6 +19347,32 @@ async function readKitchenBeoStatus({ organizationId, quoteId, nowISO }) {
     throw new functions.https.HttpsError("permission-denied", "Quote is outside your organization.");
   }
   const artifactPointer = artifactSnap.exists ? artifactSnap.data() || {} : null;
+  const activeRevisionId = normalizeText(quote.activeVersionId || quote.versionMeta?.versionId);
+  let operationalNotes = { projection: null, sourceReviewRequired: false };
+  if (operationalNotesSnap.exists) {
+    const journalRecord = operationalNotesSnap.data() || {};
+    const lastReceiptId = normalizeText(journalRecord.lastReceiptId);
+    if (!lastReceiptId) {
+      throw new eventOperations.EventOperationsError(
+        "data-loss",
+        "The operational-notes journal is missing its latest receipt pointer."
+      );
+    }
+    const receiptSnap = await refs.operationalNotesRef.collection("receipts").doc(lastReceiptId).get();
+    if (!receiptSnap.exists) {
+      throw new eventOperations.EventOperationsError(
+        "data-loss",
+        "The operational-notes journal receipt is unavailable."
+      );
+    }
+    operationalNotes = projectVerifiedOperationalNotesForBeo({
+      organizationId,
+      quoteId,
+      activeRevisionId,
+      journalRecord,
+      receiptRecord: receiptSnap.data() || {}
+    });
+  }
   const receiptHistory = await readKitchenBeoReceiptHistory({
     refs,
     artifactExists: artifactSnap.exists,
@@ -18754,8 +19400,29 @@ async function readKitchenBeoStatus({ organizationId, quoteId, nowISO }) {
       receiptHistory: receiptHistory.projection
     };
   }
+  if (operationalNotes.sourceReviewRequired) {
+    return {
+      quote,
+      status: projectKitchenBeoStatus({
+        schemaVersion: KITCHEN_BEO_STATUS_SCHEMA_VERSION,
+        authority: "server_derived",
+        state: KITCHEN_BEO_FRESHNESS_STATES.UNKNOWN,
+        observedAtISO: nowISO,
+        reasonCodes: ["operational_notes_source_revision_review_required"],
+        receiptId: normalizeText(receiptHistory.trustedCurrentReceipt?.receiptId),
+        receiptDependencyFingerprint: normalizeText(
+          receiptHistory.trustedCurrentReceipt?.dependencyFingerprint
+        ),
+        commercialSourceRevisionId: normalizeText(
+          receiptHistory.trustedCurrentReceipt?.commercialSourceRevisionId
+        )
+      }),
+      receiptHistory: receiptHistory.projection
+    };
+  }
   const status = kitchenBeoAuthority.deriveArtifactStatus({
     canonicalQuote: quote,
+    operationalNotes: operationalNotes.projection,
     trustedReceipt: receiptHistory.trustedCurrentReceipt,
     invalidations: invalidationsSnap.docs
       .map((snapshot) => ({ id: snapshot.id, ...(snapshot.data() || {}) }))
@@ -18898,11 +19565,51 @@ exports.generateKitchenBeo = functions.region(REGION).https.onCall(async (data, 
   try {
     const claimedAtISO = new Date().toISOString();
     const initialRefs = kitchenBeoRefs(organizationId, quoteId);
-    const initialQuoteSnap = await initialRefs.quoteRef.get();
+    const [initialQuoteSnap, initialOperationalNotesSnap] = await Promise.all([
+      initialRefs.quoteRef.get(),
+      initialRefs.operationalNotesRef.get()
+    ]);
     if (!initialQuoteSnap.exists) {
       throw new functions.https.HttpsError("not-found", "Quote not found.");
     }
     const canonicalQuote = { id: quoteId, ...(initialQuoteSnap.data() || {}) };
+    const activeRevisionId = normalizeText(
+      canonicalQuote.activeVersionId || canonicalQuote.versionMeta?.versionId
+    );
+    let initialOperationalNotes = { projection: null, sourceReviewRequired: false };
+    if (initialOperationalNotesSnap.exists) {
+      const journalRecord = initialOperationalNotesSnap.data() || {};
+      const lastReceiptId = normalizeText(journalRecord.lastReceiptId);
+      if (!lastReceiptId) {
+        throw new eventOperations.EventOperationsError(
+          "data-loss",
+          "The operational-notes journal is missing its latest receipt pointer."
+        );
+      }
+      const receiptSnap = await initialRefs.operationalNotesRef
+        .collection("receipts")
+        .doc(lastReceiptId)
+        .get();
+      if (!receiptSnap.exists) {
+        throw new eventOperations.EventOperationsError(
+          "data-loss",
+          "The operational-notes journal receipt is unavailable."
+        );
+      }
+      initialOperationalNotes = projectVerifiedOperationalNotesForBeo({
+        organizationId,
+        quoteId,
+        activeRevisionId,
+        journalRecord,
+        receiptRecord: receiptSnap.data() || {}
+      });
+    }
+    if (initialOperationalNotes.sourceReviewRequired) {
+      throw new eventOperations.EventOperationsError(
+        "failed-precondition",
+        "Review retained operational notes for the active quote revision before generating the Kitchen BEO."
+      );
+    }
     const trustedContext = {
       organizationId,
       quoteId,
@@ -18911,6 +19618,7 @@ exports.generateKitchenBeo = functions.region(REGION).https.onCall(async (data, 
     };
     const claim = kitchenBeoAuthority.buildGenerationClaim({
       canonicalQuote,
+      operationalNotes: initialOperationalNotes.projection,
       request: { requestId },
       trustedContext
     });
@@ -18941,14 +19649,16 @@ exports.generateKitchenBeo = functions.region(REGION).https.onCall(async (data, 
         transactionReceiptSnap,
         artifactSnap,
         dependencyStateSnap,
-        invalidationsSnap
+        invalidationsSnap,
+        transactionOperationalNotesSnap
       ] = await Promise.all([
         tx.get(refs.quoteRef),
         tx.get(refs.receiptRef),
         tx.get(refs.artifactRef),
         tx.get(refs.dependencyStateRef),
         tx.get(refs.invalidationsRef.orderBy(FieldPath.documentId())
-          .limit(COMMERCIAL_CHANGE_INVALIDATION_LIMIT + 1))
+          .limit(COMMERCIAL_CHANGE_INVALIDATION_LIMIT + 1)),
+        tx.get(refs.operationalNotesRef)
       ]);
       if (!transactionQuoteSnap.exists) {
         throw new KitchenBeoAuthorityError("not-found", "Quote not found.");
@@ -18966,8 +19676,45 @@ exports.generateKitchenBeo = functions.region(REGION).https.onCall(async (data, 
           "The Kitchen BEO quote is outside the requested organization."
         );
       }
+      const transactionActiveRevisionId = normalizeText(
+        transactionQuote.activeVersionId || transactionQuote.versionMeta?.versionId
+      );
+      let transactionOperationalNotes = { projection: null, sourceReviewRequired: false };
+      if (transactionOperationalNotesSnap.exists) {
+        const journalRecord = transactionOperationalNotesSnap.data() || {};
+        const lastReceiptId = normalizeText(journalRecord.lastReceiptId);
+        if (!lastReceiptId) {
+          throw new eventOperations.EventOperationsError(
+            "data-loss",
+            "The operational-notes journal is missing its latest receipt pointer."
+          );
+        }
+        const receiptSnap = await tx.get(
+          refs.operationalNotesRef.collection("receipts").doc(lastReceiptId)
+        );
+        if (!receiptSnap.exists) {
+          throw new eventOperations.EventOperationsError(
+            "data-loss",
+            "The operational-notes journal receipt is unavailable."
+          );
+        }
+        transactionOperationalNotes = projectVerifiedOperationalNotesForBeo({
+          organizationId,
+          quoteId,
+          activeRevisionId: transactionActiveRevisionId,
+          journalRecord,
+          receiptRecord: receiptSnap.data() || {}
+        });
+      }
+      if (transactionOperationalNotes.sourceReviewRequired) {
+        throw new eventOperations.EventOperationsError(
+          "failed-precondition",
+          "Review retained operational notes for the active quote revision before generating the Kitchen BEO."
+        );
+      }
       const transactionClaim = kitchenBeoAuthority.buildGenerationClaim({
         canonicalQuote: transactionQuote,
+        operationalNotes: transactionOperationalNotes.projection,
         request: { requestId },
         trustedContext
       });
@@ -19083,6 +19830,7 @@ exports.generateKitchenBeo = functions.region(REGION).https.onCall(async (data, 
           }));
         const postGenerationStatus = kitchenBeoAuthority.deriveArtifactStatus({
           canonicalQuote: transactionQuote,
+          operationalNotes: transactionOperationalNotes.projection,
           trustedReceipt: record,
           invalidations: remainingKitchenBeoInvalidations,
           sourceState: "available",
@@ -23901,6 +24649,2367 @@ exports.sendResendAcceptanceTestEmail = functions
           ? "Resend rejected the controlled acceptance request before accepting it."
           : "The Resend acceptance outcome is unknown. Do not retry this request; review provider evidence."
       );
+    }
+  });
+
+function googleCalendarExactKeys(value, expectedKeys, label) {
+  if (
+    !value
+    || typeof value !== "object"
+    || Array.isArray(value)
+    || Object.keys(value).length !== expectedKeys.length
+    || expectedKeys.some((key) => !Object.hasOwn(value, key))
+  ) {
+    throw new googleCalendarIntegration.GoogleCalendarIntegrationError(
+      "invalid-argument",
+      `${label} contains missing or unsupported fields.`
+    );
+  }
+}
+
+function normalizeGoogleCalendarRequestId(value) {
+  const requestId = normalizeText(value);
+  if (!/^[A-Za-z0-9][A-Za-z0-9._:@-]{19,159}$/u.test(requestId)) {
+    throw new googleCalendarIntegration.GoogleCalendarIntegrationError(
+      "invalid-argument",
+      "A stable Calendar request identity of 20 to 160 characters is required."
+    );
+  }
+  return requestId;
+}
+
+function normalizeGoogleCalendarRevision(value, label) {
+  if (!Number.isSafeInteger(value) || value < 0 || value >= Number.MAX_SAFE_INTEGER) {
+    throw new googleCalendarIntegration.GoogleCalendarIntegrationError(
+      "invalid-argument",
+      `${label} must be a bounded non-negative integer.`
+    );
+  }
+  return value;
+}
+
+function normalizeGoogleCalendarConnectionRequest(
+  data,
+  label,
+  { allowExchangeAcknowledgement = false } = {}
+) {
+  const hasAcknowledgement = Object.hasOwn(
+    data && typeof data === "object" ? data : {},
+    "acknowledgeUnknownExchange"
+  );
+  googleCalendarExactKeys(
+    data,
+    [
+      "organizationId", "requestId", "expectedConnectionRevision",
+      ...(hasAcknowledgement ? ["acknowledgeUnknownExchange"] : [])
+    ],
+    label
+  );
+  if (hasAcknowledgement
+    && (!allowExchangeAcknowledgement || data.acknowledgeUnknownExchange !== true)) {
+    throw new googleCalendarIntegration.GoogleCalendarIntegrationError(
+      "invalid-argument",
+      "The Calendar authorization uncertainty acknowledgement is invalid."
+    );
+  }
+  const organizationId = normalizeOrganizationId(data.organizationId);
+  if (!organizationId) {
+    throw new googleCalendarIntegration.GoogleCalendarIntegrationError(
+      "invalid-argument",
+      "organizationId is required."
+    );
+  }
+  return {
+    organizationId,
+    requestId: normalizeGoogleCalendarRequestId(data.requestId),
+    expectedConnectionRevision: normalizeGoogleCalendarRevision(
+      data.expectedConnectionRevision,
+      "expectedConnectionRevision"
+    ),
+    ...(hasAcknowledgement ? { acknowledgeUnknownExchange: true } : {})
+  };
+}
+
+function parseExactGoogleCalendarHttpsUrl(value, label, { allowQuery = false } = {}) {
+  try {
+    const url = new URL(normalizeText(value));
+    if (
+      url.protocol !== "https:"
+      || url.username
+      || url.password
+      || url.hash
+      || (!allowQuery && url.search)
+    ) {
+      throw new Error("unsafe");
+    }
+    return url.toString();
+  } catch {
+    throw new googleCalendarIntegration.GoogleCalendarIntegrationError(
+      "failed-precondition",
+      `${label} is not configured as an exact HTTPS URL.`
+    );
+  }
+}
+
+function getGoogleCalendarRuntimeConfiguration(organizationId) {
+  const serverEnabled = tenantWorkflowRuntimeEnabled(
+    "GOOGLE_CALENDAR_INTEGRATION_ENABLED",
+    organizationId
+  );
+  const redirectUri = normalizeText(process.env.GOOGLE_CALENDAR_OAUTH_REDIRECT_URI);
+  const appReturnUrl = normalizeText(process.env.GOOGLE_CALENDAR_APP_RETURN_URL);
+  const keyVersion = normalizeText(
+    process.env.GOOGLE_CALENDAR_OAUTH_KEY_VERSION || "calendar-key-v1"
+  );
+  const clientId = normalizeText(process.env[GOOGLE_CALENDAR_OAUTH_CLIENT_ID_SECRET_NAME]);
+  const clientSecret = normalizeText(
+    process.env[GOOGLE_CALENDAR_OAUTH_CLIENT_SECRET_NAME]
+  );
+  const stateSecret = normalizeText(process.env[GOOGLE_CALENDAR_OAUTH_STATE_SECRET_NAME]);
+  const tokenEncryptionKey = normalizeText(
+    process.env[GOOGLE_CALENDAR_TOKEN_ENCRYPTION_KEY_SECRET_NAME]
+  );
+  let urlsConfigured = false;
+  if (redirectUri && appReturnUrl) {
+    try {
+      parseExactGoogleCalendarHttpsUrl(redirectUri, "Calendar OAuth redirect URI");
+      parseExactGoogleCalendarHttpsUrl(appReturnUrl, "Calendar application return URL", {
+        allowQuery: true
+      });
+      urlsConfigured = true;
+    } catch {
+      urlsConfigured = false;
+    }
+  }
+  const tokenDecryptionConfigured = Buffer.from(tokenEncryptionKey, "base64").length === 32;
+  const secretsConfigured = Boolean(
+    clientId
+    && clientSecret
+    && Buffer.byteLength(stateSecret, "utf8") >= 32
+    && tokenDecryptionConfigured
+    && /^calendar-key-v[1-9][0-9]{0,2}$/u.test(keyVersion)
+  );
+  const providerConfigured = urlsConfigured && secretsConfigured;
+  return {
+    serverEnabled,
+    cleanupConfigured: tokenDecryptionConfigured,
+    providerConfigured,
+    configured: serverEnabled && providerConfigured,
+    redirectUri,
+    appReturnUrl,
+    keyVersion,
+    clientId,
+    clientSecret,
+    stateSecret,
+    tokenEncryptionKey
+  };
+}
+
+function googleCalendarOrganizationRefs(organizationId, quoteId = "") {
+  const organizationRef = db.collection(ORGANIZATIONS_COLLECTION).doc(organizationId);
+  return {
+    organizationRef,
+    settingsRef: organizationRef.collection("settings").doc("config"),
+    connectionRef: organizationRef.collection(GOOGLE_CALENDAR_CONNECTIONS_COLLECTION).doc("current"),
+    ...(quoteId ? {
+      quoteRef: organizationRef.collection(QUOTES_COLLECTION).doc(quoteId),
+      linkRef: organizationRef.collection(GOOGLE_CALENDAR_EVENT_LINKS_COLLECTION).doc(quoteId)
+    } : {})
+  };
+}
+
+function assertGoogleCalendarTenantEnabled(configuration, settings) {
+  if (
+    configuration.serverEnabled !== true
+    || settings?.googleCalendarIntegrationEnabled !== true
+  ) {
+    throw new googleCalendarIntegration.GoogleCalendarIntegrationError(
+      "failed-precondition",
+      "Google Calendar is not enabled for this environment and organization."
+    );
+  }
+  if (!configuration.configured) {
+    throw new googleCalendarIntegration.GoogleCalendarIntegrationError(
+      "failed-precondition",
+      "Google Calendar server configuration is incomplete."
+    );
+  }
+}
+
+function assertGoogleCalendarSameOrganizationAdmin(staff, organizationId, context) {
+  assertAdminStaff(staff);
+  if (
+    normalizeOrganizationId(staff.principalOrganizationId) !== organizationId
+    || staff.crossOrgBypass === true
+  ) {
+    throw new functions.https.HttpsError(
+      "permission-denied",
+      "Google Calendar connection changes require a same-organization administrator."
+    );
+  }
+  try {
+    assertRecentAuthentication({
+      authTimeSeconds: context?.auth?.token?.auth_time,
+      nowMs: Date.now()
+    });
+  } catch (error) {
+    throwOrganizationRoleAuthorityHttpsError(error);
+  }
+  return staff;
+}
+
+function throwGoogleCalendarHttpsError(error, fallback = "Google Calendar could not confirm the requested action.") {
+  if (error instanceof functions.https.HttpsError) throw error;
+  if (
+    error instanceof googleCalendarIntegration.GoogleCalendarIntegrationError
+    || error instanceof quoteAttendance.QuoteAttendanceError
+    || error instanceof OrganizationRoleAuthorityError
+  ) {
+    throw new functions.https.HttpsError(error.code, error.message);
+  }
+  functions.logger.error("Google Calendar operation failed", {
+    code: normalizeText(error?.code) || "internal"
+  });
+  throw new functions.https.HttpsError("internal", fallback);
+}
+
+function safeGoogleCalendarReason(value, fallback = "") {
+  const normalized = normalizeText(value).toLowerCase();
+  return /^[a-z][a-z0-9_]{0,79}$/u.test(normalized) ? normalized : fallback;
+}
+
+function googleCalendarPublicStatus({
+  configuration,
+  settings,
+  connection,
+  link,
+  activeSourceVersionId = "",
+  externalCopies = null,
+  externalCopiesTruncated = false
+} = {}) {
+  const tenantEnabled = settings?.googleCalendarIntegrationEnabled === true;
+  const available = configuration.serverEnabled === true
+    && tenantEnabled
+    && configuration.configured === true;
+  const connectionSource = available
+    ? connection
+    : { ...(connection || {}), state: "disabled" };
+  const projected = googleCalendarIntegration.projectStaffStatus({
+    connection: connectionSource,
+    sync: link,
+    activeSourceVersionId
+  });
+  const operationId = /^calendar_operation_[a-f0-9]{48}$/u.test(
+    normalizeText(link?.operationId)
+  ) ? normalizeText(link.operationId) : "";
+  const providerEventUrl = googleCalendarIntegration.safeGoogleCalendarHtmlLink(
+    normalizeText(link?.providerEventUrl)
+  );
+  const authorizationExpiryCandidates = connection?.state === "authorizing"
+    ? [connection.pendingExpiresAtISO, connection.mutationLeaseExpiresAtISO]
+      .map((value) => Date.parse(value))
+      .filter(Number.isFinite)
+    : [];
+  const authorizationExpiresAtISO = authorizationExpiryCandidates.length > 0
+    ? new Date(Math.max(...authorizationExpiryCandidates)).toISOString()
+    : "";
+  return {
+    schemaVersion: "google-calendar-public-status-v1",
+    configuration: {
+      enabled: configuration.serverEnabled === true && tenantEnabled,
+      configured: available,
+      cleanupAvailable: configuration.cleanupConfigured === true
+        && Boolean(connection?.tokenEnvelope)
+    },
+    connection: {
+      ...projected.connection,
+      reasonCode: safeGoogleCalendarReason(connection?.reasonCode),
+      canDisconnect: Boolean(connection?.tokenEnvelope),
+      authorizationExpiresAtISO
+    },
+    sync: link === undefined ? null : {
+      ...projected.sync,
+      operationId,
+      providerEventUrl
+    },
+    externalCopies: Array.isArray(externalCopies) ? externalCopies : [],
+    externalCopiesTruncated: externalCopiesTruncated === true,
+    evidenceBoundary: projected.evidenceBoundary
+  };
+}
+
+function googleCalendarExternalCopyProjection(docSnap, connection) {
+  const record = docSnap.data() || {};
+  const state = normalizeText(record.state).toLowerCase();
+  if (!docSnap.id || ["not_synced", "canceled"].includes(state)) return null;
+  const connectionGeneration = Number.isSafeInteger(connection?.configurationGeneration)
+    ? connection.configurationGeneration
+    : 0;
+  const copyGeneration = Number.isSafeInteger(record.connectionGeneration)
+    ? record.connectionGeneration
+    : 0;
+  const generationMismatch = connection?.state === "active"
+    && connectionGeneration > 0
+    && copyGeneration !== connectionGeneration;
+  const projectedState = generationMismatch ? "provider_drift" : state;
+  const requiresExactReconciliation = [
+    "queued", "dispatching", "outcome_uncertain", "cancel_queued", "provider_drift"
+  ].includes(projectedState);
+  return {
+    quoteId: docSnap.id,
+    label: normalizeText(record.eventLabel || "Catering event").slice(0, 200),
+    state: projectedState,
+    syncRevision: Number.isSafeInteger(record.syncRevision) ? record.syncRevision : 0,
+    sourceVersionId: normalizeText(record.sourceVersionId),
+    operationId: /^calendar_operation_[a-f0-9]{48}$/u.test(normalizeText(record.operationId))
+      ? normalizeText(record.operationId)
+      : "",
+    providerEventUrl: googleCalendarIntegration.safeGoogleCalendarHtmlLink(
+      normalizeText(record.providerEventUrl)
+    ),
+    recoveryAction: requiresExactReconciliation
+      ? "reconcile_exact_operation"
+      : "remove_external_copy"
+  };
+}
+
+async function readGoogleCalendarPublicStatus({ organizationId, quoteId = "" }) {
+  const configuration = getGoogleCalendarRuntimeConfiguration(organizationId);
+  const refs = googleCalendarOrganizationRefs(organizationId, quoteId);
+  const reads = [refs.settingsRef.get(), refs.connectionRef.get()];
+  if (quoteId) {
+    reads.push(refs.quoteRef.get(), refs.linkRef.get());
+  } else {
+    const links = refs.organizationRef.collection(GOOGLE_CALENDAR_EVENT_LINKS_COLLECTION);
+    reads.push(Promise.all([
+      links.where("state", "in", [
+        "queued", "dispatching", "outcome_uncertain", "cancel_queued"
+      ]).limit(51).get(),
+      links.where("providerEventId", ">", "").limit(51).get()
+    ]));
+  }
+  const [settingsSnap, connectionSnap, quoteOrLinksSnap, linkSnap] = await Promise.all(reads);
+  const settings = settingsSnap.exists ? settingsSnap.data() || {} : {};
+  const connection = connectionSnap.exists ? connectionSnap.data() || {} : null;
+  if (quoteId) {
+    const quote = quoteOrLinksSnap.exists ? quoteOrLinksSnap.data() || {} : null;
+    const acceptedOrBooked = ["accepted", "booked"].includes(
+      normalizeText(quote?.status).toLowerCase()
+    );
+    const link = linkSnap.exists ? linkSnap.data() || {} : null;
+    const status = googleCalendarPublicStatus({
+      configuration,
+      settings,
+      connection,
+      link,
+      activeSourceVersionId: acceptedOrBooked
+        ? normalizeText(quote?.activeVersionId || quote?.versionMeta?.versionId)
+        : ""
+    });
+    if (link && !acceptedOrBooked && !["canceled", "not_synced"].includes(link.state)) {
+      status.sync = {
+        ...status.sync,
+        state: "update_required",
+        reasonCode: "source_no_longer_active",
+        recoveryAction: "remove_external_copy"
+      };
+    }
+    return status;
+  }
+  const retainedCopySnaps = Array.isArray(quoteOrLinksSnap) ? quoteOrLinksSnap : [];
+  const retainedCopyDocs = [...new Map(
+    retainedCopySnaps.flatMap((snapshot) => snapshot.docs).map((doc) => [doc.id, doc])
+  ).values()];
+  const projectedCopies = retainedCopyDocs
+    .map((doc) => googleCalendarExternalCopyProjection(doc, connection))
+    .filter(Boolean);
+  const externalCopiesTruncated = projectedCopies.length > 50
+    || retainedCopySnaps.some((snapshot) => snapshot.size >= 51);
+  const externalCopies = projectedCopies.slice(0, 50);
+  return googleCalendarPublicStatus({
+    configuration,
+    settings,
+    connection,
+    link: undefined,
+    externalCopies,
+    externalCopiesTruncated
+  });
+}
+
+function buildGoogleCalendarAuthorizationUrl({ configuration, state, codeChallenge }) {
+  const url = new URL("https://accounts.google.com/o/oauth2/v2/auth");
+  url.searchParams.set("client_id", configuration.clientId);
+  url.searchParams.set("redirect_uri", configuration.redirectUri);
+  url.searchParams.set("response_type", "code");
+  url.searchParams.set("scope", googleCalendarIntegration.GOOGLE_CALENDAR_POLICY.scopes.join(" "));
+  url.searchParams.set("access_type", "offline");
+  url.searchParams.set("prompt", "consent");
+  url.searchParams.set("include_granted_scopes", "false");
+  url.searchParams.set("state", state);
+  url.searchParams.set("code_challenge", codeChallenge);
+  url.searchParams.set("code_challenge_method", "S256");
+  return url.toString();
+}
+
+function sendGoogleCalendarOAuthOutcome(res, configuration, state, reasonCode = "") {
+  res.set("Cache-Control", "no-store, max-age=0");
+  res.set("Pragma", "no-cache");
+  try {
+    const returnUrl = new URL(parseExactGoogleCalendarHttpsUrl(
+      configuration.appReturnUrl,
+      "Calendar application return URL",
+      { allowQuery: true }
+    ));
+    returnUrl.searchParams.set("calendar", state);
+    if (reasonCode) returnUrl.searchParams.set("reason", safeGoogleCalendarReason(reasonCode, "authorization_failed"));
+    res.redirect(303, returnUrl.toString());
+  } catch {
+    res.status(state === "connected" ? 200 : 400).type("text/plain").send(
+      state === "connected"
+        ? "Google Calendar connected. You may close this window."
+        : "Google Calendar could not be connected. Return to QuotePilot and try again."
+    );
+  }
+}
+
+async function exchangeGoogleCalendarAuthorizationCode({ configuration, code, codeVerifier }) {
+  let response;
+  try {
+    response = await fetch("https://oauth2.googleapis.com/token", {
+      method: "POST",
+      signal: AbortSignal.timeout(10_000),
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        code,
+        client_id: configuration.clientId,
+        client_secret: configuration.clientSecret,
+        redirect_uri: configuration.redirectUri,
+        grant_type: "authorization_code",
+        code_verifier: codeVerifier
+      }).toString()
+    });
+  } catch {
+    throw new googleCalendarIntegration.GoogleCalendarIntegrationError(
+      "unavailable",
+      "Google authorization could not be verified."
+    );
+  }
+  let payload = null;
+  try {
+    payload = await response.json();
+  } catch {
+    payload = null;
+  }
+  const refreshToken = normalizeText(payload?.refresh_token);
+  const accessToken = normalizeText(payload?.access_token);
+  const scopes = normalizeText(payload?.scope).split(/\s+/u).filter(Boolean);
+  if (
+    !response.ok
+    || !refreshToken
+    || !accessToken
+    || !googleCalendarIntegration.GOOGLE_CALENDAR_POLICY.scopes.every(
+      (scope) => scopes.includes(scope)
+    )
+  ) {
+    throw new googleCalendarIntegration.GoogleCalendarIntegrationError(
+      "failed-precondition",
+      "Google did not return the required owned-calendar authorization."
+    );
+  }
+  let verification;
+  try {
+    verification = await fetch(
+      "https://www.googleapis.com/calendar/v3/calendars/primary/events?maxResults=1&singleEvents=true",
+      {
+        method: "GET",
+        signal: AbortSignal.timeout(10_000),
+        headers: { Authorization: `Bearer ${accessToken}`, Accept: "application/json" }
+      }
+    );
+  } catch {
+    return {
+      refreshToken,
+      ownershipVerified: false,
+      verificationReasonCode: "calendar_ownership_verification_unavailable"
+    };
+  }
+  if (!verification.ok) {
+    return {
+      refreshToken,
+      ownershipVerified: false,
+      verificationReasonCode: "calendar_ownership_verification_rejected"
+    };
+  }
+  return { refreshToken, ownershipVerified: true, verificationReasonCode: "" };
+}
+
+async function refreshGoogleCalendarAccessToken({ configuration, connection }) {
+  const refreshToken = googleCalendarIntegration.decryptRefreshToken({
+    envelope: connection.tokenEnvelope,
+    organizationId: connection.organizationId,
+    actorUid: connection.tokenActorUid,
+    encryptionKey: configuration.tokenEncryptionKey
+  });
+  let response;
+  try {
+    response = await fetch("https://oauth2.googleapis.com/token", {
+      method: "POST",
+      signal: AbortSignal.timeout(10_000),
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        client_id: configuration.clientId,
+        client_secret: configuration.clientSecret,
+        refresh_token: refreshToken,
+        grant_type: "refresh_token"
+      }).toString()
+    });
+  } catch {
+    return { ok: false, reconnectRequired: false, reasonCode: "token_refresh_unavailable" };
+  }
+  let payload = null;
+  try {
+    payload = await response.json();
+  } catch {
+    payload = null;
+  }
+  const accessToken = normalizeText(payload?.access_token);
+  if (!response.ok || !accessToken) {
+    const reconnectRequired = response.status === 400 || response.status === 401;
+    return {
+      ok: false,
+      reconnectRequired,
+      reasonCode: reconnectRequired
+        ? "provider_credentials_rejected"
+        : "token_refresh_unavailable"
+    };
+  }
+  return { ok: true, accessToken };
+}
+
+async function readGoogleCalendarAcceptedProjection(tx, refs, request, connection, settings) {
+  const quoteSnap = await tx.get(refs.quoteRef);
+  if (!quoteSnap.exists) {
+    throw new googleCalendarIntegration.GoogleCalendarIntegrationError(
+      "not-found",
+      "The accepted event is unavailable."
+    );
+  }
+  const quote = { ...(quoteSnap.data() || {}), id: quoteSnap.id };
+  const sourceVersionId = normalizeText(quote.activeVersionId || quote.versionMeta?.versionId);
+  const acceptanceReceiptId = normalizeText(quote.acceptanceReceipt?.receiptId);
+  if (!sourceVersionId || !acceptanceReceiptId) {
+    throw new googleCalendarIntegration.GoogleCalendarIntegrationError(
+      "failed-precondition",
+      "The event is missing exact proposal acceptance evidence."
+    );
+  }
+  const [versionSnap, receiptSnap] = await Promise.all([
+    tx.get(refs.quoteRef.collection("versions").doc(sourceVersionId)),
+    tx.get(refs.organizationRef.collection(PROPOSAL_ACCEPTANCE_RECEIPTS_COLLECTION).doc(acceptanceReceiptId))
+  ]);
+  const version = versionSnap.exists
+    ? { ...(versionSnap.data() || {}), id: versionSnap.id }
+    : null;
+  const receiptDocument = receiptSnap.exists ? receiptSnap.data() || {} : null;
+  const acceptedSource = quoteAttendance.resolveAcceptedSource({
+    organizationId: request.organizationId,
+    quoteId: request.quoteId,
+    sourceQuote: quote,
+    sourceVersion: version,
+    acceptanceReceiptDocument: receiptDocument
+  });
+  if (acceptedSource.sourceVersionId !== request.expectedSourceVersionId) {
+    throw new googleCalendarIntegration.GoogleCalendarIntegrationError(
+      "aborted",
+      "The accepted event revision changed. Refresh before publishing its Calendar copy."
+    );
+  }
+  const tenantTimeZone = normalizeText(settings.businessTimeZone || settings.timeZone);
+  return googleCalendarIntegration.buildCanonicalEventProjection({
+    organizationId: request.organizationId,
+    quoteId: request.quoteId,
+    sourceVersionId,
+    quote,
+    sourceVersion: version,
+    acceptanceReceipt: {
+      ...(quote.acceptanceReceipt || {}),
+      organizationId: request.organizationId,
+      quoteId: request.quoteId
+    },
+    tenantTimeZone,
+    calendarBindingId: connection.calendarBindingId
+  });
+}
+
+function googleCalendarCommandDigest(request) {
+  return googleCalendarIntegration.sha256({
+    schemaVersion: googleCalendarIntegration.GOOGLE_CALENDAR_POLICY.schemaVersion,
+    request
+  });
+}
+
+function googleCalendarLinkBase(record = null) {
+  return record && typeof record === "object" ? record : {
+    state: "not_synced",
+    syncRevision: 0,
+    sourceVersionId: "",
+    operationId: "",
+    reasonCode: "",
+    providerEventId: "",
+    providerEtag: "",
+    providerOwnedFieldsSha256: "",
+    providerEventUrl: "",
+    connectionGeneration: 0,
+    lastVerifiedAtISO: ""
+  };
+}
+
+function googleCalendarLeaseIsActive(connection, nowMs = Date.now()) {
+  const kind = normalizeText(connection?.mutationLeaseKind);
+  const id = normalizeText(connection?.mutationLeaseId);
+  if (!kind || !id) return false;
+  const expiresAtMs = Date.parse(connection?.mutationLeaseExpiresAtISO || "");
+  return !Number.isFinite(expiresAtMs) || expiresAtMs > nowMs;
+}
+
+function clearGoogleCalendarLease() {
+  return {
+    mutationLeaseKind: FieldValue.delete(),
+    mutationLeaseId: FieldValue.delete(),
+    mutationLeaseExpiresAtISO: FieldValue.delete()
+  };
+}
+
+async function revokeGoogleCalendarToken(refreshToken) {
+  try {
+    const response = await fetch("https://oauth2.googleapis.com/revoke", {
+      method: "POST",
+      signal: AbortSignal.timeout(10_000),
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ token: refreshToken }).toString()
+    });
+    return response.ok || response.status === 400;
+  } catch {
+    return false;
+  }
+}
+
+async function retainGoogleCalendarRevocationUncertainty({
+  refs,
+  attemptRef,
+  stateId,
+  tokenEnvelope,
+  actorUid,
+  reasonCode
+}) {
+  const nowISO = new Date().toISOString();
+  await db.runTransaction(async (tx) => {
+    const [attemptSnap, connectionSnap] = await Promise.all([
+      tx.get(attemptRef),
+      tx.get(refs.connectionRef)
+    ]);
+    const attempt = attemptSnap.data() || {};
+    const connection = connectionSnap.data() || {};
+    const ownsActiveExchange = ["exchanging", "token_issued"].includes(attempt.state)
+      && connection.mutationLeaseKind === "oauth"
+      && connection.mutationLeaseId === stateId;
+    const ownsRecoveredUnknownExchange = attempt.state === "exchange_outcome_uncertain"
+      && attempt.stateId === stateId
+      && attempt.actorUid === actorUid
+      && connection.state === "reconnect_required"
+      && connection.reasonCode === "authorization_exchange_outcome_uncertain"
+      && !connection.tokenEnvelope
+      && !connection.pendingStateId;
+    if (!ownsActiveExchange && !ownsRecoveredUnknownExchange) {
+      throw new googleCalendarIntegration.GoogleCalendarIntegrationError(
+        "aborted",
+        "The uncertain Google grant could not be bound to its original authorization."
+      );
+    }
+    tx.set(attemptRef, {
+      state: "revocation_uncertain",
+      tokenEnvelope,
+      codeVerifierEnvelope: FieldValue.delete(),
+      reasonCode: safeGoogleCalendarReason(reasonCode, "revocation_outcome_uncertain"),
+      updatedAtISO: nowISO,
+      updatedAt: FieldValue.serverTimestamp()
+    }, { merge: true });
+    tx.set(refs.connectionRef, {
+      state: "reconnect_required",
+      connectionRevision: (connection.connectionRevision || 0) + 1,
+      tokenEnvelope,
+      tokenActorUid: actorUid,
+      tokenRevocationOnly: true,
+      reasonCode: "unactivated_grant_revocation_uncertain",
+      pendingStateId: FieldValue.delete(),
+      pendingRequestSha256: FieldValue.delete(),
+      pendingExpiresAtISO: FieldValue.delete(),
+      authorizationUrl: FieldValue.delete(),
+      authorizationPreviousState: FieldValue.delete(),
+      authorizationPreviousReasonCode: FieldValue.delete(),
+      ...clearGoogleCalendarLease(),
+      updatedAtISO: nowISO,
+      updatedAt: FieldValue.serverTimestamp()
+    }, { merge: true });
+  });
+}
+
+async function retainGoogleCalendarRevocationUncertaintyWithRetry(input) {
+  let lastError = null;
+  for (let attemptNumber = 1; attemptNumber <= 3; attemptNumber += 1) {
+    try {
+      await retainGoogleCalendarRevocationUncertainty(input);
+      return;
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw lastError;
+}
+
+async function recoverExpiredGoogleCalendarAuthorization({ organizationId, connection }) {
+  const revision = Number.isSafeInteger(connection?.connectionRevision)
+    ? connection.connectionRevision
+    : 0;
+  const stateId = normalizeText(connection?.pendingStateId);
+  const recoveryBoundaryMs = Math.max(
+    ...[connection?.pendingExpiresAtISO, connection?.mutationLeaseExpiresAtISO]
+      .map((value) => Date.parse(value))
+      .filter(Number.isFinite)
+  );
+  if (
+    connection?.state !== "authorizing"
+    || !/^calendar_oauth_state_[a-f0-9]{48}$/u.test(stateId)
+    || !Number.isFinite(recoveryBoundaryMs)
+    || recoveryBoundaryMs > Date.now()
+  ) {
+    return { handled: false };
+  }
+  const refs = googleCalendarOrganizationRefs(organizationId);
+  const attemptRef = db.collection(GOOGLE_CALENDAR_OAUTH_STATES_COLLECTION).doc(stateId);
+  return db.runTransaction(async (tx) => {
+    const [connectionSnap, attemptSnap] = await Promise.all([
+      tx.get(refs.connectionRef),
+      tx.get(attemptRef)
+    ]);
+    const current = connectionSnap.exists ? connectionSnap.data() || {} : {};
+    const attempt = attemptSnap.exists ? attemptSnap.data() || {} : null;
+    if (
+      current.state !== "authorizing"
+      || current.connectionRevision !== revision
+      || current.pendingStateId !== stateId
+      || current.mutationLeaseKind !== "oauth"
+      || current.mutationLeaseId !== stateId
+    ) {
+      throw new googleCalendarIntegration.GoogleCalendarIntegrationError(
+        "aborted",
+        "The Google authorization changed while its expired state was being recovered."
+      );
+    }
+    if (
+      !attempt
+      || attempt.stateId !== stateId
+      || attempt.organizationId !== organizationId
+    ) {
+      throw new googleCalendarIntegration.GoogleCalendarIntegrationError(
+        "data-loss",
+        "The expired Google authorization evidence could not be verified."
+      );
+    }
+    const nowISO = new Date().toISOString();
+    const recoveryPlan = googleCalendarIntegration.planExpiredOAuthRecovery({
+      connection: current,
+      attempt,
+      nowISO
+    });
+    if (["activate_verified_grant", "revoke_unverified_grant"].includes(recoveryPlan.action)
+      && !normalizeText(attempt.actorUid)) {
+      throw new googleCalendarIntegration.GoogleCalendarIntegrationError(
+        "data-loss",
+        "The retained Google grant is missing its original connector identity."
+      );
+    }
+    if (recoveryPlan.action === "replace_pending") return { handled: false };
+    if (recoveryPlan.action === "restore_prior") {
+      const restoredState = ["revoked", "unconfigured", "reconnect_required"]
+        .includes(current.authorizationPreviousState)
+        ? current.authorizationPreviousState
+        : "reconnect_required";
+      tx.set(attemptRef, {
+        state: "failed",
+        codeVerifierEnvelope: FieldValue.delete(),
+        reasonCode: "authorization_expired",
+        failedAtISO: nowISO,
+        updatedAt: FieldValue.serverTimestamp()
+      }, { merge: true });
+      tx.set(refs.connectionRef, {
+        state: restoredState,
+        connectionRevision: revision + 1,
+        reasonCode: safeGoogleCalendarReason(
+          current.authorizationPreviousReasonCode,
+          "provider_credentials_rejected"
+        ),
+        pendingStateId: FieldValue.delete(),
+        pendingRequestSha256: FieldValue.delete(),
+        pendingExpiresAtISO: FieldValue.delete(),
+        authorizationUrl: FieldValue.delete(),
+        authorizationPreviousState: FieldValue.delete(),
+        authorizationPreviousReasonCode: FieldValue.delete(),
+        ...clearGoogleCalendarLease(),
+        updatedAtISO: nowISO,
+        updatedAt: FieldValue.serverTimestamp()
+      }, { merge: true });
+      return { handled: true, state: "prior_connection_restored" };
+    }
+    if (recoveryPlan.action === "record_exchange_uncertain") {
+      tx.set(attemptRef, {
+        state: "exchange_outcome_uncertain",
+        codeVerifierEnvelope: FieldValue.delete(),
+        reasonCode: "authorization_exchange_outcome_uncertain",
+        outcomeRecordedAtISO: nowISO,
+        updatedAt: FieldValue.serverTimestamp()
+      }, { merge: true });
+      tx.set(refs.connectionRef, {
+        state: "reconnect_required",
+        connectionRevision: revision + 1,
+        reasonCode: "authorization_exchange_outcome_uncertain",
+        pendingStateId: FieldValue.delete(),
+        pendingRequestSha256: FieldValue.delete(),
+        pendingExpiresAtISO: FieldValue.delete(),
+        authorizationUrl: FieldValue.delete(),
+        authorizationPreviousState: FieldValue.delete(),
+        authorizationPreviousReasonCode: FieldValue.delete(),
+        ...clearGoogleCalendarLease(),
+        updatedAtISO: nowISO,
+        updatedAt: FieldValue.serverTimestamp()
+      }, { merge: true });
+      return { handled: true, state: "exchange_outcome_uncertain" };
+    }
+    if (["activate_verified_grant", "revoke_unverified_grant"].includes(recoveryPlan.action)) {
+      if (recoveryPlan.action === "activate_verified_grant") {
+        tx.set(refs.connectionRef, {
+          schemaVersion: 1,
+          organizationId,
+          state: "active",
+          connectionRevision: revision + 1,
+          configurationGeneration: (current.configurationGeneration || 0) + 1,
+          calendarBindingId: `calendar_binding_${randomUUID()}`,
+          calendarLabel: "Primary Google Calendar",
+          calendarId: "primary",
+          tokenActorUid: attempt.actorUid,
+          tokenEnvelope: attempt.tokenEnvelope,
+          scopes: googleCalendarIntegration.GOOGLE_CALENDAR_POLICY.scopes,
+          connectedAtISO: nowISO,
+          connectedByUid: attempt.actorUid,
+          reasonCode: "",
+          ...clearGoogleCalendarLease(),
+          updatedAtISO: nowISO,
+          updatedAt: FieldValue.serverTimestamp()
+        }, { merge: false });
+        tx.set(attemptRef, {
+          state: "consumed",
+          codeVerifierEnvelope: FieldValue.delete(),
+          tokenEnvelope: FieldValue.delete(),
+          callbackLeaseId: FieldValue.delete(),
+          consumedAtISO: nowISO,
+          updatedAt: FieldValue.serverTimestamp()
+        }, { merge: true });
+        return { handled: true, state: "active" };
+      }
+      tx.set(attemptRef, {
+        state: "revocation_required",
+        codeVerifierEnvelope: FieldValue.delete(),
+        reasonCode: safeGoogleCalendarReason(
+          attempt.verificationReasonCode,
+          "calendar_ownership_verification_unavailable"
+        ),
+        updatedAtISO: nowISO,
+        updatedAt: FieldValue.serverTimestamp()
+      }, { merge: true });
+      tx.set(refs.connectionRef, {
+        state: "reconnect_required",
+        connectionRevision: revision + 1,
+        tokenEnvelope: attempt.tokenEnvelope,
+        tokenActorUid: attempt.actorUid,
+        tokenRevocationOnly: true,
+        reasonCode: "unactivated_grant_requires_revocation",
+        pendingStateId: FieldValue.delete(),
+        pendingRequestSha256: FieldValue.delete(),
+        pendingExpiresAtISO: FieldValue.delete(),
+        authorizationUrl: FieldValue.delete(),
+        authorizationPreviousState: FieldValue.delete(),
+        authorizationPreviousReasonCode: FieldValue.delete(),
+        ...clearGoogleCalendarLease(),
+        updatedAtISO: nowISO,
+        updatedAt: FieldValue.serverTimestamp()
+      }, { merge: true });
+      return { handled: true, state: "revocation_required" };
+    }
+    throw new googleCalendarIntegration.GoogleCalendarIntegrationError(
+      "data-loss",
+      "The expired Google authorization has no safe recovery transition."
+    );
+  });
+}
+
+async function finalizeGoogleCalendarOperation({
+  organizationId,
+  quoteId,
+  operationId,
+  expectedSyncRevision,
+  resultState,
+  reasonCode,
+  sourceVersionId = "",
+  eventLabel = "",
+  provider = null,
+  connectionState = ""
+}) {
+  const refs = googleCalendarOrganizationRefs(organizationId, quoteId);
+  const operationRef = refs.organizationRef.collection(GOOGLE_CALENDAR_OPERATIONS_COLLECTION).doc(operationId);
+  const nowISO = new Date().toISOString();
+  await db.runTransaction(async (tx) => {
+    const [connectionSnap, linkSnap, operationSnap] = await Promise.all([
+      tx.get(refs.connectionRef),
+      tx.get(refs.linkRef),
+      tx.get(operationRef)
+    ]);
+    if (!operationSnap.exists) {
+      throw new googleCalendarIntegration.GoogleCalendarIntegrationError(
+        "data-loss",
+        "The Calendar operation receipt is unavailable."
+      );
+    }
+    const operation = operationSnap.data() || {};
+    const connection = connectionSnap.exists ? connectionSnap.data() || {} : {};
+    const link = googleCalendarLinkBase(linkSnap.exists ? linkSnap.data() || {} : null);
+    if (
+      operation.organizationId !== organizationId
+      || operation.quoteId !== quoteId
+      || operation.operationId !== operationId
+      || link.operationId !== operationId
+      || link.syncRevision !== expectedSyncRevision
+      || connection.mutationLeaseKind !== "event"
+      || connection.mutationLeaseId !== operationId
+    ) {
+      throw new googleCalendarIntegration.GoogleCalendarIntegrationError(
+        "aborted",
+        "The Calendar operation was superseded. Refresh its current state."
+      );
+    }
+    const nextLink = {
+      ...link,
+      organizationId,
+      quoteId,
+      state: resultState,
+      syncRevision: expectedSyncRevision + 1,
+      sourceVersionId: sourceVersionId || link.sourceVersionId || "",
+      operationId,
+      connectionGeneration: resultState === "synced"
+        || !operation.priorConnectionGeneration
+        || operation.priorConnectionGeneration === operation.connectionGeneration
+        ? operation.connectionGeneration || connection.configurationGeneration || 0
+        : operation.priorConnectionGeneration,
+      reasonCode: safeGoogleCalendarReason(reasonCode),
+      eventLabel: normalizeText(eventLabel || link.eventLabel || "Catering event").slice(0, 200),
+      ...(provider?.eventId ? {
+        providerEventId: provider.eventId,
+        providerEtag: provider.etag,
+        providerOwnedFieldsSha256: provider.ownedFieldsSha256,
+        providerEventUrl: provider.htmlLink,
+        lastVerifiedAtISO: provider.updatedAtISO || nowISO
+      } : {}),
+      ...(resultState === "canceled" ? {
+        providerEventId: "",
+        providerEtag: "",
+        providerOwnedFieldsSha256: "",
+        providerEventUrl: "",
+        lastVerifiedAtISO: nowISO
+      } : {}),
+      updatedAtISO: nowISO,
+      updatedAt: FieldValue.serverTimestamp()
+    };
+    tx.set(refs.linkRef, nextLink, { merge: true });
+    tx.set(operationRef, {
+      state: resultState,
+      reasonCode: safeGoogleCalendarReason(reasonCode),
+      resultSyncRevision: nextLink.syncRevision,
+      completedAtISO: nowISO,
+      updatedAt: FieldValue.serverTimestamp()
+    }, { merge: true });
+    tx.set(refs.connectionRef, {
+      ...clearGoogleCalendarLease(),
+      ...(connectionState === "reconnect_required" ? {
+        state: "reconnect_required",
+        connectionRevision: (connection.connectionRevision || 0) + 1,
+        reasonCode: safeGoogleCalendarReason(reasonCode)
+      } : {}),
+      updatedAtISO: nowISO,
+      updatedAt: FieldValue.serverTimestamp()
+    }, { merge: true });
+  });
+}
+
+const GOOGLE_CALENDAR_SECRET_BINDINGS = [
+  GOOGLE_CALENDAR_OAUTH_CLIENT_ID_SECRET_NAME,
+  GOOGLE_CALENDAR_OAUTH_CLIENT_SECRET_NAME,
+  GOOGLE_CALENDAR_OAUTH_STATE_SECRET_NAME,
+  GOOGLE_CALENDAR_TOKEN_ENCRYPTION_KEY_SECRET_NAME
+];
+
+exports.getGoogleCalendarStatus = functions
+  .runWith({ secrets: GOOGLE_CALENDAR_SECRET_BINDINGS })
+  .region(REGION)
+  .https.onCall(async (data, context) => {
+    try {
+      const supplied = data && typeof data === "object" && !Array.isArray(data) ? data : {};
+      const expectedKeys = Object.hasOwn(supplied, "quoteId")
+        ? ["organizationId", "quoteId"]
+        : ["organizationId"];
+      googleCalendarExactKeys(supplied, expectedKeys, "Calendar status request");
+      const organizationId = normalizeOrganizationId(supplied.organizationId);
+      const quoteId = normalizeText(supplied.quoteId);
+      if (!organizationId || (Object.hasOwn(supplied, "quoteId") && !quoteId)) {
+        throw new googleCalendarIntegration.GoogleCalendarIntegrationError(
+          "invalid-argument",
+          "An exact organization and optional quote are required."
+        );
+      }
+      await assertStaff(context, { expectedOrganizationId: organizationId });
+      return {
+        ok: true,
+        status: await readGoogleCalendarPublicStatus({ organizationId, quoteId })
+      };
+    } catch (error) {
+      return throwGoogleCalendarHttpsError(error, "Google Calendar status is unavailable.");
+    }
+  });
+
+exports.startGoogleCalendarConnection = functions
+  .runWith({ secrets: GOOGLE_CALENDAR_SECRET_BINDINGS })
+  .region(REGION)
+  .https.onCall(async (data, context) => {
+    try {
+      const request = normalizeGoogleCalendarConnectionRequest(
+        data,
+        "Calendar connection request",
+        { allowExchangeAcknowledgement: true }
+      );
+      const staff = assertGoogleCalendarSameOrganizationAdmin(
+        await assertStaff(context, { expectedOrganizationId: request.organizationId }),
+        request.organizationId,
+        context
+      );
+      const configuration = getGoogleCalendarRuntimeConfiguration(request.organizationId);
+      const refs = googleCalendarOrganizationRefs(request.organizationId);
+      const [settingsSnap, connectionSnap] = await Promise.all([
+        refs.settingsRef.get(),
+        refs.connectionRef.get()
+      ]);
+      const settings = settingsSnap.exists ? settingsSnap.data() || {} : {};
+      assertGoogleCalendarTenantEnabled(configuration, settings);
+      const prior = connectionSnap.exists ? connectionSnap.data() || {} : {};
+      const priorRevision = Number.isSafeInteger(prior.connectionRevision)
+        ? prior.connectionRevision
+        : 0;
+      const requestSha256 = googleCalendarIntegration.sha256(request.requestId);
+      if (
+        prior.state === "authorizing"
+        && prior.pendingRequestSha256 === requestSha256
+        && Number.isFinite(Date.parse(prior.pendingExpiresAtISO))
+        && Date.parse(prior.pendingExpiresAtISO) > Date.now()
+        && normalizeText(prior.authorizationUrl)
+      ) {
+        return {
+          ok: true,
+          authorizationUrl: prior.authorizationUrl,
+          expiresAtISO: prior.pendingExpiresAtISO,
+          connectionRevision: priorRevision
+        };
+      }
+      if (priorRevision !== request.expectedConnectionRevision) {
+        throw new googleCalendarIntegration.GoogleCalendarIntegrationError(
+          "aborted",
+          "The Calendar connection changed. Refresh before trying again."
+        );
+      }
+      const expiredRecovery = await recoverExpiredGoogleCalendarAuthorization({
+        organizationId: request.organizationId,
+        connection: prior
+      });
+      if (expiredRecovery.handled) {
+        return {
+          ok: true,
+          recovered: true,
+          status: await readGoogleCalendarPublicStatus({ organizationId: request.organizationId })
+        };
+      }
+      const exchangeOutcomeUncertain = prior.reasonCode === "authorization_exchange_outcome_uncertain";
+      if (exchangeOutcomeUncertain && request.acknowledgeUnknownExchange !== true) {
+        throw new googleCalendarIntegration.GoogleCalendarIntegrationError(
+          "failed-precondition",
+          "Review Google account access and acknowledge the unknown authorization exchange before retrying."
+        );
+      }
+      if (!exchangeOutcomeUncertain && request.acknowledgeUnknownExchange === true) {
+        throw new googleCalendarIntegration.GoogleCalendarIntegrationError(
+          "invalid-argument",
+          "No unknown Google authorization exchange is awaiting acknowledgement."
+        );
+      }
+      const mayReplaceExpiredAuthorization = prior.state === "authorizing"
+        && /^calendar_oauth_state_[a-f0-9]{48}$/u.test(normalizeText(prior.pendingStateId))
+        && Number.isFinite(Date.parse(prior.pendingExpiresAtISO))
+        && Date.parse(prior.pendingExpiresAtISO) <= Date.now();
+      if (prior.tokenEnvelope && !mayReplaceExpiredAuthorization) {
+        throw new googleCalendarIntegration.GoogleCalendarIntegrationError(
+          "failed-precondition",
+          "Disconnect the current Google Calendar authorization before connecting another account."
+        );
+      }
+      if (googleCalendarLeaseIsActive(prior)) {
+        throw new googleCalendarIntegration.GoogleCalendarIntegrationError(
+          "failed-precondition",
+          "Another Google Calendar change is still in progress. Check its result before continuing."
+        );
+      }
+      if (
+        prior.state === "authorizing"
+        && Number.isFinite(Date.parse(prior.pendingExpiresAtISO))
+        && Date.parse(prior.pendingExpiresAtISO) > Date.now()
+      ) {
+        throw new googleCalendarIntegration.GoogleCalendarIntegrationError(
+          "failed-precondition",
+          "Another Calendar authorization is still open. Finish it or wait for it to expire."
+        );
+      }
+      const nowISO = new Date().toISOString();
+      const stateEnvelope = googleCalendarIntegration.createOAuthState({
+        organizationId: request.organizationId,
+        actorUid: staff.uid,
+        requestId: request.requestId,
+        redirectUri: configuration.redirectUri,
+        nowISO,
+        signingSecret: configuration.stateSecret
+      });
+      const codeVerifier = `${randomUUID().replace(/-/g, "")}${randomUUID().replace(/-/g, "")}`;
+      const codeChallenge = createHash("sha256").update(codeVerifier).digest("base64url");
+      const encryptedCodeVerifier = googleCalendarIntegration.encryptRefreshToken({
+        refreshToken: codeVerifier,
+        organizationId: request.organizationId,
+        actorUid: staff.uid,
+        keyVersion: configuration.keyVersion,
+        encryptionKey: configuration.tokenEncryptionKey
+      });
+      const authorizationUrl = buildGoogleCalendarAuthorizationUrl({
+        configuration,
+        state: stateEnvelope.state,
+        codeChallenge
+      });
+      const attemptRef = db.collection(GOOGLE_CALENDAR_OAUTH_STATES_COLLECTION).doc(
+        stateEnvelope.stateId
+      );
+      const nextRevision = priorRevision + 1;
+      await db.runTransaction(async (tx) => {
+        const currentConnectionSnap = await tx.get(refs.connectionRef);
+        const current = currentConnectionSnap.exists ? currentConnectionSnap.data() || {} : {};
+        const supersededStateId = normalizeText(current.pendingStateId);
+        const supersededAttemptRef = /^calendar_oauth_state_[a-f0-9]{48}$/u.test(supersededStateId)
+          ? db.collection(GOOGLE_CALENDAR_OAUTH_STATES_COLLECTION).doc(supersededStateId)
+          : null;
+        const [existingAttemptSnap, supersededAttemptSnap] = await Promise.all([
+          tx.get(attemptRef),
+          supersededAttemptRef ? tx.get(supersededAttemptRef) : Promise.resolve(null)
+        ]);
+        const currentRevision = Number.isSafeInteger(current.connectionRevision)
+          ? current.connectionRevision
+          : 0;
+        if (currentRevision !== priorRevision || existingAttemptSnap.exists) {
+          throw new googleCalendarIntegration.GoogleCalendarIntegrationError(
+            "aborted",
+            "The Calendar connection changed while authorization was starting."
+          );
+        }
+        const supersededAttempt = supersededAttemptSnap?.exists
+          ? supersededAttemptSnap.data() || {}
+          : null;
+        const replacingExpiredAuthorization = current.state === "authorizing"
+          && Number.isFinite(Date.parse(current.pendingExpiresAtISO))
+          && Date.parse(current.pendingExpiresAtISO) <= Date.now();
+        if (current.state === "authorizing") {
+          if (
+            !replacingExpiredAuthorization
+            || !supersededAttempt
+            || supersededAttempt.stateId !== supersededStateId
+            || supersededAttempt.organizationId !== request.organizationId
+            || supersededAttempt.state !== "pending"
+          ) {
+            throw new googleCalendarIntegration.GoogleCalendarIntegrationError(
+              "failed-precondition",
+              "The prior Google authorization may already have contacted Google. Finish or recover that exact authorization before starting another."
+            );
+          }
+          tx.set(supersededAttemptRef, {
+            state: "failed",
+            codeVerifierEnvelope: FieldValue.delete(),
+            reasonCode: "authorization_expired",
+            failedAtISO: nowISO,
+            updatedAt: FieldValue.serverTimestamp()
+          }, { merge: true });
+        }
+        if (
+          (current.tokenEnvelope && !replacingExpiredAuthorization)
+          || googleCalendarLeaseIsActive(current)
+        ) {
+          throw new googleCalendarIntegration.GoogleCalendarIntegrationError(
+            "failed-precondition",
+            "Another Google Calendar authorization or event change is still active."
+          );
+        }
+        const authorizationBaseState = current.state === "authorizing"
+          ? current.authorizationPreviousState
+          : current.state;
+        const authorizationBaseReasonCode = current.state === "authorizing"
+          ? current.authorizationPreviousReasonCode
+          : current.reasonCode;
+        tx.create(attemptRef, {
+          schemaVersion: 1,
+          stateId: stateEnvelope.stateId,
+          organizationId: request.organizationId,
+          actorUid: staff.uid,
+          requestId: request.requestId,
+          redirectUri: configuration.redirectUri,
+          codeVerifierEnvelope: encryptedCodeVerifier,
+          previousConnectionState: ["revoked", "unconfigured", "reconnect_required"].includes(authorizationBaseState)
+            ? authorizationBaseState
+            : "unconfigured",
+          previousConnectionReasonCode: safeGoogleCalendarReason(authorizationBaseReasonCode),
+          state: "pending",
+          issuedAtISO: nowISO,
+          expiresAtISO: stateEnvelope.expiresAtISO,
+          createdAt: FieldValue.serverTimestamp()
+        });
+        tx.set(refs.connectionRef, {
+          ...current,
+          schemaVersion: 1,
+          organizationId: request.organizationId,
+          state: "authorizing",
+          connectionRevision: nextRevision,
+          configurationGeneration: Number.isSafeInteger(current.configurationGeneration)
+            ? current.configurationGeneration
+            : 0,
+          pendingStateId: stateEnvelope.stateId,
+          pendingRequestSha256: requestSha256,
+          pendingExpiresAtISO: stateEnvelope.expiresAtISO,
+          authorizationUrl,
+          authorizationPreviousState: ["revoked", "unconfigured", "reconnect_required"].includes(authorizationBaseState)
+            ? authorizationBaseState
+            : "unconfigured",
+          authorizationPreviousReasonCode: safeGoogleCalendarReason(authorizationBaseReasonCode),
+          mutationLeaseKind: "oauth",
+          mutationLeaseId: stateEnvelope.stateId,
+          mutationLeaseExpiresAtISO: stateEnvelope.expiresAtISO,
+          reasonCode: "authorization_in_progress",
+          updatedAtISO: nowISO,
+          updatedAt: FieldValue.serverTimestamp()
+        }, { merge: false });
+      });
+      return {
+        ok: true,
+        authorizationUrl,
+        expiresAtISO: stateEnvelope.expiresAtISO,
+        connectionRevision: nextRevision
+      };
+    } catch (error) {
+      return throwGoogleCalendarHttpsError(error, "Google Calendar authorization could not start.");
+    }
+  });
+
+exports.googleCalendarOAuthCallback = functions
+  .runWith({
+    secrets: GOOGLE_CALENDAR_SECRET_BINDINGS,
+    timeoutSeconds: GOOGLE_CALENDAR_OAUTH_CALLBACK_TIMEOUT_SECONDS
+  })
+  .region(REGION)
+  .https.onRequest(async (req, res) => {
+    const state = normalizeText(req.query?.state);
+    const code = normalizeText(req.query?.code);
+    const oauthError = normalizeText(req.query?.error);
+    const stateId = state
+      ? `calendar_oauth_state_${googleCalendarIntegration.sha256(state).slice(0, 48)}`
+      : "";
+    let configuration = getGoogleCalendarRuntimeConfiguration("");
+    let attemptRef = null;
+    let attempt = null;
+    let callbackLeaseId = "";
+    let issuedRefreshToken = "";
+    let retainedRefreshToken = "";
+    let issuedTokenPersisted = false;
+    let failureRecorded = false;
+    let unresolvedIssuedGrantWithoutReceipt = false;
+    try {
+      if (req.method !== "GET" || !stateId || code.length > 4_096) {
+        throw new googleCalendarIntegration.GoogleCalendarIntegrationError(
+          "invalid-argument",
+          "Google Calendar authorization response is incomplete."
+        );
+      }
+      attemptRef = db.collection(GOOGLE_CALENDAR_OAUTH_STATES_COLLECTION).doc(stateId);
+      const attemptSnap = await attemptRef.get();
+      if (!attemptSnap.exists) {
+        throw new googleCalendarIntegration.GoogleCalendarIntegrationError(
+          "permission-denied",
+          "Google Calendar authorization state is unavailable."
+        );
+      }
+      attempt = attemptSnap.data() || {};
+      configuration = getGoogleCalendarRuntimeConfiguration(attempt.organizationId);
+      googleCalendarIntegration.verifyOAuthState(state, {
+        organizationId: attempt.organizationId,
+        actorUid: attempt.actorUid,
+        requestId: attempt.requestId,
+        redirectUri: attempt.redirectUri,
+        nowISO: new Date().toISOString(),
+        signingSecret: configuration.stateSecret
+      });
+      const refs = googleCalendarOrganizationRefs(attempt.organizationId);
+      const settingsSnap = await refs.settingsRef.get();
+      const settings = settingsSnap.exists ? settingsSnap.data() || {} : {};
+      assertGoogleCalendarTenantEnabled(configuration, settings);
+      if (!code) {
+        const reasonCode = oauthError === "access_denied"
+          ? "authorization_declined"
+          : "authorization_response_incomplete";
+        await db.runTransaction(async (tx) => {
+          const [currentAttemptSnap, connectionSnap] = await Promise.all([
+            tx.get(attemptRef),
+            tx.get(refs.connectionRef)
+          ]);
+          const currentAttempt = currentAttemptSnap.data() || {};
+          const connection = connectionSnap.data() || {};
+          if (
+            currentAttempt.state !== "pending"
+            || connection.mutationLeaseKind !== "oauth"
+            || connection.mutationLeaseId !== stateId
+          ) {
+            throw new googleCalendarIntegration.GoogleCalendarIntegrationError(
+              "already-exists",
+              "Google Calendar authorization state was already handled."
+            );
+          }
+          const nowISO = new Date().toISOString();
+          const restoredState = ["revoked", "unconfigured", "reconnect_required"]
+            .includes(connection.authorizationPreviousState)
+            ? connection.authorizationPreviousState
+            : "unconfigured";
+          tx.set(attemptRef, {
+            state: "failed",
+            codeVerifierEnvelope: FieldValue.delete(),
+            reasonCode,
+            failedAtISO: nowISO,
+            updatedAt: FieldValue.serverTimestamp()
+          }, { merge: true });
+          tx.set(refs.connectionRef, {
+            state: restoredState,
+            connectionRevision: (connection.connectionRevision || 0) + 1,
+            reasonCode: restoredState === "reconnect_required"
+              ? safeGoogleCalendarReason(connection.authorizationPreviousReasonCode, reasonCode)
+              : reasonCode,
+            pendingStateId: FieldValue.delete(),
+            pendingRequestSha256: FieldValue.delete(),
+            pendingExpiresAtISO: FieldValue.delete(),
+            authorizationUrl: FieldValue.delete(),
+            authorizationPreviousState: FieldValue.delete(),
+            authorizationPreviousReasonCode: FieldValue.delete(),
+            ...clearGoogleCalendarLease(),
+            updatedAtISO: nowISO,
+            updatedAt: FieldValue.serverTimestamp()
+          }, { merge: true });
+        });
+        failureRecorded = true;
+        throw new googleCalendarIntegration.GoogleCalendarIntegrationError(
+          "permission-denied",
+          oauthError === "access_denied"
+            ? "Google Calendar authorization was not approved."
+            : "Google Calendar authorization response is incomplete."
+        );
+      }
+      callbackLeaseId = `calendar_oauth_callback_${randomUUID()}`;
+      const claim = await db.runTransaction(async (tx) => {
+        const [currentAttemptSnap, connectionSnap] = await Promise.all([
+          tx.get(attemptRef),
+          tx.get(refs.connectionRef)
+        ]);
+        const currentAttempt = currentAttemptSnap.data() || {};
+        const connection = connectionSnap.data() || {};
+        if (
+          currentAttempt.state === "consumed"
+          && connection.state === "active"
+        ) {
+          return { replayConnected: true };
+        }
+        if (
+          currentAttempt.state === "token_issued"
+          && currentAttempt.tokenEnvelope
+          && connection.mutationLeaseKind === "oauth"
+          && connection.mutationLeaseId === stateId
+        ) {
+          return { tokenIssued: true, attempt: currentAttempt, connection };
+        }
+        if (currentAttempt.state === "exchanging") {
+          return { inProgress: true };
+        }
+        if (
+          currentAttempt.state !== "pending"
+          || currentAttempt.stateId !== stateId
+          || connection.state !== "authorizing"
+          || connection.pendingStateId !== stateId
+          || connection.mutationLeaseKind !== "oauth"
+          || connection.mutationLeaseId !== stateId
+          || Date.parse(currentAttempt.expiresAtISO) < Date.now()
+        ) {
+          throw new googleCalendarIntegration.GoogleCalendarIntegrationError(
+            "permission-denied",
+            "Google Calendar authorization is expired or was replaced."
+          );
+        }
+        const exchangeStartedAtISO = new Date().toISOString();
+        const exchangeLeaseExpiresAtISO = new Date(
+          Date.now() + GOOGLE_CALENDAR_OAUTH_EXCHANGE_LEASE_MS
+        ).toISOString();
+        tx.set(attemptRef, {
+          state: "exchanging",
+          callbackLeaseId,
+          exchangeStartedAtISO,
+          exchangeLeaseExpiresAtISO,
+          updatedAt: FieldValue.serverTimestamp()
+        }, { merge: true });
+        tx.set(refs.connectionRef, {
+          mutationLeaseExpiresAtISO: exchangeLeaseExpiresAtISO,
+          updatedAtISO: exchangeStartedAtISO,
+          updatedAt: FieldValue.serverTimestamp()
+        }, { merge: true });
+        return { claimed: true, attempt: currentAttempt, connection };
+      });
+      if (claim.replayConnected) {
+        return sendGoogleCalendarOAuthOutcome(res, configuration, "connected");
+      }
+      if (claim.inProgress) {
+        throw new googleCalendarIntegration.GoogleCalendarIntegrationError(
+          "already-exists",
+          "Google Calendar authorization is already being completed."
+        );
+      }
+      const claimedAttempt = claim.attempt;
+      let tokenEnvelope = claim.tokenIssued ? claimedAttempt.tokenEnvelope : null;
+      let ownershipVerified = claim.tokenIssued
+        ? claimedAttempt.ownershipVerified === true
+        : false;
+      let verificationReasonCode = claim.tokenIssued
+        ? safeGoogleCalendarReason(
+          claimedAttempt.verificationReasonCode,
+          "calendar_ownership_verification_unavailable"
+        )
+        : "";
+      if (!claim.tokenIssued) {
+      const codeVerifier = googleCalendarIntegration.decryptRefreshToken({
+          envelope: claimedAttempt.codeVerifierEnvelope,
+          organizationId: claimedAttempt.organizationId,
+          actorUid: claimedAttempt.actorUid,
+        encryptionKey: configuration.tokenEncryptionKey
+      });
+      const tokens = await exchangeGoogleCalendarAuthorizationCode({
+        configuration,
+        code,
+        codeVerifier
+      });
+        issuedRefreshToken = tokens.refreshToken;
+        retainedRefreshToken = tokens.refreshToken;
+        ownershipVerified = tokens.ownershipVerified === true;
+        verificationReasonCode = safeGoogleCalendarReason(tokens.verificationReasonCode);
+        tokenEnvelope = googleCalendarIntegration.encryptRefreshToken({
+        refreshToken: tokens.refreshToken,
+          organizationId: claimedAttempt.organizationId,
+          actorUid: claimedAttempt.actorUid,
+        keyVersion: configuration.keyVersion,
+        encryptionKey: configuration.tokenEncryptionKey
+      });
+        try {
+          await db.runTransaction(async (tx) => {
+            const [currentAttemptSnap, connectionSnap] = await Promise.all([
+              tx.get(attemptRef),
+              tx.get(refs.connectionRef)
+            ]);
+            const currentAttempt = currentAttemptSnap.data() || {};
+            const connection = connectionSnap.data() || {};
+            if (
+              currentAttempt.state !== "exchanging"
+              || currentAttempt.callbackLeaseId !== callbackLeaseId
+              || connection.mutationLeaseKind !== "oauth"
+              || connection.mutationLeaseId !== stateId
+            ) {
+              throw new googleCalendarIntegration.GoogleCalendarIntegrationError(
+                "aborted",
+                "Google Calendar authorization was replaced before its token could be retained."
+              );
+            }
+            tx.set(attemptRef, {
+              state: "token_issued",
+              tokenEnvelope,
+              ownershipVerified,
+              verificationReasonCode,
+              codeVerifierEnvelope: FieldValue.delete(),
+              tokenIssuedAtISO: new Date().toISOString(),
+              updatedAt: FieldValue.serverTimestamp()
+            }, { merge: true });
+          });
+          issuedTokenPersisted = true;
+          issuedRefreshToken = "";
+        } catch (error) {
+          const revocationAccepted = await revokeGoogleCalendarToken(issuedRefreshToken);
+          if (revocationAccepted) {
+            issuedRefreshToken = "";
+          } else {
+            try {
+              await retainGoogleCalendarRevocationUncertaintyWithRetry({
+                refs,
+                attemptRef,
+                stateId,
+                tokenEnvelope,
+                actorUid: claimedAttempt.actorUid,
+                reasonCode: "token_retention_failed_revocation_uncertain"
+              });
+              failureRecorded = true;
+              issuedTokenPersisted = true;
+              issuedRefreshToken = "";
+            } catch {
+              functions.logger.error("Google Calendar uncertain grant could not be retained", {
+                stateId
+              });
+            }
+          }
+          throw error;
+        }
+      } else {
+        issuedTokenPersisted = true;
+      }
+      if (!ownershipVerified) {
+        const refreshTokenForRevocation = retainedRefreshToken || googleCalendarIntegration.decryptRefreshToken({
+          envelope: tokenEnvelope,
+          organizationId: claimedAttempt.organizationId,
+          actorUid: claimedAttempt.actorUid,
+          encryptionKey: configuration.tokenEncryptionKey
+        });
+        const revocationAccepted = await revokeGoogleCalendarToken(refreshTokenForRevocation);
+        if (!revocationAccepted) {
+          await retainGoogleCalendarRevocationUncertaintyWithRetry({
+            refs,
+            attemptRef,
+            stateId,
+            tokenEnvelope,
+            actorUid: claimedAttempt.actorUid,
+            reasonCode: verificationReasonCode
+          });
+          failureRecorded = true;
+        } else {
+          await db.runTransaction(async (tx) => {
+            const [currentAttemptSnap, connectionSnap] = await Promise.all([
+              tx.get(attemptRef),
+              tx.get(refs.connectionRef)
+            ]);
+            const currentAttempt = currentAttemptSnap.data() || {};
+            const connection = connectionSnap.data() || {};
+            if (
+              currentAttempt.state !== "token_issued"
+              || connection.mutationLeaseKind !== "oauth"
+              || connection.mutationLeaseId !== stateId
+            ) {
+              throw new googleCalendarIntegration.GoogleCalendarIntegrationError(
+                "aborted",
+                "The rejected Google grant changed before revocation was recorded."
+              );
+            }
+            const restoredState = ["revoked", "unconfigured", "reconnect_required"]
+              .includes(connection.authorizationPreviousState)
+              ? connection.authorizationPreviousState
+              : "unconfigured";
+            const nowISO = new Date().toISOString();
+            tx.set(attemptRef, {
+              state: "failed",
+              tokenEnvelope: FieldValue.delete(),
+              reasonCode: verificationReasonCode,
+              failedAtISO: nowISO,
+              updatedAt: FieldValue.serverTimestamp()
+            }, { merge: true });
+            tx.set(refs.connectionRef, {
+              state: restoredState,
+              connectionRevision: (connection.connectionRevision || 0) + 1,
+              reasonCode: restoredState === "reconnect_required"
+                ? safeGoogleCalendarReason(connection.authorizationPreviousReasonCode)
+                : verificationReasonCode,
+              pendingStateId: FieldValue.delete(),
+              pendingRequestSha256: FieldValue.delete(),
+              pendingExpiresAtISO: FieldValue.delete(),
+              authorizationUrl: FieldValue.delete(),
+              authorizationPreviousState: FieldValue.delete(),
+              authorizationPreviousReasonCode: FieldValue.delete(),
+              ...clearGoogleCalendarLease(),
+              updatedAtISO: nowISO,
+              updatedAt: FieldValue.serverTimestamp()
+            }, { merge: true });
+          });
+          failureRecorded = true;
+        }
+        throw new googleCalendarIntegration.GoogleCalendarIntegrationError(
+          revocationAccepted ? "failed-precondition" : "unavailable",
+          revocationAccepted
+            ? "The connected account did not pass owned-calendar verification; its new grant was revoked."
+            : "The connected account did not pass verification and Google did not confirm grant revocation."
+        );
+      }
+      const connectedAtISO = new Date().toISOString();
+      await db.runTransaction(async (tx) => {
+        const [currentAttemptSnap, currentConnectionSnap] = await Promise.all([
+          tx.get(attemptRef),
+          tx.get(refs.connectionRef)
+        ]);
+        const currentAttempt = currentAttemptSnap.data() || {};
+        const currentConnection = currentConnectionSnap.data() || {};
+        if (
+          currentAttempt.state !== "token_issued"
+          || !currentAttempt.tokenEnvelope
+          || currentConnection.state !== "authorizing"
+          || currentConnection.pendingStateId !== stateId
+          || currentConnection.mutationLeaseKind !== "oauth"
+          || currentConnection.mutationLeaseId !== stateId
+        ) {
+          throw new googleCalendarIntegration.GoogleCalendarIntegrationError(
+            "aborted",
+            "Google Calendar authorization was already completed or replaced."
+          );
+        }
+        tx.set(refs.connectionRef, {
+          schemaVersion: 1,
+          organizationId: claimedAttempt.organizationId,
+          state: "active",
+          connectionRevision: (currentConnection.connectionRevision || 0) + 1,
+          configurationGeneration: (currentConnection.configurationGeneration || 0) + 1,
+          calendarBindingId: `calendar_binding_${randomUUID()}`,
+          calendarLabel: "Primary Google Calendar",
+          calendarId: "primary",
+          tokenActorUid: claimedAttempt.actorUid,
+          tokenEnvelope: currentAttempt.tokenEnvelope,
+          scopes: googleCalendarIntegration.GOOGLE_CALENDAR_POLICY.scopes,
+          connectedAtISO,
+          connectedByUid: claimedAttempt.actorUid,
+          reasonCode: "",
+          ...clearGoogleCalendarLease(),
+          updatedAtISO: connectedAtISO,
+          updatedAt: FieldValue.serverTimestamp()
+        }, { merge: false });
+        tx.set(attemptRef, {
+          state: "consumed",
+          codeVerifierEnvelope: FieldValue.delete(),
+          tokenEnvelope: FieldValue.delete(),
+          callbackLeaseId: FieldValue.delete(),
+          consumedAtISO: connectedAtISO,
+          updatedAt: FieldValue.serverTimestamp()
+        }, { merge: true });
+      });
+      return sendGoogleCalendarOAuthOutcome(res, configuration, "connected");
+    } catch (error) {
+      const reasonCode = error instanceof googleCalendarIntegration.GoogleCalendarIntegrationError
+        ? safeGoogleCalendarReason(error.code, "authorization_failed")
+        : "authorization_failed";
+      if (issuedRefreshToken && !issuedTokenPersisted) {
+        const revocationAccepted = await revokeGoogleCalendarToken(issuedRefreshToken);
+        if (revocationAccepted) {
+          issuedRefreshToken = "";
+        } else if (tokenEnvelope && attemptRef && attempt?.organizationId) {
+          try {
+            await retainGoogleCalendarRevocationUncertaintyWithRetry({
+              refs: googleCalendarOrganizationRefs(attempt.organizationId),
+              attemptRef,
+              stateId,
+              tokenEnvelope,
+              actorUid: attempt.actorUid,
+              reasonCode: "token_retention_failed_revocation_uncertain"
+            });
+            failureRecorded = true;
+            issuedTokenPersisted = true;
+            issuedRefreshToken = "";
+          } catch {
+            unresolvedIssuedGrantWithoutReceipt = true;
+            functions.logger.error("Google Calendar grant revocation and recovery receipt both remain uncertain", {
+              stateId
+            });
+          }
+        }
+      }
+      if (!failureRecorded && !unresolvedIssuedGrantWithoutReceipt && attemptRef && attempt?.organizationId) {
+        try {
+          const refs = googleCalendarOrganizationRefs(attempt.organizationId);
+          await db.runTransaction(async (tx) => {
+            const [currentAttemptSnap, connectionSnap] = await Promise.all([
+              tx.get(attemptRef),
+              tx.get(refs.connectionRef)
+            ]);
+            const currentAttempt = currentAttemptSnap.data() || {};
+            const connection = connectionSnap.data() || {};
+            const ownsExchange = currentAttempt.state === "exchanging"
+              && currentAttempt.callbackLeaseId === callbackLeaseId;
+            const exchangeOutcomeUncertain = ownsExchange
+              && error instanceof googleCalendarIntegration.GoogleCalendarIntegrationError
+              && error.code === "unavailable"
+              && !issuedTokenPersisted;
+            if (currentAttempt.state === "pending" || ownsExchange) {
+              tx.set(attemptRef, {
+                state: exchangeOutcomeUncertain ? "exchange_outcome_uncertain" : "failed",
+                codeVerifierEnvelope: FieldValue.delete(),
+                reasonCode: exchangeOutcomeUncertain
+                  ? "authorization_exchange_outcome_uncertain"
+                  : reasonCode,
+                ...(exchangeOutcomeUncertain
+                  ? { outcomeRecordedAtISO: new Date().toISOString() }
+                  : { failedAtISO: new Date().toISOString() }),
+                updatedAt: FieldValue.serverTimestamp()
+              }, { merge: true });
+            }
+            if (
+              (currentAttempt.state === "pending" || ownsExchange)
+              && connection.pendingStateId === stateId
+              && connection.mutationLeaseKind === "oauth"
+              && connection.mutationLeaseId === stateId
+            ) {
+              const restoredState = ["revoked", "unconfigured", "reconnect_required"]
+                .includes(connection.authorizationPreviousState)
+                ? connection.authorizationPreviousState
+                : "unconfigured";
+              tx.set(refs.connectionRef, {
+                state: exchangeOutcomeUncertain ? "reconnect_required" : restoredState,
+                connectionRevision: (connection.connectionRevision || 0) + 1,
+                reasonCode: exchangeOutcomeUncertain
+                  ? "authorization_exchange_outcome_uncertain"
+                  : restoredState === "reconnect_required"
+                    ? safeGoogleCalendarReason(connection.authorizationPreviousReasonCode, reasonCode)
+                    : reasonCode,
+                pendingStateId: FieldValue.delete(),
+                pendingRequestSha256: FieldValue.delete(),
+                pendingExpiresAtISO: FieldValue.delete(),
+                authorizationUrl: FieldValue.delete(),
+                authorizationPreviousState: FieldValue.delete(),
+                authorizationPreviousReasonCode: FieldValue.delete(),
+                ...clearGoogleCalendarLease(),
+                updatedAtISO: new Date().toISOString(),
+                updatedAt: FieldValue.serverTimestamp()
+              }, { merge: true });
+            }
+          });
+        } catch {
+          functions.logger.error("Google Calendar OAuth failure receipt could not be recorded", {
+            reasonCode
+          });
+        }
+      }
+      return sendGoogleCalendarOAuthOutcome(res, configuration, "error", reasonCode);
+    }
+  });
+
+exports.applyGoogleCalendarEventCommand = functions
+  .runWith({ secrets: GOOGLE_CALENDAR_SECRET_BINDINGS })
+  .region(REGION)
+  .https.onCall(async (data, context) => {
+    try {
+      const request = googleCalendarIntegration.normalizeSyncCommand(data);
+      const staff = assertGoogleCalendarSameOrganizationAdmin(
+        await assertStaff(context, { expectedOrganizationId: request.organizationId }),
+        request.organizationId,
+        context
+      );
+      const configuration = getGoogleCalendarRuntimeConfiguration(request.organizationId);
+      const refs = googleCalendarOrganizationRefs(request.organizationId, request.quoteId);
+      const operationId = googleCalendarIntegration.calendarOperationIdFor(request);
+      const operationRef = refs.organizationRef
+        .collection(GOOGLE_CALENDAR_OPERATIONS_COLLECTION)
+        .doc(operationId);
+      const claim = await db.runTransaction(async (tx) => {
+        const [settingsSnap, connectionSnap, linkSnap, operationSnap] = await Promise.all([
+          tx.get(refs.settingsRef),
+          tx.get(refs.connectionRef),
+          tx.get(refs.linkRef),
+          tx.get(operationRef)
+        ]);
+        const settings = settingsSnap.exists ? settingsSnap.data() || {} : {};
+        assertGoogleCalendarTenantEnabled(configuration, settings);
+        const connection = connectionSnap.exists ? connectionSnap.data() || {} : {};
+        const link = googleCalendarLinkBase(linkSnap.exists ? linkSnap.data() || {} : null);
+        const commandDigest = googleCalendarCommandDigest(request);
+        if (operationSnap.exists) {
+          const operation = operationSnap.data() || {};
+          if (operation.commandDigest !== commandDigest) {
+            throw new googleCalendarIntegration.GoogleCalendarIntegrationError(
+              "already-exists",
+              "This Calendar request identity belongs to another action."
+            );
+          }
+          return { replay: true, operation };
+        }
+        if (
+          connection.state !== "active"
+          || !connection.tokenEnvelope
+          || !connection.calendarBindingId
+        ) {
+          throw new googleCalendarIntegration.GoogleCalendarIntegrationError(
+            "failed-precondition",
+            "Connect Google Calendar before publishing an event copy."
+          );
+        }
+        if (connection.configurationGeneration !== request.expectedConnectionGeneration) {
+          throw new googleCalendarIntegration.GoogleCalendarIntegrationError(
+            "aborted",
+            "The Calendar connection changed. Refresh before trying again."
+          );
+        }
+        const activeLease = googleCalendarLeaseIsActive(connection);
+        const expiredTargetLease = !activeLease
+          && connection.mutationLeaseKind === "event"
+          && connection.mutationLeaseId === request.expectedOperationId
+          && request.command === "reconcile";
+        if (activeLease || (connection.mutationLeaseKind && !expiredTargetLease)) {
+          throw new googleCalendarIntegration.GoogleCalendarIntegrationError(
+            "failed-precondition",
+            "Another Google Calendar change is still in progress. Check its exact result first."
+          );
+        }
+        if (link.syncRevision !== request.expectedSyncRevision) {
+          throw new googleCalendarIntegration.GoogleCalendarIntegrationError(
+            "aborted",
+            "The Calendar event copy changed. Refresh before trying again."
+          );
+        }
+        const linkConnectionGenerationChanged = Boolean(link.providerEventId)
+          && Boolean(link.connectionGeneration)
+          && link.connectionGeneration !== connection.configurationGeneration;
+        let projection = null;
+        let targetOperation = null;
+        if (request.command === "sync") {
+          projection = await readGoogleCalendarAcceptedProjection(
+            tx,
+            refs,
+            request,
+            connection,
+            settings
+          );
+          if (["queued", "outcome_uncertain", "dispatching"].includes(link.state)) {
+            throw new googleCalendarIntegration.GoogleCalendarIntegrationError(
+              "failed-precondition",
+              "Reconcile the prior Calendar operation before publishing again."
+            );
+          }
+          if (link.state === "provider_drift") {
+            throw new googleCalendarIntegration.GoogleCalendarIntegrationError(
+              "failed-precondition",
+              "Review the changed Google event before replacing any Calendar content."
+            );
+          }
+        } else if (request.command === "cancel") {
+          if (linkConnectionGenerationChanged) {
+            throw new googleCalendarIntegration.GoogleCalendarIntegrationError(
+              "failed-precondition",
+              "Check the copy against the current Google connection before removing it."
+            );
+          }
+          if (["queued", "outcome_uncertain", "dispatching"].includes(link.state)) {
+            throw new googleCalendarIntegration.GoogleCalendarIntegrationError(
+              "failed-precondition",
+              "Reconcile the prior Calendar operation before removing its copy."
+            );
+          }
+          if (
+            !link.sourceVersionId
+            || link.sourceVersionId !== request.expectedBoundSourceVersionId
+          ) {
+            throw new googleCalendarIntegration.GoogleCalendarIntegrationError(
+              "aborted",
+              "The external copy is bound to another event revision. Refresh before removing it."
+            );
+          }
+          if (!link.providerEventId || !link.providerEtag) {
+            throw new googleCalendarIntegration.GoogleCalendarIntegrationError(
+              "failed-precondition",
+              "No verified Google Calendar copy is available to remove."
+            );
+          }
+        } else {
+          const targetOperationRef = refs.organizationRef
+            .collection(GOOGLE_CALENDAR_OPERATIONS_COLLECTION)
+            .doc(request.expectedOperationId);
+          const targetOperationSnap = await tx.get(targetOperationRef);
+          targetOperation = targetOperationSnap.exists ? targetOperationSnap.data() || {} : null;
+          if (
+            !targetOperation
+            || targetOperation.organizationId !== request.organizationId
+            || targetOperation.quoteId !== request.quoteId
+            || link.operationId !== request.expectedOperationId
+            || (!linkConnectionGenerationChanged && ![
+              "queued", "dispatching", "outcome_uncertain", "provider_drift", "blocked_connection"
+            ].includes(link.state))
+          ) {
+            throw new googleCalendarIntegration.GoogleCalendarIntegrationError(
+              "failed-precondition",
+              "The exact uncertain Calendar operation is unavailable for reconciliation."
+            );
+          }
+        }
+        const nowISO = new Date().toISOString();
+        const operation = {
+          schemaVersion: 1,
+          operationId,
+          organizationId: request.organizationId,
+          quoteId: request.quoteId,
+          request,
+          commandDigest,
+          command: request.command,
+          state: "dispatching",
+          expectedSyncRevision: request.expectedSyncRevision,
+          connectionGeneration: connection.configurationGeneration,
+          priorConnectionGeneration: link.connectionGeneration || 0,
+          sourceVersionId: projection?.sourceVersionId || link.sourceVersionId || "",
+          projection: projection || targetOperation?.projection || null,
+          targetOperationId: request.command === "reconcile" ? request.expectedOperationId : "",
+          requestedBy: { uid: staff.uid, role: staff.role },
+          createdAtISO: nowISO,
+          updatedAtISO: nowISO,
+          createdAt: FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp()
+        };
+        tx.create(operationRef, operation);
+        tx.set(refs.linkRef, {
+          ...link,
+          schemaVersion: 1,
+          organizationId: request.organizationId,
+          quoteId: request.quoteId,
+          state: "dispatching",
+          operationId,
+          reasonCode: "provider_action_dispatching",
+          connectionGeneration: link.connectionGeneration
+            || (link.providerEventId ? 0 : connection.configurationGeneration),
+          sourceVersionId: operation.sourceVersionId,
+          eventLabel: projection?.providerEvent?.summary || link.eventLabel || "Catering event",
+          updatedAtISO: nowISO,
+          updatedAt: FieldValue.serverTimestamp()
+        }, { merge: true });
+        tx.set(refs.connectionRef, {
+          mutationLeaseKind: "event",
+          mutationLeaseId: operationId,
+          mutationLeaseExpiresAtISO: new Date(Date.now() + 60_000).toISOString(),
+          updatedAtISO: nowISO,
+          updatedAt: FieldValue.serverTimestamp()
+        }, { merge: true });
+        return { replay: false, operation, connection, settings, link, projection, targetOperation };
+      });
+      if (claim.replay) {
+        return {
+          ok: true,
+          status: await readGoogleCalendarPublicStatus({
+            organizationId: request.organizationId,
+            quoteId: request.quoteId
+          })
+        };
+      }
+
+      const tokenResult = await refreshGoogleCalendarAccessToken({
+        configuration,
+        connection: claim.connection
+      });
+      if (!tokenResult.ok) {
+        await finalizeGoogleCalendarOperation({
+          organizationId: request.organizationId,
+          quoteId: request.quoteId,
+          operationId,
+          expectedSyncRevision: request.expectedSyncRevision,
+          resultState: tokenResult.reconnectRequired ? "blocked_connection" : "definite_failure",
+          reasonCode: tokenResult.reasonCode,
+          sourceVersionId: claim.operation.sourceVersionId,
+          eventLabel: claim.operation.projection?.providerEvent?.summary,
+          connectionState: tokenResult.reconnectRequired ? "reconnect_required" : ""
+        });
+        return {
+          ok: true,
+          status: await readGoogleCalendarPublicStatus({
+            organizationId: request.organizationId,
+            quoteId: request.quoteId
+          })
+        };
+      }
+
+      const projection = claim.operation.projection;
+      const existingLink = claim.link;
+      let providerResult = null;
+      let resultState = "definite_failure";
+      let reasonCode = "provider_request_failed";
+      let provider = null;
+      const reconcileEventId = projection?.eventId || existingLink.providerEventId;
+      const connectionGenerationChanged = Boolean(existingLink.providerEventId)
+        && Boolean(existingLink.connectionGeneration)
+        && existingLink.connectionGeneration !== claim.connection.configurationGeneration;
+
+      if (request.command === "reconcile") {
+        providerResult = await googleCalendarIntegration.executeProviderRequest({
+          fetchImpl: fetch,
+          accessToken: tokenResult.accessToken,
+          calendarId: "primary",
+          operation: "reconcile",
+          eventId: reconcileEventId
+        });
+        const targetCommand = claim.operation.command === "reconcile"
+          ? claim.targetOperation?.command
+          : claim.operation.command;
+        if (providerResult.outcome.state === "provider_accepted") {
+          const expectedOwnedSha = projection
+            ? googleCalendarIntegration.googleOwnedFieldsSha256(projection.providerEvent)
+            : existingLink.providerOwnedFieldsSha256;
+          if (providerResult.provider.ownedFieldsSha256 === expectedOwnedSha) {
+            resultState = "synced";
+            reasonCode = "provider_event_verified";
+            provider = providerResult.provider;
+          } else {
+            resultState = "provider_drift";
+            reasonCode = "provider_owned_fields_mismatch";
+          }
+        } else if (
+          providerResult.outcome.reasonCode === "provider_event_missing"
+          && targetCommand === "cancel"
+          && !connectionGenerationChanged
+        ) {
+          resultState = "canceled";
+          reasonCode = "provider_event_already_absent";
+        } else if (providerResult.outcome.reasonCode === "provider_event_missing") {
+          resultState = connectionGenerationChanged ? "provider_drift" : "definite_failure";
+          reasonCode = connectionGenerationChanged
+            ? "previous_connection_event_unavailable"
+            : "provider_event_missing_retry_safe";
+        } else {
+          resultState = providerResult.outcome.state;
+          reasonCode = providerResult.outcome.reasonCode;
+        }
+      } else if (request.command === "sync" && existingLink.providerEventId) {
+        const observed = await googleCalendarIntegration.executeProviderRequest({
+          fetchImpl: fetch,
+          accessToken: tokenResult.accessToken,
+          calendarId: "primary",
+          operation: "reconcile",
+          eventId: existingLink.providerEventId
+        });
+        if (
+          observed.outcome.state !== "provider_accepted"
+          || observed.provider.ownedFieldsSha256 !== existingLink.providerOwnedFieldsSha256
+        ) {
+          resultState = observed.outcome.state === "provider_accepted"
+            ? "provider_drift"
+            : observed.outcome.state;
+          reasonCode = observed.outcome.state === "provider_accepted"
+            ? "provider_owned_fields_changed"
+            : observed.outcome.reasonCode;
+        } else {
+          providerResult = await googleCalendarIntegration.executeProviderRequest({
+            fetchImpl: fetch,
+            accessToken: tokenResult.accessToken,
+            calendarId: "primary",
+            operation: "update",
+            eventId: projection.eventId,
+            providerEvent: projection.providerEvent,
+            etag: observed.provider.etag
+          });
+          resultState = providerResult.outcome.state === "provider_accepted"
+            ? "synced"
+            : providerResult.outcome.state;
+          reasonCode = providerResult.outcome.reasonCode;
+          provider = providerResult.provider;
+        }
+      } else if (request.command === "sync") {
+        providerResult = await googleCalendarIntegration.executeProviderRequest({
+          fetchImpl: fetch,
+          accessToken: tokenResult.accessToken,
+          calendarId: "primary",
+          operation: "insert",
+          eventId: projection.eventId,
+          providerEvent: projection.providerEvent
+        });
+        resultState = providerResult.outcome.state === "provider_accepted"
+          ? "synced"
+          : providerResult.outcome.state;
+        reasonCode = providerResult.outcome.reasonCode;
+        provider = providerResult.provider;
+      } else {
+        const observed = await googleCalendarIntegration.executeProviderRequest({
+          fetchImpl: fetch,
+          accessToken: tokenResult.accessToken,
+          calendarId: "primary",
+          operation: "reconcile",
+          eventId: existingLink.providerEventId
+        });
+        if (observed.outcome.reasonCode === "provider_event_missing") {
+          resultState = connectionGenerationChanged ? "provider_drift" : "canceled";
+          reasonCode = connectionGenerationChanged
+            ? "previous_connection_event_unavailable"
+            : "provider_event_already_absent";
+        } else if (
+          observed.outcome.state !== "provider_accepted"
+          || observed.provider.ownedFieldsSha256 !== existingLink.providerOwnedFieldsSha256
+        ) {
+          resultState = observed.outcome.state === "provider_accepted"
+            ? "provider_drift"
+            : observed.outcome.state;
+          reasonCode = observed.outcome.state === "provider_accepted"
+            ? "provider_owned_fields_changed"
+            : observed.outcome.reasonCode;
+        } else {
+          providerResult = await googleCalendarIntegration.executeProviderRequest({
+            fetchImpl: fetch,
+            accessToken: tokenResult.accessToken,
+            calendarId: "primary",
+            operation: "cancel",
+            eventId: existingLink.providerEventId,
+            etag: observed.provider.etag
+          });
+          resultState = providerResult.outcome.state === "provider_absent"
+            ? "canceled"
+            : providerResult.outcome.state;
+          reasonCode = providerResult.outcome.reasonCode;
+        }
+      }
+
+      if (resultState === "reconnect_required") {
+        resultState = "blocked_connection";
+      }
+
+      await finalizeGoogleCalendarOperation({
+        organizationId: request.organizationId,
+        quoteId: request.quoteId,
+        operationId,
+        expectedSyncRevision: request.expectedSyncRevision,
+        resultState,
+        reasonCode,
+        sourceVersionId: claim.operation.sourceVersionId,
+        eventLabel: projection?.providerEvent?.summary,
+        provider,
+        connectionState: providerResult?.outcome?.state === "reconnect_required"
+          ? "reconnect_required"
+          : ""
+      });
+      return {
+        ok: true,
+        status: await readGoogleCalendarPublicStatus({
+          organizationId: request.organizationId,
+          quoteId: request.quoteId
+        })
+      };
+    } catch (error) {
+      return throwGoogleCalendarHttpsError(error);
+    }
+  });
+
+exports.disconnectGoogleCalendar = functions
+  .runWith({ secrets: GOOGLE_CALENDAR_SECRET_BINDINGS })
+  .region(REGION)
+  .https.onCall(async (data, context) => {
+    try {
+      const request = normalizeGoogleCalendarConnectionRequest(
+        data,
+        "Calendar disconnect request"
+      );
+      assertGoogleCalendarSameOrganizationAdmin(
+        await assertStaff(context, { expectedOrganizationId: request.organizationId }),
+        request.organizationId,
+        context
+      );
+      const configuration = getGoogleCalendarRuntimeConfiguration(request.organizationId);
+      const refs = googleCalendarOrganizationRefs(request.organizationId);
+      const links = refs.organizationRef.collection(GOOGLE_CALENDAR_EVENT_LINKS_COLLECTION);
+      const unresolvedCopyQuery = links
+        .where("state", "in", [
+          "queued", "dispatching", "outcome_uncertain", "cancel_queued"
+        ])
+        .limit(1);
+      const retainedProviderCopyQuery = links.where("providerEventId", ">", "").limit(1);
+      const claim = await db.runTransaction(async (tx) => {
+        const [settingsSnap, connectionSnap, unresolvedCopySnap, retainedProviderCopySnap] = await Promise.all([
+          tx.get(refs.settingsRef),
+          tx.get(refs.connectionRef),
+          tx.get(unresolvedCopyQuery),
+          tx.get(retainedProviderCopyQuery)
+        ]);
+        const settings = settingsSnap.exists ? settingsSnap.data() || {} : {};
+        if (configuration.cleanupConfigured !== true) {
+          throw new googleCalendarIntegration.GoogleCalendarIntegrationError(
+            "failed-precondition",
+            "Google Calendar provider access is unavailable, so stored authorization cannot be revoked safely."
+          );
+        }
+        const connection = connectionSnap.exists ? connectionSnap.data() || {} : {};
+        const revision = Number.isSafeInteger(connection.connectionRevision)
+          ? connection.connectionRevision
+          : 0;
+        if (connection.state === "revoked" && connection.lastDisconnectRequestId === request.requestId) {
+          return { replay: true };
+        }
+        const sameDisconnectLease = connection.mutationLeaseKind === "disconnect"
+          && connection.mutationLeaseId === request.requestId;
+        const expiredSameDisconnectLease = sameDisconnectLease
+          && !googleCalendarLeaseIsActive(connection);
+        if (
+          sameDisconnectLease
+          && !expiredSameDisconnectLease
+        ) {
+          return { replay: true };
+        }
+        const retryUncertainDisconnect = connection.state === "reconnect_required"
+          && ["revocation_outcome_uncertain", "unactivated_grant_revocation_uncertain"]
+            .includes(connection.reasonCode)
+          && connection.lastDisconnectRequestId === request.requestId;
+        if (!retryUncertainDisconnect && !expiredSameDisconnectLease
+          && revision !== request.expectedConnectionRevision) {
+          throw new googleCalendarIntegration.GoogleCalendarIntegrationError(
+            "aborted",
+            "The Calendar connection changed. Refresh before disconnecting."
+          );
+        }
+        if (googleCalendarLeaseIsActive(connection)
+          || (connection.mutationLeaseKind && !expiredSameDisconnectLease)) {
+          throw new googleCalendarIntegration.GoogleCalendarIntegrationError(
+            "failed-precondition",
+            "Another Google Calendar change is still in progress. Check it before disconnecting."
+          );
+        }
+        const hasRetainedCopies = !unresolvedCopySnap.empty || !retainedProviderCopySnap.empty;
+        const integrationDisabled = configuration.serverEnabled !== true
+          || settings.googleCalendarIntegrationEnabled !== true;
+        const retainedCopiesDisconnectReason = connection.tokenRevocationOnly === true
+          ? "unactivated_grant"
+          : connection.retainedCopiesDisconnectReason === "provider_credentials_rejected"
+            ? "provider_credentials_rejected"
+            : connection.reasonCode === "provider_credentials_rejected"
+              ? "provider_credentials_rejected"
+              : integrationDisabled
+                ? "integration_disabled"
+                : "";
+        if (hasRetainedCopies && !retainedCopiesDisconnectReason) {
+          throw new googleCalendarIntegration.GoogleCalendarIntegrationError(
+            "failed-precondition",
+            "Remove or reconcile every retained Google event copy before disconnecting."
+          );
+        }
+        if (!connection.tokenEnvelope) {
+          throw new googleCalendarIntegration.GoogleCalendarIntegrationError(
+            "failed-precondition",
+            "No connected Google Calendar authorization is available to disconnect."
+          );
+        }
+        if (
+          connection.state !== "active"
+          && connection.state !== "reconnect_required"
+          && !expiredSameDisconnectLease
+        ) {
+          throw new googleCalendarIntegration.GoogleCalendarIntegrationError(
+            "failed-precondition",
+            "The Google Calendar authorization is not in a disconnectable state."
+          );
+        }
+        const nowISO = new Date().toISOString();
+        tx.set(refs.connectionRef, {
+          state: "reconnect_required",
+          connectionRevision: revision + 1,
+          reasonCode: "revocation_in_progress",
+          lastDisconnectRequestId: request.requestId,
+          mutationLeaseKind: "disconnect",
+          mutationLeaseId: request.requestId,
+          mutationLeaseExpiresAtISO: new Date(Date.now() + 30_000).toISOString(),
+          ...(hasRetainedCopies && retainedCopiesDisconnectReason
+            ? { retainedCopiesDisconnectReason }
+            : {}),
+          updatedAtISO: nowISO,
+          updatedAt: FieldValue.serverTimestamp()
+        }, { merge: true });
+        return {
+          replay: false,
+          connection,
+          pendingRevision: revision + 1,
+          revocationOnly: connection.tokenRevocationOnly === true,
+          hadRetainedCopies: hasRetainedCopies,
+          retainedCopiesDisconnectReason
+        };
+      });
+      if (claim.replay) {
+        return {
+          ok: true,
+          status: await readGoogleCalendarPublicStatus({ organizationId: request.organizationId })
+        };
+      }
+      const refreshToken = googleCalendarIntegration.decryptRefreshToken({
+        envelope: claim.connection.tokenEnvelope,
+        organizationId: request.organizationId,
+        actorUid: claim.connection.tokenActorUid,
+        encryptionKey: configuration.tokenEncryptionKey
+      });
+      const revocationAccepted = await revokeGoogleCalendarToken(refreshToken);
+      await db.runTransaction(async (tx) => {
+        const connectionSnap = await tx.get(refs.connectionRef);
+        const connection = connectionSnap.exists ? connectionSnap.data() || {} : {};
+        if (
+          connection.mutationLeaseKind !== "disconnect"
+          || connection.mutationLeaseId !== request.requestId
+          || connection.connectionRevision !== claim.pendingRevision
+        ) {
+          throw new googleCalendarIntegration.GoogleCalendarIntegrationError(
+            "aborted",
+            "The Calendar disconnect was superseded. Refresh its current status."
+          );
+        }
+        const nowISO = new Date().toISOString();
+        tx.set(refs.connectionRef, revocationAccepted ? {
+          state: "revoked",
+          connectionRevision: claim.pendingRevision + 1,
+          tokenEnvelope: FieldValue.delete(),
+          tokenActorUid: FieldValue.delete(),
+          calendarId: FieldValue.delete(),
+          scopes: FieldValue.delete(),
+          authorizationUrl: FieldValue.delete(),
+          pendingStateId: FieldValue.delete(),
+          pendingRequestSha256: FieldValue.delete(),
+          pendingExpiresAtISO: FieldValue.delete(),
+          authorizationPreviousState: FieldValue.delete(),
+          tokenRevocationOnly: FieldValue.delete(),
+          retainedCopiesDisconnectReason: FieldValue.delete(),
+          ...clearGoogleCalendarLease(),
+          reasonCode: claim.hadRetainedCopies
+            && claim.retainedCopiesDisconnectReason === "provider_credentials_rejected"
+            ? "rejected_grant_revoked_external_copies_retained"
+            : claim.hadRetainedCopies
+              && claim.retainedCopiesDisconnectReason === "integration_disabled"
+              ? "disabled_grant_revoked_external_copies_retained"
+            : claim.revocationOnly && claim.hadRetainedCopies
+              ? "unactivated_grant_revoked_external_copies_retained"
+              : "authorization_revoked",
+          revokedAtISO: nowISO,
+          updatedAtISO: nowISO,
+          updatedAt: FieldValue.serverTimestamp()
+        } : {
+          state: "reconnect_required",
+          connectionRevision: claim.pendingRevision + 1,
+          ...clearGoogleCalendarLease(),
+          reasonCode: claim.revocationOnly
+            ? "unactivated_grant_revocation_uncertain"
+            : "revocation_outcome_uncertain",
+          updatedAtISO: nowISO,
+          updatedAt: FieldValue.serverTimestamp()
+        }, { merge: true });
+      });
+      return {
+        ok: true,
+        status: await readGoogleCalendarPublicStatus({ organizationId: request.organizationId })
+      };
+    } catch (error) {
+      return throwGoogleCalendarHttpsError(error, "Google Calendar could not be disconnected safely.");
     }
   });
 

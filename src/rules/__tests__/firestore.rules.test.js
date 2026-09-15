@@ -96,6 +96,12 @@ const ORG_SCOPED_ADMIN_WRITE_CASES = [
 const SERVER_OWNED_COMMERCIAL_AUTHORITY_PATHS = Object.freeze([
   ["organizations", "org-a", "kitchenBeoArtifacts", "q1"],
   ["organizations", "org-a", "kitchenBeoGenerationReceipts", "beo-receipt-1"],
+  ["organizations", "org-a", "eventOperationalNotes", "q1"],
+  ["organizations", "org-a", "eventOperationalNotes", "q1", "receipts", "notes-receipt-1"],
+  ["organizations", "org-a", "googleCalendarConnections", "current"],
+  ["organizations", "org-a", "googleCalendarEventLinks", "q1"],
+  ["organizations", "org-a", "googleCalendarOperations", `calendar_operation_${"a".repeat(48)}`],
+  ["googleCalendarOAuthStates", `calendar_oauth_state_${"b".repeat(48)}`],
   ["organizations", "org-a", "commercialChangeSimulations", "ccs-receipt-1"],
   ["organizations", "org-a", "commercialChangeApprovalRequests", "ccar-request-1"],
   ["organizations", "org-a", "commercialChangeAuthorizations", "cca-receipt-1"],
@@ -133,6 +139,17 @@ const SERVER_OWNED_COMMERCIAL_AUTHORITY_PATHS = Object.freeze([
   ["revenueAutopilotProviderMessageIndex", "provider-message-1"],
   ["revenueAutopilotSchedulerState", "global"]
 ]);
+
+test("enumerates every Google Calendar private path for browser denial coverage", () => {
+  expect(SERVER_OWNED_COMMERCIAL_AUTHORITY_PATHS.filter((pathParts) =>
+    pathParts.some((part) => String(part).startsWith("googleCalendar"))
+  )).toEqual([
+    ["organizations", "org-a", "googleCalendarConnections", "current"],
+    ["organizations", "org-a", "googleCalendarEventLinks", "q1"],
+    ["organizations", "org-a", "googleCalendarOperations", `calendar_operation_${"a".repeat(48)}`],
+    ["googleCalendarOAuthStates", `calendar_oauth_state_${"b".repeat(48)}`]
+  ]);
+});
 
 const OWNER_SMS_SERVER_ONLY_GLOBAL_COLLECTIONS = Object.freeze([
   ["ownerSmsAttempts", "sms-attempt-org-a-1"],
@@ -2832,9 +2849,10 @@ rulesDescribe("firestore rules - org scoped access controls", () => {
     await assertFails(setDoc(settingsRef, { inventoryAuthorityEnabled: true }));
   });
 
-  test("post-event closeout records and action receipts are callable-only", async () => {
+  test("post-event closeout records and action or attendance receipts are callable-only", async () => {
     const closeoutId = `closeout_${"a".repeat(48)}`;
     const receiptId = `closeout_action_${"b".repeat(48)}`;
+    const attendanceReceiptId = `closeout_attendance_${"c".repeat(48)}`;
     await testEnv.withSecurityRulesDisabled(async (context) => {
       const db = context.firestore();
       await setDoc(
@@ -2845,6 +2863,23 @@ rulesDescribe("firestore rules - org scoped access controls", () => {
           customerId: "customer-a",
           closeoutId,
           state: "pending"
+        }
+      );
+      await setDoc(
+        doc(
+          db,
+          "organizations",
+          "org-a",
+          "postEventCloseouts",
+          closeoutId,
+          "attendanceReceipts",
+          attendanceReceiptId
+        ),
+        {
+          organizationId: "org-a",
+          quoteId: "q1",
+          closeoutId,
+          receiptId: attendanceReceiptId
         }
       );
       await setDoc(
@@ -2890,12 +2925,19 @@ rulesDescribe("firestore rules - org scoped access controls", () => {
       const db = context.firestore();
       const closeoutRef = doc(db, "organizations", "org-a", "postEventCloseouts", closeoutId);
       const receiptRef = doc(closeoutRef, "actionReceipts", receiptId);
+      const attendanceReceiptRef = doc(
+        closeoutRef,
+        "attendanceReceipts",
+        attendanceReceiptId
+      );
       await assertFails(getDoc(closeoutRef));
       await assertFails(getDoc(receiptRef));
+      await assertFails(getDoc(attendanceReceiptRef));
       await assertFails(setDoc(closeoutRef, { organizationId: "org-a", state: "completed" }));
       await assertFails(updateDoc(closeoutRef, { state: "completed" }));
       await assertFails(deleteDoc(closeoutRef));
       await assertFails(setDoc(receiptRef, { forged: true }));
+      await assertFails(setDoc(attendanceReceiptRef, { forged: true }));
     }
   });
 
@@ -3139,6 +3181,30 @@ rulesDescribe("firestore rules - org scoped access controls", () => {
     });
     await assertFails(setDoc(settingsRef, {
       operationalStaffingAuthorityEnabled: true
+    }));
+  });
+
+  test("Google Calendar integration cannot be promoted by a browser administrator", async () => {
+    const adminDb = testEnv.authenticatedContext("admin-org-a", {
+      email: "admin-a@example.com",
+      email_verified: true,
+      organizationId: "org-a"
+    }).firestore();
+    const settingsRef = doc(adminDb, "organizations", "org-a", "settings", "config");
+    await assertFails(updateDoc(settingsRef, {
+      googleCalendarIntegrationEnabled: true
+    }));
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await deleteDoc(doc(
+        context.firestore(),
+        "organizations",
+        "org-a",
+        "settings",
+        "config"
+      ));
+    });
+    await assertFails(setDoc(settingsRef, {
+      googleCalendarIntegrationEnabled: true
     }));
   });
 

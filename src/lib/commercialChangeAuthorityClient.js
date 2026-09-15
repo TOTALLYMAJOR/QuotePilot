@@ -7,6 +7,7 @@ import { cloudFunctions, firebaseReady } from "./firebase";
 import normalizeActivePersistedEffects, {
   COMMERCIAL_CHANGE_PERSISTED_EFFECTS_ENABLED
 } from "quotepilot-active-commercial-persisted-effects";
+import { normalizeEventInventoryPreviewResult } from "./inventoryAuthorityClient";
 
 export const COMMERCIAL_CHANGE_AUTHORITY_CALLABLES = Object.freeze({
   simulate: "simulateCommercialQuoteChange",
@@ -48,6 +49,7 @@ const RECEIPT_SCHEMA_VERSIONS = Object.freeze({
   reconciliation: "commercial-change-reconciliation-receipt-v1"
 });
 const MAX_INVALIDATIONS = 64;
+const MAX_EVENT_INGREDIENT_OUTPUTS = 100;
 const MAX_JSON_BYTES = 262_144;
 const DEFINITIVE_ERROR_CODES = new Set([
   "aborted",
@@ -86,15 +88,15 @@ function compareText(left, right) {
   return left < right ? -1 : left > right ? 1 : 0;
 }
 
-function exactKeys(value, expectedKeys, label) {
-  if (!record(value)) fail(`${label} must be an exact server object.`);
+function exactKeys(value, expectedKeys, label, code = "invalid-server-response") {
+  if (!record(value)) fail(`${label} must be an exact server object.`, code);
   const actual = Object.keys(value).sort(compareText);
   const expected = [...expectedKeys].sort(compareText);
   if (
     actual.length !== expected.length
     || actual.some((key, index) => key !== expected[index])
   ) {
-    fail(`${label} did not match the exact server contract.`);
+    fail(`${label} did not match the exact server contract.`, code);
   }
   return value;
 }
@@ -209,6 +211,49 @@ function boundedNumber(value, label) {
     fail(`${label} is invalid.`);
   }
   return value;
+}
+
+function exactOutputQuantity(value, label) {
+  if (typeof value !== "string" || !/^(0|[1-9]\d*)(?:\.\d{1,6})?$/u.test(value)) {
+    fail(`${label} must be a canonical decimal with at most six places.`, "invalid-argument");
+  }
+  const [whole, fraction = ""] = value.split(".");
+  const micros = BigInt(whole) * 1_000_000n + BigInt(fraction.padEnd(6, "0") || "0");
+  if (micros <= 0n || micros > BigInt(Number.MAX_SAFE_INTEGER)) {
+    fail(`${label} is outside the supported quantity range.`, "invalid-argument");
+  }
+  return value;
+}
+
+function normalizeEventIngredientOutputs(value) {
+  if (!Array.isArray(value) || value.length === 0 || value.length > MAX_EVENT_INGREDIENT_OUTPUTS) {
+    fail(
+      `eventIngredientOutputs must contain 1 to ${MAX_EVENT_INGREDIENT_OUTPUTS} exact output rows.`,
+      "invalid-argument"
+    );
+  }
+  const rows = value.map((entry, index) => {
+    exactKeys(
+      entry,
+      ["menuItemId", "requiredOutputQuantity"],
+      `Event ingredient output ${index + 1}`,
+      "invalid-argument"
+    );
+    return {
+      menuItemId: exactOpaqueId(
+        entry.menuItemId,
+        `Event ingredient output ${index + 1} menuItemId`
+      ),
+      requiredOutputQuantity: exactOutputQuantity(
+        entry.requiredOutputQuantity,
+        `Event ingredient output ${index + 1} requiredOutputQuantity`
+      )
+    };
+  });
+  if (new Set(rows.map(({ menuItemId }) => menuItemId)).size !== rows.length) {
+    fail("eventIngredientOutputs contains duplicate menu items.", "invalid-argument");
+  }
+  return rows;
 }
 
 function exactEmail(value, label, { optional = false } = {}) {
@@ -1432,6 +1477,322 @@ export function isDefinitiveCommercialChangeError(error) {
   return DEFINITIVE_ERROR_CODES.has(code);
 }
 
+function inventoryReasonCode(value) {
+  const normalized = text(value).toLowerCase();
+  if (!/^[a-z0-9]+(?:_[a-z0-9]+){0,7}$/u.test(normalized) || normalized.length > 96) {
+    fail("Inventory observation reasonCode is invalid.");
+  }
+  return normalized;
+}
+
+function normalizeCommercialInventoryObservation(
+  value,
+  scope,
+  simulationReceipt,
+  proposedQuoteRevisionId,
+  observationRequested
+) {
+  const commonKeys = [
+    "schemaVersion",
+    "authority",
+    "state",
+    "organizationId",
+    "quoteId",
+    "baseQuoteRevisionId",
+    "proposedQuoteRevisionId",
+    "commercialSimulationReceiptId",
+    "commercialSimulationReceiptDigest",
+    "commercialPreviewRevisionId",
+    "observedAtISO",
+    "boundary"
+  ];
+  if (!record(value)) fail("Inventory observation must be an exact server object.");
+  const state = text(value.state).toLowerCase();
+  if (!new Set(["available", "not_requested", "unavailable"]).has(state)) {
+    fail("Inventory observation state is invalid.");
+  }
+  exactKeys(
+    value,
+    state === "available" ? [...commonKeys, "inputDigest", "preview"] : [...commonKeys, "reasonCode"],
+    "Inventory observation"
+  );
+  const proposedRevisionId = exactOpaqueId(
+    proposedQuoteRevisionId,
+    "projected quote revision",
+    256,
+    "invalid-server-response"
+  );
+  if (
+    value.schemaVersion !== "commercial-change-inventory-observation-v1"
+    || value.authority !== "inventory_read_only_observation"
+    || value.organizationId !== scope.organizationId
+    || value.quoteId !== scope.quoteId
+    || value.baseQuoteRevisionId !== simulationReceipt.baseRevisionId
+    || value.proposedQuoteRevisionId !== proposedRevisionId
+    || value.commercialSimulationReceiptId !== simulationReceipt.receiptId
+    || value.commercialSimulationReceiptDigest !== simulationReceipt.receiptDigest
+    || value.commercialPreviewRevisionId !== simulationReceipt.proposedRevisionId
+  ) {
+    fail("Inventory observation crossed its Commercial and Inventory authority boundary.");
+  }
+  if ((!observationRequested && state !== "not_requested")
+    || (observationRequested && state === "not_requested")) {
+    fail("Inventory observation does not match the requested evaluation scope.");
+  }
+  const observation = {
+    schemaVersion: value.schemaVersion,
+    authority: value.authority,
+    state,
+    organizationId: scope.organizationId,
+    quoteId: scope.quoteId,
+    baseQuoteRevisionId: simulationReceipt.baseRevisionId,
+    proposedQuoteRevisionId: proposedRevisionId,
+    commercialSimulationReceiptId: simulationReceipt.receiptId,
+    commercialSimulationReceiptDigest: simulationReceipt.receiptDigest,
+    commercialPreviewRevisionId: simulationReceipt.proposedRevisionId,
+    observedAtISO: exactISO(value.observedAtISO, "Inventory observation time"),
+    boundary: exactText(value.boundary, "Inventory observation boundary", 2_000)
+  };
+  if (state === "available") {
+    observation.inputDigest = digest(value.inputDigest, "Inventory observation input digest");
+    try {
+      observation.preview = normalizeEventInventoryPreviewResult(
+        value.preview,
+        scope.organizationId,
+        scope.quoteId,
+        proposedRevisionId
+      );
+    } catch (error) {
+      fail(error?.message || "Inventory observation preview is invalid.");
+    }
+  } else {
+    observation.reasonCode = inventoryReasonCode(value.reasonCode);
+  }
+  return deepFreeze(observation);
+}
+
+function normalizeStaffingRoleCounts(value, label) {
+  exactKeys(value, ["lead", "server", "chef", "bartender"], label);
+  return Object.freeze({
+    lead: boundedInteger(value.lead, `${label} lead`, 128),
+    server: boundedInteger(value.server, `${label} server`, 128),
+    chef: boundedInteger(value.chef, `${label} chef`, 128),
+    bartender: boundedInteger(value.bartender, `${label} bartender`, 128)
+  });
+}
+
+function normalizeStaffingWindow(value, label) {
+  exactKeys(value, ["startAtISO", "endAtISO"], label);
+  const startAtISO = exactISO(value.startAtISO, `${label} start`);
+  const endAtISO = exactISO(value.endAtISO, `${label} end`);
+  if (Date.parse(endAtISO) <= Date.parse(startAtISO)) {
+    fail(`${label} is not a valid event window.`);
+  }
+  return Object.freeze({ startAtISO, endAtISO });
+}
+
+function normalizeCommercialStaffingObservation(
+  value,
+  scope,
+  simulationReceipt,
+  proposedQuoteRevisionId
+) {
+  const commonKeys = [
+    "schemaVersion",
+    "authority",
+    "state",
+    "organizationId",
+    "quoteId",
+    "baseQuoteRevisionId",
+    "proposedQuoteRevisionId",
+    "commercialSimulationReceiptId",
+    "commercialSimulationReceiptDigest",
+    "commercialPreviewRevisionId",
+    "observedAtISO",
+    "boundary"
+  ];
+  if (!record(value)) fail("Staffing observation must be an exact server object.");
+  const state = text(value.state).toLowerCase();
+  if (!new Set(["available", "unavailable"]).has(state)) {
+    fail("Staffing observation state is invalid.");
+  }
+  exactKeys(
+    value,
+    state === "available" ? [...commonKeys, "inputDigest", "preview"] : [...commonKeys, "reasonCode"],
+    "Staffing observation"
+  );
+  const proposedRevisionId = exactOpaqueId(
+    proposedQuoteRevisionId,
+    "projected quote revision",
+    256,
+    "invalid-server-response"
+  );
+  if (
+    value.schemaVersion !== "commercial-change-staffing-observation-v1"
+    || value.authority !== "operational_staffing_read_only_observation"
+    || value.organizationId !== scope.organizationId
+    || value.quoteId !== scope.quoteId
+    || value.baseQuoteRevisionId !== simulationReceipt.baseRevisionId
+    || value.proposedQuoteRevisionId !== proposedRevisionId
+    || value.commercialSimulationReceiptId !== simulationReceipt.receiptId
+    || value.commercialSimulationReceiptDigest !== simulationReceipt.receiptDigest
+    || value.commercialPreviewRevisionId !== simulationReceipt.proposedRevisionId
+  ) {
+    fail("Staffing observation crossed its Commercial and Staffing authority boundary.");
+  }
+  const observation = {
+    schemaVersion: value.schemaVersion,
+    authority: value.authority,
+    state,
+    organizationId: scope.organizationId,
+    quoteId: scope.quoteId,
+    baseQuoteRevisionId: simulationReceipt.baseRevisionId,
+    proposedQuoteRevisionId: proposedRevisionId,
+    commercialSimulationReceiptId: simulationReceipt.receiptId,
+    commercialSimulationReceiptDigest: simulationReceipt.receiptDigest,
+    commercialPreviewRevisionId: simulationReceipt.proposedRevisionId,
+    observedAtISO: exactISO(value.observedAtISO, "Staffing observation time"),
+    boundary: exactText(value.boundary, "Staffing observation boundary", 2_000)
+  };
+  if (state === "unavailable") {
+    observation.reasonCode = inventoryReasonCode(value.reasonCode);
+    return deepFreeze(observation);
+  }
+
+  exactKeys(value.preview, ["proposed", "currentPlanState", "comparison", "boundary"], "Staffing observation preview");
+  exactKeys(
+    value.preview.proposed,
+    ["quoteRevisionId", "eventWindow", "requirementsByRole", "totalRequired"],
+    "Staffing proposed requirement"
+  );
+  if (value.preview.proposed.quoteRevisionId !== proposedRevisionId) {
+    fail("Staffing proposed requirement crossed its quote revision boundary.");
+  }
+  const requirementsByRole = normalizeStaffingRoleCounts(
+    value.preview.proposed.requirementsByRole,
+    "Staffing proposed role counts"
+  );
+  const totalRequired = boundedInteger(
+    value.preview.proposed.totalRequired,
+    "Staffing proposed total",
+    128
+  );
+  if (Object.values(requirementsByRole).reduce((sum, count) => sum + count, 0) !== totalRequired) {
+    fail("Staffing proposed total does not match its bounded role counts.");
+  }
+  const currentPlanState = text(value.preview.currentPlanState).toLowerCase();
+  if (!["absent", "current", "stale"].includes(currentPlanState)) {
+    fail("Staffing current plan state is invalid.");
+  }
+  exactKeys(value.preview.comparison, ["windowState", "coverage"], "Staffing comparison");
+  const windowState = text(value.preview.comparison.windowState).toLowerCase();
+  if (!["same", "changed", "not_applicable"].includes(windowState)) {
+    fail("Staffing proposed window state is invalid.");
+  }
+  const coverageValue = value.preview.comparison.coverage;
+  exactKeys(coverageValue, [
+    "state",
+    "byRole",
+    "totalRequired",
+    "totalOperatorConfirmedCount",
+    "totalGap",
+    "reasonCode"
+  ], "Staffing proposed coverage");
+  const coverageState = text(coverageValue.state).toLowerCase();
+  if (!["unverified", "not_required", "coverage_confirmed", "attention"].includes(coverageState)) {
+    fail("Staffing proposed coverage state is invalid.");
+  }
+  exactKeys(coverageValue.byRole, ["lead", "server", "chef", "bartender"], "Staffing coverage roles");
+  const byRole = {};
+  let summedConfirmed = 0;
+  let summedGap = 0;
+  for (const role of ["lead", "server", "chef", "bartender"]) {
+    const roleValue = coverageValue.byRole[role];
+    exactKeys(roleValue, ["requiredCount", "operatorConfirmedCount", "gap"], `Staffing ${role} coverage`);
+    const requiredCount = boundedInteger(roleValue.requiredCount, `Staffing ${role} required`, 128);
+    const operatorConfirmedCount = roleValue.operatorConfirmedCount === null
+      ? null
+      : boundedInteger(roleValue.operatorConfirmedCount, `Staffing ${role} confirmed`, 128);
+    const gap = roleValue.gap === null
+      ? null
+      : boundedInteger(roleValue.gap, `Staffing ${role} gap`, 128);
+    if (requiredCount !== requirementsByRole[role]) {
+      fail(`Staffing ${role} coverage does not match the proposed requirement.`);
+    }
+    const roleUnverified = operatorConfirmedCount === null && gap === null;
+    const rolePartiallyMissing = (operatorConfirmedCount === null) !== (gap === null);
+    if (rolePartiallyMissing || (coverageState === "unverified") !== roleUnverified) {
+      fail(`Staffing ${role} coverage does not match the proposed evidence state.`);
+    }
+    if (!roleUnverified) {
+      if (gap !== Math.max(0, requiredCount - operatorConfirmedCount)) {
+        fail(`Staffing ${role} gap does not match its aggregate counts.`);
+      }
+      summedConfirmed += operatorConfirmedCount;
+      summedGap += gap;
+    }
+    byRole[role] = Object.freeze({ requiredCount, operatorConfirmedCount, gap });
+  }
+  const totalOperatorConfirmedCount = coverageValue.totalOperatorConfirmedCount === null
+    ? null
+    : boundedInteger(coverageValue.totalOperatorConfirmedCount, "Staffing confirmed total", 128);
+  const totalGap = coverageValue.totalGap === null
+    ? null
+    : boundedInteger(coverageValue.totalGap, "Staffing gap total", 128);
+  const totalsUnverified = totalOperatorConfirmedCount === null && totalGap === null;
+  const totalsPartiallyMissing = (totalOperatorConfirmedCount === null) !== (totalGap === null);
+  if (totalsPartiallyMissing || (coverageState === "unverified") !== totalsUnverified) {
+    fail("Staffing aggregate coverage does not match the proposed evidence state.");
+  }
+  const coverageTotalRequired = boundedInteger(
+    coverageValue.totalRequired,
+    "Staffing coverage total",
+    128
+  );
+  if (coverageTotalRequired !== totalRequired) {
+    fail("Staffing coverage total does not match the proposed requirement total.");
+  }
+  if (!totalsUnverified && (
+    totalOperatorConfirmedCount !== summedConfirmed
+    || totalGap !== summedGap
+  )) {
+    fail("Staffing coverage totals do not match their bounded role evidence.");
+  }
+  const expectedCoverageState = totalsUnverified
+    ? "unverified"
+    : totalRequired === 0
+      ? "not_required"
+      : totalGap === 0
+        ? "coverage_confirmed"
+        : "attention";
+  if (coverageState !== expectedCoverageState) {
+    fail("Staffing coverage state does not match its aggregate role evidence.");
+  }
+  observation.inputDigest = digest(value.inputDigest, "Staffing observation input digest");
+  observation.preview = {
+    proposed: {
+      quoteRevisionId: proposedRevisionId,
+      eventWindow: normalizeStaffingWindow(value.preview.proposed.eventWindow, "Staffing proposed event window"),
+      requirementsByRole,
+      totalRequired
+    },
+    currentPlanState,
+    comparison: {
+      windowState,
+      coverage: {
+        state: coverageState,
+        byRole,
+        totalRequired: coverageTotalRequired,
+        totalOperatorConfirmedCount,
+        totalGap,
+        reasonCode: inventoryReasonCode(coverageValue.reasonCode)
+      }
+    },
+    boundary: exactText(value.preview.boundary, "Staffing preview boundary", 2_000)
+  };
+  return deepFreeze(observation);
+}
+
 export async function simulateCommercialQuoteChange(input = {}) {
   const scope = normalizeScope(input);
   const expectedActiveVersionId = exactOpaqueId(
@@ -1447,12 +1808,17 @@ export async function simulateCommercialQuoteChange(input = {}) {
     maximum: MAX_JSON_BYTES,
     code: "invalid-argument"
   });
+  const eventIngredientOutputs = input.eventIngredientOutputs === undefined
+    ? null
+    : normalizeEventIngredientOutputs(input.eventIngredientOutputs);
   const response = await callable(COMMERCIAL_CHANGE_AUTHORITY_CALLABLES.simulate)({
     organizationId: scope.organizationId,
     quoteId: scope.quoteId,
     expectedActiveVersionId,
     requestId,
     form,
+    staffingObservationVersion: "v1",
+    ...(eventIngredientOutputs ? { eventIngredientOutputs } : {}),
     ...(input.attendanceSubmissionReceiptId ? { attendanceSubmissionReceiptId: exactOpaqueId(input.attendanceSubmissionReceiptId, "attendanceSubmissionReceiptId") } : {})
   });
   const result = response?.data;
@@ -1465,6 +1831,8 @@ export async function simulateCommercialQuoteChange(input = {}) {
     "authorityState",
     "simulationReceipt",
     "simulation",
+    "inventoryObservation",
+    "staffingObservation",
     "persistedEffects"
   ], "Commercial change simulation response");
   const idempotent = exactBoolean(result.idempotent, "Simulation idempotency state");
@@ -1499,6 +1867,26 @@ export async function simulateCommercialQuoteChange(input = {}) {
         }
       )
     : null;
+  const proposedQuoteRevisionId = persistedEffects?.identity?.projectedRevisionId
+    || exactOpaqueId(
+      result.inventoryObservation?.proposedQuoteRevisionId,
+      "Inventory observation projected quote revision",
+      256,
+      "invalid-server-response"
+    );
+  const inventoryObservation = normalizeCommercialInventoryObservation(
+    result.inventoryObservation,
+    scope,
+    simulationReceipt,
+    proposedQuoteRevisionId,
+    eventIngredientOutputs !== null
+  );
+  const staffingObservation = normalizeCommercialStaffingObservation(
+    result.staffingObservation,
+    scope,
+    simulationReceipt,
+    proposedQuoteRevisionId
+  );
   return deepFreeze({
     ok: true,
     storage: "firebase",
@@ -1508,6 +1896,8 @@ export async function simulateCommercialQuoteChange(input = {}) {
     authorityState,
     simulationReceipt,
     simulation,
+    inventoryObservation,
+    staffingObservation,
     ...(persistedEffects ? { persistedEffects } : {})
   });
 }

@@ -7,10 +7,13 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
 vi.mock("../../lib/postEventCloseoutClient", () => ({
   isDefinitivePostEventCloseoutError: vi.fn(),
+  readPendingPostEventActualAttendanceAttempt: vi.fn(),
   readPendingPostEventCloseoutConfigurationAttempt: vi.fn(),
   readPendingPostEventCloseoutAttempt: vi.fn(),
+  recordPostEventActualAttendance: vi.fn(),
   recordPostEventCloseoutReview: vi.fn(),
   refreshPostEventCloseoutConfiguration: vi.fn(),
+  resetDefinitivePostEventActualAttendanceAttempt: vi.fn(),
   resetDefinitivePostEventCloseoutConfigurationAttempt: vi.fn(),
   resetDefinitivePostEventCloseoutAttempt: vi.fn()
 }));
@@ -20,10 +23,13 @@ import PostEventCloseoutReviewAction, {
 } from "../PostEventCloseoutReviewAction";
 import {
   isDefinitivePostEventCloseoutError,
+  readPendingPostEventActualAttendanceAttempt,
   readPendingPostEventCloseoutConfigurationAttempt,
   readPendingPostEventCloseoutAttempt,
+  recordPostEventActualAttendance,
   recordPostEventCloseoutReview,
   refreshPostEventCloseoutConfiguration,
+  resetDefinitivePostEventActualAttendanceAttempt,
   resetDefinitivePostEventCloseoutConfigurationAttempt,
   resetDefinitivePostEventCloseoutAttempt
 } from "../../lib/postEventCloseoutClient";
@@ -139,10 +145,12 @@ async function clickAndFlush(button) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  readPendingPostEventActualAttendanceAttempt.mockReturnValue(null);
   readPendingPostEventCloseoutAttempt.mockReturnValue(null);
   readPendingPostEventCloseoutConfigurationAttempt.mockReturnValue(null);
   isDefinitivePostEventCloseoutError.mockReturnValue(false);
   resetDefinitivePostEventCloseoutAttempt.mockReturnValue(false);
+  resetDefinitivePostEventActualAttendanceAttempt.mockReturnValue(false);
   resetDefinitivePostEventCloseoutConfigurationAttempt.mockReturnValue(false);
   container = document.createElement("div");
   document.body.appendChild(container);
@@ -452,6 +460,132 @@ describe("post-event closeout mutation lifecycle", () => {
     expect(button.disabled).toBe(true);
     act(() => button.click());
     expect(recordPostEventCloseoutReview).not.toHaveBeenCalled();
+  });
+});
+
+describe("post-event actual attendance", () => {
+  const confirmedAttendance = {
+    schemaVersion: 1,
+    revision: 1,
+    count: 118,
+    sourceType: "staff_observed",
+    note: "Lead server confirmed the final served headcount.",
+    sourceReferenceId: `closeout_attendance_${"e".repeat(48)}`,
+    recordedAtISO: "2026-08-15T15:30:00.000Z",
+    recordedBy: { email: "owner@example.test", role: "admin" },
+    lastReceiptId: `closeout_attendance_${"e".repeat(48)}`
+  };
+
+  function fillAttendance({ count = "118", sourceType = "staff_observed", note = confirmedAttendance.note } = {}) {
+    const countInput = container.querySelector('input[type="number"]');
+    const sourceSelect = container.querySelector('[name="actual-attendance-source"]');
+    const noteInput = container.querySelector(".post-event-actual-attendance__note input");
+    act(() => {
+      enterInputValue(countInput, count);
+      const selectSetter = Object.getOwnPropertyDescriptor(
+        HTMLSelectElement.prototype,
+        "value"
+      )?.set;
+      selectSetter.call(sourceSelect, sourceType);
+      sourceSelect.dispatchEvent(new Event("change", { bubbles: true }));
+      enterInputValue(noteInput, note);
+    });
+  }
+
+  test("records a sourced count and renders the exact server-confirmed receipt projection", async () => {
+    const result = {
+      ...serverResult(),
+      postEventCloseout: { actualAttendance: confirmedAttendance },
+      receipt: {
+        requestId: "attendance-request-0001",
+        action: "record",
+        priorRevision: 0,
+        resultRevision: 1,
+        count: 118,
+        sourceType: "staff_observed"
+      }
+    };
+    recordPostEventActualAttendance.mockResolvedValue(result);
+    mount(<PostEventCloseoutReviewAction opportunity={opportunity()} />);
+    fillAttendance();
+
+    await clickAndFlush(buttonNamed("Record actual attendance"));
+
+    expect(recordPostEventActualAttendance).toHaveBeenCalledWith({
+      organizationId: "org-one",
+      quoteId: "quote-booked",
+      closeoutId: BASE_ACTION.closeoutId,
+      action: "record",
+      expectedRevision: 0,
+      count: 118,
+      sourceType: "staff_observed",
+      note: confirmedAttendance.note
+    });
+    expect(container.querySelector('[data-attendance-record-state="confirmed"]'))
+      .not.toBeNull();
+    expect(container.textContent).toContain("118 guests recorded");
+    expect(container.textContent).toContain(confirmedAttendance.sourceReferenceId);
+    expect(container.textContent).toContain("does not reprice, invoice, refund");
+  });
+
+  test("corrects the current revision instead of overwriting it as a new record", async () => {
+    const corrected = {
+      ...confirmedAttendance,
+      revision: 2,
+      count: 116,
+      sourceType: "venue_reported",
+      note: "Venue captain reconciled the final door count.",
+      sourceReferenceId: `closeout_attendance_${"f".repeat(48)}`,
+      lastReceiptId: `closeout_attendance_${"f".repeat(48)}`
+    };
+    recordPostEventActualAttendance.mockResolvedValue({
+      ...serverResult(),
+      postEventCloseout: { actualAttendance: corrected },
+      receipt: {
+        requestId: "attendance-request-0002",
+        action: "correct",
+        priorRevision: 1,
+        resultRevision: 2,
+        count: 116,
+        sourceType: "venue_reported"
+      }
+    });
+    mount(
+      <PostEventCloseoutReviewAction
+        opportunity={opportunity({
+          reviewedAction: { ...BASE_ACTION, actualAttendance: confirmedAttendance }
+        })}
+      />
+    );
+    fillAttendance({
+      count: "116",
+      sourceType: "venue_reported",
+      note: corrected.note
+    });
+
+    await clickAndFlush(buttonNamed("Correct attendance record"));
+
+    expect(recordPostEventActualAttendance).toHaveBeenCalledWith(expect.objectContaining({
+      action: "correct",
+      expectedRevision: 1,
+      count: 116,
+      sourceType: "venue_reported"
+    }));
+    expect(container.textContent).toContain("116 guests recorded");
+    expect(container.textContent).toContain("revision 2");
+  });
+
+  test("keeps actual attendance unavailable before the closeout action gate opens", () => {
+    mount(
+      <PostEventCloseoutReviewAction
+        opportunity={opportunity({
+          reviewedAction: { ...BASE_ACTION, state: "scheduled" }
+        })}
+      />
+    );
+    expect(buttonNamed("Record actual attendance").disabled).toBe(true);
+    expect(container.querySelector('[name="actual-attendance-source"]').disabled).toBe(true);
+    expect(recordPostEventActualAttendance).not.toHaveBeenCalled();
   });
 });
 

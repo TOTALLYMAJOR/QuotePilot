@@ -416,6 +416,13 @@ export const DEFAULT_SETTINGS = {
   featureFlags: { ...DEFAULT_FEATURE_FLAGS },
   guidedSellingEnabled: true,
   staffingLaborEnabled: true,
+  // Delivery Planning remains safe-off until a tenant publishes reviewed
+  // blueprints and quantity policies. Empty configuration never invents an
+  // operational ratio or stock assumption.
+  deliveryPlanningEnabled: false,
+  deliveryBlueprints: [],
+  quantityPolicies: [],
+  purchasingPacks: [],
   upsellRules: DEFAULT_UPSELL_RULES,
   configurationRules: [],
   commercialTemplateModules: [],
@@ -503,6 +510,14 @@ function normalizeStableIdList(value) {
     .slice(0, 100);
 }
 
+function normalizeDeliveryBlueprintRef(value) {
+  const source = typeof value === "string" ? { id: value } : value;
+  if (!source || typeof source !== "object" || Array.isArray(source)) return null;
+  const id = String(source.id || source.blueprintId || "").trim();
+  const revision = String(source.revision || source.blueprintRevision || "").trim();
+  return id ? { id, revision } : null;
+}
+
 function inferAddonStaffRole(addon = {}) {
   const hasExplicitField = Object.prototype.hasOwnProperty.call(addon, "staffRole");
   const explicitRole = normalizeAddonStaffRole(addon?.staffRole);
@@ -575,6 +590,7 @@ function normalizeTemplate(item, idx) {
     eventTypeId: String(item.eventTypeId || ""),
     bartenderRateTypeId: String(item.bartenderRateTypeId || ""),
     staffingRateTypeId: String(item.staffingRateTypeId || ""),
+    deliveryBlueprintRef: normalizeDeliveryBlueprintRef(item.deliveryBlueprintRef),
     bartenderRateOverride:
       item.bartenderRateOverride === "" || item.bartenderRateOverride === null || item.bartenderRateOverride === undefined
         ? ""
@@ -905,6 +921,7 @@ export function normalizeCatalog(raw) {
     includedAddonIds: normalizeStableIdList(p.includedAddonIds),
     includedRentalIds: normalizeStableIdList(p.includedRentalIds),
     choiceGroups: Array.isArray(p.choiceGroups) ? p.choiceGroups.map((group) => ({ ...group })) : [],
+    deliveryBlueprintRef: normalizeDeliveryBlueprintRef(p.deliveryBlueprintRef),
     quantityPolicyRefs: normalizeStableIdList(p.quantityPolicyRefs),
     ruleRefs: normalizeStableIdList(p.ruleRefs),
     offerVersion: toText(p.offerVersion, "configurable-offer-v1"),
@@ -1242,6 +1259,16 @@ export function normalizeCatalog(raw) {
         pricingValue("staffingLaborEnabled", DEFAULT_SETTINGS.staffingLaborEnabled, false),
         false
       ),
+      deliveryPlanningEnabled: rawSettings.deliveryPlanningEnabled === true,
+      deliveryBlueprints: Array.isArray(rawSettings.deliveryBlueprints)
+        ? rawSettings.deliveryBlueprints.map((blueprint) => ({ ...blueprint }))
+        : [],
+      quantityPolicies: Array.isArray(rawSettings.quantityPolicies)
+        ? rawSettings.quantityPolicies.map((policy) => ({ ...policy }))
+        : [],
+      purchasingPacks: Array.isArray(rawSettings.purchasingPacks)
+        ? rawSettings.purchasingPacks.map((pack) => ({ ...pack }))
+        : [],
       upsellRules,
       configurationRules: Array.isArray(rawSettings.configurationRules)
         ? rawSettings.configurationRules.map((rule) => ({ ...rule }))
@@ -1270,6 +1297,7 @@ export function toStorageCatalog(catalog) {
       includedAddonIds,
       includedRentalIds,
       choiceGroups,
+      deliveryBlueprintRef,
       quantityPolicyRefs,
       ruleRefs,
       offerVersion,
@@ -1284,6 +1312,9 @@ export function toStorageCatalog(catalog) {
       includedAddonIds: normalizeStableIdList(includedAddonIds),
       includedRentalIds: normalizeStableIdList(includedRentalIds),
       choiceGroups: Array.isArray(choiceGroups) ? choiceGroups.map((group) => ({ ...group })) : [],
+      ...(normalizeDeliveryBlueprintRef(deliveryBlueprintRef)
+        ? { deliveryBlueprintRef: normalizeDeliveryBlueprintRef(deliveryBlueprintRef) }
+        : {}),
       quantityPolicyRefs: normalizeStableIdList(quantityPolicyRefs),
       ruleRefs: normalizeStableIdList(ruleRefs),
       offerVersion: toText(offerVersion, "configurable-offer-v1"),

@@ -1296,6 +1296,7 @@ export function buildLivingCommercialTwinProjection({
   staffingRead = null,
   proposedStaffingRequirements = null,
   proposedStaffingRequirementsSource = "proposed_commercial_and_canonical_counts",
+  proposedStaffingEventWindowState = "current",
   staffingRequirementPolicy = null,
   appliedQuote = null,
   workbenchRequest = null
@@ -1371,6 +1372,7 @@ export function buildLivingCommercialTwinProjection({
       ? proposedStaffingRequirements
       : undefined,
     proposedRequirementsSource: text(proposedStaffingRequirementsSource),
+    proposedEventWindowState: text(proposedStaffingEventWindowState) || "current",
     staffingPolicy: staffingRequirementPolicy,
     supply: buildFulfillmentSupplyInput({
       inventory,
