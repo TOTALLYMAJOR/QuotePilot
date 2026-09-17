@@ -1064,6 +1064,31 @@ describe("inventory schema-v2 command authority", () => {
     expect(mocks.callable.mock.calls[1][0]).toEqual(mocks.callable.mock.calls[0][0]);
   });
 
+  test("tracks uncertain stock counts independently for different ingredients at one location", async () => {
+    const scope = { ...ADMIN_SCOPE, organizationId: "org-independent-stock-counts" };
+    const chicken = {
+      kind: "record_stock_count",
+      ingredientId: "chicken",
+      locationId: "main-kitchen",
+      countedQuantity: "37",
+      baseUnitId: "lb",
+      occurredAtISO: NOW,
+      note: "Chicken count",
+      expectedStockRevision: 1
+    };
+    const pasta = { ...chicken, ingredientId: "pasta", countedQuantity: "22", note: "Pasta count" };
+    mocks.callable
+      .mockRejectedValueOnce(Object.assign(new Error("connection ended"), { code: "functions/unavailable" }))
+      .mockRejectedValueOnce(Object.assign(new Error("connection ended"), { code: "functions/unavailable" }));
+
+    await expect(applyInventoryCommand({ ...scope, requestId: `inventory_request_${"4".repeat(32)}`, command: chicken })).rejects.toThrow(/connection ended/i);
+    await expect(applyInventoryCommand({ ...scope, requestId: `inventory_request_${"5".repeat(32)}`, command: pasta })).rejects.toThrow(/connection ended/i);
+    expect(readPendingInventoryCommands(scope)).toEqual(expect.arrayContaining([
+      expect.objectContaining({ targetId: "chicken", command: expect.objectContaining({ ingredientId: "chicken" }) }),
+      expect.objectContaining({ targetId: "pasta", command: expect.objectContaining({ ingredientId: "pasta" }) })
+    ]));
+  });
+
   test("treats aborted as definitive and allows a deliberate reset", async () => {
     const scope = { ...ADMIN_SCOPE, organizationId: "org-stale-command" };
     mocks.callable.mockRejectedValueOnce(Object.assign(new Error("revision stale"), { code: "functions/aborted" }));

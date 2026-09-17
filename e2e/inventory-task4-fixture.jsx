@@ -37,6 +37,26 @@ const ingredient = {
   locationName: "Main kitchen"
 };
 
+const riceIngredient = {
+  ...ingredient,
+  ingredientId: "rice",
+  name: "Rice",
+  nameSortKey: "rice",
+  category: "Dry goods",
+  updatedAtISO: "2026-09-01T12:00:00.000Z",
+  stock: {
+    ...ingredient.stock,
+    revision: 2,
+    onHandMicros: 18_000_000,
+    quantity: "18",
+    committedMicros: 0,
+    committedQuantity: "0",
+    availableToAllocateMicros: 18_000_000,
+    availableToAllocateQuantity: "18",
+    lastMovementId: `imv_${"b".repeat(48)}`
+  }
+};
+
 const model = {
   schemaVersion: 2,
   organizationId: ORG,
@@ -55,17 +75,24 @@ const access = { organizationId: ORG, role: "admin", readEnabled: true, mutation
 
 function Harness() {
   const [mode, setMode] = useState("current");
+  const [userId, setUserId] = useState("e2e-admin");
+  const [riceRevision, setRiceRevision] = useState(2);
   useEffect(() => {
-    window.inventoryTask4Harness = { setMode };
+    window.inventoryTask4Harness = { setMode, setUserId, setRiceRevision };
     return () => { delete window.inventoryTask4Harness; };
   }, []);
+  const currentModel = useMemo(() => ({
+    ...model,
+    ingredients: [ingredient, { ...riceIngredient, stock: { ...riceIngredient.stock, revision: riceRevision } }]
+  }), [riceRevision]);
   const read = useMemo(() => {
     if (mode === "loading") return { state: "loading", model: null, error: "" };
     if (mode === "error") return { state: "unavailable", model: null, error: "Inventory fixture unavailable." };
-    if (mode === "empty") return { state: "current", model: { ...model, ingredients: [] }, error: "" };
-    return { state: "current", model, error: "" };
-  }, [mode]);
+    if (mode === "empty") return { state: "current", model: { ...currentModel, ingredients: [] }, error: "" };
+    return { state: "current", model: currentModel, error: "" };
+  }, [currentModel, mode]);
   return (
+    <div data-e2e-authority="mock-server">
     <InventoryWorkspaceView
       access={access}
       read={read}
@@ -91,12 +118,23 @@ function Harness() {
         }),
         applyPlan: async () => { throw new Error("Fixture does not submit authority commands."); }
       }}
-      mobileCaptureProps={{ organizationId: ORG, userId: "e2e-admin", role: "admin", browserEnabled: true, tenantEnabled: true, submitCommand: async () => { throw new Error("Fixture does not submit authority commands."); } }}
+      mobileCaptureProps={{
+        organizationId: ORG,
+        userId,
+        role: "admin",
+        browserEnabled: true,
+        tenantEnabled: true,
+        submitCommand: async ({ requestId, command }) => ({
+          receipt: { receiptId: `mock-${command.ingredientId}-${requestId.slice(-6)}` },
+          confirmation: { stockRevision: command.expectedStockRevision + 1 }
+        })
+      }}
       onRetry={() => setMode("current")}
       onSubmit={() => {}}
       onReconcile={() => {}}
       onReset={() => {}}
     />
+    </div>
   );
 }
 

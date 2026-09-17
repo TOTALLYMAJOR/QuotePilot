@@ -850,7 +850,7 @@ export function inventoryCommandAxis(kind) {
 }
 
 function targetIdentity(command) {
-  return command.locationId || command.ingredientId || command.menuItemId || command.quoteId || "authority";
+  return command.ingredientId || command.locationId || command.menuItemId || command.quoteId || "authority";
 }
 
 function normalizeEnvelope(input) {

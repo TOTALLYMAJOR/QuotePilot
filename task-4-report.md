@@ -1,6 +1,6 @@
 # Task 4 — Exception-first inventory and offline mobile capture
 
-Last updated: 2026-09-17 09:45 CDT
+Last updated: 2026-09-17 10:11 CDT
 
 ## Outcome
 
@@ -40,3 +40,29 @@ Planner start: `2026-09-17T14:39:40.067Z` for `task-4-exception-first-inventory-
 - No hosted Firebase call, deployment, production verification, provider proof, or human acceptance was performed.
 
 Planner completion: `2026-09-17T14:44:41.622Z` (`ui`, medium risk). The emitted canonical documentation and Product Intelligence obligations remain assigned to Task 5; Task 4 changed no canonical authority documents.
+
+## Fix round 1 — concurrency and recovery hardening
+
+Planner start: `2026-09-17T15:08:02.280Z` for `task-4-fix-round-1-inventory-concurrency-and-recovery` (`ui`, medium risk). An earlier planner invocation used the smaller initial file set at `2026-09-17T14:49:09.504Z`; the later timestamp records the exact final implementation/report scope.
+
+The review findings are resolved without widening Inventory authority:
+
+- A stale supply plan now rebases against refreshed shortage evidence. Edits are dirty-tracked, confirmation is reset on any event/revision/value change, and approval is allowed only for the exact saved revision and values.
+- Supply-plan and capture reads/mutations are generation-fenced across organization, user, location, event, and empty-selection transitions so late callbacks cannot repopulate the wrong scope.
+- Each capture line durably owns its exact request ID and canonical `record_stock_count` command. Uncertain outcomes—including an interrupted persisted in-flight attempt—explicitly reconcile the same identity; definitive rejections are reset before a new identity is issued for an explicitly reviewed rebase. Different ingredients at the same location no longer collide in pending-attempt identity, and unsafe upstream error text cannot prevent the recovery state itself from being persisted.
+- Native IndexedDB create/update/submit/discard use atomic add or revision-checked read-write transactions. Mutations retry bounded compare-and-swap conflicts, merge independent lines, and persist each line's in-flight marker and receipt/conflict/error before moving to the next request.
+- Search, reconnect comparison, and recovery all require exact organization/user/location/ingredient/base-unit evidence. Barcode files are decoded to `ImageBitmap`, passed to `BarcodeDetector`, and closed, with manual search preserved on every failure.
+- With `inventoryExceptionWorkspace` off, the ledger retains the prior expanded presentation. The disclosure exists only when that feature flag is on.
+
+Red evidence captured the original defects: 5/7 draft-store tests failed, the same-location/different-ingredient authority-client test failed, and 6/34 component tests failed. Initial E2E also exposed both the native two-tab IndexedDB create race and 28 px overflow at 768 px. After implementation:
+
+- Focused unit/component/client: 3 files passed, 92/92 tests.
+- Full unit: 507 files passed, 3 skipped; 6,043 tests passed, 100 skipped.
+- Responsive/accessibility/native-browser E2E: 4/4 passed at 1440×1000, 768×1024, and 390×844, including native IndexedDB reload, concurrent-tab line merging, user-scope switching, partial authoritative receipt retention, and revision-conflict recovery. The fixture is explicitly marked as mock-server authority; this is not hosted Firebase proof.
+- Production build: passed with 369 modules transformed.
+- `npm run check:project-state`: passed (12 capabilities, 10 blockers, 1 proof event, 5 commercial evidence records).
+- `git diff --check`: passed.
+
+The expected Task 5/environment residuals remain unchanged: `check:env` lacks the six local Firebase variables; documentation and Product Intelligence gates require the explicitly deferred canonical files; and the cumulative capability-surface gate reports prior Task 1–3 backend paths plus the local draft module until Task 5 reconciliation. No hosted, deployed, provider, production, or human-acceptance claim is made.
+
+Fix-round planner completion: `2026-09-17T15:16:31.677Z` (`ui`, medium risk), using the same exact final file set as the refreshed start record.

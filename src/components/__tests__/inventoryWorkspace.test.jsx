@@ -125,6 +125,16 @@ function setInput(input, value) {
   input.dispatchEvent(new Event("change", { bubbles: true }));
 }
 
+function deferred() {
+  let resolve;
+  let reject;
+  const promise = new Promise((nextResolve, nextReject) => {
+    resolve = nextResolve;
+    reject = nextReject;
+  });
+  return { promise, resolve, reject };
+}
+
 async function openPackEditor() {
   const trigger = [...container.querySelectorAll("button")]
     .find((button) => button.textContent === "Declare or revise pack");
@@ -173,6 +183,24 @@ describe("InventoryWorkspace ingredient evidence presentation", () => {
     expect(html).toContain('data-inventory-axis="committed"');
     expect(html).toContain('data-inventory-axis="available"');
     expect(html).toContain('data-inventory-axis="cost"');
+  });
+
+  test("keeps the pre-Task-4 ledger expanded when the exception gate is off", () => {
+    const html = renderToStaticMarkup(
+      <InventoryWorkspaceView
+        access={ADMIN_ACCESS}
+        read={{ state: "current", model: projectionModel(), error: "" }}
+        attempts={attempts()}
+        exceptionWorkspaceEnabled={false}
+        onRetry={() => {}}
+        onSubmit={() => {}}
+        onReconcile={() => {}}
+        onReset={() => {}}
+      />
+    );
+    expect(html).not.toContain("Seven-axis inventory ledger");
+    expect(html).toContain('aria-labelledby="inventory-list-title"');
+    expect(html).toContain("Physical on hand");
   });
 
   test("keeps physical stock and purchase-cost evidence as separate axes", () => {
@@ -417,6 +445,108 @@ describe("Task 4 inventory action surfaces", () => {
     }));
   });
 
+  test("rebases a stale plan against refreshed shortage fingerprints and current shortage rows", async () => {
+    const getPlan = vi.fn().mockResolvedValue({
+      resolution: "stale",
+      stale: true,
+      plan: {
+        status: "draft",
+        planRevision: 3,
+        edits: [{
+          ingredientId: "old-ingredient", locationId: "main-kitchen", baseUnitId: "lb", shortageQuantity: "2",
+          supplierId: "old-supplier", supplierLabel: "Old supplier", purchaseQuantity: "2", estimatedCostMinor: null,
+          note: "", conditions: [], policyFingerprint: "d".repeat(64), offerFingerprint: "e".repeat(64)
+        }]
+      },
+      source: {
+        eligible: true,
+        allocationFingerprint: "1".repeat(64),
+        shortageFingerprint: "2".repeat(64),
+        sourceFingerprint: "3".repeat(64),
+        shortages: [{ ingredientId: "current-chicken", locationId: "main-kitchen", baseUnitId: "lb", shortageQuantity: "5" }]
+      }
+    });
+    const applyPlan = vi.fn().mockResolvedValue({ receipt: { receiptId: "receipt" } });
+    await act(async () => root.render(
+      <EventSupplyActionPlanPanel
+        enabled organizationId={ORGANIZATION_ID} role="admin"
+        events={[{ id: "quote-stale", status: "accepted" }]}
+        getPlan={getPlan} applyPlan={applyPlan}
+      />
+    ));
+    await act(async () => setInput(container.querySelector('select[aria-label="Event supply plan"]'), "quote-stale"));
+    expect(container.textContent).toContain("Current chicken");
+    expect(container.textContent).not.toContain("Old ingredient");
+    const fields = container.querySelectorAll(".inventory-supply-edit input");
+    await act(async () => {
+      setInput(fields[0], "supplier-current");
+      setInput(fields[1], "Current supplier");
+      const evidence = container.querySelector(".inventory-supply-edit details");
+      evidence.open = true;
+      setInput(container.querySelector('input[maxlength="64"]'), "a".repeat(64));
+      setInput(container.querySelectorAll('input[maxlength="64"]')[1], "b".repeat(64));
+    });
+    const rebase = container.querySelector('button[data-supply-command="rebase"]');
+    expect(rebase).not.toBeNull();
+    await act(async () => rebase.click());
+    expect(applyPlan).toHaveBeenCalledWith(expect.objectContaining({
+      command: expect.objectContaining({
+        kind: "rebase",
+        expectedPlanRevision: 3,
+        expectedSourceFingerprint: "3".repeat(64),
+        edits: [expect.objectContaining({ ingredientId: "current-chicken", shortageQuantity: "5" })]
+      })
+    }));
+  });
+
+  test("invalidates approval confirmation when saved plan values change", async () => {
+    const getPlan = vi.fn().mockResolvedValue({
+      resolution: "unresolved",
+      stale: false,
+      plan: {
+        status: "draft", planRevision: 1,
+        edits: [{
+          ingredientId: "chicken", locationId: "main-kitchen", baseUnitId: "lb", shortageQuantity: "5",
+          supplierId: "supplier-1", supplierLabel: "Saved supplier", purchaseQuantity: "5", estimatedCostMinor: null,
+          note: "", conditions: [], policyFingerprint: "d".repeat(64), offerFingerprint: "e".repeat(64)
+        }]
+      },
+      source: {
+        eligible: true, allocationFingerprint: "a".repeat(64), shortageFingerprint: "b".repeat(64), sourceFingerprint: "c".repeat(64),
+        shortages: [{ ingredientId: "chicken", locationId: "main-kitchen", baseUnitId: "lb", shortageQuantity: "5" }]
+      }
+    });
+    await act(async () => root.render(
+      <EventSupplyActionPlanPanel enabled organizationId={ORGANIZATION_ID} role="admin"
+        events={[{ id: "quote-dirty", status: "accepted" }]} getPlan={getPlan} applyPlan={vi.fn()} />
+    ));
+    await act(async () => setInput(container.querySelector('select[aria-label="Event supply plan"]'), "quote-dirty"));
+    const approval = container.querySelector(".inventory-approval-check input");
+    const approve = container.querySelector('button[data-supply-command="approve"]');
+    await act(async () => approval.click());
+    expect(approve.disabled).toBe(false);
+    await act(async () => setInput(container.querySelector(".inventory-supply-edit input"), "supplier-2"));
+    expect(approval.checked).toBe(false);
+    expect(approval.disabled).toBe(true);
+    expect(approve.disabled).toBe(true);
+    expect(container.textContent).toContain("Save this reviewed change before approval");
+  });
+
+  test("generation-fences supply reads and resets state when organization changes", async () => {
+    const first = deferred();
+    const getPlan = vi.fn().mockImplementation(({ organizationId }) => (
+      organizationId === "org-old" ? first.promise : Promise.resolve({ resolution: "not_started", stale: false, plan: null, source: { eligible: true, shortages: [], allocationFingerprint: "a".repeat(64), shortageFingerprint: "b".repeat(64), sourceFingerprint: "c".repeat(64) } })
+    ));
+    const events = [{ id: "quote-1", status: "accepted" }];
+    await act(async () => root.render(<EventSupplyActionPlanPanel enabled organizationId="org-old" role="admin" events={events} getPlan={getPlan} applyPlan={vi.fn()} />));
+    await act(async () => setInput(container.querySelector('select[aria-label="Event supply plan"]'), "quote-1"));
+    await act(async () => root.render(<EventSupplyActionPlanPanel enabled organizationId="org-new" role="admin" events={events} getPlan={getPlan} applyPlan={vi.fn()} />));
+    first.resolve({ resolution: "stale", stale: true, plan: null, source: { eligible: true, shortages: [{ ingredientId: "wrong-org", locationId: "main-kitchen", baseUnitId: "lb", shortageQuantity: "1" }], allocationFingerprint: "1".repeat(64), shortageFingerprint: "2".repeat(64), sourceFingerprint: "3".repeat(64) } });
+    await act(async () => first.promise);
+    expect(container.querySelector('select[aria-label="Event supply plan"]').value).toBe("");
+    expect(container.textContent).not.toContain("Wrong org");
+  });
+
   test("keeps manual shelf search available when BarcodeDetector is absent", async () => {
     const previous = globalThis.BarcodeDetector;
     delete globalThis.BarcodeDetector;
@@ -441,9 +571,55 @@ describe("Task 4 inventory action surfaces", () => {
     globalThis.BarcodeDetector = previous;
   });
 
+  test("filters shelf search to the exact selected location and fences late scope reads", async () => {
+    const oldScope = deferred();
+    const draftService = {
+      create: vi.fn(), update: vi.fn(), discard: vi.fn(), submit: vi.fn(),
+      list: vi.fn(({ userId }) => userId === "old-user" ? oldScope.promise : Promise.resolve([]))
+    };
+    const locations = [{ locationId: "main-kitchen", name: "Main kitchen" }, { locationId: "pantry", name: "Pantry" }];
+    await act(async () => root.render(
+      <InventoryMobileCapturePanel enabled organizationId={ORGANIZATION_ID} userId="old-user" locations={locations}
+        ingredients={projectionModel().ingredients} draftService={draftService} />
+    ));
+    await act(async () => root.render(
+      <InventoryMobileCapturePanel enabled organizationId={ORGANIZATION_ID} userId="new-user" locations={locations}
+        ingredients={projectionModel().ingredients} draftService={draftService} />
+    ));
+    oldScope.resolve([{ draftId: "wrong-scope", lines: [{ ingredientName: "Wrong scope" }] }]);
+    await act(async () => oldScope.promise);
+    expect(container.textContent).not.toContain("Wrong scope");
+    await act(async () => setInput(container.querySelector(".inventory-mobile-capture select"), "pantry"));
+    expect(container.textContent).not.toContain("Current revision 1");
+  });
+
+  test("decodes barcode files through an ImageBitmap and closes it", async () => {
+    const previousDetector = globalThis.BarcodeDetector;
+    const previousBitmap = globalThis.createImageBitmap;
+    const bitmap = { close: vi.fn() };
+    const detect = vi.fn().mockResolvedValue([{ rawValue: "chicken" }]);
+    globalThis.createImageBitmap = vi.fn().mockResolvedValue(bitmap);
+    globalThis.BarcodeDetector = class { detect(value) { return detect(value); } };
+    await act(async () => root.render(
+      <InventoryMobileCapturePanel enabled organizationId={ORGANIZATION_ID} userId="admin-user"
+        locations={[{ locationId: "main-kitchen", name: "Main kitchen" }]} ingredients={projectionModel().ingredients}
+        draftService={{ create: vi.fn(), update: vi.fn(), list: vi.fn().mockResolvedValue([]), discard: vi.fn(), submit: vi.fn() }} />
+    ));
+    const fileInput = container.querySelector('input[aria-label="Barcode image"]');
+    const file = new File(["barcode"], "barcode.png", { type: "image/png" });
+    Object.defineProperty(fileInput, "files", { configurable: true, value: [file] });
+    await act(async () => fileInput.dispatchEvent(new Event("change", { bubbles: true })));
+    expect(globalThis.createImageBitmap).toHaveBeenCalledWith(file);
+    expect(detect).toHaveBeenCalledWith(bitmap);
+    expect(bitmap.close).toHaveBeenCalledTimes(1);
+    globalThis.BarcodeDetector = previousDetector;
+    globalThis.createImageBitmap = previousBitmap;
+  });
+
   test("submits each clean mobile count through the existing gated stock-count command", async () => {
     const draft = {
       draftId: "shelf-1",
+      draftRevision: 1,
       status: "draft",
       lines: [{
         lineId: "count-chicken",
@@ -454,6 +630,17 @@ describe("Task 4 inventory action surfaces", () => {
         note: "Shelf walk",
         occurredAtISO: "2026-09-17T14:00:00.000Z",
         expectedStockRevision: 1,
+        requestId: `inventory_request_${"1".repeat(32)}`,
+        command: {
+          kind: "record_stock_count",
+          ingredientId: "chicken",
+          locationId: "main-kitchen",
+          baseUnitId: "lb",
+          countedQuantity: "37.5",
+          occurredAtISO: "2026-09-17T14:00:00.000Z",
+          note: "Shelf walk",
+          expectedStockRevision: 1
+        },
         state: "draft"
       }]
     };
@@ -465,14 +652,17 @@ describe("Task 4 inventory action surfaces", () => {
       discard: vi.fn(),
       submit: vi.fn(async ({ submitLine }) => {
         await submitLine({
-          kind: "record_stock_count",
-          ingredientId: "chicken",
-          locationId: "main-kitchen",
-          baseUnitId: "lb",
-          countedQuantity: "37.5",
-          occurredAtISO: "2026-09-17T14:00:00.000Z",
-          note: "Shelf walk",
-          expectedStockRevision: 1
+          requestId: `inventory_request_${"1".repeat(32)}`,
+          command: {
+            kind: "record_stock_count",
+            ingredientId: "chicken",
+            locationId: "main-kitchen",
+            baseUnitId: "lb",
+            countedQuantity: "37.5",
+            occurredAtISO: "2026-09-17T14:00:00.000Z",
+            note: "Shelf walk",
+            expectedStockRevision: 1
+          }
         });
         return { ...draft, status: "submitted", lines: [{ ...draft.lines[0], state: "submitted", receiptId: "inventory-receipt" }] };
       })
@@ -501,6 +691,61 @@ describe("Task 4 inventory action surfaces", () => {
       browserEnabled: true,
       tenantEnabled: true,
       command: expect.objectContaining({ kind: "record_stock_count", expectedStockRevision: 1 })
+    }));
+  });
+
+  test("resets a definitive stock-count attempt before rebasing the retained line", async () => {
+    const requestId = `inventory_request_${"7".repeat(32)}`;
+    const line = {
+      lineId: "count-chicken",
+      ingredientId: "chicken",
+      ingredientName: "Chicken",
+      baseUnitId: "lb",
+      countedQuantity: "24",
+      note: "Shelf walk",
+      occurredAtISO: "2026-09-17T14:00:00.000Z",
+      expectedStockRevision: 0,
+      requestId,
+      command: {
+        kind: "record_stock_count",
+        ingredientId: "chicken",
+        locationId: "main-kitchen",
+        baseUnitId: "lb",
+        countedQuantity: "24",
+        occurredAtISO: "2026-09-17T14:00:00.000Z",
+        note: "Shelf walk",
+        expectedStockRevision: 0
+      },
+      state: "error",
+      definitive: true,
+      error: "The command was rejected."
+    };
+    const draft = { draftId: "shelf-1", draftRevision: 2, status: "partial", lines: [line] };
+    const resetCommand = vi.fn().mockReturnValue(true);
+    const draftService = {
+      create: vi.fn(),
+      list: vi.fn().mockResolvedValue([draft]),
+      discard: vi.fn(),
+      submit: vi.fn(),
+      update: vi.fn(async ({ line: replacement }) => ({ ...draft, draftRevision: 3, status: "draft", lines: [replacement] }))
+    };
+    await act(async () => root.render(
+      <InventoryMobileCapturePanel enabled organizationId={ORGANIZATION_ID} userId="admin-user" role="admin"
+        browserEnabled tenantEnabled locations={[{ locationId: "main-kitchen", name: "Main kitchen" }]}
+        ingredients={projectionModel().ingredients} resetCommand={resetCommand} draftService={draftService} />
+    ));
+    await act(async () => [...container.querySelectorAll("button")]
+      .find((button) => button.textContent === "Review against current revision").click());
+    expect(resetCommand).toHaveBeenCalledWith(expect.objectContaining({ organizationId: ORGANIZATION_ID, requestId }));
+    expect(draftService.update).toHaveBeenCalledWith(expect.objectContaining({
+      expectedDraftRevision: 2,
+      line: expect.objectContaining({
+        requestId: expect.not.stringMatching(requestId),
+        state: "draft",
+        definitive: false,
+        expectedStockRevision: 1,
+        command: expect.objectContaining({ locationId: "main-kitchen", baseUnitId: "lb", expectedStockRevision: 1 })
+      })
     }));
   });
 });
