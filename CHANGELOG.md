@@ -6,9 +6,13 @@ Last updated: 2026-09-17 14:01:00 CDT
 
 - Keep the six default-off Quote-to-Confidence capabilities out of disabled
   bundles with compile-time gates and lazy presentation boundaries. Exact
-  local CI-matrix builds measure 3,657,288 / 385,181 bytes for compatibility
-  and 4,962,837 / 446,522 bytes for Ambient; the temporary exception is pinned
-  to those values without percentage or future-growth headroom.
+  config-free local matrix builds measure 3,657,288 / 385,181 bytes for
+  compatibility and 4,962,837 / 446,522 bytes for Ambient. The exact
+  production CI environments measure 3,657,606 / 385,181 and 4,963,155 /
+  446,541 bytes respectively; exact-PR CI run `35265592125` confirmed the
+  compatibility result. The temporary exception is pinned to those larger
+  literal production-matrix artifacts without percentage or future-growth
+  headroom.
 
 - Fence cancelled capture rollback to its exact persisted line-claim revision, leaving newer reconciliation claims and their replacement protection untouched.
 

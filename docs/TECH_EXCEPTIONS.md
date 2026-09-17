@@ -74,13 +74,16 @@ Use this log when a change intentionally departs from stable-first policy or req
   the compatibility largest-chunk ceiling stays unchanged. Exact-PR CI must
   confirm both profiles before release. The Quote-to-Confidence update first
   removes about 153 KB of default-off eager capability code with compile-time
-  gates and lazy presentation boundaries, then measures 3,657,288 / 385,181
-  bytes for compatibility and 4,962,837 / 446,522 bytes for Ambient. Its
-  remaining increase is the reviewed role-safe host integration for the five
-  separately gated workflows. Aggregate ceilings and the Ambient
-  largest-chunk ceiling are pinned to those literal local graphs;
-  compatibility retains its existing largest-chunk ceiling. There is no
-  discretionary headroom, and exact-PR CI must confirm both profiles. The Proposal
+  gates and lazy presentation boundaries. The config-free local matrix
+  measures 3,657,288 / 385,181 bytes for compatibility and 4,962,837 / 446,522
+  bytes for Ambient. With the exact production CI environment, compatibility
+  measures 3,657,606 / 385,181 bytes and Ambient measures 4,963,155 / 446,541
+  bytes; exact-PR CI run `35265592125` confirmed the compatibility result. The
+  profile ceilings are pinned to those larger literal production-matrix
+  artifacts while compatibility's largest-chunk ceiling remains unchanged.
+  The remaining increase is the reviewed role-safe host
+  integration for the five separately gated workflows; there is no
+  discretionary headroom. The Proposal
   Composer quote-builder candidate (measured 2,943,941 local compatibility bytes, largest chunk
   unchanged), the first Live planning and Staff People presentation slice
   (measured 2,963,542 compatibility bytes, largest chunk unchanged), and the
@@ -235,7 +238,7 @@ Use this log when a change intentionally departs from stable-first policy or req
   The Quote-to-Confidence follow-on adds 4,443 aggregate compatibility bytes
   and 14,848 aggregate Ambient bytes after its default-off feature
   implementations are compile-gated or lazy. Compatibility's largest emitted
-  chunk remains 385,181 bytes; Ambient's current largest chunk is 446,522
+  chunk remains 385,181 bytes; Ambient's current largest chunk is 446,541
   bytes, 1,100 bytes above the v0.20.0 ceiling. These exact residuals are the
   reviewed integration cost, not a general allowance.
 - Rollback plan: Revert the quote-builder decision-flow slice and its exact
@@ -258,8 +261,10 @@ Use this log when a change intentionally departs from stable-first policy or req
   jobs passed. A fresh CI-equivalent local Ambient build established the larger
   literal ceiling above. A subsequent exact-SHA CI pass, hosted timing, and
   human acceptance remain open.
-  The Quote-to-Confidence local CI-matrix builds measure 3,657,288 / 385,181
-  bytes for compatibility and 4,962,837 / 446,522 bytes for Ambient. Both
+  The Quote-to-Confidence config-free local matrix builds measure 3,657,288 /
+  385,181 bytes for compatibility and 4,962,837 / 446,522 bytes for Ambient;
+  the exact production CI environments measure 3,657,606 / 385,181 and
+  4,963,155 / 446,541 bytes respectively. Both
   profile bundle guards pass against the exact exception values; exact-PR CI,
   hosted timing, and human acceptance remain open.
   The v0.16 candidate then measured 3,214,012 / 385,130 bytes for compatibility
