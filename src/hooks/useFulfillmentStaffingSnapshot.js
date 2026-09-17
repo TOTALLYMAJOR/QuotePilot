@@ -150,6 +150,10 @@ export function useFulfillmentStaffingSnapshot({
       setRead(initialRead(identity));
       return undefined;
     }
+    // A new quote/revision scope invalidates prior staffing evidence
+    // immediately. Deferral changes when the next read starts, never how long
+    // stale evidence is allowed to masquerade as current.
+    setRead(initialRead(identity));
     return scheduleDeferredClientWork(() => {
       void load({ retain: false }).catch(() => {});
     });
