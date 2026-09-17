@@ -343,7 +343,8 @@ export const DEFAULT_FEATURE_FLAGS = {
   guidedSelling: true,
   aiAssist: true,
   aiAutopilot: false,
-  quoteCompletionCommandPath: false
+  quoteCompletionCommandPath: false,
+  decisionPacket: false
 };
 
 export const DEFAULT_SETTINGS = {
@@ -846,6 +847,10 @@ function normalizeFeatureFlags(input, legacySettings = {}) {
     quoteCompletionCommandPath: toBoolean(
       source.quoteCompletionCommandPath,
       DEFAULT_FEATURE_FLAGS.quoteCompletionCommandPath
+    ),
+    decisionPacket: toBoolean(
+      source.decisionPacket,
+      DEFAULT_FEATURE_FLAGS.decisionPacket
     )
   };
 }

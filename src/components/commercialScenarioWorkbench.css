@@ -706,6 +706,27 @@
   width: 24%;
 }
 
+.csw-comparison tbody th strong,
+.csw-comparison tbody th span {
+  display: block;
+}
+
+.csw-comparison tbody th strong {
+  color: var(--csw-ink);
+  font-size: 0.78rem;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.csw-comparison tbody th span {
+  margin-top: 0.18rem;
+  color: var(--csw-muted);
+  font-size: 0.67rem;
+  letter-spacing: 0;
+  line-height: 1.3;
+  text-transform: none;
+}
+
 .csw-comparison th:not(:first-child),
 .csw-comparison td {
   padding-left: 0.7rem;
@@ -766,6 +787,17 @@
 
 .csw-comparison-mobile {
   display: none;
+}
+
+.csw-comparison-blocker {
+  margin: .75rem 0 0;
+  padding: .75rem;
+  border: 1px solid color-mix(in srgb, var(--csw-danger) 30%, var(--csw-line));
+  border-radius: .55rem;
+  background: color-mix(in srgb, var(--csw-danger) 7%, #fff);
+  color: var(--csw-ink);
+  font-size: .78rem;
+  line-height: 1.5;
 }
 
 .csw-menu-basis {
@@ -1180,6 +1212,53 @@
 
   .csw-comparison--wide {
     display: none;
+  }
+
+  .csw-comparison--decision {
+    display: block;
+  }
+
+  .csw-comparison--decision thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  .csw-comparison--decision tbody,
+  .csw-comparison--decision tr,
+  .csw-comparison--decision th,
+  .csw-comparison--decision td {
+    display: block;
+    width: 100%;
+  }
+
+  .csw-comparison--decision tr {
+    padding: .75rem 0;
+    border-bottom: 1px solid var(--csw-line);
+  }
+
+  .csw-comparison--decision th,
+  .csw-comparison--decision td,
+  .csw-comparison--decision th:not(:first-child) {
+    padding: .25rem 0;
+    border: 0;
+    text-align: left;
+  }
+
+  .csw-comparison--decision td::before {
+    display: inline-block;
+    min-width: 5.5rem;
+    margin-right: .5rem;
+    color: var(--csw-muted);
+    content: attr(data-label);
+    font-size: .67rem;
+    font-weight: 720;
+    text-transform: uppercase;
   }
 
   .csw-comparison-mobile {

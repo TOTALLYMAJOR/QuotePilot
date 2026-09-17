@@ -271,6 +271,49 @@ function commercialRail(commercialModel, evidenceState) {
   };
 }
 
+function marginRail(value) {
+  if (!record(value)) {
+    return {
+      evidenceState: EVIDENCE_STATES.MISSING,
+      before: null,
+      proposedAfter: null,
+      delta: null,
+      boundary: "Complete recorded-cost coverage for both snapshots is required before margin can be compared."
+    };
+  }
+  const state = text(value.evidenceState).toLowerCase();
+  if (state !== EVIDENCE_STATES.AVAILABLE) {
+    return {
+      evidenceState: Object.values(EVIDENCE_STATES).includes(state)
+        ? state
+        : EVIDENCE_STATES.MISSING,
+      before: null,
+      proposedAfter: null,
+      delta: null,
+      boundary: text(value.boundary)
+        || "Margin stays unavailable when recorded-cost evidence is missing, stale, contradictory, or unavailable."
+    };
+  }
+  const before = finiteNumber(value.before);
+  const proposedAfter = finiteNumber(value.proposedAfter);
+  if (before === null || proposedAfter === null) {
+    return {
+      evidenceState: EVIDENCE_STATES.SCHEMA_DRIFT,
+      before: null,
+      proposedAfter: null,
+      delta: null,
+      boundary: "The provided margin comparison does not contain two finite recorded-cost ratios."
+    };
+  }
+  return {
+    evidenceState: EVIDENCE_STATES.AVAILABLE,
+    before,
+    proposedAfter,
+    delta: proposedAfter - before,
+    boundary: "Existing recorded-cost margin presentation only; no missing cost, rate, or policy is inferred."
+  };
+}
+
 function inventoryEvidenceState({
   scenarioChanged,
   inventoryScenarioEligible,
@@ -1282,6 +1325,7 @@ export function buildLivingCommercialTwinProjection({
   previewError = null,
   previewScopeCurrent = false,
   commercialModel = null,
+  marginComparison = null,
   authorityState = "",
   authorizationRequired = false,
   authorizationReceiptId = "",
@@ -1333,6 +1377,7 @@ export function buildLivingCommercialTwinProjection({
     commercialModel
   });
   const commercial = commercialRail(commercialModel, commercialEvidenceState);
+  const margin = marginRail(marginComparison);
   const inventoryState = inventoryEvidenceState({
     scenarioChanged,
     inventoryScenarioEligible,
@@ -1408,7 +1453,7 @@ export function buildLivingCommercialTwinProjection({
       selectedMenuItems: resolvedMenuItems,
       workbenchRequest: workbenchRequestEnvelope(workbenchRequest)
     },
-    consequences: { commercial, inventory, staffing, beo },
+    consequences: { commercial, margin, inventory, staffing, beo },
     fulfillment,
     decisionAnswer: buildDecisionAnswer({
       organizationId,

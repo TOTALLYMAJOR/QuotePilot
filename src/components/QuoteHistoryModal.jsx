@@ -57,6 +57,7 @@ import {
 } from "../lib/workspacePresentation";
 import CommercialDependencyStatePanel from "./CommercialDependencyStatePanel";
 import ConfiguredQuoteActionRail from "./ConfiguredQuoteActionRail";
+import DecisionPacketPanel from "./DecisionPacketPanel";
 import EventWorkspaceView from "./EventWorkspaceView";
 import KitchenBeoArtifactPanel from "./KitchenBeoArtifactPanel";
 import QuoteDecisionDebtPanel from "./QuoteDecisionDebtPanel";
@@ -896,6 +897,7 @@ export function QuoteHistoryView({
   ambientPricingCatalog = null,
   ambientPricingSettings = null,
   inquiryShowcaseEnabled = false,
+  decisionPacketEnabled = false,
   globalPilotRequest = null,
   globalPilotReturnFocusRef = null,
   onGlobalPilotResolution = null,
@@ -2905,6 +2907,18 @@ export function QuoteHistoryView({
                 : setConversationQuote(focusedQuote)}
             />
           ) : null}
+          <DecisionPacketPanel
+            enabled={decisionPacketEnabled}
+            quote={focusedQuote}
+            source={state.source}
+            onOpenAcceptedRevision={typeof onOpenQuoteAdministration === "function"
+              ? () => onOpenQuoteAdministration(focusedQuote.id, {
+                  reason: "Review the exact accepted revision from the decision packet.",
+                  consequence: "The decision packet remains read-only; quote administration retains every existing authority check.",
+                  nextResolution: "Continue only from the matching accepted revision and acceptance receipt."
+                })
+              : undefined}
+          />
           {focusedQuote && permissions.canExportBeo ? (
             <section
               className="admin-section staff-capability-state"

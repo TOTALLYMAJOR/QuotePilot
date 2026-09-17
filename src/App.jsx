@@ -1,6 +1,7 @@
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import "./ambientSurfaceGrammar.css";
 import AuthGate from "./components/AuthGate";
+import GovernedQuoteStarts from "./components/GovernedQuoteStarts";
 import { RebookQuoteReviewBanner } from "./components/CustomerRebookDraftAction";
 import LiveBreakdown from "./components/LiveBreakdown";
 import ProposalComposer, {
@@ -35,6 +36,7 @@ import CreateIntake from "./components/CreateIntake";
 import ChangeRequestPanel from "./components/ChangeRequestPanel";
 import { parseIntentDraftWithModel } from "./lib/intentParseClient";
 import { resolveQuoteCompletionCommandPathGate } from "./lib/quoteCompletionGate";
+import { resolveDecisionPacketGate } from "./lib/quoteConfidenceDecisionPacket";
 import {
   resolveQuoteWizardCompletionDestination,
   scheduleQuoteCompletionDestinationFocus
@@ -618,7 +620,8 @@ function normalizeFeatureFlags(input) {
     guidedSelling: source.guidedSelling !== false,
     aiAssist,
     aiAutopilot: aiAssist && source.aiAutopilot === true,
-    quoteCompletionCommandPath: source.quoteCompletionCommandPath === true
+    quoteCompletionCommandPath: source.quoteCompletionCommandPath === true,
+    decisionPacket: source.decisionPacket === true
   };
 }
 
@@ -2793,6 +2796,10 @@ export default function App({
     buildValue: import.meta.env.VITE_QUOTE_COMPLETION_COMMAND_PATH_ENABLED,
     tenantValue: featureFlags.quoteCompletionCommandPath
   });
+  const decisionPacketEnabled = resolveDecisionPacketGate({
+    buildValue: import.meta.env.VITE_DECISION_PACKET_ENABLED,
+    tenantValue: featureFlags.decisionPacket
+  });
   const proposalComposerQuoteActionController = useMemo(() => (
     editingQuote?.id
       ? buildRoleSafeQuoteActionController({
@@ -2949,6 +2956,62 @@ export default function App({
     : "";
   const quoteEditReady = Boolean(quoteEditRouteId && editingQuote.id === quoteEditRouteId);
   const isEditingQuote = quoteEditReady;
+  const livingTwinMarginComparison = useMemo(() => {
+    if (!isEditingQuote || !editingQuote.baseForm) {
+      return { evidenceState: "missing" };
+    }
+    const savedCatalogRevision = Number(editingQuote.pricingCatalogAuthority?.catalogRevision);
+    const currentCatalogRevision = Number(effectiveSettings.catalogRevision);
+    if (!Number.isSafeInteger(savedCatalogRevision)
+      || !Number.isSafeInteger(currentCatalogRevision)) {
+      return {
+        evidenceState: "missing",
+        boundary: "The saved and current catalog revisions are required before margin can be compared."
+      };
+    }
+    if (savedCatalogRevision !== currentCatalogRevision) {
+      return {
+        evidenceState: "stale",
+        boundary: "The saved quote and current catalog use different revisions; refresh the governed quote review before comparing margin."
+      };
+    }
+    try {
+      const currentTotals = calculateQuote(
+        editingQuote.baseForm,
+        catalog,
+        effectiveSettings
+      );
+      const currentMargin = buildMarginPresentation({
+        form: editingQuote.baseForm,
+        totals: currentTotals,
+        catalog,
+        settings: effectiveSettings
+      });
+      if (!currentMargin?.available || !proposedMargin?.available) {
+        return {
+          evidenceState: "missing",
+          boundary: "Complete recorded-cost coverage for both the saved and proposed quote is required before margin can be compared."
+        };
+      }
+      return {
+        evidenceState: "available",
+        before: currentMargin.marginPct,
+        proposedAfter: proposedMargin.marginPct
+      };
+    } catch {
+      return {
+        evidenceState: "unavailable",
+        boundary: "The existing margin presentation could not compare both snapshots."
+      };
+    }
+  }, [
+    catalog,
+    editingQuote.baseForm,
+    editingQuote.pricingCatalogAuthority?.catalogRevision,
+    effectiveSettings,
+    isEditingQuote,
+    proposedMargin
+  ]);
   const inventoryRecipeExtension = useInventoryRecipeExtension({
     active: adminOpen || catalogRouteOpen || catalogModalOpen || isEditingQuote,
     organizationId: authSession.organizationId,
@@ -3148,6 +3211,7 @@ export default function App({
     previewError: changeImpactPresentationError,
     previewScopeCurrent: !changeImpactPresentationError,
     commercialModel: changeImpactPreview.model,
+    marginComparison: livingTwinMarginComparison,
     authorityState: changeImpactPreview.authorityState,
     authorizationRequired: changeImpactPreview.authorizationRequired,
     authorizationReceiptId: changeImpactPreview.authorizationReceiptId,
@@ -3191,6 +3255,7 @@ export default function App({
     form.guests,
     inventoryGuestScenarioEligible,
     livingTwinBaseQuoteRevisionId,
+    livingTwinMarginComparison,
     authoritativeStaffingObservation,
     effectiveProposedStaffingEventWindowState,
     effectiveProposedStaffingRequirements,
@@ -6662,6 +6727,32 @@ export default function App({
   const draftReviewSurfaces = (
     <>
       {draftRecoveryBanner}
+      {!isEditingQuote && (
+        <GovernedQuoteStarts
+          enabled={decisionPacketEnabled}
+          templates={effectiveSettings.eventTemplates}
+          onUseBlank={() => {
+            setBuilderMode("guided");
+            setStep(1);
+            window.requestAnimationFrame(() => {
+              wizardRef.current?.querySelector('[data-ambient-field="eventName"]')?.focus({ preventScroll: true });
+            });
+          }}
+          onReviewTemplate={() => {
+            if (PROPOSAL_COMPOSER_ENABLED) {
+              setBuilderMode("composer");
+            } else {
+              setBuilderMode("guided");
+              setStep(1);
+            }
+            window.requestAnimationFrame(() => {
+              document.getElementById("proposal-event-template")?.focus({ preventScroll: true });
+              wizardRef.current?.querySelector('[data-choice-field="event-template"] select')?.focus({ preventScroll: true });
+            });
+          }}
+          onReviewPriorAccepted={() => navigateWorkspace(WORKSPACE_PATHS.customers)}
+        />
+      )}
       {AMBIENT_PILOT_COMMANDS_ENABLED && AmbientPilotScenarioReview && pilotScenarioDraftReview && (
         <RecoverableErrorBoundary
           active
@@ -8044,6 +8135,7 @@ export default function App({
             ambientPricingCatalog={AMBIENT_UI_ENABLED ? catalog : null}
             ambientPricingSettings={AMBIENT_UI_ENABLED ? effectiveSettings : null}
             inquiryShowcaseEnabled={INQUIRY_SHOWCASE_UI_ENABLED}
+            decisionPacketEnabled={decisionPacketEnabled}
             globalPilotRequest={AMBIENT_UI_ENABLED && globalPilotRequest?.target === "living_opportunity"
               ? globalPilotRequest
               : null}

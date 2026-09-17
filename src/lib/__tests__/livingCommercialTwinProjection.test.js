@@ -296,6 +296,36 @@ function readyInput(overrides = {}) {
 }
 
 describe("buildLivingCommercialTwinProjection", () => {
+  test("carries only explicit recorded-cost margin comparison evidence", () => {
+    const available = buildLivingCommercialTwinProjection(readyInput({
+      marginComparison: {
+        evidenceState: "available",
+        before: 0.31,
+        proposedAfter: 0.27
+      }
+    }));
+    expect(available.consequences.margin).toMatchObject({
+      evidenceState: "available",
+      before: 0.31,
+      proposedAfter: 0.27
+    });
+    expect(available.consequences.margin.delta).toBeCloseTo(-0.04, 8);
+
+    const stale = buildLivingCommercialTwinProjection(readyInput({
+      marginComparison: {
+        evidenceState: "stale",
+        before: 0.31,
+        proposedAfter: 0.27
+      }
+    }));
+    expect(stale.consequences.margin).toMatchObject({
+      evidenceState: "stale",
+      before: null,
+      proposedAfter: null,
+      delta: null
+    });
+  });
+
   test("keeps guest-only edits inside one scenario context and invalidates other draft inputs", () => {
     const base = {
       form: {

@@ -82,6 +82,12 @@ function projection(guests, {
           delta: deposit - 3_120
         }
       },
+      margin: {
+        evidenceState: "available",
+        before: 0.31,
+        proposedAfter: 0.27,
+        delta: -0.04
+      },
       inventory: {
         evidenceState: guests === CURRENT_GUESTS ? "not_applicable" : "available",
         cost: {
@@ -196,6 +202,7 @@ function projection(guests, {
     provenance: { previewError: previewError || null },
     boundary: "Presentation-only projection. Separate authorities remain unchanged."
   });
+
 }
 
 let container;
@@ -262,6 +269,34 @@ function LiveHarness({ onReview = vi.fn(), onRequest = vi.fn() }) {
 }
 
 describe("CommercialScenarioWorkbench", () => {
+  test("renders an accessible six-domain Current / Proposed / Difference decision panel", async () => {
+    const request = requestEnvelope({ guestCount: 175 });
+    act(() => root.render(
+      <CommercialScenarioWorkbench
+        projection={projection(175, { workbenchRequest: request, state: "ready" })}
+        scopeKey={SCOPE}
+        baseQuoteRevisionId={REVISION}
+        currentGuestCount={CURRENT_GUESTS}
+        proposedGuestCount={175}
+        previewDebounceMs={0}
+        clock={() => "2026-09-09T16:00:00.000Z"}
+        idFactory={({ slot }) => `scenario-${slot.toLowerCase()}`}
+      />
+    ));
+
+    await act(async () => Promise.resolve());
+    const panel = container.querySelector('[data-consequence-comparison="current-proposed-difference"]');
+    expect(panel).not.toBeNull();
+    expect(panel.querySelectorAll("tbody tr")).toHaveLength(6);
+    expect(panel.textContent).toContain("Menu");
+    expect(panel.textContent).toContain("Price");
+    expect(panel.textContent).toContain("Margin");
+    expect(panel.textContent).toContain("Staffing");
+    expect(panel.textContent).toContain("Supply");
+    expect(panel.textContent).toContain("Difference");
+    expect(panel.textContent).toContain("Current evidence");
+  });
+
   test("resolves and restores the exact inventory constraint by editing the active scenario", () => {
     vi.useFakeTimers();
     act(() => root.render(<LiveHarness />));

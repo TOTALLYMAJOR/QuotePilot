@@ -575,7 +575,8 @@ function normalizeFeatureFlags(input) {
     guidedSelling: source.guidedSelling !== false,
     aiAssist,
     aiAutopilot: aiAssist && source.aiAutopilot === true,
-    quoteCompletionCommandPath: source.quoteCompletionCommandPath === true
+    quoteCompletionCommandPath: source.quoteCompletionCommandPath === true,
+    decisionPacket: source.decisionPacket === true
   };
 }
 
