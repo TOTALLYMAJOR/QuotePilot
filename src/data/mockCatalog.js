@@ -342,7 +342,8 @@ export const DEFAULT_FEATURE_FLAGS = {
   crmSync: true,
   guidedSelling: true,
   aiAssist: true,
-  aiAutopilot: false
+  aiAutopilot: false,
+  quoteCompletionCommandPath: false
 };
 
 export const DEFAULT_SETTINGS = {
@@ -841,7 +842,11 @@ function normalizeFeatureFlags(input, legacySettings = {}) {
       toBoolean(legacySettings.guidedSellingEnabled, DEFAULT_FEATURE_FLAGS.guidedSelling)
     ),
     aiAssist,
-    aiAutopilot: aiAssist && toBoolean(source.aiAutopilot, DEFAULT_FEATURE_FLAGS.aiAutopilot)
+    aiAutopilot: aiAssist && toBoolean(source.aiAutopilot, DEFAULT_FEATURE_FLAGS.aiAutopilot),
+    quoteCompletionCommandPath: toBoolean(
+      source.quoteCompletionCommandPath,
+      DEFAULT_FEATURE_FLAGS.quoteCompletionCommandPath
+    )
   };
 }
 

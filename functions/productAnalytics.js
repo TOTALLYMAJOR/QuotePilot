@@ -10,7 +10,10 @@ const ANALYTICS_EVENT_NAMES = new Set([
   "priced_draft_receipt_observed",
   "ambient_primary_action_assessed",
   "ambient_issue_surfaced",
-  "ambient_issue_resolved"
+  "ambient_issue_resolved",
+  "quote_completion_action_shown",
+  "quote_completion_action_resolved",
+  "quote_completion_sendable_reached"
 ]);
 const AMBIENT_RESULT_KINDS = new Set([
   "context",
@@ -40,6 +43,28 @@ const PRODUCT_ANALYTICS_ISSUE_CATEGORIES = Object.freeze([
   "staffing-guidance"
 ]);
 const ISSUE_CATEGORIES = new Set(PRODUCT_ANALYTICS_ISSUE_CATEGORIES);
+const QUOTE_COMPLETION_STATES = new Set([
+  "blocked",
+  "review_required",
+  "sendable",
+  "sent",
+  "accepted"
+]);
+const QUOTE_COMPLETION_ACTION_KINDS = new Set([
+  "resolve_field",
+  "recover_evidence",
+  "save_revision",
+  "send_proposal",
+  "recover_delivery",
+  "configured_action",
+  "review_proposal"
+]);
+const QUOTE_COMPLETION_SURFACES = new Set([
+  "proposal_composer",
+  "review",
+  "living_opportunity"
+]);
+const QUOTE_COMPLETION_RESULTS = new Set(["success", "failure", "stale", "recovery"]);
 
 class ProductAnalyticsError extends Error {
   constructor(code, message) {
@@ -80,6 +105,14 @@ function requireIssueCategory(value) {
   const normalized = text(value, 64).toLowerCase();
   if (!ISSUE_CATEGORIES.has(normalized)) {
     throw new ProductAnalyticsError("invalid-argument", "Analytics issue category is invalid.");
+  }
+  return normalized;
+}
+
+function requireQuoteCompletionCategory(value, allowed, label) {
+  const normalized = text(value, 40).toLowerCase();
+  if (!allowed.has(normalized)) {
+    throw new ProductAnalyticsError("invalid-argument", `Quote completion ${label} category is invalid.`);
   }
   return normalized;
 }
@@ -180,6 +213,39 @@ function sanitizeAnalyticsEvent(raw, { organizationId, receivedAtISO }) {
       });
     }
   }
+  if (eventName.startsWith("quote_completion_")) {
+    event.completionState = requireQuoteCompletionCategory(
+      raw?.completionState,
+      QUOTE_COMPLETION_STATES,
+      "state"
+    );
+    event.surface = requireQuoteCompletionCategory(
+      raw?.surface,
+      QUOTE_COMPLETION_SURFACES,
+      "surface"
+    );
+    if (eventName === "quote_completion_sendable_reached") {
+      if (event.completionState !== "sendable") {
+        throw new ProductAnalyticsError(
+          "invalid-argument",
+          "Quote completion sendable category is invalid."
+        );
+      }
+    } else {
+      event.actionKind = requireQuoteCompletionCategory(
+        raw?.actionKind,
+        QUOTE_COMPLETION_ACTION_KINDS,
+        "action"
+      );
+      if (eventName === "quote_completion_action_resolved") {
+        event.result = requireQuoteCompletionCategory(
+          raw?.result,
+          QUOTE_COMPLETION_RESULTS,
+          "result"
+        );
+      }
+    }
+  }
   event.eventId = createHash("sha256")
     .update(`${event.organizationId}\n${sessionId}\n${sequence}`)
     .digest("hex");
@@ -238,6 +304,9 @@ function summarizeAnalyticsEvents(rawEvents = []) {
   const saved = sessionRows.filter((session) => session.saved).length;
   let primaryActionsAssessed = 0;
   let deadClicks = 0;
+  let quoteCompletionActionsShown = 0;
+  let quoteCompletionActionsResolved = 0;
+  let quoteCompletionSendableReached = 0;
   const intentToPricedDraftDurations = [];
   const issueResolutionDurations = [];
   const issueResolutionDurationsByCategory = new Map();
@@ -288,6 +357,18 @@ function summarizeAnalyticsEvents(rawEvents = []) {
         if (typeof event?.deadClick !== "boolean") return;
         primaryActionsAssessed += 1;
         if (event.deadClick) deadClicks += 1;
+        return;
+      }
+      if (event?.eventName === "quote_completion_action_shown") {
+        quoteCompletionActionsShown += 1;
+        return;
+      }
+      if (event?.eventName === "quote_completion_action_resolved") {
+        quoteCompletionActionsResolved += 1;
+        return;
+      }
+      if (event?.eventName === "quote_completion_sendable_reached") {
+        quoteCompletionSendableReached += 1;
         return;
       }
       if (event?.eventName === "ambient_issue_surfaced") {
@@ -343,6 +424,15 @@ function summarizeAnalyticsEvents(rawEvents = []) {
           issueCategory,
           ...summarizeDurations(issueResolutionDurationsByCategory.get(issueCategory))
         }))
+    },
+    quoteCompletion: {
+      observationSource: "client",
+      actionsShown: quoteCompletionActionsShown,
+      actionsResolved: quoteCompletionActionsResolved,
+      actionResolutionRate: quoteCompletionActionsShown
+        ? quoteCompletionActionsResolved / quoteCompletionActionsShown
+        : 0,
+      sendableReached: quoteCompletionSendableReached
     }
   };
 }

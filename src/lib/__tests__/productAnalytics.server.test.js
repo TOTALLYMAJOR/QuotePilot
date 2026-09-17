@@ -95,6 +95,45 @@ describe("product analytics server contract", () => {
     });
   });
 
+  test("accepts only aggregate quote completion categories", () => {
+    const shown = sanitizeAnalyticsEvent(event("quote_completion_action_shown", 11, {
+      completionState: "blocked",
+      actionKind: "resolve_field",
+      surface: "proposal_composer",
+      quoteId: "quote-private",
+      customerEmail: "private@example.test"
+    }), context);
+    expect(shown).toMatchObject({
+      eventName: "quote_completion_action_shown",
+      completionState: "blocked",
+      actionKind: "resolve_field",
+      surface: "proposal_composer"
+    });
+    expect(shown).not.toHaveProperty("quoteId");
+    expect(shown).not.toHaveProperty("customerEmail");
+
+    expect(sanitizeAnalyticsEvent(event("quote_completion_action_resolved", 12, {
+      completionState: "sendable",
+      actionKind: "send_proposal",
+      surface: "living_opportunity",
+      result: "success"
+    }), context)).toMatchObject({
+      result: "success"
+    });
+    expect(sanitizeAnalyticsEvent(event("quote_completion_sendable_reached", 13, {
+      completionState: "sendable",
+      surface: "review"
+    }), context)).toMatchObject({
+      completionState: "sendable",
+      surface: "review"
+    });
+    expect(() => sanitizeAnalyticsEvent(event("quote_completion_action_shown", 14, {
+      completionState: "blocked",
+      actionKind: "free_form_private_action",
+      surface: "proposal_composer"
+    }), context)).toThrow("category");
+  });
+
   test("rejects fabricated authority, unbounded timing, free-form issue categories, and non-primary assessments", () => {
     expect(() => sanitizeAnalyticsEvent(event("priced_draft_receipt_observed", 8, {
       durationMs: 100,
@@ -175,6 +214,13 @@ describe("product analytics server contract", () => {
         medianMs: null,
         p75Ms: null,
         byCategory: []
+      },
+      quoteCompletion: {
+        observationSource: "client",
+        actionsShown: 0,
+        actionsResolved: 0,
+        actionResolutionRate: 0,
+        sendableReached: 0
       }
     });
   });
@@ -278,6 +324,45 @@ describe("product analytics server contract", () => {
         { issueCategory: "staffing-guidance", samples: 1, medianMs: 5000, p75Ms: 5000 }
       ]
     });
+  });
+
+  test("summarizes quote completion events as aggregate counts only", () => {
+    const summary = summarizeAnalyticsEvents([
+      event("wizard_started", 1),
+      event("quote_completion_action_shown", 2, {
+        completionState: "blocked",
+        actionKind: "resolve_field",
+        surface: "proposal_composer"
+      }),
+      event("quote_completion_action_resolved", 3, {
+        completionState: "review_required",
+        actionKind: "resolve_field",
+        surface: "proposal_composer",
+        result: "recovery"
+      }),
+      event("quote_completion_sendable_reached", 4, {
+        completionState: "sendable",
+        surface: "review"
+      }),
+      {
+        ...event("quote_completion_action_shown", 1, {
+          completionState: "blocked",
+          actionKind: "resolve_field",
+          surface: "proposal_composer"
+        }),
+        sessionId: "session-without-start"
+      }
+    ]);
+
+    expect(summary.quoteCompletion).toEqual({
+      observationSource: "client",
+      actionsShown: 1,
+      actionsResolved: 1,
+      actionResolutionRate: 1,
+      sendableReached: 1
+    });
+    expect(JSON.stringify(summary.quoteCompletion)).not.toContain("quote");
+    expect(JSON.stringify(summary.quoteCompletion)).not.toContain("customer");
   });
 
   test("omits orphan receipts, mismatched issue resolutions, and events outside a started session", () => {

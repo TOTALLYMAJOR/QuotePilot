@@ -1,0 +1,218 @@
+// @vitest-environment jsdom
+import React, { act } from "react";
+import { createRoot } from "react-dom/client";
+import { renderToStaticMarkup } from "react-dom/server";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import ProposalComposer from "../ProposalComposer";
+import { StepReview } from "../WizardSteps";
+import { buildAmbientLivingOpportunityPresentation } from "../ambientLivingOpportunityPresentation";
+
+globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+
+const form = {
+  name: "Morgan Lee",
+  email: "morgan@example.test",
+  eventTypeId: "wedding",
+  eventName: "Morgan wedding",
+  date: "2026-09-12",
+  time: "18:00",
+  venue: "Pine Hall",
+  hours: 4,
+  guests: 80,
+  pkg: "standard",
+  style: "Buffet",
+  servers: 3,
+  chefs: 1,
+  bartenders: 0,
+  addons: [],
+  rentals: [],
+  menuItems: ["chicken"],
+  addonQuantities: {},
+  rentalQuantities: {},
+  menuItemQuantities: {},
+  payMethod: "card",
+  taxRegion: "local",
+  seasonProfileId: "auto"
+};
+const totals = {
+  guests: 80,
+  total: 3200,
+  deposit: 960,
+  base: 2200,
+  labor: 500,
+  bartenderLabor: 0,
+  travel: 0,
+  tax: 200,
+  serviceFee: 300,
+  serviceFeePctApplied: 0.1,
+  taxRateApplied: 0.08,
+  addons: 0,
+  rentals: 0,
+  menu: 0,
+  serverRateApplied: 25,
+  chefRateApplied: 35,
+  bartenderRateApplied: 30
+};
+const settings = {
+  brandName: "Test Catering",
+  staffingLaborEnabled: true,
+  quoteValidityDays: 30,
+  depositPct: 0.3,
+  taxRegions: [{ id: "local", name: "Local", rate: 0.08 }],
+  seasonalProfiles: [],
+  menuSections: [{
+    id: "mains",
+    name: "Mains",
+    items: [{ id: "chicken", name: "Roast chicken", price: 12, active: true }]
+  }]
+};
+const readiness = {
+  score: 100,
+  complete: true,
+  gaps: [],
+  recommendedGaps: [],
+  status: { id: "ready", label: "Ready to send" }
+};
+
+function composerProps(overrides = {}) {
+  return {
+    form,
+    totals,
+    readiness,
+    catalog: {
+      packages: [{ id: "standard", name: "Standard", ppp: 40, active: true }],
+      addons: [],
+      rentals: []
+    },
+    settings,
+    menuSections: settings.menuSections,
+    eventTypes: [{ id: "wedding", name: "Wedding" }],
+    onFieldChange: vi.fn(),
+    onSelectionTouched: vi.fn(),
+    onPatchForm: vi.fn(),
+    onTemplateChange: vi.fn(),
+    onEventTypeChange: vi.fn(),
+    onSaveQuote: vi.fn(),
+    onGuidedMode: vi.fn(),
+    ...overrides
+  };
+}
+
+let container;
+let root;
+
+beforeEach(() => {
+  container = document.createElement("div");
+  document.body.append(container);
+  root = createRoot(container);
+  window.requestAnimationFrame = (callback) => window.setTimeout(callback, 0);
+  window.cancelAnimationFrame = (handle) => window.clearTimeout(handle);
+  window.HTMLElement.prototype.scrollIntoView = vi.fn();
+});
+
+afterEach(async () => {
+  await act(async () => root.unmount());
+  container.remove();
+  vi.restoreAllMocks();
+});
+
+describe("quote completion surface integrations", () => {
+  test("Proposal Composer keeps the command path absent by default and uses it when enabled", async () => {
+    await act(async () => root.render(<ProposalComposer {...composerProps()} />));
+    expect(container.querySelector('[data-capability-id="quote-completion-command-path"]')).toBeNull();
+
+    const props = composerProps({
+      quoteCompletionCommandPathEnabled: true,
+      quoteDirty: true
+    });
+    await act(async () => root.render(<ProposalComposer {...props} />));
+    const panel = container.querySelector('[data-capability-id="quote-completion-command-path"]');
+    expect(panel?.getAttribute("data-capability-state")).toBe("review_required");
+    expect(panel?.querySelector("button")?.textContent).toContain("Save exact revision");
+
+    await act(async () => panel.querySelector("button").click());
+    expect(props.onSaveQuote).toHaveBeenCalledTimes(1);
+  });
+
+  test("review step replaces the legacy percentage as primary UX only when enabled", () => {
+    const legacy = renderToStaticMarkup(
+      <StepReview form={form} totals={totals} settings={settings} readiness={readiness} />
+    );
+    const enabled = renderToStaticMarkup(
+      <StepReview
+        form={form}
+        totals={totals}
+        settings={settings}
+        readiness={readiness}
+        quoteCompletionCommandPathEnabled
+      />
+    );
+
+    expect(legacy).toContain("Proposal readiness");
+    expect(legacy).toContain("<progress");
+    expect(enabled).not.toContain("Proposal readiness");
+    expect(enabled).not.toContain("<progress");
+    expect(enabled).toContain('data-capability-id="quote-completion-command-path"');
+    expect(enabled).toContain("Compatibility details");
+  });
+
+  test("Ambient presentation composes configured actions only behind the gate", () => {
+    const quote = {
+      id: "quote-1",
+      organizationId: "org-1",
+      quoteNumber: "Q-1",
+      activeVersionId: "v0001",
+      updatedAtISO: "2026-09-12T18:00:00.000Z",
+      portalKey: "portal-key-for-current-revision-12345",
+      portalIssuedAtISO: "2026-09-12T18:00:00.000Z",
+      portalExpiresAtISO: "2026-10-12T18:00:00.000Z",
+      status: "draft",
+      customer: { name: "Morgan Lee", email: "morgan@example.test" },
+      event: {
+        name: "Morgan wedding",
+        date: "2026-09-12",
+        time: "18:00",
+        venue: "Pine Hall",
+        hours: 4,
+        guests: 80
+      },
+      selection: {
+        packageId: "standard",
+        packageName: "Standard",
+        menuItems: ["chicken"],
+        menuItemNames: ["Roast chicken"]
+      },
+      totals: { total: 3200, deposit: 960 },
+      pricing: {
+        authority: "server_authoritative",
+        calculatedAt: "2026-09-12T17:00:00.000Z",
+        grandTotal: 3200
+      }
+    };
+    const configuredActions = {
+      state: { versionSaved: true, providerAccepted: false },
+      actions: {
+        send_quote: { id: "send_quote", label: "Send proposal", visible: true, enabled: true }
+      },
+      primaryAction: { id: "send_quote", label: "Send proposal", visible: true, enabled: true }
+    };
+    const options = {
+      source: "firebase",
+      sourceFreshness: "fresh",
+      role: "admin",
+      ordinaryEditAllowed: true,
+      now: new Date("2026-09-13T12:00:00.000Z"),
+      configuredActions
+    };
+
+    expect(buildAmbientLivingOpportunityPresentation(quote, options).quoteCompletion).toBeNull();
+    expect(buildAmbientLivingOpportunityPresentation(quote, {
+      ...options,
+      quoteCompletionCommandPathEnabled: true
+    }).quoteCompletion).toMatchObject({
+      schemaVersion: "quote-completion-contract-v1",
+      state: "sendable",
+      nextAction: { id: "send_quote" }
+    });
+  });
+});

@@ -31,6 +31,7 @@ import { StepEvent, StepMenu, StepReview, StepServices } from "./components/Wiza
 import CreateIntake from "./components/CreateIntake";
 import ChangeRequestPanel from "./components/ChangeRequestPanel";
 import { parseIntentDraftWithModel } from "./lib/intentParseClient";
+import { resolveQuoteCompletionCommandPathGate } from "./lib/quoteCompletionGate";
 import { applyProposalToForm, proposalTouchedFields } from "./components/changeRequestParse";
 import {
   clearDraftSnapshot,
@@ -608,7 +609,8 @@ function normalizeFeatureFlags(input) {
     crmSync: source.crmSync !== false,
     guidedSelling: source.guidedSelling !== false,
     aiAssist,
-    aiAutopilot: aiAssist && source.aiAutopilot === true
+    aiAutopilot: aiAssist && source.aiAutopilot === true,
+    quoteCompletionCommandPath: source.quoteCompletionCommandPath === true
   };
 }
 
@@ -2774,6 +2776,10 @@ export default function App({
     effectiveSettings
   ]);
   const featureFlags = effectiveSettings.featureFlags || DEFAULT_FEATURE_FLAGS;
+  const quoteCompletionCommandPathEnabled = resolveQuoteCompletionCommandPathGate({
+    buildValue: import.meta.env.VITE_QUOTE_COMPLETION_COMMAND_PATH_ENABLED,
+    tenantValue: featureFlags.quoteCompletionCommandPath
+  });
   const customerPortalEnabled = featureFlags.customerPortal !== false;
   const eventScheduleEnabled = featureFlags.eventSchedule !== false;
   const integrationsEnabled = featureFlags.integrationsOps !== false;
@@ -6897,6 +6903,7 @@ export default function App({
         : ""}
       saveBlockers={proposalComposerSaveBlockers}
       saveMessage={submitState.message}
+      quoteCompletionCommandPathEnabled={quoteCompletionCommandPathEnabled}
       compareEnabled={quoteCompareEnabled}
       catalogLoading={catalog.loading}
       onFieldChange={handleStep1FieldChange}
@@ -7812,6 +7819,16 @@ export default function App({
                 totals={totals}
                 settings={effectiveSettings}
                 readiness={proposalReadiness}
+                quoteCompletionCommandPathEnabled={quoteCompletionCommandPathEnabled}
+                quoteCompletionSaveBlockers={proposalComposerSaveBlockers}
+                onQuoteCompletionAction={(action) => {
+                  const destinationStep = Number(action?.destination?.step);
+                  if (Number.isInteger(destinationStep) && destinationStep >= 1 && destinationStep <= 5) {
+                    setStep(destinationStep);
+                    return { state: "success", message: `Opened step ${destinationStep}.` };
+                  }
+                  return { state: "recovery", message: action?.reason };
+                }}
               />
             )}
             {!catalog.loading && step === 5 && (

@@ -75,6 +75,7 @@ import AmbientOperationalReceipts from "./AmbientOperationalReceipts";
 import { deriveAttendanceState } from "./attendanceState";
 import QuickUpdatesPanel from "./QuickUpdatesPanel";
 import AdaptiveChoiceField from "./AdaptiveChoiceField";
+import QuoteCompletionCommandPath from "./QuoteCompletionCommandPath";
 import "./ambientLivingOpportunity.css";
 
 const AMBIENT_INTERACTION_EVENT_NAME = "quotepilot:ambient-interaction";
@@ -556,7 +557,8 @@ const AmbientLivingOpportunity = forwardRef(function AmbientLivingOpportunity({
   globalPilotRequest = null,
   globalPilotReturnFocusRef = null,
   onGlobalPilotResolution = null,
-  quoteActionController = null
+  quoteActionController = null,
+  quoteCompletionCommandPathEnabled = false
 }, forwardedRef) {
   const ambientContext = useAmbientContext({ optional: true });
   const rootRef = useRef(null);
@@ -673,7 +675,9 @@ const AmbientLivingOpportunity = forwardRef(function AmbientLivingOpportunity({
     pricingMargin,
     packageMenuCatalogEvidence,
     eventLogisticsEvidence,
-    role: ambientRole
+    role: ambientRole,
+    quoteCompletionCommandPathEnabled,
+    configuredActions: quoteActionController?.actionState
   }), [
     quote,
     source,
@@ -689,7 +693,9 @@ const AmbientLivingOpportunity = forwardRef(function AmbientLivingOpportunity({
     onOpenLegacyWorkspace,
     scenarioGuestCount,
     ambientRole,
-    proposalSourceFreshness
+    proposalSourceFreshness,
+    quoteActionController?.actionState,
+    quoteCompletionCommandPathEnabled
   ]);
   const openCalendar = () => {
     if (!calendarAvailable) return;
@@ -3183,6 +3189,31 @@ const AmbientLivingOpportunity = forwardRef(function AmbientLivingOpportunity({
         || "No conversation next step is available here. These details remain read-only."}
     </p>
   );
+  const runQuoteCompletionAction = async (action) => {
+    const surfaceId = String(action?.destination?.surfaceId || "");
+    if (surfaceId === "quote-administration") {
+      if (!model.actions.openProposalControls.enabled) {
+        return { state: "recovery", message: model.actions.openProposalControls.disabledReason };
+      }
+      openProposalControls();
+      return { state: "success", message: "Opened the governed proposal controls." };
+    }
+    if (surfaceId === "living-opportunity") {
+      openProposalContext();
+      return { state: "success", message: "Opened the current proposal evidence." };
+    }
+    if (typeof onEditQuote === "function") {
+      const result = await onEditQuote(quote, {
+        arrivalContext: {
+          kind: "quote_completion",
+          actionId: action.id,
+          destination: action.destination
+        }
+      });
+      return result || { state: "success", message: "Opened the exact proposal destination." };
+    }
+    return { state: "recovery", message: "The exact proposal destination is not available here." };
+  };
   const contextSurfaceActive = Boolean(
     guestOpen
     || staffingOpen
@@ -3267,6 +3298,16 @@ const AmbientLivingOpportunity = forwardRef(function AmbientLivingOpportunity({
           </button>
         )}
       </div>
+
+      {model.quoteCompletion ? (
+        <QuoteCompletionCommandPath
+          enabled
+          projection={model.quoteCompletion}
+          onAction={runQuoteCompletionAction}
+          surface="living_opportunity"
+          className="ambient-quote-completion-command"
+        />
+      ) : null}
 
       <section
         className="ambient-mobile-remote ambient-v16-opportunity__mobile"

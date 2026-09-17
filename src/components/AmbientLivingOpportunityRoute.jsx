@@ -5,6 +5,7 @@ import {
   prepareAmbientPricingPreview
 } from "../lib/ambientPricingPreview";
 import { buildAmbientPackageMenuCatalogEvidence } from "../lib/ambientPackageMenuCatalogEvidence";
+import { resolveQuoteCompletionCommandPathGate } from "../lib/quoteCompletionGate";
 import AmbientLivingOpportunity from "./AmbientLivingOpportunity";
 import { buildMarginPresentation } from "./marginPresentation";
 
@@ -41,6 +42,10 @@ const AmbientLivingOpportunityRoute = forwardRef(function AmbientLivingOpportuni
   const role = String(context.role || "").trim().toLowerCase();
   const exactSource = String(source || "").trim().toLowerCase();
   const staffRole = STAFF_ROLES.has(role);
+  const quoteCompletionCommandPathEnabled = resolveQuoteCompletionCommandPathGate({
+    buildValue: import.meta.env.VITE_QUOTE_COMPLETION_COMMAND_PATH_ENABLED,
+    tenantValue: ambientPricingSettings?.featureFlags?.quoteCompletionCommandPath
+  });
   const packageMenuCatalogEvidence = useMemo(() => (
     buildAmbientPackageMenuCatalogEvidence({
       organizationId,
@@ -108,6 +113,7 @@ const AmbientLivingOpportunityRoute = forwardRef(function AmbientLivingOpportuni
         pricingPreviewAvailable={pricingInputsAvailable}
         pricingMargin={pricingMargin}
         packageMenuCatalogEvidence={packageMenuCatalogEvidence}
+        quoteCompletionCommandPathEnabled={quoteCompletionCommandPathEnabled}
         onSimulatePricing={pricingInputsAvailable ? simulatePricing : undefined}
         {...props}
       />

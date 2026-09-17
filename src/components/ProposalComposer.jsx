@@ -3,12 +3,14 @@ import AdaptiveChoiceField from "./AdaptiveChoiceField";
 import InlineValue from "./ambient/InlineValue";
 import DigitRoll from "./DigitRoll";
 import DeliveryProposal from "./DeliveryProposal";
+import QuoteCompletionCommandPath from "./QuoteCompletionCommandPath";
 import { currency } from "../lib/quoteCalculator";
 import { normalizeBrandLogoUrl } from "../lib/brandLogoUrl";
 import { normalizeProposalDocumentFontScale } from "../lib/proposalDocumentPreferences";
 import { detectBreakdownValueChanges, MAX_EVENT_HOURS, MIN_EVENT_HOURS, normalizeEventHours } from "../lib/wizardUi";
 import { buildMarginPresentation, marginRequiresExpandedEvidence } from "./marginPresentation";
 import { playCue } from "./soundKit";
+import { buildQuoteCompletionProjection } from "../lib/quoteCompletionProjection";
 import {
   buildCompositionLine,
   buildCommercialWorkbenchModel,
@@ -515,7 +517,10 @@ export default function ProposalComposer({
   onDeliveryPlanningHandoff = null,
   impactWatch = null,
   isAdmin = false,
-  onOpenCatalogPricing = null
+  onOpenCatalogPricing = null,
+  quoteCompletionCommandPathEnabled = false,
+  quoteCompletionConfiguredActions = null,
+  quoteCompletionCommand = null
 }) {
   const [menuEditorOpen, setMenuEditorOpen] = useState(false);
   const [ratesEditorOpen, setRatesEditorOpen] = useState(false);
@@ -612,6 +617,34 @@ export default function ProposalComposer({
     saveLabel,
     saveDisabled
   });
+  const quoteCompletion = useMemo(() => buildQuoteCompletionProjection({
+    quote: editingQuote || {},
+    readiness,
+    saveBlockers: currentSaveBlockers,
+    configuredActions: quoteCompletionConfiguredActions,
+    livingOpportunity: livingCommercialTwin?.projection || livingCommercialTwin,
+    draftDirty: quoteDirty || !editingQuote?.id,
+    command: quoteCompletionCommand || {
+      state: saving
+        ? "loading"
+        : /fail|error|unable/i.test(String(saveMessage || ""))
+          ? "failure"
+          : String(saveMessage || "").trim()
+            ? "success"
+            : "idle",
+      message: saveMessage
+    }
+  }), [
+    currentSaveBlockers,
+    editingQuote,
+    livingCommercialTwin,
+    quoteCompletionCommand,
+    quoteCompletionConfiguredActions,
+    quoteDirty,
+    readiness,
+    saveMessage,
+    saving
+  ]);
 
   const logActivity = (label) => {
     activityIdRef.current += 1;
@@ -785,6 +818,29 @@ export default function ProposalComposer({
         });
       }
     });
+  };
+
+  const runQuoteCompletionAction = (action) => {
+    if (action?.kind === "resolve_field") {
+      const blockerId = String(action.id || "").replace(/^resolve:/u, "");
+      const blocker = currentSaveBlockers.find((item) => String(item?.id || "") === blockerId);
+      if (blocker) {
+        revealSaveBlocker(blocker);
+      } else if (action.destination?.selector) {
+        setPulseOpen(false);
+        if (action.destination.domainId) openDomain(action.destination.domainId);
+        nextUiFrame(() => focusRecoveryTarget(action.destination.selector, {
+          activate: action.destination.activate,
+          focusSelector: action.destination.focusSelector
+        }));
+      }
+      return { state: "recovery", message: action.reason };
+    }
+    if (action?.kind === "save_revision") {
+      requestSave();
+      return { state: "loading", message: "Saving the exact revision." };
+    }
+    return { state: "recovery", message: action?.reason || "Review the current proposal." };
   };
 
   const commitField = (field) => (value) => {
@@ -1247,6 +1303,14 @@ export default function ProposalComposer({
 
       <div className="pc-pulse-block pc-draft-activity">
         <p className="pc-eyebrow">Draft activity</p>
+        {quoteCompletionCommandPathEnabled ? (
+          <QuoteCompletionCommandPath
+            enabled
+            projection={quoteCompletion}
+            onAction={runQuoteCompletionAction}
+            surface="proposal_composer"
+          />
+        ) : (
         <div
           className="pc-save-readiness"
           data-state={saveReadinessState}
@@ -1288,6 +1352,7 @@ export default function ProposalComposer({
             </div>
           ) : null}
         </div>
+        )}
         <button
           type="button"
           className="pc-section-action pc-activity-toggle"
@@ -1319,7 +1384,7 @@ export default function ProposalComposer({
         <button type="button" className="pc-ghost" onClick={() => setPreviewOpen(true)}>
           Preview client view
         </button>
-        <button
+        {!quoteCompletionCommandPathEnabled ? <button
           type="button"
           className="pc-cta"
           onClick={requestSave}
@@ -1328,7 +1393,7 @@ export default function ProposalComposer({
           data-testid="pc-save"
         >
           {saveAction.label}
-        </button>
+        </button> : null}
         {compareEnabled ? (
           <button
             type="button"
@@ -1369,7 +1434,7 @@ export default function ProposalComposer({
             {header.saveState.label}
           </p>
           <div className="pc-header-actions">
-            <button
+            {!quoteCompletionCommandPathEnabled ? <button
               type="button"
               className="pc-cta pc-compact"
               onClick={requestSave}
@@ -1378,7 +1443,7 @@ export default function ProposalComposer({
               data-testid="pc-save-header"
             >
               {saveAction.label}
-            </button>
+            </button> : null}
             <button type="button" className="pc-ghost" onClick={() => setPreviewOpen(true)}>
               Preview client view
             </button>
@@ -1673,6 +1738,7 @@ export default function ProposalComposer({
               <button
                 type="button"
                 className="pc-section-action"
+                data-testid="pc-edit-experience"
                 aria-expanded={experienceEditorOpen}
                 onClick={() => setExperienceEditorOpen((open) => !open)}
               >
@@ -2291,7 +2357,7 @@ export default function ProposalComposer({
           {investment.perGuest !== null ? <small>{currency(investment.perGuest)} / guest</small> : null}
         </p>
         <div className="pc-mobile-actions">
-          <button
+          {!quoteCompletionCommandPathEnabled ? <button
             type="button"
             className="pc-cta pc-compact"
             onClick={requestSave}
@@ -2300,7 +2366,7 @@ export default function ProposalComposer({
             data-testid="pc-save-mobile"
           >
             {saveAction.label}
-          </button>
+          </button> : null}
           <button
             type="button"
             className="pc-mobile-details"

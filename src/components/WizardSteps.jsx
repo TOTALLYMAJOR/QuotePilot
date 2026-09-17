@@ -4,6 +4,8 @@ import { MAX_EVENT_HOURS, MIN_EVENT_HOURS, normalizeEventHours } from "../lib/wi
 import AdaptiveChoiceField from "./AdaptiveChoiceField";
 import DecisionCard from "./DecisionCard";
 import FieldStateIndicator from "./FieldStateIndicator";
+import QuoteCompletionCommandPath from "./QuoteCompletionCommandPath";
+import { buildQuoteCompletionProjection } from "../lib/quoteCompletionProjection";
 import { buildGuidedSellingCards } from "./guidedSellingPresentation";
 import { playCue } from "./soundKit";
 import "./wizardMotion.css";
@@ -1669,7 +1671,15 @@ export function StepServices({
   );
 }
 
-export function StepReview({ form, totals, settings, readiness = null }) {
+export function StepReview({
+  form,
+  totals,
+  settings,
+  readiness = null,
+  quoteCompletionCommandPathEnabled = false,
+  quoteCompletionSaveBlockers = [],
+  onQuoteCompletionAction = null
+}) {
   const quoteDate = new Date().toLocaleDateString();
   const eventDateLabel = form.date ? new Date(`${form.date}T12:00:00`).toLocaleDateString() : "-";
   const eventTimeLabel = form.time ? new Date(`2000-01-01T${form.time}`).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : "-";
@@ -1697,10 +1707,32 @@ export function StepReview({ form, totals, settings, readiness = null }) {
     settings.businessPhone,
     settings.businessEmail
   ].filter(Boolean).join("  •  ");
+  const quoteCompletion = buildQuoteCompletionProjection({
+    quote: form,
+    readiness,
+    saveBlockers: quoteCompletionSaveBlockers,
+    draftDirty: true,
+    saveRevisionLabel: "Continue to save review",
+    saveRevisionDestination: {
+      surfaceId: "quote-wizard",
+      step: 5,
+      actionId: "review_before_save"
+    }
+  });
 
   return (
     <div className="review">
-      {readiness && (
+      {quoteCompletionCommandPathEnabled ? (
+        <QuoteCompletionCommandPath
+          enabled
+          projection={quoteCompletion}
+          onAction={(action) => onQuoteCompletionAction?.(action) || {
+            state: "recovery",
+            message: action.reason
+          }}
+          surface="review"
+        />
+      ) : readiness && (
         <section className={`readiness-panel readiness-${readiness.status?.id || "review"}`}>
           <div className="readiness-head">
             <div>
