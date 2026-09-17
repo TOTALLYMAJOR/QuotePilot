@@ -2,7 +2,8 @@
 import React, { act } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import ProposalComposer, {
+import ProposalComposer from "../ProposalComposerImpl";
+import {
   buildDraftSaveBlockers,
   buildSaveActionModel,
   buildSaveBlockerRecovery
