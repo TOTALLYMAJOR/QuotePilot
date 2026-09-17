@@ -375,7 +375,9 @@ async function mutateDraft(input, options, reducer, { strictRevision = false } =
     if (strictRevision && input.expectedDraftRevision !== current.draftRevision) {
       throw draftError("conflict", "The device draft changed in another browser context. Reload it before continuing.");
     }
-    const next = reducer(Object.freeze(clone(current)), timestamp);
+    const snapshot = Object.freeze(clone(current));
+    const next = reducer(snapshot, timestamp);
+    if (next === snapshot) return snapshot;
     try {
       await store.compareAndSwap(key, current.draftRevision, next);
       return next === null ? null : Object.freeze(clone(next));
@@ -504,15 +506,15 @@ function currentEvidence(input, locationId) {
   return evidence;
 }
 
-async function persistLine(input, options, lineId, transform) {
+async function persistLine(input, options, lineId, transform, { expectedLineRevision } = {}) {
   return mutateDraft(input, options, (draft, timestamp) => {
-    let found = false;
+    const target = draft.lines.find((line) => line.lineId === lineId);
+    if (!target) throw draftError("conflict", "The capture line changed in another browser context.");
+    if (expectedLineRevision !== undefined && target.lineRevision !== expectedLineRevision) return draft;
     const lines = draft.lines.map((line) => {
       if (line.lineId !== lineId) return line;
-      found = true;
       return normalizeLine({ ...transform(line, draft), lineRevision: line.lineRevision + 1 }, 0);
     });
-    if (!found) throw draftError("conflict", "The capture line changed in another browser context.");
     return nextRecord(draft, lines, timestamp);
   });
 }
@@ -529,7 +531,7 @@ export async function submitInventoryCaptureDraft(input = {}, options = {}) {
     let action = "";
     let claimedLine = null;
     let previousLine = null;
-    await persistLine(input, options, lineId, (line) => {
+    const claimedDraft = await persistLine(input, options, lineId, (line) => {
       action = "";
       claimedLine = null;
       if (!scopeIsCurrent()) return line;
@@ -561,8 +563,9 @@ export async function submitInventoryCaptureDraft(input = {}, options = {}) {
     });
     if (!action || !claimedLine) continue;
     if (!scopeIsCurrent()) {
-      // No adapter started: restore the exact prior attempt, preserving its identity.
-      await persistLine(input, options, lineId, (line) => line.requestId === claimedLine.requestId && line.inFlight ? previousLine : line);
+      // Restore only our persisted claim; a newer reconciler owns its own revision.
+      const claimedLineRevision = claimedDraft.lines.find((line) => line.lineId === lineId).lineRevision;
+      await persistLine(input, options, lineId, (line) => line.requestId === claimedLine.requestId && line.inFlight ? previousLine : line, { expectedLineRevision: claimedLineRevision });
       break;
     }
     try {

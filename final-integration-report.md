@@ -1,5 +1,34 @@
 # Quote-to-Confidence final integration corrections
 
+## Final claim-concurrency correction
+
+An older cancelled capture operation now restores its pre-claim line only if
+the stored line still has that operation's exact persisted claim revision.
+A newer reconciliation claim causes a true no-op: no line or draft revision,
+timestamp, state, or in-flight marker changes. The revision predicate is
+rechecked on every CAS retry. Successful outcomes retain the existing exact
+request receipt-persistence path.
+
+A deterministic two-submitter regression reproduced the failure before the
+fix: A persisted its claim and paused, B claimed/reconciled the same request and
+started its adapter, then A lost scope and restored B's line to draft. The fixed
+test asserts the entire draft is unchanged by A, ordinary replacement remains
+rejected, and B's receipt persists. Focused capture/component checks pass:
+60/60 (`/tmp/quote-confidence-claim-fence-focused.log`); red evidence is in
+`/tmp/quote-confidence-claim-fence-red.log`.
+
+Planner preflight for this four-file correction:
+`2026-09-17T17:17:15.182Z` (core / medium; no additional required skills).
+Full unit passed: 512 files / 6,118 tests, 3 files / 100 tests skipped,
+147.41 seconds (`/tmp/quote-confidence-claim-fence-unit.log`). Documentation,
+Product Intelligence, capability and project-state gates passed. Environment
+check retains the same six absent Firebase variables. Default production build
+passed in 27.03 seconds (`/tmp/quote-confidence-claim-fence-build.log`). The
+same-task/same-file-list planner completion is **`2026-09-17T17:21:38.890Z`**.
+This correction introduces no UI,
+authority, schema or exposure change; the prior responsive browser evidence
+and its limitations remain.
+
 Scope: the final review's three runtime fixes, their bounded regression tests,
 canonical Changelog/Product Intelligence notes, and removal of the obsolete
 duplicate Task 4 ledger line. Every existing Ruling line is retained. The

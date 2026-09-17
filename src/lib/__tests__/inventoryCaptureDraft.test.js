@@ -77,6 +77,54 @@ const scope = Object.freeze({ organizationId: "org-a", userId: "user-a", locatio
 const now = Date.parse("2026-09-17T14:00:00.000Z");
 
 describe("inventory-capture-draft-v1", () => {
+  test("a cancelled older claimant cannot roll back a newer reconciliation claim", async () => {
+    const store = memoryStore();
+    const line = captureLine();
+    await createInventoryCaptureDraft({ ...scope, draftId: "claim-interleaving", now, lines: [line] }, { store });
+    let releaseClaimA;
+    let resolveReceiptB;
+    let notifyClaimA;
+    const claimAPersisted = new Promise((resolve) => { notifyClaimA = resolve; });
+    const claimAPaused = new Promise((resolve) => { releaseClaimA = resolve; });
+    const receiptB = new Promise((resolve) => { resolveReceiptB = resolve; });
+    const compareAndSwap = store.compareAndSwap;
+    let paused = false;
+    store.compareAndSwap = async (...args) => {
+      const value = await compareAndSwap(...args);
+      if (!paused && value?.lines[0].inFlight) {
+        paused = true;
+        notifyClaimA();
+        await claimAPaused;
+      }
+      return value;
+    };
+    const common = { ...scope, draftId: "claim-interleaving", online: true, currentInventory: [{ ingredientId: "chicken", locationId: scope.locationId, baseUnitId: "lb", stockRevision: 4 }] };
+    let scopeAIsCurrent = true;
+    const submitA = vi.fn();
+    const pendingA = submitInventoryCaptureDraft({ ...common, now: now + 1000, submitLine: submitA, scopeIsCurrent: () => scopeAIsCurrent }, { store });
+    await claimAPersisted;
+    const reconcileB = vi.fn(() => receiptB);
+    const pendingB = submitInventoryCaptureDraft({ ...common, now: now + 2000, submitLine: vi.fn(), reconcileLine: reconcileB, reconcileUncertain: true }, { store });
+    await vi.waitFor(() => expect(reconcileB).toHaveBeenCalledTimes(1));
+    const [claimB] = await listInventoryCaptureDrafts({ ...scope, now: now + 2100 }, { store });
+    expect(claimB.lines[0]).toMatchObject({ state: "uncertain", inFlight: true, requestId: line.requestId });
+    scopeAIsCurrent = false;
+    releaseClaimA();
+    await pendingA;
+    expect(submitA).not.toHaveBeenCalled();
+    const [afterRollback] = await listInventoryCaptureDrafts({ ...scope, now: now + 2200 }, { store });
+    expect(afterRollback).toEqual(claimB);
+    await expect(updateInventoryCaptureDraft({
+      ...scope, draftId: common.draftId, now: now + 2300,
+      expectedDraftRevision: afterRollback.draftRevision,
+      expectedLineRevision: afterRollback.lines[0].lineRevision,
+      line: captureLine({ countedQuantity: "13", requestId: `inventory_request_${"8".repeat(32)}` })
+    }, { store })).rejects.toMatchObject({ code: "conflict" });
+    resolveReceiptB({ receipt: { receiptId: "receipt-newer-claim" }, confirmation: { stockRevision: 5 } });
+    const completedB = await pendingB;
+    expect(completedB.lines[0]).toMatchObject({ state: "submitted", inFlight: false, requestId: line.requestId, receiptId: "receipt-newer-claim" });
+  });
+
   test("restores an unstarted line when scope changes during its durable claim", async () => {
     const store = memoryStore();
     let current = true;

@@ -1,8 +1,10 @@
 # Changelog
 
-Last updated: 2026-09-17 12:09:23 CDT
+Last updated: 2026-09-17 12:18:30 CDT
 
 ## Unreleased — Quote-to-Confidence local candidate
+
+- Fence cancelled capture rollback to its exact persisted line-claim revision, leaving newer reconciliation claims and their replacement protection untouched.
 
 - Stop subsequent mobile count requests when the account, organization, location, role, or capture gates change; retain any already-started line outcome in its original device draft. Permit reviewed empty-shortage rebases and independent cancellation, with resolution read from the backend. Share exact recorded-cost comparison preparation across App and the enabled Legacy decision surface.
 
