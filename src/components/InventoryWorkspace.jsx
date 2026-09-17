@@ -25,6 +25,19 @@ import {
   updateInventoryCaptureDraft
 } from "../lib/inventoryCaptureDraft";
 
+const INVENTORY_EXCEPTION_BUILD_ENABLED = import.meta.env.MODE === "test"
+  || import.meta.env.DEV
+  || import.meta.env.VITE_INVENTORY_EXCEPTION_WORKSPACE_ENABLED === "true";
+const EVENT_SUPPLY_PLAN_BUILD_ENABLED = import.meta.env.MODE === "test"
+  || import.meta.env.DEV
+  || import.meta.env.VITE_EVENT_SUPPLY_ACTION_PLAN_ENABLED === "true";
+const INVENTORY_CAPTURE_BUILD_ENABLED = import.meta.env.MODE === "test"
+  || import.meta.env.DEV
+  || import.meta.env.VITE_INVENTORY_MOBILE_CAPTURE_ENABLED === "true";
+const INVENTORY_CONFIDENCE_BUILD_ENABLED = INVENTORY_EXCEPTION_BUILD_ENABLED
+  || EVENT_SUPPLY_PLAN_BUILD_ENABLED
+  || INVENTORY_CAPTURE_BUILD_ENABLED;
+
 const formGridStyle = Object.freeze({
   display: "grid",
   gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 14rem), 1fr))",
@@ -176,7 +189,7 @@ export function buildInventoryExceptionCards(ingredients, { now = Date.now() } =
   return cards.sort((left, right) => left.priority - right.priority || left.title.localeCompare(right.title));
 }
 
-export function InventoryExceptionWorkspace({ ingredients, current }) {
+function InventoryExceptionWorkspaceImpl({ ingredients, current }) {
   const cards = useMemo(() => buildInventoryExceptionCards(ingredients), [ingredients]);
   return (
     <section className="panel inventory-exception-workspace" data-capability-id="inventory-exception-workspace" data-capability-state={!current ? "stale" : cards.length ? "ready" : "empty"} aria-labelledby="inventory-exceptions-title">
@@ -934,7 +947,7 @@ function moneyMinorOrNull(value) {
   return minor;
 }
 
-export function EventSupplyActionPlanPanel({
+function EventSupplyActionPlanPanelImpl({
   enabled = false,
   organizationId,
   role = "customer",
@@ -1149,15 +1162,17 @@ export function EventSupplyActionPlanPanel({
   );
 }
 
-const DEFAULT_DRAFT_SERVICE = Object.freeze({
-  create: createInventoryCaptureDraft,
-  update: updateInventoryCaptureDraft,
-  list: listInventoryCaptureDrafts,
-  discard: discardInventoryCaptureDraft,
-  submit: submitInventoryCaptureDraft
-});
+const DEFAULT_DRAFT_SERVICE = INVENTORY_CAPTURE_BUILD_ENABLED
+  ? Object.freeze({
+      create: createInventoryCaptureDraft,
+      update: updateInventoryCaptureDraft,
+      list: listInventoryCaptureDrafts,
+      discard: discardInventoryCaptureDraft,
+      submit: submitInventoryCaptureDraft
+    })
+  : null;
 
-export function InventoryMobileCapturePanel({
+function InventoryMobileCapturePanelImpl({
   enabled = false,
   organizationId,
   userId,
@@ -1479,15 +1494,22 @@ export function InventoryMobileCapturePanel({
   );
 }
 
-export function InventoryWorkspaceView({
+export const InventoryExceptionWorkspace = import.meta.env.MODE === "test"
+  ? InventoryExceptionWorkspaceImpl
+  : null;
+export const EventSupplyActionPlanPanel = import.meta.env.MODE === "test"
+  ? EventSupplyActionPlanPanelImpl
+  : null;
+export const InventoryMobileCapturePanel = import.meta.env.MODE === "test"
+  ? InventoryMobileCapturePanelImpl
+  : null;
+
+function InventoryWorkspaceViewCore({
   access,
   read,
   attempts,
-  exceptionWorkspaceEnabled = false,
-  eventSupplyActionPlanEnabled = false,
-  inventoryMobileCaptureEnabled = false,
-  supplyPlanProps = {},
-  mobileCaptureProps = {},
+  detailedTableDisclosed = false,
+  renderExtensions = null,
   onRetry,
   onSubmit,
   onReconcile,
@@ -1526,18 +1548,7 @@ export function InventoryWorkspaceView({
       ) : (
         <div style={stackStyle}>
           <ReadBoundary state={read.state} model={model} error={read.error} onRetry={onRetry} />
-          {exceptionWorkspaceEnabled && (
-            <InventoryExceptionWorkspace ingredients={ingredients} current={read.state === "current" && sourcesCurrent} />
-          )}
-          {eventSupplyActionPlanEnabled && <EventSupplyActionPlanPanel key={JSON.stringify([supplyPlanProps.organizationId, supplyPlanProps.principalId, supplyPlanProps.role])} enabled {...supplyPlanProps} />}
-          {inventoryMobileCaptureEnabled && (
-            <InventoryMobileCapturePanel
-              enabled
-              locations={locations}
-              ingredients={ingredients}
-              {...mobileCaptureProps}
-            />
-          )}
+          {renderExtensions?.({ ingredients, locations, sourcesCurrent })}
           <section className="panel" aria-labelledby="inventory-source-state-title">
             <p className="eyebrow">Projection evidence</p>
             <h2 id="inventory-source-state-title">Currentness by source</h2>
@@ -1550,7 +1561,7 @@ export function InventoryWorkspaceView({
           <IngredientEvidenceTable
             ingredients={ingredients}
             freshness={read.state}
-            disclosed={exceptionWorkspaceEnabled}
+            disclosed={detailedTableDisclosed}
             packsCurrent={read.state === "current" && currentSource(model, "ingredients")}
             canManagePacks={access.mutationEnabled === true}
             packAttempt={attempts.conversion || initialAttempt()}
@@ -1603,6 +1614,48 @@ export function InventoryWorkspaceView({
   );
 }
 
+function buildInventoryExtensionsRenderer({
+  exceptionWorkspaceEnabled,
+  eventSupplyActionPlanEnabled,
+  inventoryMobileCaptureEnabled,
+  supplyPlanProps,
+  mobileCaptureProps
+}) {
+  if (!INVENTORY_CONFIDENCE_BUILD_ENABLED) return null;
+  return ({ ingredients, locations, sourcesCurrent }) => <>
+    {INVENTORY_EXCEPTION_BUILD_ENABLED && exceptionWorkspaceEnabled ? (
+      <InventoryExceptionWorkspaceImpl ingredients={ingredients} current={sourcesCurrent} />
+    ) : null}
+    {EVENT_SUPPLY_PLAN_BUILD_ENABLED && eventSupplyActionPlanEnabled ? (
+      <EventSupplyActionPlanPanelImpl key={JSON.stringify([supplyPlanProps.organizationId, supplyPlanProps.principalId, supplyPlanProps.role])} enabled {...supplyPlanProps} />
+    ) : null}
+    {INVENTORY_CAPTURE_BUILD_ENABLED && inventoryMobileCaptureEnabled ? (
+      <InventoryMobileCapturePanelImpl enabled locations={locations} ingredients={ingredients} {...mobileCaptureProps} />
+    ) : null}
+  </>;
+}
+
+export function InventoryWorkspaceView({
+  exceptionWorkspaceEnabled = false,
+  eventSupplyActionPlanEnabled = false,
+  inventoryMobileCaptureEnabled = false,
+  supplyPlanProps = {},
+  mobileCaptureProps = {},
+  ...props
+}) {
+  return <InventoryWorkspaceViewCore
+    {...props}
+    detailedTableDisclosed={INVENTORY_EXCEPTION_BUILD_ENABLED && exceptionWorkspaceEnabled}
+    renderExtensions={buildInventoryExtensionsRenderer({
+      exceptionWorkspaceEnabled,
+      eventSupplyActionPlanEnabled,
+      inventoryMobileCaptureEnabled,
+      supplyPlanProps,
+      mobileCaptureProps
+    })}
+  />;
+}
+
 export default function InventoryWorkspace({
   organizationId,
   userId = "",
@@ -1613,8 +1666,8 @@ export default function InventoryWorkspace({
   exceptionWorkspaceEnabled = false,
   eventSupplyActionPlanEnabled = false,
   inventoryMobileCaptureEnabled = false,
-  getSupplyPlan = getEventSupplyActionPlan,
-  applySupplyPlan = applyEventSupplyActionPlanCommand,
+  getSupplyPlan = EVENT_SUPPLY_PLAN_BUILD_ENABLED ? getEventSupplyActionPlan : undefined,
+  applySupplyPlan = EVENT_SUPPLY_PLAN_BUILD_ENABLED ? applyEventSupplyActionPlanCommand : undefined,
   draftService = DEFAULT_DRAFT_SERVICE,
   subscribeProjections = subscribeToInventoryIngredientProjections,
   submitCommand = applyInventoryCommand,
@@ -1794,30 +1847,18 @@ export default function InventoryWorkspace({
   }, [attempts, resetCommand, scope, setAttempt]);
 
   return (
-    <InventoryWorkspaceView
+    <InventoryWorkspaceViewCore
       access={access}
       read={read}
       attempts={attempts}
-      exceptionWorkspaceEnabled={exceptionWorkspaceEnabled}
-      eventSupplyActionPlanEnabled={eventSupplyActionPlanEnabled && access.readEnabled}
-      inventoryMobileCaptureEnabled={inventoryMobileCaptureEnabled && access.mutationEnabled}
-      supplyPlanProps={{
-        organizationId,
-        principalId: userId,
-        role,
-        events,
-        getPlan: getSupplyPlan,
-        applyPlan: applySupplyPlan
-      }}
-      mobileCaptureProps={{
-        organizationId,
-        userId,
-        role,
-        browserEnabled,
-        tenantEnabled,
-        submitCommand,
-        draftService
-      }}
+      detailedTableDisclosed={INVENTORY_EXCEPTION_BUILD_ENABLED && exceptionWorkspaceEnabled}
+      renderExtensions={buildInventoryExtensionsRenderer({
+        exceptionWorkspaceEnabled,
+        eventSupplyActionPlanEnabled: EVENT_SUPPLY_PLAN_BUILD_ENABLED && eventSupplyActionPlanEnabled && access.readEnabled,
+        inventoryMobileCaptureEnabled: INVENTORY_CAPTURE_BUILD_ENABLED && inventoryMobileCaptureEnabled && access.mutationEnabled,
+        supplyPlanProps: { organizationId, principalId: userId, role, events, getPlan: getSupplyPlan, applyPlan: applySupplyPlan },
+        mobileCaptureProps: { organizationId, userId, role, browserEnabled, tenantEnabled, submitCommand, draftService }
+      })}
       onRetry={() => setRetryGeneration((value) => value + 1)}
       onSubmit={onSubmit}
       onReconcile={onReconcile}

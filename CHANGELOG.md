@@ -1,8 +1,14 @@
 # Changelog
 
-Last updated: 2026-09-17 12:18:30 CDT
+Last updated: 2026-09-17 14:01:00 CDT
 
 ## Unreleased — Quote-to-Confidence local candidate
+
+- Keep the six default-off Quote-to-Confidence capabilities out of disabled
+  bundles with compile-time gates and lazy presentation boundaries. Exact
+  local CI-matrix builds measure 3,657,288 / 385,181 bytes for compatibility
+  and 4,962,837 / 446,522 bytes for Ambient; the temporary exception is pinned
+  to those values without percentage or future-growth headroom.
 
 - Fence cancelled capture rollback to its exact persisted line-claim revision, leaving newer reconciliation claims and their replacement protection untouched.
 

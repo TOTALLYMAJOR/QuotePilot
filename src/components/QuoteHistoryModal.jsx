@@ -14,7 +14,6 @@ import { sanitizeStripePaymentLink } from "../lib/paymentLink";
 import { buildQuoteEmailPayload } from "../lib/proposalPayload";
 import { buildDefaultEmailAppHandoff } from "../lib/defaultEmailApp";
 import { getApprovalRequestExecutionEligibility } from "../lib/quoteWorkflow";
-import { buildDecisionPacketProjection } from "../lib/quoteConfidenceDecisionPacket";
 import { getRebookDeliveryGate } from "../lib/rebookQuoteClient";
 import { portalConversationAvailable } from "../lib/portalConversationClient";
 import {
@@ -58,7 +57,7 @@ import {
 } from "../lib/workspacePresentation";
 import CommercialDependencyStatePanel from "./CommercialDependencyStatePanel";
 import ConfiguredQuoteActionRail from "./ConfiguredQuoteActionRail";
-import DecisionPacketPanel from "./DecisionPacketPanel";
+import DecisionPacketPanelTest from "./DecisionPacketPanel";
 import EventWorkspaceView from "./EventWorkspaceView";
 import KitchenBeoArtifactPanel from "./KitchenBeoArtifactPanel";
 import QuoteDecisionDebtPanel from "./QuoteDecisionDebtPanel";
@@ -73,6 +72,13 @@ const AMBIENT_UI_ENABLED = import.meta.env.VITE_AMBIENT_UI_ENABLED === "1"
 const AmbientLivingOpportunityRoute = AMBIENT_UI_ENABLED
   ? lazy(() => import("./AmbientLivingOpportunityRoute"))
   : null;
+const DECISION_PACKET_BUILD_ENABLED = import.meta.env.MODE === "test"
+  || import.meta.env.VITE_DECISION_PACKET_ENABLED === "true";
+const DecisionPacketPanel = import.meta.env.MODE === "test"
+  ? DecisionPacketPanelTest
+  : DECISION_PACKET_BUILD_ENABLED
+    ? lazy(() => import("./DecisionPacketPanel"))
+    : null;
 
 const QUOTE_STATUS_FILTER_OPTIONS = [
   { value: "all", label: "All statuses" },
@@ -597,12 +603,17 @@ export function resolveAcceptedRevisionAdministrationArrival({
     };
   }
 
-  const packet = buildDecisionPacketProjection({ quote, source });
-  if (
-    packet.internalHandoff?.action !== "open_existing_accepted_revision"
-    || packet.internalHandoff.acceptedRevisionId !== acceptedRevisionId
-    || packet.internalHandoff.acceptanceReceiptId !== acceptanceReceiptId
-  ) {
+  const connectedSource = ["firebase", "firebase-org"].includes(String(source || "").trim().toLowerCase());
+  const acceptedFamily = ["accepted", "booked"].includes(String(quote.status || "").trim().toLowerCase());
+  const portalDecisionAccepted = String(quote.portalDecision?.decision || "").trim().toLowerCase() === "accepted";
+  const receiptRevisionId = String(quote.acceptanceReceipt?.quoteRevisionId || "").trim();
+  const decisionReceiptId = String(quote.portalDecision?.requestId || "").trim();
+  const portalIssuedAtISO = String(quote.portalIssuedAtISO || "").trim();
+  const receiptIssuedAtISO = String(quote.acceptanceReceipt?.portalIssuedAtISO || "").trim();
+  if (!connectedSource || !acceptedFamily || !portalDecisionAccepted
+    || receiptRevisionId !== acceptedRevisionId
+    || decisionReceiptId !== acceptanceReceiptId
+    || !portalIssuedAtISO || portalIssuedAtISO !== receiptIssuedAtISO) {
     return {
       applies: true,
       status: "recovery",
@@ -3001,7 +3012,7 @@ export function QuoteHistoryView({
                 : setConversationQuote(focusedQuote)}
             />
           ) : null}
-          <DecisionPacketPanel
+          {DecisionPacketPanel ? <Suspense fallback={<p className="status-strip" role="status">Loading decision packet...</p>}><DecisionPacketPanel
             enabled={decisionPacketEnabled}
             quote={focusedQuote}
             source={state.source}
@@ -3014,7 +3025,7 @@ export function QuoteHistoryView({
                   acceptanceReceiptId: destination.acceptanceReceiptId
                 })
               : undefined}
-          />
+          /></Suspense> : null}
           {focusedQuote && permissions.canExportBeo ? (
             <section
               className="admin-section staff-capability-state"

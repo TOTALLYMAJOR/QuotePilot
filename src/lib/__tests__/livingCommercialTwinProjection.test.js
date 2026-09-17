@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest";
 import { readFileSync } from "node:fs";
-import { buildMarginPresentation, buildRecordedCostMarginComparison } from "../../components/marginPresentation";
+import { buildMarginPresentation } from "../../components/marginPresentation";
+import { buildRecordedCostMarginComparison } from "../decisionPacketMarginComparison";
 import { calculateQuote } from "../quoteCalculator";
 import { buildCommercialConsequenceComparison, resolveDecisionPacketGate } from "../quoteConfidenceDecisionPacket";
 import {
@@ -22,7 +23,13 @@ function shellMarginEvidence(shell, context) {
   expect(start).toBeGreaterThan(0);
   expect(end).toBeGreaterThan(start);
   expect(source).toContain("marginComparison: livingTwinMarginComparison,");
-  const bindings = { useMemo: (compute) => compute(), buildMarginPresentation, buildRecordedCostMarginComparison, ...context };
+  const bindings = {
+    useMemo: (compute) => compute(),
+    buildMarginPresentation,
+    buildRecordedCostMarginComparison,
+    DECISION_PACKET_BUILD_ENABLED: true,
+    ...context
+  };
   return new Function(...Object.keys(bindings), `${source.slice(start, end)}; return livingTwinMarginComparison;`)(...Object.values(bindings));
 }
 

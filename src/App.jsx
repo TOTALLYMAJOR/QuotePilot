@@ -1,11 +1,8 @@
-import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import "./ambientSurfaceGrammar.css";
 import AuthGate from "./components/AuthGate";
-import PostEventLearningReviewBanner from "./components/PostEventLearningReviewBanner";
-import { navigateLearningReview } from "./lib/postEventLearningReview";
-import GovernedQuoteStarts, {
-  scheduleGovernedTemplateDestinationFocus
-} from "./components/GovernedQuoteStarts";
+import GovernedQuoteStartsTest from "./components/GovernedQuoteStarts";
+import { scheduleGovernedTemplateDestinationFocus } from "./components/governedQuoteStartFocus";
 import { RebookQuoteReviewBanner } from "./components/CustomerRebookDraftAction";
 import LiveBreakdown from "./components/LiveBreakdown";
 import ProposalComposer, {
@@ -14,7 +11,8 @@ import ProposalComposer, {
 } from "./components/ProposalComposer";
 import CatalogReadNotice from "./components/CatalogReadNotice";
 import QuoteCatalogRevisionReviewPanel from "./components/QuoteCatalogRevisionReviewPanel";
-import { buildMarginPresentation, buildRecordedCostMarginComparison } from "./components/marginPresentation";
+import { buildMarginPresentation } from "./components/marginPresentation";
+import { buildRecordedCostMarginComparison } from "./lib/decisionPacketMarginComparison";
 import ProductBrandLockup from "./components/ProductBrandLockup";
 import WorkspaceActionFeedbackNotice, {
   buildWorkspaceActionFeedbackFollowUpIdentity,
@@ -35,12 +33,13 @@ import {
   WorkspaceLazyTool,
   WorkspaceToolSurface
 } from "./components/WorkspaceSurfaceBoundary";
+
 import { StepEvent, StepMenu, StepReview, StepServices } from "./components/WizardSteps";
 import CreateIntake from "./components/CreateIntake";
 import ChangeRequestPanel from "./components/ChangeRequestPanel";
 import { parseIntentDraftWithModel } from "./lib/intentParseClient";
 import { resolveQuoteCompletionCommandPathGate } from "./lib/quoteCompletionGate";
-import { resolveDecisionPacketGate } from "./lib/quoteConfidenceDecisionPacket";
+import { resolveDecisionPacketGate } from "./lib/decisionPacketGate";
 import {
   resolveQuoteWizardCompletionDestination,
   scheduleQuoteCompletionDestinationFocus
@@ -172,6 +171,27 @@ import {
   beginWizardAnalyticsSession,
   recordProductAnalyticsEvent
 } from "quotepilot-active-product-analytics";
+
+const DECISION_PACKET_BUILD_ENABLED = import.meta.env.MODE === "test"
+  || import.meta.env.VITE_DECISION_PACKET_ENABLED === "true";
+const QUOTE_COMPLETION_BUILD_ENABLED = import.meta.env.MODE === "test"
+  || import.meta.env.VITE_QUOTE_COMPLETION_COMMAND_PATH_ENABLED === "true";
+const POST_EVENT_LEARNING_BUILD_ENABLED = import.meta.env.MODE === "test"
+  || import.meta.env.VITE_POST_EVENT_LEARNING_ENABLED === "true";
+const QUOTE_CONFIDENCE_BUILD_ENABLED = QUOTE_COMPLETION_BUILD_ENABLED
+  || DECISION_PACKET_BUILD_ENABLED
+  || POST_EVENT_LEARNING_BUILD_ENABLED
+  || import.meta.env.VITE_INVENTORY_EXCEPTION_WORKSPACE_ENABLED === "true"
+  || import.meta.env.VITE_EVENT_SUPPLY_ACTION_PLAN_ENABLED === "true"
+  || import.meta.env.VITE_INVENTORY_MOBILE_CAPTURE_ENABLED === "true";
+const GovernedQuoteStarts = import.meta.env.MODE === "test"
+  ? GovernedQuoteStartsTest
+  : DECISION_PACKET_BUILD_ENABLED
+    ? lazy(() => import("./components/GovernedQuoteStarts"))
+    : null;
+const PostEventLearningReviewBanner = POST_EVENT_LEARNING_BUILD_ENABLED
+  ? lazy(() => import("./components/PostEventLearningReviewBanner"))
+  : null;
 
 const AMBIENT_UI_ENABLED = import.meta.env.VITE_AMBIENT_UI_ENABLED === "1"
   || import.meta.env.VITE_AMBIENT_UI_ENABLED === "true"
@@ -624,12 +644,14 @@ function normalizeFeatureFlags(input) {
     guidedSelling: source.guidedSelling !== false,
     aiAssist,
     aiAutopilot: aiAssist && source.aiAutopilot === true,
-    quoteCompletionCommandPath: source.quoteCompletionCommandPath === true,
-    decisionPacket: source.decisionPacket === true,
-    postEventLearning: source.postEventLearning === true,
-    inventoryExceptionWorkspace: source.inventoryExceptionWorkspace === true,
-    eventSupplyActionPlan: source.eventSupplyActionPlan === true,
-    inventoryMobileCapture: source.inventoryMobileCapture === true
+    ...(QUOTE_CONFIDENCE_BUILD_ENABLED ? {
+      quoteCompletionCommandPath: source.quoteCompletionCommandPath === true,
+      decisionPacket: source.decisionPacket === true,
+      postEventLearning: source.postEventLearning === true,
+      inventoryExceptionWorkspace: source.inventoryExceptionWorkspace === true,
+      eventSupplyActionPlan: source.eventSupplyActionPlan === true,
+      inventoryMobileCapture: source.inventoryMobileCapture === true
+    } : {})
   };
 }
 
@@ -2806,16 +2828,16 @@ export default function App({
     effectiveSettings
   ]);
   const featureFlags = effectiveSettings.featureFlags || DEFAULT_FEATURE_FLAGS;
-  const quoteCompletionCommandPathEnabled = resolveQuoteCompletionCommandPathGate({
+  const quoteCompletionCommandPathEnabled = QUOTE_COMPLETION_BUILD_ENABLED && resolveQuoteCompletionCommandPathGate({
     buildValue: import.meta.env.VITE_QUOTE_COMPLETION_COMMAND_PATH_ENABLED,
     tenantValue: featureFlags.quoteCompletionCommandPath
   });
-  const decisionPacketEnabled = resolveDecisionPacketGate({
+  const decisionPacketEnabled = DECISION_PACKET_BUILD_ENABLED && resolveDecisionPacketGate({
     buildValue: import.meta.env.VITE_DECISION_PACKET_ENABLED,
     tenantValue: featureFlags.decisionPacket
   });
   const proposalComposerQuoteActionController = useMemo(() => (
-    editingQuote?.id
+    QUOTE_COMPLETION_BUILD_ENABLED && editingQuote?.id
       ? buildRoleSafeQuoteActionController({
           quote: editingQuote,
           currentUserRole: authSession.role,
@@ -2823,7 +2845,7 @@ export default function App({
         })
       : null
   ), [authSession.role, catalog.source, editingQuote]);
-  const navigateProposalQuoteCompletion = useCallback((action) => {
+  const navigateProposalQuoteCompletion = useMemo(() => QUOTE_COMPLETION_BUILD_ENABLED ? (action) => {
     const quoteId = String(action?.objectContext?.quoteId || editingQuote?.id || "").trim();
     if (!quoteId) {
       return {
@@ -2855,7 +2877,7 @@ export default function App({
         });
     if (!handoff.ok) return { status: "recovery", ...handoff.recovery };
     return navigateAmbientTaskHandoff(handoff, `quote-completion:${action?.id || "review"}`);
-  }, [editingQuote?.id, navigateAmbientTaskHandoff]);
+  } : undefined, [editingQuote?.id, navigateAmbientTaskHandoff]);
   const customerPortalEnabled = featureFlags.customerPortal !== false;
   const eventScheduleEnabled = featureFlags.eventSchedule !== false;
   const integrationsEnabled = featureFlags.integrationsOps !== false;
@@ -2970,10 +2992,11 @@ export default function App({
     : "";
   const quoteEditReady = Boolean(quoteEditRouteId && editingQuote.id === quoteEditRouteId);
   const isEditingQuote = quoteEditReady;
-  const livingTwinMarginComparison = useMemo(() => buildRecordedCostMarginComparison({
+  const livingTwinMarginComparison = useMemo(() => DECISION_PACKET_BUILD_ENABLED && decisionPacketEnabled ? buildRecordedCostMarginComparison({
     isEditingQuote, editingQuote, catalog, effectiveSettings, proposedMargin
-  }), [
+  }) : null, [
     catalog,
+    decisionPacketEnabled,
     editingQuote.baseForm,
     editingQuote.pricingCatalogAuthority?.catalogRevision,
     effectiveSettings,
@@ -5820,12 +5843,16 @@ export default function App({
     });
     const ambientFocusField = draftRuntime.ambientDraftIntent?.focusField || "";
     wizardRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-    const quoteCompletionFocus = scheduleQuoteCompletionDestinationFocus(quoteCompletionDestination, {
-      editorMode: proposalComposerActive ? "composer" : "guided",
-      root: wizardRef,
-      setStep: proposalComposerActive ? null : setStep
-    });
-    if (!proposalComposerActive && quoteCompletionFocus.step === null) setStep(1);
+    if (QUOTE_COMPLETION_BUILD_ENABLED) {
+      const quoteCompletionFocus = scheduleQuoteCompletionDestinationFocus(quoteCompletionDestination, {
+        editorMode: proposalComposerActive ? "composer" : "guided",
+        root: wizardRef,
+        setStep: proposalComposerActive ? null : setStep
+      });
+      if (!proposalComposerActive && quoteCompletionFocus.step === null) setStep(1);
+    } else {
+      setStep(1);
+    }
     window.requestAnimationFrame(() => {
       const exactField = ambientFocusField
         ? wizardRef.current?.querySelector(`[data-ambient-field="${ambientFocusField}"]`)
@@ -6700,8 +6727,8 @@ export default function App({
   const draftReviewSurfaces = (
     <>
       {draftRecoveryBanner}
-      {!isEditingQuote && (
-        <GovernedQuoteStarts
+      {!isEditingQuote && GovernedQuoteStarts && (
+        <Suspense fallback={<p className="status-strip" role="status">Loading governed quote starts...</p>}><GovernedQuoteStarts
           enabled={decisionPacketEnabled}
           templates={effectiveSettings.eventTemplates}
           onUseBlank={() => {
@@ -6722,7 +6749,7 @@ export default function App({
             });
           }}
           onReviewPriorAccepted={() => navigateWorkspace(WORKSPACE_PATHS.customers)}
-        />
+        /></Suspense>
       )}
       {AMBIENT_PILOT_COMMANDS_ENABLED && AmbientPilotScenarioReview && pilotScenarioDraftReview && (
         <RecoverableErrorBoundary
@@ -7031,9 +7058,11 @@ export default function App({
         : ""}
       saveBlockers={proposalComposerSaveBlockers}
       saveMessage={submitState.message}
-      quoteCompletionCommandPathEnabled={quoteCompletionCommandPathEnabled}
-      quoteCompletionConfiguredActions={proposalComposerQuoteActionController?.actionState || null}
-      onQuoteCompletionNavigate={navigateProposalQuoteCompletion}
+      {...(QUOTE_COMPLETION_BUILD_ENABLED ? {
+        quoteCompletionCommandPathEnabled,
+        quoteCompletionConfiguredActions: proposalComposerQuoteActionController?.actionState || null,
+        onQuoteCompletionNavigate: navigateProposalQuoteCompletion
+      } : {})}
       compareEnabled={quoteCompareEnabled}
       catalogLoading={catalog.loading}
       onFieldChange={handleStep1FieldChange}
@@ -7042,14 +7071,16 @@ export default function App({
       onTemplateChange={applyEventTemplate}
       onEventTypeChange={handleEventTypeChange}
       onSaveQuote={() => handleSubmitQuote()}
-      onQuoteCompletionSave={() => handleSubmitQuote({ propagateError: true })}
+      {...(QUOTE_COMPLETION_BUILD_ENABLED ? {
+        onQuoteCompletionSave: () => handleSubmitQuote({ propagateError: true })
+      } : {})}
       onOpenCompare={() => openWorkspaceTool(setCompareOpen)}
       onGuidedMode={() => setBuilderMode("guided")}
       reviewSurfaces={draftReviewSurfaces}
       statusNotes={builderStatusNotes}
       changeImpactSurface={changeImpactSurface}
       livingCommercialTwin={isEditingQuote ? {
-        decisionPacketEnabled,
+        ...(DECISION_PACKET_BUILD_ENABLED ? { decisionPacketEnabled } : {}),
         projection: livingCommercialTwinProjection,
         scopeKey: livingTwinScopeKey,
         baseQuoteRevisionId: livingTwinBaseQuoteRevisionId,
@@ -7230,7 +7261,7 @@ export default function App({
       ambientOpportunity={AMBIENT_UI_ENABLED && resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.QUOTE_DETAIL}
       ambientNavigation={AMBIENT_UI_ENABLED}
     >
-      <PostEventLearningReviewBanner organizationId={authSession.organizationId} principalId={currentUserUid} role={authSession.role} enabled={import.meta.env.VITE_POST_EVENT_LEARNING_ENABLED === "true" && featureFlags.postEventLearning === true} />
+      {PostEventLearningReviewBanner ? <Suspense fallback={null}><PostEventLearningReviewBanner organizationId={authSession.organizationId} principalId={currentUserUid} role={authSession.role} enabled={POST_EVENT_LEARNING_BUILD_ENABLED && featureFlags.postEventLearning === true} /></Suspense> : null}
       {AMBIENT_UI_ENABLED && AmbientGlobalPilotSurface && (
         <RecoverableErrorBoundary
           active={globalPilotSurfaceOpen}
@@ -7555,9 +7586,12 @@ export default function App({
             currentUserRole={authSession.role}
             currentUserUid={authSession.user?.uid || ""}
             workflowEnabled={EVENT_OPERATING_SPINE_UI_ENABLED && catalog.settings?.eventOperatingSpineEnabled === true}
-            postEventLearningEnabled={import.meta.env.VITE_POST_EVENT_LEARNING_ENABLED === "true" && featureFlags.postEventLearning === true}
+            postEventLearningEnabled={POST_EVENT_LEARNING_BUILD_ENABLED && featureFlags.postEventLearning === true}
             learningInventoryEnabled={INVENTORY_AUTHORITY_UI_ENABLED && inventoryTenantEnabled}
-            onReviewLearning={authSession.isAdmin ? async (proposal) => navigateLearningReview(proposal, currentUserUid, navigateWorkspace) : undefined}
+            onReviewLearning={POST_EVENT_LEARNING_BUILD_ENABLED && authSession.isAdmin ? async (proposal) => {
+              const { navigateLearningReview } = await import("./lib/postEventLearningNavigation");
+              return navigateLearningReview(proposal, currentUserUid, navigateWorkspace);
+            } : undefined}
             ambientMode={AMBIENT_UI_ENABLED}
             arrivalContext={workspaceArrivalContext?.surfaceId === "client-overview"
               ? workspaceArrivalContext
@@ -7957,9 +7991,10 @@ export default function App({
                 totals={totals}
                 settings={effectiveSettings}
                 readiness={proposalReadiness}
-                quoteCompletionCommandPathEnabled={quoteCompletionCommandPathEnabled}
-                quoteCompletionSaveBlockers={proposalComposerSaveBlockers}
-                onQuoteCompletionAction={(action) => {
+                {...(QUOTE_COMPLETION_BUILD_ENABLED ? {
+                quoteCompletionCommandPathEnabled,
+                quoteCompletionSaveBlockers: proposalComposerSaveBlockers,
+                onQuoteCompletionAction: (action) => {
                   const focusResult = scheduleQuoteCompletionDestinationFocus(
                     resolveQuoteWizardCompletionDestination(action?.destination), {
                       root: wizardRef,
@@ -7970,7 +8005,8 @@ export default function App({
                     return { state: "success", message: "Opened the exact quote destination." };
                   }
                   return { state: "recovery", message: action?.reason };
-                }}
+                }
+                } : {})}
               />
             )}
             {!catalog.loading && step === 5 && (

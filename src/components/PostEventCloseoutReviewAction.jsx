@@ -13,7 +13,6 @@ import {
 } from "../lib/postEventCloseoutClient";
 import AdaptiveChoiceField from "./AdaptiveChoiceField";
 import StatusChip from "./StatusChip";
-import PostEventLearningPanel from "./PostEventLearningPanel";
 import "../styles/customer-closeout.css";
 import {
   formatWorkspaceDate,
@@ -25,6 +24,11 @@ const WorkflowPackPolicyPanel = import.meta.env.VITE_EVENT_OPERATING_SPINE_ENABL
   ? lazy(() => import("./WorkflowPackPolicyPanel")) : null;
 const EventActualsCloseoutSummary = import.meta.env.VITE_EVENT_OPERATING_SPINE_ENABLED === "true"
   ? lazy(() => import("./EventActualsCloseoutSummary")) : null;
+const POST_EVENT_LEARNING_BUILD_ENABLED = import.meta.env.MODE === "test"
+  || import.meta.env.VITE_POST_EVENT_LEARNING_ENABLED === "true";
+const PostEventLearningPanel = POST_EVENT_LEARNING_BUILD_ENABLED
+  ? lazy(() => import("./PostEventLearningPanel"))
+  : null;
 export function closeoutActualsSource(opportunity = {}) {
   const source = opportunity.reviewedAction || {};
   return { organizationId: opportunity.organizationId || "", quoteId: opportunity.quoteId || "", sourceVersionId: source.sourceVersionId || "", acceptanceReceiptId: source.acceptanceReceiptId || "" };
@@ -565,15 +569,19 @@ export default function PostEventCloseoutReviewAction({
         <p className="source-note">{view.detail}</p>
       {WorkflowPackPolicyPanel && available && view.authoritative && workflowScope?.enabled && <Suspense fallback={<p role="status">Loading closeout coordination...</p>}><WorkflowPackPolicyPanel {...workflowScope} organizationId={opportunity.organizationId} quoteId={opportunity.quoteId} workflowKind="closeout_follow_up" sourceVersionId={opportunity.reviewedAction?.sourceVersionId || ""} sourceReceiptId={opportunity.reviewedAction?.acceptanceReceiptId || ""} domainRevision={mutation.receipt?.receiptId || opportunity.reviewedAction?.completedAtISO || ""} otherMutationBlocked={["submitting", "uncertain", "reconciliation", "error", "recovery"].includes(mutation.state)} /></Suspense>}
       {EventActualsCloseoutSummary && available && view.authoritative && ["due", "overdue", "completed"].includes(view.state) && <Suspense fallback={<p role="status">Loading closeout actuals...</p>}><EventActualsCloseoutSummary {...closeoutActualsSource(opportunity)} available={available} /></Suspense>}
-      {supportingDetailsOpen && learningContext?.enabled && available && view.authoritative && ["due", "overdue", "completed"].includes(view.state) && <PostEventLearningPanel
-        enabled organizationId={opportunity.organizationId}
-        quote={learningContext.quotes?.find((quote) => quote.id === opportunity.quoteId) || {}}
-        acceptedVersion={learningContext.versions?.filter((version) => version.quoteId === opportunity.quoteId && (version.versionId || version.id) === opportunity.reviewedAction?.sourceVersionId).length === 1 ? learningContext.versions.find((version) => version.quoteId === opportunity.quoteId && (version.versionId || version.id) === opportunity.reviewedAction?.sourceVersionId) : null}
-        closeout={{ ...opportunity.reviewedAction, actualAttendance }} source={workflowScope?.source}
-        role={workflowScope?.role} principalId={workflowScope?.principalId}
-        inventoryEnabled={learningContext.inventoryEnabled} onReview={learningContext.onReview}
-        onRefreshSource={learningContext.onRefreshSource}
-      />}
+      {supportingDetailsOpen && learningContext?.enabled && PostEventLearningPanel && available && view.authoritative && ["due", "overdue", "completed"].includes(view.state) && (
+        <Suspense fallback={<p role="status">Loading event learning...</p>}>
+          <PostEventLearningPanel
+            enabled organizationId={opportunity.organizationId}
+            quote={learningContext.quotes?.find((quote) => quote.id === opportunity.quoteId) || {}}
+            acceptedVersion={learningContext.versions?.filter((version) => version.quoteId === opportunity.quoteId && (version.versionId || version.id) === opportunity.reviewedAction?.sourceVersionId).length === 1 ? learningContext.versions.find((version) => version.quoteId === opportunity.quoteId && (version.versionId || version.id) === opportunity.reviewedAction?.sourceVersionId) : null}
+            closeout={{ ...opportunity.reviewedAction, actualAttendance }} source={workflowScope?.source}
+            role={workflowScope?.role} principalId={workflowScope?.principalId}
+            inventoryEnabled={learningContext.inventoryEnabled} onReview={learningContext.onReview}
+            onRefreshSource={learningContext.onRefreshSource}
+          />
+        </Suspense>
+      )}
       </details>
     </section>
   );

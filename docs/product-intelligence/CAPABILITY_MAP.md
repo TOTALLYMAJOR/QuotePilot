@@ -1,6 +1,6 @@
 # Capability / Functional Map
 
-Last updated: 2026-09-17 11:56:08 CDT
+Last updated: 2026-09-17 14:17:30 CDT
 
 ## Quote-to-Confidence extension
 
@@ -15,6 +15,10 @@ infer price, margin, rate, threshold, conversion, supplier or readiness policy.
 Presentation-only contracts own no callable exports. Read and mutation callables
 retain their existing authority owners and full lifecycle requirements; UI
 composition contracts cannot replace or downgrade those controls (`CAP-12`).
+The final packaging split adds only build-gate, comparison, navigation, and
+arrival helpers to those existing owners; it does not create a new capability
+or transfer authority. Default-off implementation modules remain absent from
+disabled production bundles.
 
 ## Purpose and evidence boundary
 

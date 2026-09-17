@@ -220,7 +220,13 @@ describe("quote completion surface integrations", () => {
       quoteCompletionCommandPathEnabled: true,
       quoteDirty: true
     });
-    await act(async () => root.render(<ProposalComposer {...props} />));
+    await act(async () => {
+      root.render(<ProposalComposer {...props} />);
+      await vi.dynamicImportSettled();
+    });
+    await vi.waitFor(() => {
+      expect(container.querySelector('[data-capability-id="quote-completion-command-path"]')).not.toBeNull();
+    });
     const panel = container.querySelector('[data-capability-id="quote-completion-command-path"]');
     expect(panel?.getAttribute("data-capability-state")).toBe("review_required");
     expect(panel?.querySelector("button")?.textContent).toContain("Save exact revision");
@@ -246,9 +252,10 @@ describe("quote completion surface integrations", () => {
     expect(directSave).toHaveBeenCalledOnce();
     expect(commandSave).not.toHaveBeenCalled();
 
-    await act(async () => root.render(
-      <ProposalComposer {...props} quoteCompletionCommandPathEnabled />
-    ));
+    await act(async () => {
+      root.render(<ProposalComposer {...props} quoteCompletionCommandPathEnabled />);
+      await vi.dynamicImportSettled();
+    });
     await act(async () => {
       container.querySelector('[data-capability-id="quote-completion-command-path"] button').click();
       await Promise.resolve();
@@ -291,7 +298,10 @@ describe("quote completion surface integrations", () => {
       },
       onQuoteCompletionNavigate
     });
-    await act(async () => root.render(<ProposalComposer {...props} />));
+    await act(async () => {
+      root.render(<ProposalComposer {...props} />);
+      await vi.dynamicImportSettled();
+    });
     const panel = container.querySelector('[data-capability-id="quote-completion-command-path"]');
 
     expect(panel?.dataset.capabilityState).toBe("sendable");
@@ -349,19 +359,21 @@ describe("quote completion surface integrations", () => {
     expect(evidence.contains(document.activeElement) || document.activeElement === evidence).toBe(true);
   });
 
-  test("review step replaces the legacy percentage as primary UX only when enabled", () => {
+  test("review step replaces the legacy percentage as primary UX only when enabled", async () => {
     const legacy = renderToStaticMarkup(
       <StepReview form={form} totals={totals} settings={settings} readiness={readiness} />
     );
-    const enabled = renderToStaticMarkup(
-      <StepReview
+    await act(async () => {
+      root.render(<StepReview
         form={form}
         totals={totals}
         settings={settings}
         readiness={readiness}
         quoteCompletionCommandPathEnabled
-      />
-    );
+      />);
+      await vi.dynamicImportSettled();
+    });
+    const enabled = container.innerHTML;
 
     expect(legacy).toContain("Proposal readiness");
     expect(legacy).toContain("<progress");

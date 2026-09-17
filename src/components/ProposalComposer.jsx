@@ -3,7 +3,6 @@ import AdaptiveChoiceField from "./AdaptiveChoiceField";
 import InlineValue from "./ambient/InlineValue";
 import DigitRoll from "./DigitRoll";
 import DeliveryProposal from "./DeliveryProposal";
-import QuoteCompletionCommandPath from "./QuoteCompletionCommandPath";
 import { currency } from "../lib/quoteCalculator";
 import { normalizeBrandLogoUrl } from "../lib/brandLogoUrl";
 import { normalizeProposalDocumentFontScale } from "../lib/proposalDocumentPreferences";
@@ -35,6 +34,11 @@ import {
 import "./proposalComposer.css";
 
 const LivingCommercialTwin = lazy(() => import("./LivingCommercialTwin"));
+const QUOTE_COMPLETION_BUILD_ENABLED = import.meta.env.MODE === "test"
+  || import.meta.env.VITE_QUOTE_COMPLETION_COMMAND_PATH_ENABLED === "true";
+const QuoteCompletionCommandPath = QUOTE_COMPLETION_BUILD_ENABLED
+  ? lazy(() => import("./QuoteCompletionCommandPath"))
+  : null;
 
 // Margin stays behind the same default-off gate LiveBreakdown uses; the
 // composer never introduces a wider margin surface than the wizard had.
@@ -624,7 +628,7 @@ export default function ProposalComposer({
     saveLabel,
     saveDisabled
   });
-  const quoteCompletion = useMemo(() => buildQuoteCompletionProjection({
+  const quoteCompletion = useMemo(() => QUOTE_COMPLETION_BUILD_ENABLED ? buildQuoteCompletionProjection({
     quote: editingQuote || {},
     readiness,
     saveBlockers: currentSaveBlockers,
@@ -641,7 +645,7 @@ export default function ProposalComposer({
             : "idle",
       message: saveMessage
     }
-  }), [
+  }) : null, [
     currentSaveBlockers,
     editingQuote,
     livingCommercialTwin,
@@ -1357,13 +1361,15 @@ export default function ProposalComposer({
 
       <div className="pc-pulse-block pc-draft-activity">
         <p className="pc-eyebrow">Draft activity</p>
-        {quoteCompletionCommandPathEnabled ? (
-          <QuoteCompletionCommandPath
-            enabled
-            projection={quoteCompletion}
-            onAction={runQuoteCompletionAction}
-            surface="proposal_composer"
-          />
+        {quoteCompletionCommandPathEnabled && QuoteCompletionCommandPath ? (
+          <Suspense fallback={<p className="status-strip" role="status">Loading quote completion…</p>}>
+            <QuoteCompletionCommandPath
+              enabled
+              projection={quoteCompletion}
+              onAction={runQuoteCompletionAction}
+              surface="proposal_composer"
+            />
+          </Suspense>
         ) : (
         <div
           className="pc-save-readiness"

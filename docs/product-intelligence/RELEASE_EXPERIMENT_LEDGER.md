@@ -1,6 +1,6 @@
 # Release and Experiment Ledger
 
-Last updated: 2026-09-17 12:09:23 CDT
+Last updated: 2026-09-17 14:17:30 CDT
 
 ## LED-006 — Quote-to-Confidence local candidate
 
@@ -15,6 +15,10 @@ changes while stopping subsequent requests, expose reviewed empty-shortage
 rebases and independent cancellation, and align both shells' recorded-cost
 comparison evidence. Local regressions exercise these reliability boundaries;
 the unchanged metrics, gates, and authority contracts carry no outcome claim.
+The final packaging pass compile-gates or lazy-loads default-off implementation
+code and leaves only role-safe integration seams in the owning shells. This is
+a delivery-cost correction under the same disabled exposure and does not add a
+metric, production cohort, authority change, or outcome claim.
 
 Catering value: the owner-operator needs to finish an explainable quote, hand off
 the accepted promise, resolve supply exceptions, capture shelf facts and reuse

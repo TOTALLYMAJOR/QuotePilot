@@ -1,6 +1,6 @@
 # Performance Guardrails
 
-Last updated: 2026-09-14 04:06:56 CDT
+Last updated: 2026-09-17 14:01:00 CDT
 
 ## Objectives
 Keep delivery speed high while protecting end-user experience and predictable performance.
@@ -25,10 +25,10 @@ Threshold policy:
   rejects a requested-profile mismatch, and accepts an exception only when its
   active ID and pinned baseline date and metrics exactly match
   `bundle-budget.json`.
-- The current compatibility graph has a temporary 3,652,845-byte aggregate
+- The current compatibility graph has a temporary 3,657,288-byte aggregate
   and 399,665-byte largest-chunk ceiling. The production-equivalent Ambient
-  graph has a separate temporary 4,947,989-byte aggregate ceiling and
-  445,422-byte largest-chunk ceiling. The pre-authority local
+  graph has a separate temporary 4,962,837-byte aggregate ceiling and
+  446,522-byte largest-chunk ceiling. The pre-authority local
   measurements were 2,769,824 / 391,596 bytes for compatibility and 3,700,202
   / 391,596 bytes for Ambient. The deduplicated owner-provisioning recovery
   states add 2,651 Ambient aggregate bytes, for a reviewed 3,702,853-byte local
@@ -162,6 +162,14 @@ Threshold policy:
   pinned to those literal graphs; the compatibility largest-chunk ceiling
   remains unchanged. This is reviewed combined-candidate cost with no future
   growth allowance, and exact-PR CI remains required.
+  The Quote-to-Confidence candidate then removes about 153 KB of default-off
+  eager capability code through compile-time gates and lazy presentation
+  boundaries. Its remaining role-safe host integration measures exactly
+  3,657,288 / 385,181 bytes for compatibility and 4,962,837 / 446,522 bytes
+  for Ambient. The aggregate ceilings and Ambient largest-chunk ceiling are
+  pinned to those literal local CI-matrix graphs; compatibility retains its
+  existing largest-chunk ceiling. No percentage or future-growth headroom is
+  added, and exact-PR CI remains required.
   Searchable-PDF inspection additionally emits 1,667,684 raw runtime bytes in
   `dist/vendor/pdfjs-5.7.284`, with a 1,232,303-byte worker as its largest file.
   These assets are same-origin and load only after PDF inspection begins; they

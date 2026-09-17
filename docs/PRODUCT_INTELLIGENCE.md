@@ -1,6 +1,6 @@
 # QuotePilot Product Intelligence System
 
-Last updated: 2026-09-17 12:09:23 CDT
+Last updated: 2026-09-17 14:17:30 CDT
 
 ## Quote-to-Confidence measurement extension
 
@@ -18,6 +18,10 @@ Final integration corrections stop new shelf-count requests after scope changes,
 retain original attempt outcomes, allow backend-derived supply resolution after
 an empty-shortage rebase, and align Legacy recorded-cost comparisons. These are
 local reliability corrections under `LED-006`; no metric or exposure changes.
+The final packaging pass keeps default-off implementations behind compile-time
+and lazy boundaries, while small role-safe gate, comparison, navigation, and
+arrival helpers remain in their owning shells. This reduces disabled-bundle
+cost without changing `LED-006` exposure, metrics, authority, or outcome claims.
 
 ## Purpose
 

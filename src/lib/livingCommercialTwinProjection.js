@@ -1,5 +1,8 @@
 import { buildFulfillmentProjection } from "./fulfillmentProjection";
 
+const DECISION_PACKET_BUILD_ENABLED = import.meta.env.MODE === "test"
+  || import.meta.env.VITE_DECISION_PACKET_ENABLED === "true";
+
 const EVIDENCE_STATES = Object.freeze({
   AVAILABLE: "available",
   NOT_YET_AVAILABLE: "not_yet_available",
@@ -1377,7 +1380,7 @@ export function buildLivingCommercialTwinProjection({
     commercialModel
   });
   const commercial = commercialRail(commercialModel, commercialEvidenceState);
-  const margin = marginRail(marginComparison);
+  const margin = DECISION_PACKET_BUILD_ENABLED ? marginRail(marginComparison) : null;
   const inventoryState = inventoryEvidenceState({
     scenarioChanged,
     inventoryScenarioEligible,
@@ -1453,7 +1456,9 @@ export function buildLivingCommercialTwinProjection({
       selectedMenuItems: resolvedMenuItems,
       workbenchRequest: workbenchRequestEnvelope(workbenchRequest)
     },
-    consequences: { commercial, margin, inventory, staffing, beo },
+    consequences: DECISION_PACKET_BUILD_ENABLED
+      ? { commercial, margin, inventory, staffing, beo }
+      : { commercial, inventory, staffing, beo },
     fulfillment,
     decisionAnswer: buildDecisionAnswer({
       organizationId,

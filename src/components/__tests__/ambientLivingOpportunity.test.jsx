@@ -907,6 +907,11 @@ describe("AmbientLivingOpportunity", () => {
         }
       }
     });
+    await settle();
+    await vi.dynamicImportSettled();
+    await vi.waitFor(() => {
+      expect(container.querySelector('[data-capability-id="quote-completion-command-path"]')).not.toBeNull();
+    });
     const command = container.querySelector('[data-capability-id="quote-completion-command-path"]');
 
     expect(command?.dataset.capabilityState).toBe("blocked");
@@ -935,7 +940,7 @@ describe("AmbientLivingOpportunity", () => {
     });
     expect(onEditQuote.mock.calls[0][1].arrivalContext).not.toHaveProperty("kind");
     await settle();
-    expect(document.activeElement).toBe(exactField);
+    await vi.waitFor(() => expect(document.activeElement).toBe(exactField));
     expect(command.dataset.commandState).toBe("success");
     exactField.remove();
   });
@@ -997,6 +1002,11 @@ describe("AmbientLivingOpportunity", () => {
       ...CONTEXT,
       role: "admin",
       sourceFreshness: { state: "fresh", observedAt: "2026-08-12T10:42:01.000Z" }
+    });
+    await settle();
+    await vi.dynamicImportSettled();
+    await vi.waitFor(() => {
+      expect(container.querySelector('[data-capability-id="quote-completion-command-path"]')).not.toBeNull();
     });
     const command = container.querySelector('[data-capability-id="quote-completion-command-path"]');
 

@@ -12,6 +12,9 @@ import {
   WORKSPACE_RETURN_CONTEXT_STATE_KEY
 } from "./workspaceReturnContext";
 
+const DECISION_PACKET_BUILD_ENABLED = import.meta.env.MODE === "test"
+  || import.meta.env.VITE_DECISION_PACKET_ENABLED === "true";
+
 /**
  * Pure transport contract for object-scoped workspace arrivals.
  *
@@ -556,6 +559,10 @@ function normalizeFocus(value, destination, intent) {
     return { quoteId: opaqueId(input.quoteId) };
   }
   if (destination === "administration") {
+    if (!DECISION_PACKET_BUILD_ENABLED) {
+      const input = exactRecord(value, ["quoteId"]);
+      return { quoteId: opaqueId(input.quoteId) };
+    }
     const input = exactRecord(value, [
       "quoteId",
       "acceptedRevisionId",

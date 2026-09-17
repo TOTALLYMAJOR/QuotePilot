@@ -75,13 +75,17 @@ import AmbientOperationalReceipts from "./AmbientOperationalReceipts";
 import { deriveAttendanceState } from "./attendanceState";
 import QuickUpdatesPanel from "./QuickUpdatesPanel";
 import AdaptiveChoiceField from "./AdaptiveChoiceField";
-import QuoteCompletionCommandPath from "./QuoteCompletionCommandPath";
 import "./ambientLivingOpportunity.css";
 
 const AMBIENT_INTERACTION_EVENT_NAME = "quotepilot:ambient-interaction";
 const OPERATIONAL_STAFFING_UI_ENABLED = ["1", "true", "yes", "on"].includes(
   String(import.meta.env.VITE_OPERATIONAL_STAFFING_ENABLED || "").trim().toLowerCase()
 );
+const QUOTE_COMPLETION_UI_ENABLED = import.meta.env.MODE === "test"
+  || import.meta.env.VITE_QUOTE_COMPLETION_COMMAND_PATH_ENABLED === "true";
+const QuoteCompletionCommandPath = QUOTE_COMPLETION_UI_ENABLED
+  ? lazy(() => import("./QuoteCompletionCommandPath"))
+  : null;
 const OperationalStaffingPanel = OPERATIONAL_STAFFING_UI_ENABLED
   ? lazy(() => import("./OperationalStaffingPanel"))
   : null;
@@ -3331,14 +3335,16 @@ const AmbientLivingOpportunity = forwardRef(function AmbientLivingOpportunity({
         )}
       </div>
 
-      {model.quoteCompletion ? (
-        <QuoteCompletionCommandPath
-          enabled
-          projection={model.quoteCompletion}
-          onAction={runQuoteCompletionAction}
-          surface="living_opportunity"
-          className="ambient-quote-completion-command"
-        />
+      {model.quoteCompletion && QuoteCompletionCommandPath ? (
+        <Suspense fallback={<p className="status-strip" role="status">Loading quote completion…</p>}>
+          <QuoteCompletionCommandPath
+            enabled
+            projection={model.quoteCompletion}
+            onAction={runQuoteCompletionAction}
+            surface="living_opportunity"
+            className="ambient-quote-completion-command"
+          />
+        </Suspense>
       ) : null}
 
       <section

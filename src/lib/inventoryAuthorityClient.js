@@ -1,8 +1,12 @@
 import { collection, doc, limit, onSnapshot, orderBy, query } from "firebase/firestore";
 import { httpsCallable } from "firebase/functions";
 import { auth, cloudFunctions, db, firebaseReady } from "./firebase";
-
 import { observeLearningInventoryReceipt } from "./postEventLearningReview";
+
+const INVENTORY_CAPTURE_BUILD_ENABLED = import.meta.env.MODE === "test"
+  || import.meta.env.VITE_INVENTORY_MOBILE_CAPTURE_ENABLED === "true";
+const POST_EVENT_LEARNING_BUILD_ENABLED = import.meta.env.MODE === "test"
+  || import.meta.env.VITE_POST_EVENT_LEARNING_ENABLED === "true";
 
 export const INVENTORY_AUTHORITY_SCHEMA_VERSION = 2;
 export const INVENTORY_AUTHORITY_VERSION = "inventory-ingredient-authority-v2";
@@ -19,7 +23,7 @@ export const INVENTORY_COMMAND_KINDS = Object.freeze([
   "upsert_ingredient",
   "opening_balance",
   "receive_stock",
-  "record_stock_count",
+  ...(INVENTORY_CAPTURE_BUILD_ENABLED ? ["record_stock_count"] : []),
   "record_ingredient_cost",
   "publish_pack_conversion",
   "publish_menu_recipe",
@@ -823,7 +827,7 @@ function normalizeCommand(value) {
   if (value.kind === "upsert_ingredient") return deepFreeze(normalizeIngredientCommand(value));
   if (value.kind === "opening_balance") return deepFreeze(normalizeOpeningBalanceCommand(value));
   if (value.kind === "receive_stock") return deepFreeze(normalizeReceiveStockCommand(value));
-  if (value.kind === "record_stock_count") return deepFreeze(normalizeStockCountCommand(value));
+  if (INVENTORY_CAPTURE_BUILD_ENABLED && value.kind === "record_stock_count") return deepFreeze(normalizeStockCountCommand(value));
   if (value.kind === "record_ingredient_cost") return deepFreeze(normalizeCostCommand(value));
   if (value.kind === "publish_pack_conversion") return deepFreeze(normalizePackConversionCommand(value));
   if (value.kind === "publish_menu_recipe") return deepFreeze(normalizeRecipeCommand(value));
@@ -841,7 +845,7 @@ export function inventoryCommandAxis(kind) {
   if (kind === "upsert_ingredient") return "ingredient";
   if (kind === "opening_balance") return "stock";
   if (kind === "receive_stock") return "receiving";
-  if (kind === "record_stock_count") return "stock_count";
+  if (INVENTORY_CAPTURE_BUILD_ENABLED && kind === "record_stock_count") return "stock_count";
   if (kind === "record_ingredient_cost") return "cost";
   if (kind === "publish_pack_conversion") return "conversion";
   if (kind === "publish_menu_recipe") return "recipe";
@@ -1015,7 +1019,7 @@ function normalizeMutationResult(value, attempt, receipt) {
     }
     return { ...value };
   }
-  if (command.kind === "record_stock_count") {
+  if (INVENTORY_CAPTURE_BUILD_ENABLED && command.kind === "record_stock_count") {
     exactKeys(value, [
       "schemaVersion", "ingredientId", "locationId", "movementId", "stockRevision",
       "countedQuantity", "countedQuantityMicros", "signedDeltaMicros", "onHandQuantity"
@@ -1197,7 +1201,7 @@ async function executeAttempt(attempt) {
     const response = await call(canonicalClone(attempt.payload, "Inventory callable request"));
     const result = normalizeResultOrUncertain(response?.data, attempt);
     pendingAttempts.delete(attempt.key);
-    observeLearningInventoryReceipt(attempt, result);
+    if (POST_EVENT_LEARNING_BUILD_ENABLED) observeLearningInventoryReceipt(attempt, result);
     return result;
   } catch (error) {
     markAttemptError(attempt, error);
@@ -2886,7 +2890,7 @@ export function inventoryProjectionConfirmsReceipt(model, attempt) {
       && ingredient.stock.lastMovementId === result.movementId
       && ingredient.cost.revision === result.costRevision;
   }
-  if (commandKind === "record_stock_count") {
+  if (INVENTORY_CAPTURE_BUILD_ENABLED && commandKind === "record_stock_count") {
     return ingredient.stock.revision === result.stockRevision
       && ingredient.stock.lastMovementId === result.movementId
       && ingredient.stock.quantity === result.countedQuantity;

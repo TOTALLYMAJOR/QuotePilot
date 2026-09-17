@@ -25,7 +25,8 @@ import AmbientLibraryRoute from "../AmbientLibraryRoute";
 import InventoryWorkspace from "../InventoryWorkspace";
 import PostEventLearningReviewBanner from "../PostEventLearningReviewBanner";
 import { applyInventoryCommand } from "../../lib/inventoryAuthorityClient";
-import { clearLearningReview, getLearningReview, navigateLearningReview } from "../../lib/postEventLearningReview";
+import { clearLearningReview, getLearningReview } from "../../lib/postEventLearningReview";
+import { navigateLearningReview } from "../../lib/postEventLearningNavigation";
 import { WORKSPACE_PATHS } from "../../lib/workspaceRoutes";
 import { learningFixture } from "../../lib/__tests__/postEventLearning.fixture";
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
@@ -61,11 +62,27 @@ test.each(["recipe", "pack_conversion"])("Client overview disclosure to real %s 
   expect(recordDisclosure.open).toBe(true);
   const disclosure = [...container.querySelectorAll("summary")].find((node) => node.textContent.includes("event learning"));
   expect(disclosure).toBeTruthy();
-  await act(async () => { disclosure.parentElement.open = true; disclosure.parentElement.dispatchEvent(new Event("toggle")); });
+  await act(async () => {
+    disclosure.parentElement.open = true;
+    disclosure.parentElement.dispatchEvent(new Event("toggle"));
+  });
+  await act(async () => {
+    await vi.dynamicImportSettled();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+  await vi.waitFor(() => {
+    expect(mock.planRead).toHaveBeenCalledWith(expect.objectContaining({ organizationId: "org-one", quoteId: "quote-one" }));
+  });
   expect(mock.planRead).toHaveBeenCalledWith(expect.objectContaining({ organizationId: "org-one", quoteId: "quote-one" }));
   expect(mock.actuals).toHaveBeenCalledOnce();
   const priorReads = mock.workspace.mock.calls.length;
-  await act(async () => button("Refresh learning evidence").click());
+  await act(async () => {
+    button("Refresh learning evidence").click();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  });
+  await vi.waitFor(() => {
+    expect(mock.workspace.mock.calls.length).toBeGreaterThan(priorReads);
+  });
   expect(mock.workspace.mock.calls.length).toBeGreaterThan(priorReads);
   await act(async () => container.querySelector(`[data-learning-category="${category}"] button`).click());
   expect(window.location.pathname).toBe(category === "recipe" ? WORKSPACE_PATHS.catalog : WORKSPACE_PATHS.inventory);

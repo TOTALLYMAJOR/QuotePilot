@@ -1,6 +1,16 @@
 import { normalizeBrandLogoUrl } from "../lib/brandLogoUrl.js";
 import { normalizeProposalDocumentFontScale } from "../lib/proposalDocumentPreferences.js";
 
+const QUOTE_CONFIDENCE_BUILD_ENABLED = import.meta.env?.MODE === "test"
+  || [
+    import.meta.env?.VITE_QUOTE_COMPLETION_COMMAND_PATH_ENABLED,
+    import.meta.env?.VITE_DECISION_PACKET_ENABLED,
+    import.meta.env?.VITE_INVENTORY_EXCEPTION_WORKSPACE_ENABLED,
+    import.meta.env?.VITE_EVENT_SUPPLY_ACTION_PLAN_ENABLED,
+    import.meta.env?.VITE_INVENTORY_MOBILE_CAPTURE_ENABLED,
+    import.meta.env?.VITE_POST_EVENT_LEARNING_ENABLED
+  ].includes("true");
+
 export const DEFAULT_PACKAGES = [
   { id: "classic", name: "Classic", ppp: 18, includedMenuItemIds: [], includedAddonIds: [], includedRentalIds: [] },
   { id: "premium", name: "Premium", ppp: 24, includedMenuItemIds: [], includedAddonIds: [], includedRentalIds: [] },
@@ -343,12 +353,14 @@ export const DEFAULT_FEATURE_FLAGS = {
   guidedSelling: true,
   aiAssist: true,
   aiAutopilot: false,
-  quoteCompletionCommandPath: false,
-  decisionPacket: false,
-  inventoryExceptionWorkspace: false,
-  eventSupplyActionPlan: false,
-  inventoryMobileCapture: false,
-  postEventLearning: false
+  ...(QUOTE_CONFIDENCE_BUILD_ENABLED ? {
+    quoteCompletionCommandPath: false,
+    decisionPacket: false,
+    inventoryExceptionWorkspace: false,
+    eventSupplyActionPlan: false,
+    inventoryMobileCapture: false,
+    postEventLearning: false
+  } : {})
 };
 
 export const DEFAULT_SETTINGS = {
@@ -848,27 +860,14 @@ function normalizeFeatureFlags(input, legacySettings = {}) {
     ),
     aiAssist,
     aiAutopilot: aiAssist && toBoolean(source.aiAutopilot, DEFAULT_FEATURE_FLAGS.aiAutopilot),
-    quoteCompletionCommandPath: toBoolean(
-      source.quoteCompletionCommandPath,
-      DEFAULT_FEATURE_FLAGS.quoteCompletionCommandPath
-    ),
-    decisionPacket: toBoolean(
-      source.decisionPacket,
-      DEFAULT_FEATURE_FLAGS.decisionPacket
-    ),
-    inventoryExceptionWorkspace: toBoolean(
-      source.inventoryExceptionWorkspace,
-      DEFAULT_FEATURE_FLAGS.inventoryExceptionWorkspace
-    ),
-    eventSupplyActionPlan: toBoolean(
-      source.eventSupplyActionPlan,
-      DEFAULT_FEATURE_FLAGS.eventSupplyActionPlan
-    ),
-    postEventLearning: source.postEventLearning === true,
-    inventoryMobileCapture: toBoolean(
-      source.inventoryMobileCapture,
-      DEFAULT_FEATURE_FLAGS.inventoryMobileCapture
-    )
+    ...(QUOTE_CONFIDENCE_BUILD_ENABLED ? {
+      quoteCompletionCommandPath: toBoolean(source.quoteCompletionCommandPath, false),
+      decisionPacket: toBoolean(source.decisionPacket, false),
+      inventoryExceptionWorkspace: toBoolean(source.inventoryExceptionWorkspace, false),
+      eventSupplyActionPlan: toBoolean(source.eventSupplyActionPlan, false),
+      postEventLearning: source.postEventLearning === true,
+      inventoryMobileCapture: toBoolean(source.inventoryMobileCapture, false)
+    } : {})
   };
 }
 

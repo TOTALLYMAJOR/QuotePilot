@@ -5,6 +5,9 @@ import { buildCommercialConsequenceComparison } from "../lib/quoteConfidenceDeci
 import FulfillmentIntelligence from "./FulfillmentIntelligence";
 import "./commercialScenarioWorkbench.css";
 
+const DECISION_PACKET_BUILD_ENABLED = import.meta.env.MODE === "test"
+  || import.meta.env.VITE_DECISION_PACKET_ENABLED === "true";
+
 const UNUSABLE_PROJECTION_STATES = new Set(["awaiting_preview", "loading", "stale"]);
 const HEALTHY_EVIDENCE_STATES = new Set(["available", "current", "not_applicable"]);
 export const COMMERCIAL_SCENARIO_WORKBENCH_CAPABILITY_ID = "commercial-scenario-workbench";
@@ -288,10 +291,7 @@ function ScenarioComparison({
   );
 }
 
-function ConsequenceComparison({
-  visibleProjection,
-  activeScenario
-}) {
+function ConsequenceComparison({ visibleProjection, activeScenario }) {
   const comparison = buildCommercialConsequenceComparison(visibleProjection || {});
   return (
     <div
@@ -303,21 +303,11 @@ function ConsequenceComparison({
         <caption className="visually-hidden">
           Current quote compared with {activeScenario.name}, including explicit evidence state
         </caption>
-        <thead>
-          <tr>
-            <th scope="col">Measure</th>
-            <th scope="col">Current</th>
-            <th scope="col">Proposed</th>
-            <th scope="col">Difference</th>
-          </tr>
-        </thead>
+        <thead><tr><th scope="col">Measure</th><th scope="col">Current</th><th scope="col">Proposed</th><th scope="col">Difference</th></tr></thead>
         <tbody>
           {comparison.rows.map((row) => (
             <tr key={row.id} data-comparison-domain={row.id} data-evidence-state={row.evidenceState}>
-              <th scope="row">
-                <strong>{row.label}</strong>
-                <span>{evidenceLabel(row.evidenceState)}</span>
-              </th>
+              <th scope="row"><strong>{row.label}</strong><span>{evidenceLabel(row.evidenceState)}</span></th>
               <td data-label="Current">{row.current}</td>
               <td data-label="Proposed">{row.proposed}</td>
               <td data-label="Difference">{row.difference}</td>
@@ -536,9 +526,11 @@ function CommercialScenarioWorkbenchReady({
   const currentDraftChanged = isCurrent && projection?.scenario?.proposalChanged === true;
   const activeProposalChanged = activeScenario.guestCount !== snapshot.currentScenario.guestCount
     || (exactProjectionUsable && visibleProjection?.scenario?.proposalChanged === true);
-  const consequenceComparison = buildCommercialConsequenceComparison(visibleProjection || {});
+  const consequenceComparison = DECISION_PACKET_BUILD_ENABLED
+    ? buildCommercialConsequenceComparison(visibleProjection || {})
+    : null;
   const consequenceEvidenceReady = !decisionPacketEnabled
-    || consequenceComparison.canContinueToGovernedReview;
+    || consequenceComparison?.canContinueToGovernedReview === true;
   const currentPreviewLoading = currentDraftChanged && projection?.state === "loading";
   const workbenchUpdating = !isCurrent
     && !retryAvailable
@@ -684,7 +676,7 @@ function CommercialScenarioWorkbenchReady({
             currentGuestCount={snapshot.currentScenario.guestCount}
           />
 
-          {decisionPacketEnabled ? (
+          {DECISION_PACKET_BUILD_ENABLED && decisionPacketEnabled ? (
             <ConsequenceComparison
               activeScenario={activeScenario}
               visibleProjection={visibleProjection}

@@ -1,4 +1,4 @@
-const ENABLED_BUILD_VALUES = new Set(["1", "true", "yes", "on"]);
+export { resolveDecisionPacketGate } from "./decisionPacketGate";
 const HEALTHY_EVIDENCE_STATES = new Set(["available", "not_applicable"]);
 const BLOCKING_EVIDENCE_STATES = new Set([
   "missing",
@@ -409,10 +409,6 @@ export function buildGovernedQuoteStarts({ templates = [] } = {}) {
       action: "open_existing_rebook_review"
     }
   ]);
-}
-
-export function resolveDecisionPacketGate({ buildValue = "", tenantValue = false } = {}) {
-  return ENABLED_BUILD_VALUES.has(text(buildValue).toLowerCase()) && tenantValue === true;
 }
 
 function decisionEvidence(quote) {
