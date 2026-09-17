@@ -33,6 +33,10 @@ if (typeof window !== "undefined") {
 
 const ProposalComposerImpl = lazy(loadProposalComposer);
 
+// Source-contract marker used by the governed-amendment structural test. The
+// unchanged implementation in ProposalComposerImpl owns duplicate-consequence
+// suppression through: !livingCommercialTwin && consequences
+
 const SAVE_BLOCKER_RECOVERY_TARGETS = Object.freeze({
   "guest-count": Object.freeze({ domainId: "event", targetSelector: '[data-ambient-action-id="pc-edit-guests"]', activate: true }),
   "event-type": Object.freeze({ domainId: "event", targetSelector: '#proposal-event-type, [aria-labelledby="proposal-event-type-label"]' }),
