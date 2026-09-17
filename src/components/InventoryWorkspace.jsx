@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   applyInventoryCommand,
   buildInventoryRequestId,
@@ -1034,12 +1034,14 @@ export function EventSupplyActionPlanPanel({
   const source = value?.source;
   const unresolvedSupply = ["submitting", "uncertain", "reconciliation", "error"].includes(attempt.state);
   const canEdit = role === "admin" && !unresolvedSupply && ["current", "stale"].includes(read.state) && source?.eligible === true;
+  const canCancel = role === "admin" && !unresolvedSupply && ["current", "stale"].includes(read.state) && plan && plan.status !== "cancelled";
   const editSignature = signatureFor(edits);
   const dirty = plan?.status === "draft" ? editSignature !== savedSignature : edits.length > 0;
-  const editReady = edits.length > 0 && edits.every((edit) => (
+  const emptyRebase = value?.stale === true && Boolean(plan) && Array.isArray(source?.shortages) && source.shortages.length === 0 && edits.length === 0;
+  const editReady = emptyRebase || (edits.length > 0 && edits.every((edit) => (
     edit.supplierId.trim() && edit.supplierLabel.trim() && CANONICAL_QUANTITY.test(edit.purchaseQuantity.trim())
     && /^[a-f0-9]{64}$/u.test(edit.policyFingerprint) && /^[a-f0-9]{64}$/u.test(edit.offerFingerprint)
-  ));
+  )));
 
   const updateEdit = (index, field, nextValue) => {
     generation.current += 1;
@@ -1124,13 +1126,16 @@ export function EventSupplyActionPlanPanel({
               </details>
             </fieldset>
           ))}
-          {canEdit && edits.length > 0 && (
+          {((canEdit && (edits.length > 0 || emptyRebase)) || canCancel) && (
             <div className="inventory-action-row" role="group" aria-label="Supply plan actions">
+              {canEdit && (edits.length > 0 || emptyRebase) && <>
+              {emptyRebase && <p className="source-note">Refreshed allocation evidence has no shortages. Rebase the reviewed plan to check its current resolution.</p>}
               <button type="button" className="ghost" data-supply-command={value.stale ? "rebase" : "save_draft"} disabled={!editReady || (!value.stale && !dirty) || attempt.state === "submitting"} onClick={() => submit(value.stale ? "rebase" : "save_draft")}>{value.stale ? "Rebase reviewed plan" : "Save internal draft"}</button>
               {dirty && !value.stale && <p className="source-note">Save this reviewed change before approval.</p>}
               <label className="inventory-approval-check"><input type="checkbox" checked={approvalChecked} disabled={plan?.status !== "draft" || value.stale || dirty} onChange={(event) => setApprovalChecked(event.target.checked)} /> I approve this internal plan for the exact saved revision and current evidence.</label>
               <button type="button" className="cta" data-supply-command="approve" disabled={!approvalChecked || dirty || plan?.status !== "draft" || value.stale || attempt.state === "submitting"} onClick={() => submit("approve")}>Approve internal plan</button>
-              {plan && plan.status !== "cancelled" && <><label className="field">Cancellation reason<input value={cancelReason} onChange={(event) => { generation.current += 1; setCancelReason(event.target.value); setApprovalChecked(false); setAttempt({ state: "ready", error: "", receipt: null }); }} /></label><button type="button" className="ghost" data-supply-command="cancel" disabled={!cancelReason.trim() || attempt.state === "submitting"} onClick={() => submit("cancel")}>Cancel plan</button></>}
+              </>}
+              {canCancel && <><label className="field">Cancellation reason<input value={cancelReason} onChange={(event) => { generation.current += 1; setCancelReason(event.target.value); setApprovalChecked(false); setAttempt({ state: "ready", error: "", receipt: null }); }} /></label><button type="button" className="ghost" data-supply-command="cancel" disabled={!cancelReason.trim() || attempt.state === "submitting"} onClick={() => submit("cancel")}>Cancel plan</button></>}
             </div>
           )}
           {attempt.state === "submitting" && <p className="status-strip" role="status">Submitting the exact internal-plan command…</p>}
@@ -1194,8 +1199,8 @@ export function InventoryMobileCapturePanel({
     }
   }, [locationId, locations]);
 
-  useEffect(() => {
-    const identity = `${enabled ? "1" : "0"}\u0000${organizationId || ""}\u0000${userId || ""}\u0000${locationId || ""}`;
+  useLayoutEffect(() => {
+    const identity = JSON.stringify([enabled, organizationId, userId, locationId, browserEnabled, tenantEnabled, role]);
     if (scopeIdentity.current === identity) return;
     scopeIdentity.current = identity;
     scopeEpoch.current += 1;
@@ -1206,7 +1211,7 @@ export function InventoryMobileCapturePanel({
     setNotes({});
     setState({ kind: enabled ? "loading" : "empty", message: enabled ? "Loading device drafts…" : "Device capture is unavailable." });
     setScanBusy(false);
-  }, [enabled, locationId, organizationId, userId]);
+  }, [browserEnabled, enabled, locationId, organizationId, role, tenantEnabled, userId]);
   useEffect(() => () => { scopeEpoch.current += 1; uiFreshness.current += 1; }, []);
 
   const refresh = useCallback(async () => {
@@ -1225,7 +1230,7 @@ export function InventoryMobileCapturePanel({
     } catch (error) {
       if (operationIsCurrent(operation)) setState({ kind: "error", message: safeMessage(error, "Durable device draft storage is unavailable.") });
     }
-  }, [draftService, locationId, organizationId, scopeReady, userId]);
+  }, [browserEnabled, draftService, locationId, organizationId, role, scopeReady, tenantEnabled, userId]);
 
   useEffect(() => { refresh(); }, [refresh]);
   useEffect(() => {
@@ -1327,6 +1332,7 @@ export function InventoryMobileCapturePanel({
         online,
         lineIds,
         reconcileUncertain,
+        scopeIsCurrent: () => scopeIsCurrent(operation),
         currentInventory: locationIngredients.map((ingredient) => ({
           ingredientId: ingredient.ingredientId,
           locationId,
@@ -1347,6 +1353,7 @@ export function InventoryMobileCapturePanel({
           } catch (error) {
             const code = String(error?.code || "");
             if (!code.endsWith("failed-precondition")) throw error;
+            if (!scopeIsCurrent(operation)) throw new Error("The capture scope changed before replay. Check the saved request from its original workspace and account.");
             return submitCommand({ organizationId, role, browserEnabled, tenantEnabled, requestId, command });
           }
         }
@@ -1447,7 +1454,7 @@ export function InventoryMobileCapturePanel({
       <p className="eyebrow">Walk the shelf</p>
       <h2 id="inventory-capture-title">Device stock-count draft</h2>
       <p className="muted">Manual search is always available. Drafts stay on this device for up to seven days and do not claim server persistence.</p>
-      <label className="field">Stock location<select value={locationId} onChange={(event) => { const nextLocationId = event.target.value; scopeEpoch.current += 1; uiFreshness.current += 1; scopeIdentity.current = `${enabled ? "1" : "0"}\u0000${organizationId || ""}\u0000${userId || ""}\u0000${nextLocationId}`; setLocationId(nextLocationId); setDraft(null); setQueryText(""); setCounts({}); setNotes({}); setState({ kind: "loading", message: "Loading device drafts…" }); }}><option value="">Select location</option>{locations.map((location) => <option key={location.locationId} value={location.locationId}>{location.name}</option>)}</select></label>
+      <label className="field">Stock location<select value={locationId} onChange={(event) => { const nextLocationId = event.target.value; scopeEpoch.current += 1; uiFreshness.current += 1; scopeIdentity.current = JSON.stringify([enabled, organizationId, userId, nextLocationId, browserEnabled, tenantEnabled, role]); setLocationId(nextLocationId); setDraft(null); setQueryText(""); setCounts({}); setNotes({}); setState({ kind: "loading", message: "Loading device drafts…" }); }}><option value="">Select location</option>{locations.map((location) => <option key={location.locationId} value={location.locationId}>{location.name}</option>)}</select></label>
       <div className={online ? "status-strip" : "warning-note"} role="status">{online ? state.message : "Offline: counts are local device truth only. Reconnect to compare stock revisions."}</div>
       <label className="field">Search first<input type="search" aria-label="Search shelf ingredients" value={queryText} onChange={(event) => setQueryText(event.target.value)} placeholder="Ingredient name or reference" /></label>
       {typeof globalThis.BarcodeDetector === "function" && <><input ref={fileRef} className="sr-only" type="file" accept="image/*" capture="environment" aria-label="Barcode image" onChange={(event) => detectBarcode(event.target.files?.[0])} /><button type="button" className="ghost" disabled={scanBusy} onClick={() => fileRef.current?.click()}>{scanBusy ? "Reading barcode…" : "Scan barcode"}</button></>}

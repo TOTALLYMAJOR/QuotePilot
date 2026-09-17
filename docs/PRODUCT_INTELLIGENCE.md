@@ -1,6 +1,6 @@
 # QuotePilot Product Intelligence System
 
-Last updated: 2026-09-17 11:57:30 CDT
+Last updated: 2026-09-17 12:09:23 CDT
 
 ## Quote-to-Confidence measurement extension
 
@@ -14,6 +14,10 @@ template, pack-conversion and workflow categories. A zero completion-action
 denominator yields an unavailable (`null`) resolution rate, not zero performance.
 Presentation-only capability contracts are export-free: callable ownership and
 complete read/mutation lifecycles remain with existing authority contracts.
+Final integration corrections stop new shelf-count requests after scope changes,
+retain original attempt outcomes, allow backend-derived supply resolution after
+an empty-shortage rebase, and align Legacy recorded-cost comparisons. These are
+local reliability corrections under `LED-006`; no metric or exposure changes.
 
 ## Purpose
 

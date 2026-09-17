@@ -5,6 +5,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
 import { DEFAULT_FEATURE_FLAGS } from "../../data/mockCatalog";
+import { createInventoryCaptureDraft, listInventoryCaptureDrafts, submitInventoryCaptureDraft } from "../../lib/inventoryCaptureDraft";
 import InventoryWorkspace, {
   EventSupplyActionPlanPanel,
   InventoryMobileCapturePanel,
@@ -372,6 +373,109 @@ describe("InventoryWorkspace ingredient evidence presentation", () => {
 });
 
 describe("Task 4 inventory action surfaces", () => {
+  test.each(["principal", "organization", "location", "enabled", "browserEnabled", "tenantEnabled", "role", "uncertain principal"])("stops later count requests after a %s change and retains the started outcome in the original draft", async (change) => {
+    const records = new Map();
+    const store = {
+      async get(key) { return records.get(key) || null; },
+      async list() { return [...records.values()]; },
+      async create(value) { records.set(value.key, structuredClone(value)); return value; },
+      async compareAndSwap(key, revision, value) {
+        if (records.get(key)?.draftRevision !== revision) throw Object.assign(new Error("changed"), { code: "conflict" });
+        records.set(key, structuredClone(value));
+        return value;
+      }
+    };
+    const scope = { organizationId: ORGANIZATION_ID, userId: "operator-a", locationId: "main-kitchen" };
+    const lines = ["chicken", "pasta"].map((ingredientId, index) => {
+      const command = { kind: "record_stock_count", ingredientId, locationId: scope.locationId, baseUnitId: "lb", countedQuantity: "12", occurredAtISO: new Date().toISOString(), expectedStockRevision: 1, note: "" };
+      return { ...command, lineId: `line-${ingredientId}`, ingredientName: ingredientId, requestId: `inventory_request_${String(index + 1).repeat(32)}`, command, state: "draft" };
+    });
+    await createInventoryCaptureDraft({ ...scope, draftId: "original-draft", lines }, { store });
+    const first = deferred();
+    const submitCommand = vi.fn(() => first.promise);
+    const draftService = {
+      list: (input) => listInventoryCaptureDrafts(input, { store }),
+      submit: vi.fn((input) => submitInventoryCaptureDraft(input, { store }))
+    };
+    const base = {
+      enabled: true, ...scope, role: "admin", browserEnabled: true, tenantEnabled: true,
+      locations: [...projectionModel().workspace.locations, { locationId: "other-kitchen", name: "Other kitchen" }],
+      ingredients: lines.map((line) => ({ ...projectionModel().ingredients[0], ingredientId: line.ingredientId, name: line.ingredientName })),
+      submitCommand, draftService
+    };
+    await act(async () => root.render(<InventoryMobileCapturePanel {...base} />));
+    await act(async () => [...container.querySelectorAll("button")].find((button) => button.textContent === "Submit clean counts").click());
+    expect(submitCommand).toHaveBeenCalledTimes(1);
+    if (change === "location") {
+      await act(async () => setInput(container.querySelector("select"), "other-kitchen"));
+    } else {
+      const overrides = change.includes("principal") ? { userId: "operator-b" }
+        : change === "organization" ? { organizationId: "org-other" }
+          : change === "role" ? { role: "customer" } : { [change]: false };
+      await act(async () => root.render(<InventoryMobileCapturePanel {...base} {...overrides} />));
+    }
+    await act(async () => {
+      if (change === "uncertain principal") first.reject(new Error("Receipt unavailable"));
+      else first.resolve({ receipt: { receiptId: "original-line-receipt" }, confirmation: { stockRevision: 2 } });
+      await draftService.submit.mock.results[0].value;
+    });
+    expect(submitCommand).toHaveBeenCalledTimes(1);
+    const [retained] = await listInventoryCaptureDrafts(scope, { store });
+    expect(retained.lines[0]).toMatchObject(change === "uncertain principal"
+      ? { state: "uncertain", inFlight: false, requestId: lines[0].requestId }
+      : { state: "submitted", receiptId: "original-line-receipt", requestId: lines[0].requestId });
+    expect(retained.lines[1]).toMatchObject({ state: "draft", inFlight: false, requestId: lines[1].requestId });
+    expect(await listInventoryCaptureDrafts({ ...scope, userId: "operator-b" }, { store })).toEqual([]);
+    if (change.includes("principal")) {
+      expect(container.textContent).not.toContain("original-line-receipt");
+      await act(async () => root.render(<InventoryMobileCapturePanel {...base} />));
+      expect(container.querySelector('[data-capability-id="inventory-mobile-capture"]')).not.toBeNull();
+      expect(container.textContent).toContain(change === "uncertain principal" ? "uncertain" : "original-line-receipt");
+    }
+  });
+
+  test("rebases an approved stale plan with refreshed empty shortages and displays only the backend-derived resolution", async () => {
+    const stale = {
+      resolution: "stale", stale: true,
+      plan: { status: "approved", planRevision: 4, edits: [{ ingredientId: "chicken", locationId: "main-kitchen", baseUnitId: "lb", shortageQuantity: "5", supplierId: "supplier", supplierLabel: "Supplier", purchaseQuantity: "5", conditions: [], policyFingerprint: "d".repeat(64), offerFingerprint: "e".repeat(64) }] },
+      source: { eligible: true, shortages: [], allocationFingerprint: "a".repeat(64), shortageFingerprint: "b".repeat(64), sourceFingerprint: "c".repeat(64) }
+    };
+    const refreshed = deferred();
+    const getPlan = vi.fn().mockResolvedValueOnce(stale).mockImplementationOnce(() => refreshed.promise);
+    const applyPlan = vi.fn().mockResolvedValue({ receipt: { receiptId: "rebase-receipt" } });
+    await act(async () => root.render(<EventSupplyActionPlanPanel enabled organizationId={ORGANIZATION_ID} role="admin" events={[{ id: "quote-resolved", status: "accepted" }]} getPlan={getPlan} applyPlan={applyPlan} />));
+    await act(async () => setInput(container.querySelector("select"), "quote-resolved"));
+    expect(container.querySelector('[data-supply-truth="stale"]')).not.toBeNull();
+    expect(container.querySelector(".inventory-supply-edit")).toBeNull();
+    expect(container.querySelector('[data-supply-command="cancel"]')).not.toBeNull();
+    expect(container.querySelector('[data-supply-command="approve"]').disabled).toBe(true);
+    const rebase = container.querySelector('[data-supply-command="rebase"]');
+    expect(rebase.disabled).toBe(false);
+    await act(async () => rebase.click());
+    expect(applyPlan).toHaveBeenCalledWith(expect.objectContaining({ command: {
+      kind: "rebase", quoteId: "quote-resolved", expectedPlanRevision: 4,
+      expectedAllocationFingerprint: stale.source.allocationFingerprint,
+      expectedShortageFingerprint: stale.source.shortageFingerprint,
+      expectedSourceFingerprint: stale.source.sourceFingerprint, edits: []
+    } }));
+    expect(container.querySelector('[data-supply-truth="resolved"]')).toBeNull();
+    await act(async () => refreshed.resolve({ ...stale, stale: false, resolution: "resolved", plan: { status: "draft", planRevision: 5, edits: [] } }));
+    expect(container.querySelector('[data-supply-truth="resolved"]')).not.toBeNull();
+    expect(container.querySelector('[data-capability-id="event-supply-action-plan"]').getAttribute("data-capability-state")).toBe("receipt");
+    expect(container.querySelector('[data-supply-command="approve"]')).toBeNull();
+  });
+
+  test("keeps cancellation available with empty edits and ineligible refreshed source", async () => {
+    const getPlan = vi.fn().mockResolvedValue({ resolution: "stale", stale: true, plan: { status: "approved", planRevision: 4, edits: [] }, source: { eligible: false, shortages: [] } });
+    const applyPlan = vi.fn().mockResolvedValue({ receipt: { receiptId: "cancel-receipt" } });
+    await act(async () => root.render(<EventSupplyActionPlanPanel enabled organizationId={ORGANIZATION_ID} role="admin" events={[{ id: "quote-cancel", status: "accepted" }]} getPlan={getPlan} applyPlan={applyPlan} />));
+    await act(async () => setInput(container.querySelector("select"), "quote-cancel"));
+    expect(container.querySelector('[data-supply-command="rebase"]')).toBeNull();
+    await act(async () => setInput(container.querySelector("input"), "No longer needed"));
+    await act(async () => container.querySelector('[data-supply-command="cancel"]').click());
+    expect(applyPlan).toHaveBeenCalledWith(expect.objectContaining({ command: { kind: "cancel", quoteId: "quote-cancel", expectedPlanRevision: 4, reason: "No longer needed" } }));
+  });
+
   test("keeps all three Task 4 capability gates default off", () => {
     expect(DEFAULT_FEATURE_FLAGS).toMatchObject({
       inventoryExceptionWorkspace: false,

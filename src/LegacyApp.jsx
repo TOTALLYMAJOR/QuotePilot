@@ -13,6 +13,7 @@ import AuthGate from "./components/AuthGate";
 import CustomerPortalView from "quotepilot-active-customer-portal";
 import { RebookQuoteReviewBanner } from "./components/CustomerRebookDraftAction";
 import LiveBreakdown from "./components/LiveBreakdown";
+import { buildMarginPresentation, buildRecordedCostMarginComparison } from "./components/marginPresentation";
 import ProposalComposer, {
   buildDraftSaveBlockers,
   QuoteEditorModeSurface
@@ -1563,6 +1564,20 @@ function LegacyAppCore({
     : "";
   const quoteEditReady = Boolean(quoteEditRouteId && editingQuote.id === quoteEditRouteId);
   const isEditingQuote = quoteEditReady;
+  const proposedMargin = useMemo(() => decisionPacketEnabled
+    ? buildMarginPresentation({ form, totals, catalog, settings: effectiveSettings })
+    : null, [catalog, decisionPacketEnabled, effectiveSettings, form, totals]);
+  const livingTwinMarginComparison = useMemo(() => decisionPacketEnabled
+    ? buildRecordedCostMarginComparison({ isEditingQuote, editingQuote, catalog, effectiveSettings, proposedMargin })
+    : null, [
+    catalog,
+    decisionPacketEnabled,
+    editingQuote.baseForm,
+    editingQuote.pricingCatalogAuthority?.catalogRevision,
+    effectiveSettings,
+    isEditingQuote,
+    proposedMargin
+  ]);
   const inventoryRecipeExtension = useInventoryRecipeExtension({
     active: catalogRouteOpen || catalogModalOpen || step === 2 || isEditingQuote,
     organizationId: authSession.organizationId,
@@ -1749,6 +1764,7 @@ function LegacyAppCore({
     previewError: changeImpactPresentationError,
     previewScopeCurrent: !changeImpactPresentationError,
     commercialModel: changeImpactPreview.model,
+    marginComparison: livingTwinMarginComparison,
     authorityState: changeImpactPreview.authorityState,
     authorizationRequired: changeImpactPreview.authorizationRequired,
     authorizationReceiptId: changeImpactPreview.authorizationReceiptId,
@@ -1792,6 +1808,7 @@ function LegacyAppCore({
     form.guests,
     inventoryGuestScenarioEligible,
     livingTwinBaseQuoteRevisionId,
+    livingTwinMarginComparison,
     authoritativeStaffingObservation,
     effectiveProposedStaffingEventWindowState,
     effectiveProposedStaffingRequirements,

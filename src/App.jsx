@@ -14,7 +14,7 @@ import ProposalComposer, {
 } from "./components/ProposalComposer";
 import CatalogReadNotice from "./components/CatalogReadNotice";
 import QuoteCatalogRevisionReviewPanel from "./components/QuoteCatalogRevisionReviewPanel";
-import { buildMarginPresentation } from "./components/marginPresentation";
+import { buildMarginPresentation, buildRecordedCostMarginComparison } from "./components/marginPresentation";
 import ProductBrandLockup from "./components/ProductBrandLockup";
 import WorkspaceActionFeedbackNotice, {
   buildWorkspaceActionFeedbackFollowUpIdentity,
@@ -2970,55 +2970,9 @@ export default function App({
     : "";
   const quoteEditReady = Boolean(quoteEditRouteId && editingQuote.id === quoteEditRouteId);
   const isEditingQuote = quoteEditReady;
-  const livingTwinMarginComparison = useMemo(() => {
-    if (!isEditingQuote || !editingQuote.baseForm) {
-      return { evidenceState: "missing" };
-    }
-    const savedCatalogRevision = Number(editingQuote.pricingCatalogAuthority?.catalogRevision);
-    const currentCatalogRevision = Number(effectiveSettings.catalogRevision);
-    if (!Number.isSafeInteger(savedCatalogRevision)
-      || !Number.isSafeInteger(currentCatalogRevision)) {
-      return {
-        evidenceState: "missing",
-        boundary: "The saved and current catalog revisions are required before margin can be compared."
-      };
-    }
-    if (savedCatalogRevision !== currentCatalogRevision) {
-      return {
-        evidenceState: "stale",
-        boundary: "The saved quote and current catalog use different revisions; refresh the governed quote review before comparing margin."
-      };
-    }
-    try {
-      const currentTotals = calculateQuote(
-        editingQuote.baseForm,
-        catalog,
-        effectiveSettings
-      );
-      const currentMargin = buildMarginPresentation({
-        form: editingQuote.baseForm,
-        totals: currentTotals,
-        catalog,
-        settings: effectiveSettings
-      });
-      if (!currentMargin?.available || !proposedMargin?.available) {
-        return {
-          evidenceState: "missing",
-          boundary: "Complete recorded-cost coverage for both the saved and proposed quote is required before margin can be compared."
-        };
-      }
-      return {
-        evidenceState: "available",
-        before: currentMargin.marginPct,
-        proposedAfter: proposedMargin.marginPct
-      };
-    } catch {
-      return {
-        evidenceState: "unavailable",
-        boundary: "The existing margin presentation could not compare both snapshots."
-      };
-    }
-  }, [
+  const livingTwinMarginComparison = useMemo(() => buildRecordedCostMarginComparison({
+    isEditingQuote, editingQuote, catalog, effectiveSettings, proposedMargin
+  }), [
     catalog,
     editingQuote.baseForm,
     editingQuote.pricingCatalogAuthority?.catalogRevision,

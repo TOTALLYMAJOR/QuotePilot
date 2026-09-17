@@ -1,6 +1,6 @@
 # Release and Experiment Ledger
 
-Last updated: 2026-09-17 11:51:38 CDT
+Last updated: 2026-09-17 12:09:23 CDT
 
 ## LED-006 — Quote-to-Confidence local candidate
 
@@ -10,6 +10,11 @@ evidence states and parent-source recovery, and add local delivered-component
 journeys through Client closeout and Library/Inventory with normalized mocked
 authority receipts. Category aggregates and unavailable zero-denominator rates
 do not change the event schema or authorize exposure. Hosted proof remains open.
+Final integration fixes preserve shelf-count receipts across account/scope
+changes while stopping subsequent requests, expose reviewed empty-shortage
+rebases and independent cancellation, and align both shells' recorded-cost
+comparison evidence. Local regressions exercise these reliability boundaries;
+the unchanged metrics, gates, and authority contracts carry no outcome claim.
 
 Catering value: the owner-operator needs to finish an explainable quote, hand off
 the accepted promise, resolve supply exceptions, capture shelf facts and reuse

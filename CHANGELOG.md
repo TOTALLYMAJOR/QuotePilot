@@ -1,8 +1,10 @@
 # Changelog
 
-Last updated: 2026-09-17 11:56:08 CDT
+Last updated: 2026-09-17 12:09:23 CDT
 
 ## Unreleased — Quote-to-Confidence local candidate
+
+- Stop subsequent mobile count requests when the account, organization, location, role, or capture gates change; retain any already-started line outcome in its original device draft. Permit reviewed empty-shortage rebases and independent cancellation, with resolution read from the backend. Share exact recorded-cost comparison preparation across App and the enabled Legacy decision surface.
 
 - Require presentation-only capability contracts to own no callable exports; read and mutation authorities retain their complete lifecycle contracts, enforced by downgrade rejection tests.
 

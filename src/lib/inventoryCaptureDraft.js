@@ -523,10 +523,17 @@ export async function submitInventoryCaptureDraft(input = {}, options = {}) {
   const { draft } = await exactDraft(input, options);
   const evidence = currentEvidence(input, draft.locationId);
   const lineIds = Array.isArray(input.lineIds) ? input.lineIds.map((value) => exactIdentifier(value, "capture lineId")) : draft.lines.map((line) => line.lineId);
+  const scopeIsCurrent = () => typeof input.scopeIsCurrent !== "function" || input.scopeIsCurrent() === true;
   for (const lineId of lineIds) {
+    if (!scopeIsCurrent()) break;
     let action = "";
     let claimedLine = null;
+    let previousLine = null;
     await persistLine(input, options, lineId, (line) => {
+      action = "";
+      claimedLine = null;
+      if (!scopeIsCurrent()) return line;
+      previousLine = line;
       if (line.state === "submitted" || line.state === "conflict" || (line.state === "error" && line.definitive)) return line;
       if (line.state === "uncertain") {
         if (!input.reconcileUncertain) return line;
@@ -553,9 +560,16 @@ export async function submitInventoryCaptureDraft(input = {}, options = {}) {
       return claimedLine;
     });
     if (!action || !claimedLine) continue;
+    if (!scopeIsCurrent()) {
+      // No adapter started: restore the exact prior attempt, preserving its identity.
+      await persistLine(input, options, lineId, (line) => line.requestId === claimedLine.requestId && line.inFlight ? previousLine : line);
+      break;
+    }
     try {
       const adapter = action === "reconcile" && typeof input.reconcileLine === "function" ? input.reconcileLine : input.submitLine;
       const result = await adapter({ requestId: claimedLine.requestId, command: claimedLine.command });
+      // An already-started outcome always belongs to the original scoped draft,
+      // even when the panel has since changed principal, location, or gates.
       await persistLine(input, options, lineId, (line) => line.requestId !== claimedLine.requestId || line.state === "submitted" ? line : ({
         ...line,
         state: "submitted",

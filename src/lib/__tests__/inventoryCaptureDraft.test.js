@@ -77,6 +77,27 @@ const scope = Object.freeze({ organizationId: "org-a", userId: "user-a", locatio
 const now = Date.parse("2026-09-17T14:00:00.000Z");
 
 describe("inventory-capture-draft-v1", () => {
+  test("restores an unstarted line when scope changes during its durable claim", async () => {
+    const store = memoryStore();
+    let current = true;
+    const compareAndSwap = store.compareAndSwap;
+    store.compareAndSwap = async (...args) => {
+      const value = await compareAndSwap(...args);
+      if (value?.lines.some((line) => line.inFlight)) current = false;
+      return value;
+    };
+    await createInventoryCaptureDraft({ ...scope, draftId: "scope-during-claim", now, lines: [captureLine()] }, { store });
+    const submitLine = vi.fn();
+    const result = await submitInventoryCaptureDraft({
+      ...scope, draftId: "scope-during-claim", now: now + 1000, online: true,
+      scopeIsCurrent: () => current,
+      currentInventory: [{ ingredientId: "chicken", locationId: scope.locationId, baseUnitId: "lb", stockRevision: 4 }],
+      submitLine
+    }, { store });
+    expect(submitLine).not.toHaveBeenCalled();
+    expect(result.lines[0]).toMatchObject({ state: "draft", inFlight: false, requestId: captureLine().requestId, command: captureLine().command });
+  });
+
   test("creates, updates, lists, expires, and discards only exact organization/user/location scope", async () => {
     const store = memoryStore();
     const draft = await createInventoryCaptureDraft({
