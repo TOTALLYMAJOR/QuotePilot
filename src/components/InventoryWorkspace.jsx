@@ -12,6 +12,18 @@ import {
   resetDefinitiveInventoryCommand,
   subscribeToInventoryIngredientProjections
 } from "../lib/inventoryAuthorityClient";
+import {
+  applyEventSupplyActionPlanCommand,
+  buildEventSupplyActionPlanRequestId,
+  getEventSupplyActionPlan
+} from "../lib/eventSupplyActionPlanClient";
+import {
+  createInventoryCaptureDraft,
+  discardInventoryCaptureDraft,
+  listInventoryCaptureDrafts,
+  submitInventoryCaptureDraft,
+  updateInventoryCaptureDraft
+} from "../lib/inventoryCaptureDraft";
 
 const formGridStyle = Object.freeze({
   display: "grid",
@@ -24,7 +36,7 @@ const stackStyle = Object.freeze({
   gap: "var(--space-4, 1rem)"
 });
 
-const AXES = Object.freeze(["location", "ingredient", "stock", "receiving", "cost", "conversion"]);
+const AXES = Object.freeze(["location", "ingredient", "stock", "stock_count", "receiving", "cost", "conversion"]);
 const CANONICAL_QUANTITY = /^(?:0|[1-9]\d*)(?:\.\d{1,6})?$/u;
 const STABLE_REFERENCE = /^[^\s/?#\\\u0000]{1,180}$/u;
 
@@ -134,6 +146,56 @@ function costText(ingredient) {
   if (unavailableLabels[cost.state]) return unavailableLabels[cost.state];
   if (cost.state !== "recorded") return "Cost evidence unavailable";
   return `${displayMoneyMinorUnits(cost.totalMinorUnits, cost.currency)} for ${cost.basisQuantity} ${cost.basisUnit}`;
+}
+
+const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
+
+export function buildInventoryExceptionCards(ingredients, { now = Date.now() } = {}) {
+  const cards = [];
+  const source = Array.isArray(ingredients) ? ingredients : [];
+  source.forEach((ingredient) => {
+    const stock = ingredient?.stock;
+    const name = ingredient?.name || ingredient?.ingredientId || "Ingredient";
+    if (stock?.state === "recorded" && stock.availableToAllocateMicros <= 0) {
+      cards.push({ kind: "shortage", priority: 1, ingredientId: ingredient.ingredientId, title: `${name} has no uncommitted stock`, detail: `${stock.quantity} ${stock.unit} physical · ${stock.committedQuantity} ${stock.unit} committed · ${stock.availableToAllocateQuantity} ${stock.unit} available.` });
+    }
+    const observedAt = Date.parse(ingredient?.updatedAtISO || "");
+    if (stock?.state === "recorded" && Number.isFinite(observedAt) && now - observedAt > SEVEN_DAYS_MS) {
+      cards.push({ kind: "stale_count", priority: 2, ingredientId: ingredient.ingredientId, title: `${name} needs a fresh shelf count`, detail: `Last server projection ${displayInstant(ingredient.updatedAtISO)}. Review the physical quantity before relying on it.` });
+    }
+    if (ingredient?.cost?.state !== "recorded") {
+      cards.push({ kind: "missing_cost", priority: 3, ingredientId: ingredient.ingredientId, title: `${name} has incomplete cost evidence`, detail: costText(ingredient) });
+    }
+    if (!Array.isArray(ingredient?.packConversions) || ingredient.packConversions.length === 0) {
+      cards.push({ kind: "missing_conversion", priority: 4, ingredientId: ingredient.ingredientId, title: `${name} has no purchase-pack conversion`, detail: `Declare a supplier pack only from explicit pack evidence; do not infer case contents.` });
+    }
+    if (stock?.state === "recorded" && stock.committedMicros > 0) {
+      cards.push({ kind: "contention", priority: 5, ingredientId: ingredient.ingredientId, title: `${name} is committed to event work`, detail: `${stock.committedQuantity} ${stock.unit} is committed. Physical and committed quantities remain separate.` });
+    }
+  });
+  return cards.sort((left, right) => left.priority - right.priority || left.title.localeCompare(right.title));
+}
+
+function InventoryExceptionWorkspace({ ingredients, current }) {
+  const cards = useMemo(() => buildInventoryExceptionCards(ingredients), [ingredients]);
+  return (
+    <section className="panel inventory-exception-workspace" data-capability-id="inventory-exception-workspace" data-capability-state={!current ? "stale" : cards.length ? "ready" : "empty"} aria-labelledby="inventory-exceptions-title">
+      <p className="eyebrow">Act first</p>
+      <h2 id="inventory-exceptions-title">Inventory exceptions</h2>
+      <p className="muted">Shortages lead, followed by old counts, incomplete cost, missing pack evidence, and competing commitments.</p>
+      {cards.length ? (
+        <div className="inventory-exception-grid">
+          {cards.map((card) => (
+            <article key={`${card.kind}:${card.ingredientId}`} className="inventory-exception-card" data-inventory-exception={card.kind}>
+              <p className="eyebrow">Priority {card.priority}</p>
+              <h3>{card.title}</h3>
+              <p>{card.detail}</p>
+            </article>
+          ))}
+        </div>
+      ) : <p className="source-note">No exceptions are visible in the current bounded projection.</p>}
+    </section>
+  );
 }
 
 function EvidenceSourceState({ label, state, bounded = false }) {
@@ -723,13 +785,15 @@ function IngredientEvidenceTable({ ingredients, freshness, packsCurrent, canMana
     );
   }
   return (
-    <section className="panel" aria-labelledby="inventory-list-title">
-      <p className="eyebrow">Ingredient evidence</p>
-      <h2 id="inventory-list-title">Stock and cost by ingredient</h2>
-      <p id="inventory-list-description" className="source-note">
-        {freshness === "current" ? "Server-confirmed projections." : "Retained projections for orientation only."} Stock and cost are separate evidence axes.
-      </p>
-      <div className="history-table-wrap">
+    <details className="panel staff-evidence-disclosure inventory-ledger-disclosure">
+      <summary>Seven-axis inventory ledger</summary>
+      <div aria-labelledby="inventory-list-title">
+        <p className="eyebrow">Ingredient evidence</p>
+        <h2 id="inventory-list-title">Stock and cost by ingredient</h2>
+        <p id="inventory-list-description" className="source-note">
+          {freshness === "current" ? "Server-confirmed projections." : "Retained projections for orientation only."} Physical, committed, available, cost, location, and conversion evidence remain independent.
+        </p>
+        <div className="history-table-wrap" data-layout-overflow="bounded">
         <table aria-describedby="inventory-list-description">
           <caption className="sr-only">Ingredient on-hand, committed, available-to-allocate, and independent purchase-cost evidence</caption>
           <thead>
@@ -744,9 +808,9 @@ function IngredientEvidenceTable({ ingredients, freshness, packsCurrent, canMana
                 <Fragment key={ingredient.ingredientId}>
                   <tr>
                     <th scope="row">{ingredient.name}<span className="source-note"> · {ingredient.category}</span></th>
-                    <td data-inventory-axis="stock">{stockText(ingredient)}</td>
-                    <td data-inventory-axis="allocation">{committedStockText(ingredient)}</td>
-                    <td data-inventory-axis="availability">{availableStockText(ingredient)}</td>
+                    <td data-inventory-axis="physical">{stockText(ingredient)}</td>
+                    <td data-inventory-axis="committed">{committedStockText(ingredient)}</td>
+                    <td data-inventory-axis="available">{availableStockText(ingredient)}</td>
                     <td data-inventory-axis="cost">{costText(ingredient)}</td>
                     <td>{ingredient.locationName || ingredient.locationId || "No location evidence"}</td>
                     <td>
@@ -794,7 +858,408 @@ function IngredientEvidenceTable({ ingredients, freshness, packsCurrent, canMana
             })}
           </tbody>
         </table>
+        </div>
       </div>
+    </details>
+  );
+}
+
+function eligibleSupplyEvents(events) {
+  return (Array.isArray(events) ? events : []).filter((event) => (
+    event?.id && ["accepted", "booked"].includes(String(event.status || "").toLowerCase())
+  ));
+}
+
+function emptySupplyEdit(shortage) {
+  return {
+    ingredientId: shortage.ingredientId,
+    locationId: shortage.locationId,
+    baseUnitId: shortage.baseUnitId,
+    shortageQuantity: shortage.shortageQuantity,
+    supplierId: "",
+    supplierLabel: "",
+    purchaseQuantity: shortage.shortageQuantity,
+    estimatedCost: "",
+    note: "",
+    conditionsText: "",
+    policyFingerprint: "",
+    offerFingerprint: ""
+  };
+}
+
+function supplyEditFromPlan(edit) {
+  return {
+    ...edit,
+    estimatedCost: edit.estimatedCostMinor === null ? "" : (edit.estimatedCostMinor / 100).toFixed(2),
+    conditionsText: (edit.conditions || []).join("\n")
+  };
+}
+
+function eventLabel(event) {
+  return [event.quoteNumber, event.event?.name || event.eventName, event.customer?.name || event.customerName]
+    .map((value) => String(value || "").trim()).filter(Boolean).join(" · ") || event.id;
+}
+
+function humanizeReference(value) {
+  const text = String(value || "").replace(/[-_]+/gu, " ");
+  return text ? `${text.charAt(0).toUpperCase()}${text.slice(1)}` : "Ingredient";
+}
+
+function moneyMinorOrNull(value) {
+  const text = String(value || "").trim();
+  if (!text) return null;
+  if (!/^(?:0|[1-9]\d*)(?:\.\d{1,2})?$/u.test(text)) throw new Error("Estimated cost must be an exact nonnegative amount with at most two decimals.");
+  const [major, fraction = ""] = text.split(".");
+  const minor = Number(major) * 100 + Number(fraction.padEnd(2, "0"));
+  if (!Number.isSafeInteger(minor)) throw new Error("Estimated cost is too large.");
+  return minor;
+}
+
+export function EventSupplyActionPlanPanel({
+  enabled = false,
+  organizationId,
+  role = "customer",
+  events = [],
+  getPlan = getEventSupplyActionPlan,
+  applyPlan = applyEventSupplyActionPlanCommand
+}) {
+  const choices = useMemo(() => eligibleSupplyEvents(events), [events]);
+  const [quoteId, setQuoteId] = useState("");
+  const [read, setRead] = useState({ state: "empty", value: null, error: "" });
+  const [edits, setEdits] = useState([]);
+  const [attempt, setAttempt] = useState({ state: "ready", error: "", receipt: null });
+  const [approvalChecked, setApprovalChecked] = useState(false);
+  const [cancelReason, setCancelReason] = useState("");
+  const generation = useRef(0);
+
+  const load = useCallback(async (selectedQuoteId) => {
+    if (!selectedQuoteId) {
+      setRead({ state: "empty", value: null, error: "" });
+      setEdits([]);
+      return;
+    }
+    const current = generation.current + 1;
+    generation.current = current;
+    setRead({ state: "loading", value: null, error: "" });
+    try {
+      const value = await getPlan({ organizationId, quoteId: selectedQuoteId, role });
+      if (generation.current !== current) return;
+      setRead({ state: value.stale ? "stale" : "current", value, error: "" });
+      const planned = Array.isArray(value.plan?.edits) && value.plan.edits.length
+        ? value.plan.edits.map(supplyEditFromPlan)
+        : (value.source?.shortages || []).map(emptySupplyEdit);
+      setEdits(planned);
+    } catch (error) {
+      if (generation.current === current) setRead({ state: "error", value: null, error: safeMessage(error, "The exact supply plan could not be loaded.") });
+    }
+  }, [getPlan, organizationId, role]);
+
+  useEffect(() => () => { generation.current += 1; }, []);
+
+  if (!enabled) return null;
+  const value = read.value;
+  const plan = value?.plan;
+  const source = value?.source;
+  const canEdit = role === "admin" && read.state === "current" && source?.eligible === true;
+  const editReady = edits.length > 0 && edits.every((edit) => (
+    edit.supplierId.trim() && edit.supplierLabel.trim() && CANONICAL_QUANTITY.test(edit.purchaseQuantity.trim())
+    && /^[a-f0-9]{64}$/u.test(edit.policyFingerprint) && /^[a-f0-9]{64}$/u.test(edit.offerFingerprint)
+  ));
+
+  const updateEdit = (index, field, nextValue) => setEdits((current) => current.map((edit, editIndex) => (
+    editIndex === index ? { ...edit, [field]: nextValue } : edit
+  )));
+
+  const commandEdits = () => edits.map((edit) => {
+    const estimatedCostMinor = moneyMinorOrNull(edit.estimatedCost);
+    return {
+      ingredientId: edit.ingredientId,
+      locationId: edit.locationId,
+      baseUnitId: edit.baseUnitId,
+      shortageQuantity: edit.shortageQuantity,
+      supplierId: edit.supplierId.trim(),
+      supplierLabel: edit.supplierLabel.trim(),
+      purchaseQuantity: edit.purchaseQuantity.trim(),
+      estimatedCostMinor,
+      currency: estimatedCostMinor === null ? null : "USD",
+      note: edit.note.trim(),
+      conditions: edit.conditionsText.split("\n").map((entry) => entry.trim()).filter(Boolean),
+      policyFingerprint: edit.policyFingerprint.trim(),
+      offerFingerprint: edit.offerFingerprint.trim()
+    };
+  });
+
+  const submit = async (kind) => {
+    if (!quoteId || !source) return;
+    setAttempt({ state: "submitting", error: "", receipt: null });
+    try {
+      const common = {
+        kind,
+        quoteId,
+        expectedPlanRevision: plan?.planRevision || 0,
+        expectedAllocationFingerprint: source.allocationFingerprint,
+        expectedShortageFingerprint: source.shortageFingerprint,
+        expectedSourceFingerprint: source.sourceFingerprint
+      };
+      const command = kind === "approve"
+        ? { ...common, confirmation: "approve_internal_supply_plan" }
+        : kind === "cancel"
+          ? { kind, quoteId, expectedPlanRevision: plan?.planRevision || 0, reason: cancelReason.trim() }
+          : { ...common, edits: commandEdits() };
+      const result = await applyPlan({ organizationId, quoteId, role, requestId: buildEventSupplyActionPlanRequestId(), command });
+      setAttempt({ state: "receipt", error: "", receipt: result.receipt });
+      setApprovalChecked(false);
+      await load(quoteId);
+    } catch (error) {
+      setAttempt({ state: "error", error: safeMessage(error, "The internal supply plan was not changed."), receipt: null });
+    }
+  };
+
+  return (
+    <section className="panel inventory-supply-plan" data-capability-id="event-supply-action-plan" data-capability-state={attempt.state === "submitting" ? "submitting" : attempt.state === "receipt" ? "receipt" : attempt.state === "error" ? "error" : read.state === "current" ? "ready" : read.state} aria-labelledby="inventory-supply-title">
+      <p className="eyebrow">Event shortage response</p>
+      <h2 id="inventory-supply-title">Internal supply action plan</h2>
+      <p className="muted"><strong>Internal plan only.</strong> This surface does not contact a vendor, create a purchase order or reservation, change stock, or authorize commercial scope.</p>
+      <label className="field">
+        Accepted or booked event
+        <select aria-label="Event supply plan" value={quoteId} onChange={(event) => { const next = event.target.value; setQuoteId(next); setAttempt({ state: "ready", error: "", receipt: null }); load(next); }}>
+          <option value="">Select exact event</option>
+          {choices.map((event) => <option key={event.id} value={event.id}>{eventLabel(event)}</option>)}
+        </select>
+      </label>
+      {!choices.length && <p className="source-note" data-capability-state="empty">No accepted or booked event is available for internal supply planning.</p>}
+      {read.state === "loading" && <p className="status-strip" role="status">Loading exact shortage and plan evidence…</p>}
+      {read.state === "error" && <div className="error-note" role="alert"><p>{read.error}</p><button type="button" className="ghost" onClick={() => load(quoteId)}>Try exact plan again</button></div>}
+      {value && (
+        <div className="inventory-supply-plan-body">
+          <div className={value.stale ? "warning-note" : "status-strip"} data-supply-truth={value.stale ? "stale" : value.resolution} role="status">
+            Plan: {plan?.status || "not started"} · Resolution: {value.resolution.replaceAll("_", " ")}.
+            {value.stale && " Source evidence changed. Rebase before approval."}
+          </div>
+          {edits.map((edit, index) => (
+            <fieldset key={`${edit.ingredientId}:${edit.locationId}`} className="inventory-supply-edit" disabled={!canEdit}>
+              <legend>{humanizeReference(edit.ingredientId)} · shortage {edit.shortageQuantity} {edit.baseUnitId}</legend>
+              <div style={formGridStyle}>
+                <label className="field">Supplier reference<input value={edit.supplierId} onChange={(event) => updateEdit(index, "supplierId", event.target.value)} /></label>
+                <label className="field">Supplier label<input value={edit.supplierLabel} onChange={(event) => updateEdit(index, "supplierLabel", event.target.value)} /></label>
+                <label className="field">Planned quantity ({edit.baseUnitId})<input inputMode="decimal" value={edit.purchaseQuantity} onChange={(event) => updateEdit(index, "purchaseQuantity", event.target.value)} /></label>
+                <label className="field">Estimated cost (USD)<input inputMode="decimal" value={edit.estimatedCost} onChange={(event) => updateEdit(index, "estimatedCost", event.target.value)} /></label>
+              </div>
+              <label className="field">Internal note<textarea maxLength={500} value={edit.note} onChange={(event) => updateEdit(index, "note", event.target.value)} /></label>
+              <label className="field">Conditions, one per line<textarea maxLength={1800} value={edit.conditionsText} onChange={(event) => updateEdit(index, "conditionsText", event.target.value)} /></label>
+              <details className="staff-evidence-disclosure"><summary>Exact policy and offer evidence</summary>
+                <label className="field">Policy fingerprint<input maxLength={64} value={edit.policyFingerprint} onChange={(event) => updateEdit(index, "policyFingerprint", event.target.value)} /></label>
+                <label className="field">Offer fingerprint<input maxLength={64} value={edit.offerFingerprint} onChange={(event) => updateEdit(index, "offerFingerprint", event.target.value)} /></label>
+              </details>
+            </fieldset>
+          ))}
+          {canEdit && edits.length > 0 && (
+            <div className="inventory-action-row" role="group" aria-label="Supply plan actions">
+              <button type="button" className="ghost" data-supply-command={value.stale ? "rebase" : "save_draft"} disabled={!editReady || attempt.state === "submitting"} onClick={() => submit(value.stale ? "rebase" : "save_draft")}>{value.stale ? "Rebase reviewed plan" : "Save internal draft"}</button>
+              <label className="inventory-approval-check"><input type="checkbox" checked={approvalChecked} disabled={plan?.status !== "draft" || value.stale} onChange={(event) => setApprovalChecked(event.target.checked)} /> I approve this internal plan for the exact current evidence.</label>
+              <button type="button" className="cta" data-supply-command="approve" disabled={!approvalChecked || plan?.status !== "draft" || value.stale || attempt.state === "submitting"} onClick={() => submit("approve")}>Approve internal plan</button>
+              {plan && plan.status !== "cancelled" && <><label className="field">Cancellation reason<input value={cancelReason} onChange={(event) => setCancelReason(event.target.value)} /></label><button type="button" className="ghost" data-supply-command="cancel" disabled={!cancelReason.trim() || attempt.state === "submitting"} onClick={() => submit("cancel")}>Cancel plan</button></>}
+            </div>
+          )}
+          {attempt.state === "submitting" && <p className="status-strip" role="status">Submitting the exact internal-plan command…</p>}
+          {attempt.state === "receipt" && <p className="status-strip" data-capability-state="receipt" role="status">Command receipt recorded. Refreshed plan truth is shown above.</p>}
+          {attempt.state === "error" && <p className="error-note" role="alert">{attempt.error}</p>}
+        </div>
+      )}
+    </section>
+  );
+}
+
+const DEFAULT_DRAFT_SERVICE = Object.freeze({
+  create: createInventoryCaptureDraft,
+  update: updateInventoryCaptureDraft,
+  list: listInventoryCaptureDrafts,
+  discard: discardInventoryCaptureDraft,
+  submit: submitInventoryCaptureDraft
+});
+
+export function InventoryMobileCapturePanel({
+  enabled = false,
+  organizationId,
+  userId,
+  role = "customer",
+  browserEnabled = false,
+  tenantEnabled = false,
+  locations = [],
+  ingredients = [],
+  submitCommand = applyInventoryCommand,
+  draftService = DEFAULT_DRAFT_SERVICE
+}) {
+  const [online, setOnline] = useState(() => typeof navigator === "undefined" || navigator.onLine !== false);
+  const [locationId, setLocationId] = useState(locations[0]?.locationId || "");
+  const [draft, setDraft] = useState(null);
+  const [queryText, setQueryText] = useState("");
+  const [counts, setCounts] = useState({});
+  const [notes, setNotes] = useState({});
+  const [state, setState] = useState({ kind: "loading", message: "Loading device drafts…" });
+  const [scanBusy, setScanBusy] = useState(false);
+  const fileRef = useRef(null);
+  const scopeReady = enabled && organizationId && userId && locationId;
+
+  useEffect(() => {
+    if (!locations.some((location) => location.locationId === locationId)) {
+      setLocationId(locations[0]?.locationId || "");
+    }
+  }, [locationId, locations]);
+
+  const refresh = useCallback(async () => {
+    if (!scopeReady) return;
+    setState({ kind: "loading", message: "Loading device drafts…" });
+    try {
+      const drafts = await draftService.list({ organizationId, userId, locationId });
+      setDraft(drafts[0] || null);
+      setState({ kind: drafts.length ? "draft" : "empty", message: drafts.length ? "Device draft loaded." : "No shelf-count draft at this location." });
+    } catch (error) {
+      setState({ kind: "error", message: safeMessage(error, "Durable device draft storage is unavailable.") });
+    }
+  }, [draftService, locationId, organizationId, scopeReady, userId]);
+
+  useEffect(() => { refresh(); }, [refresh]);
+  useEffect(() => {
+    const handleOnline = () => setOnline(true);
+    const handleOffline = () => setOnline(false);
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+    return () => { window.removeEventListener("online", handleOnline); window.removeEventListener("offline", handleOffline); };
+  }, []);
+
+  if (!enabled) return null;
+  const normalizedQuery = queryText.trim().toLocaleLowerCase("en-US");
+  const results = ingredients.filter((ingredient) => ingredient.active !== false && ingredient.stock?.revision > 0 && (
+    !normalizedQuery || ingredient.name.toLocaleLowerCase("en-US").includes(normalizedQuery)
+    || ingredient.ingredientId.toLocaleLowerCase("en-US").includes(normalizedQuery)
+  )).slice(0, 20);
+
+  const saveLine = async (ingredient) => {
+    const countedQuantity = String(counts[ingredient.ingredientId] || "").trim();
+    if (!CANONICAL_QUANTITY.test(countedQuantity)) {
+      setState({ kind: "error", message: "Enter a nonnegative count with no more than six decimal places." });
+      return;
+    }
+    try {
+      let current = draft;
+      if (!current) {
+        current = await draftService.create({ organizationId, userId, locationId, draftId: `shelf-${Date.now()}`, lines: [] });
+      }
+      const line = {
+        lineId: `count-${ingredient.ingredientId}`,
+        ingredientId: ingredient.ingredientId,
+        ingredientName: ingredient.name,
+        baseUnitId: ingredient.baseUnitId,
+        countedQuantity,
+        note: String(notes[ingredient.ingredientId] || "").trim(),
+        occurredAtISO: new Date().toISOString(),
+        expectedStockRevision: ingredient.stock?.revision || 0,
+        state: "draft"
+      };
+      const lines = [...current.lines.filter((entry) => entry.ingredientId !== ingredient.ingredientId), line];
+      current = await draftService.update({ organizationId, userId, locationId, draftId: current.draftId, lines });
+      setDraft(current);
+      setState({ kind: "draft", message: "Count saved on this device only." });
+    } catch (error) {
+      setState({ kind: "error", message: safeMessage(error, "The device draft could not be saved.") });
+    }
+  };
+
+  const submit = async () => {
+    if (!draft) return;
+    setState({ kind: "submitting", message: "Comparing stock revisions and submitting clean lines…" });
+    try {
+      const current = await draftService.submit({
+        organizationId,
+        userId,
+        locationId,
+        draftId: draft.draftId,
+        online,
+        currentStockRevisions: Object.fromEntries(ingredients.map((ingredient) => [ingredient.ingredientId, ingredient.stock?.revision || 0])),
+        submitLine: (command) => submitCommand({
+          organizationId,
+          role,
+          browserEnabled,
+          tenantEnabled,
+          requestId: buildInventoryRequestId(),
+          command
+        })
+      });
+      setDraft(current);
+      setState({ kind: current.status === "submitted" ? "receipt" : "partial", message: current.status === "submitted" ? "Every line has an authoritative receipt." : "Clean lines were submitted independently; conflicts and failures remain in this device draft." });
+    } catch (error) {
+      setState({ kind: error?.code === "offline" ? "offline" : "error", message: safeMessage(error, "The device draft was retained for recovery.") });
+    }
+  };
+
+  const recoverLine = async (line) => {
+    const ingredient = ingredients.find((entry) => entry.ingredientId === line.ingredientId);
+    if (!ingredient || !draft) return;
+    const lines = draft.lines.map((entry) => entry.lineId === line.lineId ? {
+      ...entry,
+      expectedStockRevision: ingredient.stock.revision,
+      state: "draft",
+      error: "",
+      currentStockRevision: null
+    } : entry);
+    try {
+      const current = await draftService.update({ organizationId, userId, locationId, draftId: draft.draftId, lines });
+      setDraft(current);
+      setState({ kind: "draft", message: `${ingredient.name} was rebased to the current stock revision. Review before submitting.` });
+    } catch (error) {
+      setState({ kind: "error", message: safeMessage(error) });
+    }
+  };
+
+  const discard = async () => {
+    if (!draft) return;
+    try {
+      await draftService.discard({ organizationId, userId, locationId, draftId: draft.draftId });
+      setDraft(null);
+      setState({ kind: "empty", message: "Device draft discarded." });
+    } catch (error) {
+      setState({ kind: "error", message: safeMessage(error) });
+    }
+  };
+
+  const detectBarcode = async (file) => {
+    if (!file || typeof globalThis.BarcodeDetector !== "function") return;
+    setScanBusy(true);
+    try {
+      const detector = new globalThis.BarcodeDetector();
+      const codes = await detector.detect(file);
+      setQueryText(String(codes?.[0]?.rawValue || ""));
+      setState({ kind: codes?.length ? "draft" : "empty", message: codes?.length ? "Barcode placed in search. Confirm the exact ingredient." : "No barcode was detected. Use manual search." });
+    } catch {
+      setState({ kind: "error", message: "Barcode capture was unavailable. Use manual search." });
+    } finally {
+      setScanBusy(false);
+    }
+  };
+
+  return (
+    <section className="panel inventory-mobile-capture" data-capability-id="inventory-mobile-capture" data-capability-state={state.kind === "draft" ? "ready" : state.kind === "partial" ? "recovery" : state.kind === "offline" ? "stale" : state.kind} aria-labelledby="inventory-capture-title">
+      <p className="eyebrow">Walk the shelf</p>
+      <h2 id="inventory-capture-title">Device stock-count draft</h2>
+      <p className="muted">Manual search is always available. Drafts stay on this device for up to seven days and do not claim server persistence.</p>
+      <label className="field">Stock location<select value={locationId} onChange={(event) => { setLocationId(event.target.value); setDraft(null); }}><option value="">Select location</option>{locations.map((location) => <option key={location.locationId} value={location.locationId}>{location.name}</option>)}</select></label>
+      <div className={online ? "status-strip" : "warning-note"} role="status">{online ? state.message : "Offline: counts are local device truth only. Reconnect to compare stock revisions."}</div>
+      <label className="field">Search first<input type="search" aria-label="Search shelf ingredients" value={queryText} onChange={(event) => setQueryText(event.target.value)} placeholder="Ingredient name or reference" /></label>
+      {typeof globalThis.BarcodeDetector === "function" && <><input ref={fileRef} className="sr-only" type="file" accept="image/*" capture="environment" aria-label="Barcode image" onChange={(event) => detectBarcode(event.target.files?.[0])} /><button type="button" className="ghost" disabled={scanBusy} onClick={() => fileRef.current?.click()}>{scanBusy ? "Reading barcode…" : "Scan barcode"}</button></>}
+      <div className="inventory-capture-results" aria-label="Shelf search results">
+        {results.map((ingredient) => (
+          <article key={ingredient.ingredientId} className="inventory-capture-row">
+            <div><h3>{ingredient.name}</h3><p className="source-note">Current revision {ingredient.stock?.revision || "unavailable"} · {stockText(ingredient)}</p></div>
+            <label className="field">Count ({ingredient.baseUnitId})<input inputMode="decimal" value={counts[ingredient.ingredientId] || ""} onChange={(event) => setCounts((current) => ({ ...current, [ingredient.ingredientId]: event.target.value }))} /></label>
+            <label className="field">Note <span className="source-note">optional</span><input maxLength={240} value={notes[ingredient.ingredientId] || ""} onChange={(event) => setNotes((current) => ({ ...current, [ingredient.ingredientId]: event.target.value }))} /></label>
+            <button type="button" className="ghost" onClick={() => saveLine(ingredient)}>Save count to device</button>
+          </article>
+        ))}
+      </div>
+      {draft?.lines?.length > 0 && <div className="inventory-capture-draft-lines"><h3>Draft lines</h3><ul className="plain-list">{draft.lines.map((line) => <li key={line.lineId} data-capture-line-state={line.state}><strong>{line.ingredientName}: {line.countedQuantity} {line.baseUnitId}</strong> · {line.state}{line.receiptId && ` · receipt ${line.receiptId}`}{line.error && <span> · {line.error}</span>}{["conflict", "error"].includes(line.state) && <button type="button" className="ghost" onClick={() => recoverLine(line)}>Review against current revision</button>}</li>)}</ul></div>}
+      <div className="inventory-action-row"><button type="button" className="cta" disabled={!draft?.lines?.some((line) => line.state !== "submitted") || !online || state.kind === "submitting"} onClick={submit}>Submit clean counts</button><button type="button" className="ghost" disabled={!draft || state.kind === "submitting"} onClick={discard}>Discard device draft</button></div>
+      <p className="source-note">No cold offline launch is promised. Successful lines record independent stock-count receipts; failures and conflicts remain local until reviewed.</p>
     </section>
   );
 }
@@ -803,6 +1268,11 @@ export function InventoryWorkspaceView({
   access,
   read,
   attempts,
+  exceptionWorkspaceEnabled = false,
+  eventSupplyActionPlanEnabled = false,
+  inventoryMobileCaptureEnabled = false,
+  supplyPlanProps = {},
+  mobileCaptureProps = {},
   onRetry,
   onSubmit,
   onReconcile,
@@ -841,6 +1311,18 @@ export function InventoryWorkspaceView({
       ) : (
         <div style={stackStyle}>
           <ReadBoundary state={read.state} model={model} error={read.error} onRetry={onRetry} />
+          {exceptionWorkspaceEnabled && (
+            <InventoryExceptionWorkspace ingredients={ingredients} current={read.state === "current" && sourcesCurrent} />
+          )}
+          {eventSupplyActionPlanEnabled && <EventSupplyActionPlanPanel enabled {...supplyPlanProps} />}
+          {inventoryMobileCaptureEnabled && (
+            <InventoryMobileCapturePanel
+              enabled
+              locations={locations}
+              ingredients={ingredients}
+              {...mobileCaptureProps}
+            />
+          )}
           <section className="panel" aria-labelledby="inventory-source-state-title">
             <p className="eyebrow">Projection evidence</p>
             <h2 id="inventory-source-state-title">Currentness by source</h2>
@@ -907,9 +1389,17 @@ export function InventoryWorkspaceView({
 
 export default function InventoryWorkspace({
   organizationId,
+  userId = "",
   role = "customer",
   browserEnabled = false,
   tenantEnabled = false,
+  events = [],
+  exceptionWorkspaceEnabled = false,
+  eventSupplyActionPlanEnabled = false,
+  inventoryMobileCaptureEnabled = false,
+  getSupplyPlan = getEventSupplyActionPlan,
+  applySupplyPlan = applyEventSupplyActionPlanCommand,
+  draftService = DEFAULT_DRAFT_SERVICE,
   subscribeProjections = subscribeToInventoryIngredientProjections,
   submitCommand = applyInventoryCommand,
   reconcileCommand = reconcileInventoryCommand,
@@ -1092,6 +1582,25 @@ export default function InventoryWorkspace({
       access={access}
       read={read}
       attempts={attempts}
+      exceptionWorkspaceEnabled={exceptionWorkspaceEnabled}
+      eventSupplyActionPlanEnabled={eventSupplyActionPlanEnabled && access.readEnabled}
+      inventoryMobileCaptureEnabled={inventoryMobileCaptureEnabled && access.mutationEnabled}
+      supplyPlanProps={{
+        organizationId,
+        role,
+        events,
+        getPlan: getSupplyPlan,
+        applyPlan: applySupplyPlan
+      }}
+      mobileCaptureProps={{
+        organizationId,
+        userId,
+        role,
+        browserEnabled,
+        tenantEnabled,
+        submitCommand,
+        draftService
+      }}
       onRetry={() => setRetryGeneration((value) => value + 1)}
       onSubmit={onSubmit}
       onReconcile={onReconcile}

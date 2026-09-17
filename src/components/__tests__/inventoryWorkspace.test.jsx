@@ -4,7 +4,13 @@ import { createRoot } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
-import InventoryWorkspace, { InventoryWorkspaceView } from "../InventoryWorkspace";
+import { DEFAULT_FEATURE_FLAGS } from "../../data/mockCatalog";
+import InventoryWorkspace, {
+  EventSupplyActionPlanPanel,
+  InventoryMobileCapturePanel,
+  InventoryWorkspaceView,
+  buildInventoryExceptionCards
+} from "../InventoryWorkspace";
 
 const ORGANIZATION_ID = "org-inventory-workspace";
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
@@ -96,6 +102,7 @@ function viewMarkup({ model = projectionModel(), readState = "current", attemptO
       access={access}
       read={{ state: readState, model, error: "" }}
       attempts={attempts(attemptOverrides)}
+      exceptionWorkspaceEnabled
       onRetry={() => {}}
       onSubmit={() => {}}
       onReconcile={() => {}}
@@ -136,6 +143,38 @@ afterEach(async () => {
 });
 
 describe("InventoryWorkspace ingredient evidence presentation", () => {
+  test("prioritizes shortage, stale count, missing cost, conversion, and contention exceptions", () => {
+    const ingredient = {
+      ...projectionModel().ingredients[0],
+      updatedAtISO: "2026-09-01T00:00:00.000Z",
+      packConversions: [],
+      stock: {
+        ...projectionModel().ingredients[0].stock,
+        onHandMicros: 25_000_000,
+        quantity: "25",
+        committedMicros: 25_000_000,
+        committedQuantity: "25",
+        availableToAllocateMicros: 0,
+        availableToAllocateQuantity: "0"
+      }
+    };
+    expect(buildInventoryExceptionCards([ingredient], { now: Date.parse("2026-09-17T00:00:00.000Z") })
+      .map((card) => card.kind)).toEqual([
+      "shortage", "stale_count", "missing_cost", "missing_conversion", "contention"
+    ]);
+  });
+
+  test("leads with exception cards and keeps the seven-axis ledger under disclosure", () => {
+    const html = viewMarkup();
+    expect(html).toContain('data-capability-id="inventory-exception-workspace"');
+    expect(html.indexOf("Inventory exceptions")).toBeLessThan(html.indexOf("Seven-axis inventory ledger"));
+    expect(html).toContain('<summary>Seven-axis inventory ledger</summary>');
+    expect(html).toContain('data-inventory-axis="physical"');
+    expect(html).toContain('data-inventory-axis="committed"');
+    expect(html).toContain('data-inventory-axis="available"');
+    expect(html).toContain('data-inventory-axis="cost"');
+  });
+
   test("keeps physical stock and purchase-cost evidence as separate axes", () => {
     const html = viewMarkup();
     expect(html).toContain("40 lb");
@@ -301,6 +340,168 @@ describe("InventoryWorkspace ingredient evidence presentation", () => {
     const rejected = viewMarkup({ attemptOverrides: { stock: attempt("error", { requestId: `inventory_request_${"f".repeat(32)}`, error: "Review required." }) } });
     expect(rejected).toContain('data-capability-state="error"');
     expect(rejected).toContain('class="ghost" type="button" data-capability-state="recovery"');
+  });
+});
+
+describe("Task 4 inventory action surfaces", () => {
+  test("keeps all three Task 4 capability gates default off", () => {
+    expect(DEFAULT_FEATURE_FLAGS).toMatchObject({
+      inventoryExceptionWorkspace: false,
+      eventSupplyActionPlan: false,
+      inventoryMobileCapture: false
+    });
+  });
+
+  test("loads an accepted event and requires an explicit internal-plan approval command", async () => {
+    const getPlan = vi.fn().mockResolvedValue({
+      resolution: "not_started",
+      stale: false,
+      plan: {
+        status: "draft",
+        planRevision: 1,
+        edits: [{
+          ingredientId: "chicken",
+          locationId: "main-kitchen",
+          baseUnitId: "lb",
+          shortageQuantity: "5",
+          supplierId: "supplier-1",
+          supplierLabel: "Reviewed supplier",
+          purchaseQuantity: "5",
+          estimatedCostMinor: null,
+          note: "",
+          conditions: [],
+          policyFingerprint: "d".repeat(64),
+          offerFingerprint: "e".repeat(64)
+        }]
+      },
+      source: {
+        eligible: true,
+        allocationFingerprint: "a".repeat(64),
+        shortageFingerprint: "b".repeat(64),
+        sourceFingerprint: "c".repeat(64),
+        shortages: [{ ingredientId: "chicken", locationId: "main-kitchen", baseUnitId: "lb", shortageQuantity: "5" }]
+      }
+    });
+    const applyPlan = vi.fn().mockResolvedValue({ status: "approved", resolution: "unresolved", planRevision: 2, receipt: { receiptId: "receipt" } });
+    await act(async () => {
+      root.render(
+        <EventSupplyActionPlanPanel
+          enabled
+          organizationId={ORGANIZATION_ID}
+          role="admin"
+          events={[{ id: "quote-1", quoteNumber: "QP-101", status: "accepted", event: { name: "Dinner" } }]}
+          getPlan={getPlan}
+          applyPlan={applyPlan}
+        />
+      );
+    });
+    const eventSelect = container.querySelector('select[aria-label="Event supply plan"]');
+    await act(async () => setInput(eventSelect, "quote-1"));
+    expect(getPlan).toHaveBeenCalledWith(expect.objectContaining({ quoteId: "quote-1" }));
+    expect(container.textContent).toContain("Chicken");
+    expect(container.textContent).toContain("Internal plan only");
+    const approve = container.querySelector('button[data-supply-command="approve"]');
+    expect(approve.disabled).toBe(true);
+    await act(async () => container.querySelector(".inventory-approval-check input").click());
+    expect(approve.disabled).toBe(false);
+    await act(async () => approve.click());
+    expect(applyPlan).toHaveBeenCalledWith(expect.objectContaining({
+      organizationId: ORGANIZATION_ID,
+      quoteId: "quote-1",
+      role: "admin",
+      command: expect.objectContaining({
+        kind: "approve",
+        confirmation: "approve_internal_supply_plan",
+        expectedPlanRevision: 1
+      })
+    }));
+  });
+
+  test("keeps manual shelf search available when BarcodeDetector is absent", async () => {
+    const previous = globalThis.BarcodeDetector;
+    delete globalThis.BarcodeDetector;
+    await act(async () => {
+      root.render(
+        <InventoryMobileCapturePanel
+          enabled
+          organizationId={ORGANIZATION_ID}
+          userId="admin-user"
+          locations={[{ locationId: "main-kitchen", name: "Main kitchen" }]}
+          ingredients={projectionModel().ingredients}
+          submitCommand={vi.fn()}
+          draftService={{
+            create: vi.fn(), update: vi.fn(), list: vi.fn().mockResolvedValue([]), discard: vi.fn(), submit: vi.fn()
+          }}
+        />
+      );
+    });
+    expect(container.querySelector('input[type="search"][aria-label="Search shelf ingredients"]')).not.toBeNull();
+    expect(container.textContent).toContain("Manual search is always available");
+    expect(container.textContent).not.toContain("Scan barcode");
+    globalThis.BarcodeDetector = previous;
+  });
+
+  test("submits each clean mobile count through the existing gated stock-count command", async () => {
+    const draft = {
+      draftId: "shelf-1",
+      status: "draft",
+      lines: [{
+        lineId: "count-chicken",
+        ingredientId: "chicken",
+        ingredientName: "Chicken",
+        baseUnitId: "lb",
+        countedQuantity: "37.5",
+        note: "Shelf walk",
+        occurredAtISO: "2026-09-17T14:00:00.000Z",
+        expectedStockRevision: 1,
+        state: "draft"
+      }]
+    };
+    const submitCommand = vi.fn().mockResolvedValue({ receipt: { receiptId: "inventory-receipt" } });
+    const draftService = {
+      create: vi.fn(),
+      update: vi.fn(),
+      list: vi.fn().mockResolvedValue([draft]),
+      discard: vi.fn(),
+      submit: vi.fn(async ({ submitLine }) => {
+        await submitLine({
+          kind: "record_stock_count",
+          ingredientId: "chicken",
+          locationId: "main-kitchen",
+          baseUnitId: "lb",
+          countedQuantity: "37.5",
+          occurredAtISO: "2026-09-17T14:00:00.000Z",
+          note: "Shelf walk",
+          expectedStockRevision: 1
+        });
+        return { ...draft, status: "submitted", lines: [{ ...draft.lines[0], state: "submitted", receiptId: "inventory-receipt" }] };
+      })
+    };
+    await act(async () => {
+      root.render(
+        <InventoryMobileCapturePanel
+          enabled
+          organizationId={ORGANIZATION_ID}
+          userId="admin-user"
+          role="admin"
+          browserEnabled
+          tenantEnabled
+          locations={[{ locationId: "main-kitchen", name: "Main kitchen" }]}
+          ingredients={projectionModel().ingredients}
+          submitCommand={submitCommand}
+          draftService={draftService}
+        />
+      );
+    });
+    const submitButton = [...container.querySelectorAll("button")].find((button) => button.textContent === "Submit clean counts");
+    await act(async () => submitButton.click());
+    expect(submitCommand).toHaveBeenCalledWith(expect.objectContaining({
+      organizationId: ORGANIZATION_ID,
+      role: "admin",
+      browserEnabled: true,
+      tenantEnabled: true,
+      command: expect.objectContaining({ kind: "record_stock_count", expectedStockRevision: 1 })
+    }));
   });
 });
 

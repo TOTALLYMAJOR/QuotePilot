@@ -344,7 +344,10 @@ export const DEFAULT_FEATURE_FLAGS = {
   aiAssist: true,
   aiAutopilot: false,
   quoteCompletionCommandPath: false,
-  decisionPacket: false
+  decisionPacket: false,
+  inventoryExceptionWorkspace: false,
+  eventSupplyActionPlan: false,
+  inventoryMobileCapture: false
 };
 
 export const DEFAULT_SETTINGS = {
@@ -851,6 +854,18 @@ function normalizeFeatureFlags(input, legacySettings = {}) {
     decisionPacket: toBoolean(
       source.decisionPacket,
       DEFAULT_FEATURE_FLAGS.decisionPacket
+    ),
+    inventoryExceptionWorkspace: toBoolean(
+      source.inventoryExceptionWorkspace,
+      DEFAULT_FEATURE_FLAGS.inventoryExceptionWorkspace
+    ),
+    eventSupplyActionPlan: toBoolean(
+      source.eventSupplyActionPlan,
+      DEFAULT_FEATURE_FLAGS.eventSupplyActionPlan
+    ),
+    inventoryMobileCapture: toBoolean(
+      source.inventoryMobileCapture,
+      DEFAULT_FEATURE_FLAGS.inventoryMobileCapture
     )
   };
 }

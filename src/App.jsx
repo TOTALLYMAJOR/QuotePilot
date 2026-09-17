@@ -623,7 +623,10 @@ function normalizeFeatureFlags(input) {
     aiAssist,
     aiAutopilot: aiAssist && source.aiAutopilot === true,
     quoteCompletionCommandPath: source.quoteCompletionCommandPath === true,
-    decisionPacket: source.decisionPacket === true
+    decisionPacket: source.decisionPacket === true,
+    inventoryExceptionWorkspace: source.inventoryExceptionWorkspace === true,
+    eventSupplyActionPlan: source.eventSupplyActionPlan === true,
+    inventoryMobileCapture: source.inventoryMobileCapture === true
   };
 }
 
@@ -6572,9 +6575,14 @@ export default function App({
     onClose: returnWorkspaceHome,
     surfaceProps: {
       organizationId: authSession.organizationId,
+      userId: currentUserUid,
       role: authSession.role,
       browserEnabled: INVENTORY_AUTHORITY_UI_ENABLED,
-      tenantEnabled: inventoryTenantEnabled
+      tenantEnabled: inventoryTenantEnabled,
+      events: commercialSnapshot.quotes,
+      exceptionWorkspaceEnabled: featureFlags.inventoryExceptionWorkspace === true,
+      eventSupplyActionPlanEnabled: featureFlags.eventSupplyActionPlan === true,
+      inventoryMobileCaptureEnabled: featureFlags.inventoryMobileCapture === true
     },
     route: { mounted: inventoryRouteMounted, open: inventoryRouteOpen },
     modal: { mounted: false, open: false }
