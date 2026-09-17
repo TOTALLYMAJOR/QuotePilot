@@ -21,8 +21,12 @@ describe("Proposal Composer quote-acceleration boundary", () => {
     expect(IMPLEMENTATION_SOURCE).toContain("export default function ProposalComposer");
   });
 
-  test("assigns the heavy implementation, not the facade, to the quote-builder chunk", () => {
+  test("keeps the heavy composer independent from the statically imported guided-wizard chunk", () => {
+    expect(VITE_SOURCE).toContain('return "proposal-composer-ui"');
     expect(VITE_SOURCE).toContain('normalizedId.endsWith("/src/components/ProposalComposerImpl.jsx")');
+    expect(VITE_SOURCE).toContain('normalizedId.endsWith("/src/components/proposalComposerPresentation.js")');
+    expect(VITE_SOURCE).toContain('return "quote-builder-ui"');
+    expect(VITE_SOURCE).toContain('normalizedId.endsWith("/src/components/WizardSteps.jsx")');
     expect(VITE_SOURCE).not.toContain('normalizedId.endsWith("/src/components/ProposalComposer.jsx")');
   });
 });
