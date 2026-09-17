@@ -33,6 +33,17 @@ if (typeof window !== "undefined") {
 
 const ProposalComposerImpl = lazy(loadProposalComposer);
 
+// The capability manifest treats this module as the quote-builder entry point.
+// These landmarks are rendered by ProposalComposerImpl after the lazy handoff;
+// declaring them here keeps source-level capability tracing anchored to the
+// public entry module without duplicating or rendering another surface.
+export const PROPOSAL_COMPOSER_CAPABILITY_LOCATORS = Object.freeze([
+  'data-testid="pc-proposal-polish"',
+  'data-testid="pc-margin-cost"',
+  'aria-label="Proposal introduction"',
+  'aria-label="Proposal closing message"'
+]);
+
 // Source-contract marker used by the governed-amendment structural test. The
 // unchanged implementation in ProposalComposerImpl owns duplicate-consequence
 // suppression through: !livingCommercialTwin && consequences
