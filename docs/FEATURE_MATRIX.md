@@ -1,6 +1,25 @@
 # Feature Matrix
 
-Last updated: 2026-09-14 02:59:23 CDT
+Last updated: 2026-09-17 11:51:38 CDT
+
+## Quote-to-Confidence local candidate
+
+| Capability | Source contract and operator surface | Boundary |
+|---|---|---|
+| Completion command | `quote-completion-contract-v1`, Proposal Composer, Guided review and Living Opportunity; ordered blockers and one exact next action. | `blocked / review_required / sendable / sent / accepted` are distinct; percentage is compatibility-only; existing save/delivery authority remains. |
+| Decision packet and governed starts | `quote-decision-packet-v1`, `commercial-consequence-comparison-v1`, blank/template/exact accepted-event starts. | Six independent Current / Proposed / Difference rows; missing/stale evidence blocks review; no new acceptance or payment authority. |
+| Internal supply plan | `event-supply-action-plan-v1`, Inventory event selector and approved-revision editor. | Admin mutations, same-tenant staff callable reads; exact source fingerprints and idempotent receipts; no supplier action, purchase order, stock reservation, or spending authorization. |
+| Exception-first Inventory and stock count | Inventory exceptions and seven-axis ledger; `record_stock_count`. | Physical, committed, available, cost, conversion and contention remain separate; server computes signed delta against expected stock revision. |
+| Walk-the-shelf capture | `inventory-capture-draft-v1`, search/manual capture with optional BarcodeDetector. | Organization/user/location-scoped seven-day IndexedDB drafts; already-loaded offline only; independent receipt/conflict recovery; no cold-start/PWA claim. |
+| Post-event learning | `post-event-learning-proposal-v1`, Client overview → due/completed follow-up → Learn from this event. | Exact immutable accepted source, separate actuals, no score or inferred policy; explicit existing-authority adoption only. Receiving and unsupported template/workflow applied tracking remain `blocked_by_integration`. |
+
+All six tenant flags default off and require their matching build gates. See
+[workflow instructions](USER_MANUAL.md#quote-to-confidence-workflows) for gate
+names and [the release ledger](product-intelligence/RELEASE_EXPERIMENT_LEDGER.md)
+for the uncollected baseline. This candidate is source/local evidence only.
+Each composition has its own canonical capability marker and assertion-bound
+state contract; learning review distinguishes ready, review-required and receipt.
+Learning refresh reloads the owning accepted source as well as subordinate reads.
 
 This matrix maps the master feature checklist to current implementation and source locations.
 It is an inventory and chronology index, not the canonical detailed history or

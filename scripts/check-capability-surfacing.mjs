@@ -37,6 +37,7 @@ const CAPABILITY_KINDS = new Set([
   "read_surface",
   "mutation_surface",
   "mixed_surface",
+  "presentation_surface",
   "headless_operational",
   "security_private",
   "developer_infrastructure"
@@ -70,6 +71,8 @@ const ALLOWED_CONTRACT_FIELDS = new Set([
   "surfaceReviewNote",
   "stateEvidence",
   "stateExceptions",
+  "surfaceId",
+  "surfaceStates",
   "headlessReason",
   "safeOutcome"
 ]);
@@ -521,6 +524,9 @@ function validateLocators({
       const segment = stripComments(executableTestSegment(content, locator));
       const assertionOccurrences = countStringLiteralValueOccurrences(segment, assertionLocator);
       const canonicalAssertionCount = countCanonicalStateAssertions(segment, assertionLocator);
+      if (contract.surfaceId && countCanonicalStateAssertions(segment, `data-capability-id="${contract.surfaceId}"`) !== 1) {
+        errors.push(`${contract.id}: ${field}[${index}] must assert its own surface ID exactly once in the same executable test as the state.`);
+      }
       if (
         assertionLocator.length < 12
         || assertionOccurrences !== 1
@@ -543,7 +549,17 @@ function requiredStatesForCapability(capabilityKind) {
 }
 
 function validateStateEvidence({ contract, testPaths, pathExists, readPath, errors }) {
-  const requiredStates = requiredStatesForCapability(contract.capabilityKind);
+  const presentation = contract.capabilityKind === "presentation_surface";
+  const declared = stringList(contract.surfaceStates);
+  const allowed = new Set([...REQUIRED_USER_STATES, "blocked", "review_required", "sendable", "sent", "accepted", "idle", "failure", "unavailable"]);
+  if (presentation && (!contract.surfaceId || !declared.length || declared.some((state) => !allowed.has(state)) || new Set(declared).size !== declared.length)) {
+    errors.push(`${contract.id}: presentation surfaces require an exact surfaceId and a unique supported surfaceStates list.`);
+  }
+  if (!presentation && contract.surfaceStates) errors.push(`${contract.id}: read and mutation surfaces cannot override their required state model.`);
+  if (contract.surfaceId && !locatorList(contract.entryPointLocators).some((entry) => entry.locator === `data-capability-id="${contract.surfaceId}"`)) {
+    errors.push(`${contract.id}: surfaceId must match a canonical entry-point marker.`);
+  }
+  const requiredStates = presentation ? declared : requiredStatesForCapability(contract.capabilityKind);
   const requiredStateSet = new Set(requiredStates);
   const stateExceptions = contract?.stateExceptions && typeof contract.stateExceptions === "object"
     && !Array.isArray(contract.stateExceptions)
@@ -863,6 +879,9 @@ export function validateCapabilitySurfacing({
     }
     if (!CAPABILITY_KINDS.has(contract?.capabilityKind)) {
       errors.push(`${contract.id}: capabilityKind is not recognized.`);
+    }
+    if (contract?.capabilityKind === "presentation_surface" && stringList(contract.backendExports).length) {
+      errors.push(`${contract.id}: presentation surfaces cannot own callable exports; retain read or mutation exports in their authority contract.`);
     }
     if (contract?.deliveryType === "user_relevant" && HEADLESS_KINDS.has(contract?.capabilityKind)) {
       errors.push(`${contract.id}: headless capability kinds cannot be user_relevant.`);

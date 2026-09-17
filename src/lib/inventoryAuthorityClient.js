@@ -1,6 +1,12 @@
 import { collection, doc, limit, onSnapshot, orderBy, query } from "firebase/firestore";
 import { httpsCallable } from "firebase/functions";
 import { auth, cloudFunctions, db, firebaseReady } from "./firebase";
+import { observeLearningInventoryReceipt } from "./postEventLearningReview";
+
+const INVENTORY_CAPTURE_BUILD_ENABLED = import.meta.env.MODE === "test"
+  || import.meta.env.VITE_INVENTORY_MOBILE_CAPTURE_ENABLED === "true";
+const POST_EVENT_LEARNING_BUILD_ENABLED = import.meta.env.MODE === "test"
+  || import.meta.env.VITE_POST_EVENT_LEARNING_ENABLED === "true";
 
 export const INVENTORY_AUTHORITY_SCHEMA_VERSION = 2;
 export const INVENTORY_AUTHORITY_VERSION = "inventory-ingredient-authority-v2";
@@ -17,6 +23,7 @@ export const INVENTORY_COMMAND_KINDS = Object.freeze([
   "upsert_ingredient",
   "opening_balance",
   "receive_stock",
+  ...(INVENTORY_CAPTURE_BUILD_ENABLED ? ["record_stock_count"] : []),
   "record_ingredient_cost",
   "publish_pack_conversion",
   "publish_menu_recipe",
@@ -457,6 +464,25 @@ function normalizeReceiveStockCommand(value) {
   };
 }
 
+function normalizeStockCountCommand(value) {
+  exactKeys(value, [
+    "kind", "ingredientId", "locationId", "countedQuantity", "baseUnitId",
+    "occurredAtISO", "note", "expectedStockRevision"
+  ], "Ingredient stock count command");
+  if (value.kind !== "record_stock_count") throw clientError("invalid-argument", "Ingredient stock count command is invalid.");
+  const countedQuantityMicros = parseQuantityMicros(value.countedQuantity, "counted quantity", { allowZero: true });
+  return {
+    kind: value.kind,
+    ingredientId: identifier(value.ingredientId, "ingredientId"),
+    locationId: identifier(value.locationId, "locationId"),
+    countedQuantity: formatQuantityMicros(countedQuantityMicros, "counted quantity", "invalid-argument"),
+    baseUnitId: baseUnit(value.baseUnitId),
+    occurredAtISO: exactIso(value.occurredAtISO, "stock count occurrence time", "invalid-argument"),
+    note: exactText(value.note, "stock count note", 240, { allowEmpty: true }),
+    expectedStockRevision: exactRevision(value.expectedStockRevision, "stock count expected revision", { allowZero: false })
+  };
+}
+
 function normalizeCostCommand(value) {
   if (!isRecord(value) || value.kind !== "record_ingredient_cost" || !COST_AVAILABILITY.has(value.availability)) {
     throw clientError("invalid-argument", "Ingredient cost command is invalid.");
@@ -801,6 +827,7 @@ function normalizeCommand(value) {
   if (value.kind === "upsert_ingredient") return deepFreeze(normalizeIngredientCommand(value));
   if (value.kind === "opening_balance") return deepFreeze(normalizeOpeningBalanceCommand(value));
   if (value.kind === "receive_stock") return deepFreeze(normalizeReceiveStockCommand(value));
+  if (INVENTORY_CAPTURE_BUILD_ENABLED && value.kind === "record_stock_count") return deepFreeze(normalizeStockCountCommand(value));
   if (value.kind === "record_ingredient_cost") return deepFreeze(normalizeCostCommand(value));
   if (value.kind === "publish_pack_conversion") return deepFreeze(normalizePackConversionCommand(value));
   if (value.kind === "publish_menu_recipe") return deepFreeze(normalizeRecipeCommand(value));
@@ -818,6 +845,7 @@ export function inventoryCommandAxis(kind) {
   if (kind === "upsert_ingredient") return "ingredient";
   if (kind === "opening_balance") return "stock";
   if (kind === "receive_stock") return "receiving";
+  if (INVENTORY_CAPTURE_BUILD_ENABLED && kind === "record_stock_count") return "stock_count";
   if (kind === "record_ingredient_cost") return "cost";
   if (kind === "publish_pack_conversion") return "conversion";
   if (kind === "publish_menu_recipe") return "recipe";
@@ -828,7 +856,7 @@ export function inventoryCommandAxis(kind) {
 }
 
 function targetIdentity(command) {
-  return command.locationId || command.ingredientId || command.menuItemId || command.quoteId || "authority";
+  return command.ingredientId || command.locationId || command.menuItemId || command.quoteId || "authority";
 }
 
 function normalizeEnvelope(input) {
@@ -988,6 +1016,28 @@ function normalizeMutationResult(value, attempt, receipt) {
       || !Number.isSafeInteger(value.onHandMicros) || value.onHandMicros < 1
       || value.onHandQuantity !== formatQuantityMicros(value.onHandMicros, "received on-hand micros")) {
       throw clientError("data-loss", "Ingredient receiving result differs from the exact request.");
+    }
+    return { ...value };
+  }
+  if (INVENTORY_CAPTURE_BUILD_ENABLED && command.kind === "record_stock_count") {
+    exactKeys(value, [
+      "schemaVersion", "ingredientId", "locationId", "movementId", "stockRevision",
+      "countedQuantity", "countedQuantityMicros", "signedDeltaMicros", "onHandQuantity"
+    ], "Ingredient stock count result", "data-loss");
+    const countedMicros = parseQuantityMicros(command.countedQuantity, "requested counted quantity", {
+      allowZero: true,
+      code: "data-loss"
+    });
+    if (value.schemaVersion !== INVENTORY_AUTHORITY_SCHEMA_VERSION
+      || value.ingredientId !== command.ingredientId
+      || value.locationId !== command.locationId
+      || !MOVEMENT_ID_PATTERN.test(value.movementId)
+      || value.stockRevision !== command.expectedStockRevision + 1
+      || value.countedQuantity !== command.countedQuantity
+      || value.countedQuantityMicros !== countedMicros
+      || !Number.isSafeInteger(value.signedDeltaMicros)
+      || value.onHandQuantity !== command.countedQuantity) {
+      throw clientError("data-loss", "Ingredient stock count result differs from the exact request.");
     }
     return { ...value };
   }
@@ -1151,6 +1201,7 @@ async function executeAttempt(attempt) {
     const response = await call(canonicalClone(attempt.payload, "Inventory callable request"));
     const result = normalizeResultOrUncertain(response?.data, attempt);
     pendingAttempts.delete(attempt.key);
+    if (POST_EVENT_LEARNING_BUILD_ENABLED) observeLearningInventoryReceipt(attempt, result);
     return result;
   } catch (error) {
     markAttemptError(attempt, error);
@@ -2838,6 +2889,11 @@ export function inventoryProjectionConfirmsReceipt(model, attempt) {
     return ingredient.stock.revision === result.stockRevision
       && ingredient.stock.lastMovementId === result.movementId
       && ingredient.cost.revision === result.costRevision;
+  }
+  if (INVENTORY_CAPTURE_BUILD_ENABLED && commandKind === "record_stock_count") {
+    return ingredient.stock.revision === result.stockRevision
+      && ingredient.stock.lastMovementId === result.movementId
+      && ingredient.stock.quantity === result.countedQuantity;
   }
   if (commandKind === "record_ingredient_cost") return ingredient.cost.revision === result.costRevision && ingredient.cost.lastCostEvidenceId === result.costEvidenceId;
   if (commandKind === "publish_pack_conversion") {

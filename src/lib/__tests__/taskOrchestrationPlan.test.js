@@ -363,4 +363,57 @@ describe("task orchestration planning", () => {
       dependsOn: ["verify"]
     });
   });
+
+  test("routes explicit catering-value product intelligence work through domain reconsideration", () => {
+    const plan = buildTaskPlan({
+      task: "Enforce catering-value product intelligence compliance",
+      files: [
+        "docs/PRODUCT_INTELLIGENCE.md",
+        "scripts/check-product-intelligence.mjs"
+      ],
+      contract,
+      env: {}
+    });
+
+    expect(plan.domainClassification).toMatchObject({
+      applicable: true,
+      contexts: ["reporting"]
+    });
+    expect(plan.dependencies.requiredSkills).toContain("catering-domain-intelligence");
+    expect(plan.productIntelligence).toEqual({
+      disposition: "required",
+      requiredFields: [
+        "actor",
+        "jobOrDecision",
+        "expectedImprovement",
+        "outcomeOrMetricIds",
+        "guardrailIds",
+        "evidenceNeeded"
+      ],
+      notApplicableRequiresRationale: true
+    });
+    expect(plan.dependencies.validations).toContain("npm run check:product-intelligence");
+    expect(plan.dependencies.docRequirements).toContainEqual({
+      mode: "all",
+      paths: [
+        "docs/PRODUCT_INTELLIGENCE.md",
+        "docs/product-intelligence/RELEASE_EXPERIMENT_LEDGER.md"
+      ]
+    });
+  });
+
+  test("allows an explicit not-applicable rationale for mechanical work", () => {
+    const plan = buildTaskPlan({
+      task: "Reformat product analytics without behavioral changes",
+      files: ["src/lib/productAnalyticsCore.js"],
+      contract,
+      env: {}
+    });
+
+    expect(plan.productIntelligence).toMatchObject({
+      disposition: "not_applicable_allowed",
+      notApplicableRequiresRationale: true
+    });
+    expect(plan.dependencies.validations).toContain("npm run check:product-intelligence");
+  });
 });

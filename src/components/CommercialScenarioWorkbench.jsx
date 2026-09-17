@@ -1,8 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import useCommercialScenarioWorkbench from "../hooks/useCommercialScenarioWorkbench";
 import { commercialScenarioProjectionMatches } from "../lib/commercialScenarioWorkbench";
+import { buildCommercialConsequenceComparison } from "../lib/quoteConfidenceDecisionPacket";
 import FulfillmentIntelligence from "./FulfillmentIntelligence";
 import "./commercialScenarioWorkbench.css";
+
+const DECISION_PACKET_BUILD_ENABLED = import.meta.env.MODE === "test"
+  || import.meta.env.VITE_DECISION_PACKET_ENABLED === "true";
 
 const UNUSABLE_PROJECTION_STATES = new Set(["awaiting_preview", "loading", "stale"]);
 const HEALTHY_EVIDENCE_STATES = new Set(["available", "current", "not_applicable"]);
@@ -65,6 +69,8 @@ function formatCreatedAt(value) {
 
 function evidenceLabel(state) {
   return ({
+    available: "Current evidence",
+    not_applicable: "Not applicable",
     missing: "Details unavailable",
     not_yet_available: "Still checking",
     blocked_by_integration: "Connection needs attention",
@@ -285,6 +291,39 @@ function ScenarioComparison({
   );
 }
 
+function ConsequenceComparison({ visibleProjection, activeScenario }) {
+  const comparison = buildCommercialConsequenceComparison(visibleProjection || {});
+  return (
+    <div
+      className="csw-comparison-shell"
+      data-consequence-comparison="current-proposed-difference"
+      data-review-eligibility={comparison.canContinueToGovernedReview ? "eligible" : "blocked"}
+    >
+      <table className="csw-comparison csw-comparison--wide csw-comparison--decision">
+        <caption className="visually-hidden">
+          Current quote compared with {activeScenario.name}, including explicit evidence state
+        </caption>
+        <thead><tr><th scope="col">Measure</th><th scope="col">Current</th><th scope="col">Proposed</th><th scope="col">Difference</th></tr></thead>
+        <tbody>
+          {comparison.rows.map((row) => (
+            <tr key={row.id} data-comparison-domain={row.id} data-evidence-state={row.evidenceState}>
+              <th scope="row"><strong>{row.label}</strong><span>{evidenceLabel(row.evidenceState)}</span></th>
+              <td data-label="Current">{row.current}</td>
+              <td data-label="Proposed">{row.proposed}</td>
+              <td data-label="Difference">{row.difference}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {!comparison.canContinueToGovernedReview ? (
+        <p className="csw-comparison-blocker" role="status">
+          Review is blocked until {comparison.blockingEvidenceStates.map(evidenceLabel).join(", ").toLowerCase()} is resolved. No change can be applied or saved from this comparison.
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
 function focusGovernedReview() {
   if (typeof document === "undefined") return;
   const target = document.getElementById("commercial-change-impact-title")
@@ -299,6 +338,7 @@ function focusGovernedReview() {
 
 function CommercialScenarioWorkbenchReady({
   projection,
+  decisionPacketEnabled = false,
   resolvedScopeKey,
   resolvedBaseRevisionId,
   resolvedCurrentGuestCount,
@@ -486,12 +526,18 @@ function CommercialScenarioWorkbenchReady({
   const currentDraftChanged = isCurrent && projection?.scenario?.proposalChanged === true;
   const activeProposalChanged = activeScenario.guestCount !== snapshot.currentScenario.guestCount
     || (exactProjectionUsable && visibleProjection?.scenario?.proposalChanged === true);
+  const consequenceComparison = DECISION_PACKET_BUILD_ENABLED
+    ? buildCommercialConsequenceComparison(visibleProjection || {})
+    : null;
+  const consequenceEvidenceReady = !decisionPacketEnabled
+    || consequenceComparison?.canContinueToGovernedReview === true;
   const currentPreviewLoading = currentDraftChanged && projection?.state === "loading";
   const workbenchUpdating = !isCurrent
     && !retryAvailable
     && (recomputing || !exactProjectionUsable);
   const reviewReady = (currentDraftChanged || (!isCurrent && activeProposalChanged))
     && exactProjectionUsable
+    && consequenceEvidenceReady
     && !workbenchUpdating;
   const capabilityState = retryAvailable
     ? "recovery"
@@ -508,16 +554,19 @@ function CommercialScenarioWorkbenchReady({
   const primaryDisabled = isCurrent
     ? !currentDraftChanged
       || currentPreviewLoading
+      || (exactProjectionUsable && !consequenceEvidenceReady)
       || (retryAvailable
         ? !retryHandlerAvailable
         : exactProjectionUsable ? false : !previewHandlerAvailable)
     : retryAvailable
       ? !retryHandlerAvailable
-      : !activeProposalChanged || workbenchUpdating;
+      : !activeProposalChanged || workbenchUpdating || (exactProjectionUsable && !consequenceEvidenceReady);
   const primaryLabel = retryAvailable
     ? "Try again"
     : reviewReady
       ? "Review change"
+      : exactProjectionUsable && !consequenceEvidenceReady
+        ? "Resolve evidence before review"
       : currentDraftChanged
       ? currentPreviewLoading
           ? "Checking change…"
@@ -626,6 +675,13 @@ function CommercialScenarioWorkbenchReady({
             workbenchUpdating={workbenchUpdating}
             currentGuestCount={snapshot.currentScenario.guestCount}
           />
+
+          {DECISION_PACKET_BUILD_ENABLED && decisionPacketEnabled ? (
+            <ConsequenceComparison
+              activeScenario={activeScenario}
+              visibleProjection={visibleProjection}
+            />
+          ) : null}
 
           {showingRetainedProjection ? (
             <p className="csw-retained-note">

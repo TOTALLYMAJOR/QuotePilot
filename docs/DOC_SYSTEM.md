@@ -1,8 +1,18 @@
 # Documentation System
 
-Last updated: 2026-09-14 01:31:14 CDT
+Last updated: 2026-09-17 11:54:34 CDT
 
 ## Purpose
+Synchronous composition surfaces may use `presentation_surface` contracts with
+an explicit `surfaceId` and bounded `surfaceStates`. Every claimed state test must
+assert that same canonical surface identity as well as its state. Read and
+mutation surfaces retain their full required state models; presentation contracts
+cannot weaken or replace the owning authority contract.
+Presentation contracts must own zero callable exports (`backendExports: []`):
+both read and mutation callables remain owned by their authority contracts with
+the corresponding complete lifecycle requirements. A callable owner cannot be
+downgraded to a presentation-only lifecycle.
+
 This repository uses a layered canonical documentation model.
 Each major topic has one source of truth. Other docs should link to that source instead of duplicating content.
 
@@ -36,6 +46,11 @@ Each major topic has one source of truth. Other docs should link to that source 
   semantics, priority, accessibility, provenance, and 0/1/many choice contract.
 - `docs/field-state-surface-contracts.json`: explicit registry of product
   surfaces and executable tests adopting the field-state contract.
+- `docs/PRODUCT_INTELLIGENCE.md` and `docs/product-intelligence/`: canonical
+  product outcome, capability, metric, instrumentation, baseline/target,
+  journey/funnel, guardrail, and release/experiment traceability. These files
+  measure product value without replacing feature, runtime, release, or human
+  evidence authorities.
 
 ## Update Triggers
 - Code or behavior changes: update `CHANGELOG.md`.
@@ -60,6 +75,10 @@ Each major topic has one source of truth. Other docs should link to that source 
   save/publish state, or field-level failure/recovery changes: update the field-
   state surface registry and its exact tests; change the field-state contract
   itself only when the governing vocabulary or semantics change.
+- Product outcome, actor/job, capability-to-value mapping, success metric,
+  measurement source, target, journey, product guardrail, or causal release/
+  experiment decision changes: update the owning artifact under
+  `docs/product-intelligence/` and its index when navigation or authority moves.
 
 ## Update Timestamps
 Every changed canonical Markdown document, every Markdown file under `docs/`,
@@ -85,6 +104,7 @@ diff validation use the same baseline semantics.
 | process | `.github/`, `scripts/`, `.codex/skills/`, contributor/agent policy files | one of `README.md`, `CONTRIBUTING.md`, `docs/VERSION_CONTROL.md`, `docs/DOC_SYSTEM.md` |
 | deploy | `Dockerfile`, `docker-compose.yml`, `docker/*`, deploy workflows/config | one of `README.md`, `docs/LAUNCH_RUNBOOK.md`, `docs/VERSION_CONTROL.md`, `docs/DOC_SYSTEM.md` |
 | backlog | roadmap/backlog/task artifacts | `DEV_TASKS.md` |
+| product intelligence | user-visible product source, capability authority, analytics implementation, or product-intelligence artifact | `docs/PRODUCT_INTELLIGENCE.md` plus the affected artifact and `docs/product-intelligence/RELEASE_EXPERIMENT_LEDGER.md` according to `npm run check:product-intelligence` |
 
 The GitHub job named `lane:firebase-auth-rules` must invoke the package lane of
 the same name. That lane owns Firestore rule tests, the disposable owner-SMS
@@ -148,8 +168,10 @@ for operator review.
 | Claim/evidence verdicts and executive reconciliation | `docs/project/PROOF.md` and `docs/project/EXECUTIVE_STATE.md` | Missing evidence is `UNVERIFIED`; no evidence class substitutes for another. |
 | Decision, exploration, capability, and blocker compatibility indexes | `docs/project/` | Index-only views. Feature Matrix, ADRs, Project Status, and Dev Tasks retain authority. |
 | Feature inventory, function served, and implementation cohorts | `docs/FEATURE_MATRIX.md` | Current source mapping plus a Git-grounded chronology index. Detailed change history remains in `CHANGELOG.md`; operational/deployment truth remains in `PROJECT_STATUS.md`. |
+| Product outcomes, capability-to-value mapping, metrics, observation schema, baselines/targets, journeys, guardrails, and release/experiment decisions | `docs/PRODUCT_INTELLIGENCE.md` and `docs/product-intelligence/` | Outcome authority and traceability only. Feature implementation remains in the Feature Matrix; operational truth remains in Project Status; shipped history remains in the Changelog; runtime and provider receipts retain their own authority. |
 | Release workflow/process policy | `docs/VERSION_CONTROL.md` | References this doc for ownership rules. |
 | Agent policy and skill governance | `docs/AGENT_GOVERNANCE.md` | `docs/SKILLS.md` remains index-only. |
+| External engineering-skill repository configuration | `docs/agents/*.md` | Subordinate consumer configuration for the selected issue tracker, triage-label mapping, and domain-document layout. These files do not replace canonical product, agent-governance, runtime, release, or operational authorities. |
 | Cloud/local orchestration policy and lane contracts | `docs/ORCHESTRATION_BLUEPRINT.md` | Operational commands and scenarios live in `docs/ORCHESTRATION_RUNBOOK.md`. |
 | Repository operating-system maturity | `docs/REPOSITORY_OPERATING_SYSTEM_AUDIT.md` | Adapted solo-agent harness assessment and target architecture; it summarizes but does not replace the owning governance docs. |
 | Portable Codex Desktop governance prompt series | `docs/PORTABLE_CODEX_GOVERNANCE_PROMPT_SERIES.md` | Transferable organization/repository bootstrap prompts for the Commanding Governance Overlay archetype. It is a template and does not govern QuotePilot runtime, release, provider, or product behavior. |
@@ -190,6 +212,22 @@ dependency and blocker references, and exactly one next proof event. It also
 checks that compatibility indexes point back to their existing authorities.
 The check runs in `lane:quick`. A pass proves control-plane consistency only,
 not runtime, provider, production, human, usage, or commercial behavior.
+
+## Product-Intelligence Compliance Gate
+
+`npm run check:product-intelligence` runs in `lane:core`. It validates the
+eight-artifact Product Intelligence graph, unique and resolvable IDs, event
+schema vocabulary and source paths, the catering-value declaration contract,
+and release-ledger decision honesty. Its Git impact rules require the index and
+ledger for user-visible product changes, require analytics code to move with
+its event and metric contracts, and require capability authorities to move with
+the capability map.
+
+The planner emits the same obligation before work, including the exact
+catering-value fields or a rationale-required `not_applicable` disposition.
+The pull-request template makes that declaration reviewable. A passing gate is
+source/structural evidence only; owners still approve outcomes and targets, and
+only measured outcome evidence establishes catering value.
 
 ## Security Scan Note
 Documentation secret scanning blocks real token-like values and allows explicit placeholder values such as `<your_secret_here>`.

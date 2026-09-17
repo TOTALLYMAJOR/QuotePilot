@@ -8,6 +8,7 @@ vi.mock("../QuoteAttendancePanel", () => ({ default: function AttendancePanel(pr
 } }));
 import AmbientLivingOpportunity from "../AmbientLivingOpportunity";
 import { AmbientContextProvider } from "../../context/AmbientContext";
+import { scheduleQuoteCompletionDestinationFocus } from "../../lib/quoteCompletionDestination";
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -870,6 +871,161 @@ describe("AmbientLivingOpportunity", () => {
       draftPatch: null
     });
     expect(QUOTE).toEqual(before);
+  });
+
+  test("routes the quote-completion proposal gap through the existing exact editor handoff", async () => {
+    const exactField = document.createElement("button");
+    exactField.type = "button";
+    exactField.dataset.ambientActionId = "pc-edit-hours";
+    document.body.append(exactField);
+    const onEditQuote = vi.fn((_quote, options) => {
+      scheduleQuoteCompletionDestinationFocus(options.quoteCompletionDestination, {
+        root: document
+      });
+      return { status: "opened" };
+    });
+    mount({
+      onEditQuote,
+      quoteCompletionCommandPathEnabled: true,
+      quoteActionController: {
+        actionState: {
+          state: { versionSaved: true, providerAccepted: false },
+          actions: {
+            send_quote: {
+              id: "send_quote",
+              label: "Send proposal",
+              visible: true,
+              enabled: true
+            }
+          },
+          primaryAction: {
+            id: "send_quote",
+            label: "Send proposal",
+            visible: true,
+            enabled: true
+          }
+        }
+      }
+    });
+    await settle();
+    await vi.dynamicImportSettled();
+    await vi.waitFor(() => {
+      expect(container.querySelector('[data-capability-id="quote-completion-command-path"]')).not.toBeNull();
+    });
+    const command = container.querySelector('[data-capability-id="quote-completion-command-path"]');
+
+    expect(command?.dataset.capabilityState).toBe("blocked");
+    await act(async () => command.querySelector("button").click());
+
+    expect(onEditQuote).toHaveBeenCalledOnce();
+    expect(onEditQuote.mock.calls[0][0]).toBe(QUOTE);
+    expect(onEditQuote.mock.calls[0][1]).toMatchObject({
+      arrivalContext: {
+        object: {
+          id: "proposal",
+          type: "customer-decision-artifact",
+          opportunityId: "quote-alpha"
+        },
+        reason: expect.stringContaining("exact proposal completeness"),
+        consequence: expect.stringContaining("Nothing is repriced, saved, published, sent, rotated, or recovered"),
+        nextResolution: expect.stringContaining("Save only through the existing authoritative quote workflow")
+      },
+      draftPatch: null,
+      quoteCompletionDestination: {
+        surfaceId: "proposal-composer",
+        step: 1,
+        selector: '[data-ambient-action-id="pc-edit-hours"]',
+        activate: true
+      }
+    });
+    expect(onEditQuote.mock.calls[0][1].arrivalContext).not.toHaveProperty("kind");
+    await settle();
+    await vi.waitFor(() => expect(document.activeElement).toBe(exactField));
+    expect(command.dataset.commandState).toBe("success");
+    exactField.remove();
+  });
+
+  test("routes a sendable quote-completion action through the exact governed proposal-controls handoff", async () => {
+    const quote = Object.freeze({
+      ...QUOTE,
+      updatedAtISO: "2026-08-12T10:42:00.000Z",
+      customer: Object.freeze({
+        ...QUOTE.customer,
+        phone: "205-555-0142"
+      }),
+      event: Object.freeze({
+        ...QUOTE.event,
+        hours: 6
+      }),
+      totals: Object.freeze({
+        subtotal: 7_800,
+        tax: 600,
+        total: 8_400,
+        deposit: 2_520
+      }),
+      pricing: Object.freeze({
+        authority: "server_authoritative",
+        calculatedAt: "2026-08-12T10:41:30.000Z",
+        grandTotal: 8_400
+      }),
+      portalKey: "proposal-living-opportunity-key-000001",
+      portalIssuedAtISO: "2026-08-12T10:42:00.000Z",
+      portalExpiresAtISO: "2027-09-11T10:42:00.000Z",
+      workflow: Object.freeze({ quoteDelivery: Object.freeze({}) })
+    });
+    const onOpenLegacyWorkspace = vi.fn(() => ({ status: "opened" }));
+    mount({
+      quote,
+      source: "firebase",
+      onOpenLegacyWorkspace,
+      quoteCompletionCommandPathEnabled: true,
+      quoteActionController: {
+        actionState: {
+          state: { versionSaved: true, providerAccepted: false },
+          actions: {
+            send_quote: {
+              id: "send_quote",
+              label: "Send proposal",
+              visible: true,
+              enabled: true
+            }
+          },
+          primaryAction: {
+            id: "send_quote",
+            label: "Send proposal",
+            visible: true,
+            enabled: true
+          }
+        }
+      }
+    }, {
+      ...CONTEXT,
+      role: "admin",
+      sourceFreshness: { state: "fresh", observedAt: "2026-08-12T10:42:01.000Z" }
+    });
+    await settle();
+    await vi.dynamicImportSettled();
+    await vi.waitFor(() => {
+      expect(container.querySelector('[data-capability-id="quote-completion-command-path"]')).not.toBeNull();
+    });
+    const command = container.querySelector('[data-capability-id="quote-completion-command-path"]');
+
+    expect(command?.dataset.capabilityState).toBe("sendable");
+    await act(async () => command.querySelector("button").click());
+
+    expect(onOpenLegacyWorkspace).toHaveBeenCalledOnce();
+    expect(onOpenLegacyWorkspace.mock.calls[0][0]).toMatchObject({
+      object: { id: "proposal", type: "customer-decision-artifact", label: "Proposal" },
+      reason: expect.stringContaining("Prepare proposal, Send proposal, Replace customer link, or Review delivery"),
+      consequence: expect.stringContaining("independently recheck role, exact revision"),
+      nextResolution: expect.stringContaining("Choose Prepare, Send, Replace customer link, or Review delivery"),
+      quoteCompletionDestination: {
+        surfaceId: "quote-administration",
+        actionId: "send_quote",
+        quoteId: quote.id
+      }
+    });
+    expect(command.dataset.commandState).toBe("success");
   });
 
   test("presents a missing phone as recommended contact detail without proposal-blocking language", () => {

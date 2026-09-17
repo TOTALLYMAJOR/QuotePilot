@@ -9,6 +9,7 @@ import { normalizeProposalDocumentFontScale } from "../lib/proposalDocumentPrefe
 import { detectBreakdownValueChanges, MAX_EVENT_HOURS, MIN_EVENT_HOURS, normalizeEventHours } from "../lib/wizardUi";
 import { buildMarginPresentation, marginRequiresExpandedEvidence } from "./marginPresentation";
 import { playCue } from "./soundKit";
+import { buildQuoteCompletionProjection } from "../lib/quoteCompletionProjection";
 import {
   buildCompositionLine,
   buildCommercialWorkbenchModel,
@@ -33,6 +34,11 @@ import {
 import "./proposalComposer.css";
 
 const LivingCommercialTwin = lazy(() => import("./LivingCommercialTwin"));
+const QUOTE_COMPLETION_BUILD_ENABLED = import.meta.env.MODE === "test"
+  || import.meta.env.VITE_QUOTE_COMPLETION_COMMAND_PATH_ENABLED === "true";
+const QuoteCompletionCommandPath = QUOTE_COMPLETION_BUILD_ENABLED
+  ? lazy(() => import("./QuoteCompletionCommandPath"))
+  : null;
 
 // Margin stays behind the same default-off gate LiveBreakdown uses; the
 // composer never introduces a wider margin surface than the wizard had.
@@ -41,6 +47,11 @@ const PILOT_MARGINS_ENABLED = ["1", "true", "yes", "on"].includes(
 );
 
 const FLASH_CLEAR_MS = 620;
+
+export function QuoteEditorModeSurface({ composerActive = false, composerSurface = null, children }) {
+  return composerActive ? composerSurface : children;
+}
+
 const ACTIVITY_LOG_LIMIT = 30;
 
 const SAVE_BLOCKER_RECOVERY_TARGETS = Object.freeze({
@@ -504,6 +515,7 @@ export default function ProposalComposer({
   onTemplateChange,
   onEventTypeChange,
   onSaveQuote,
+  onQuoteCompletionSave = null,
   onOpenCompare,
   onGuidedMode,
   reviewSurfaces = null,
@@ -515,7 +527,11 @@ export default function ProposalComposer({
   onDeliveryPlanningHandoff = null,
   impactWatch = null,
   isAdmin = false,
-  onOpenCatalogPricing = null
+  onOpenCatalogPricing = null,
+  quoteCompletionCommandPathEnabled = false,
+  quoteCompletionConfiguredActions = null,
+  quoteCompletionCommand = null,
+  onQuoteCompletionNavigate = null
 }) {
   const [menuEditorOpen, setMenuEditorOpen] = useState(false);
   const [ratesEditorOpen, setRatesEditorOpen] = useState(false);
@@ -612,6 +628,34 @@ export default function ProposalComposer({
     saveLabel,
     saveDisabled
   });
+  const quoteCompletion = useMemo(() => QUOTE_COMPLETION_BUILD_ENABLED ? buildQuoteCompletionProjection({
+    quote: editingQuote || {},
+    readiness,
+    saveBlockers: currentSaveBlockers,
+    configuredActions: quoteCompletionConfiguredActions,
+    livingOpportunity: livingCommercialTwin?.projection || livingCommercialTwin,
+    draftDirty: quoteDirty || !editingQuote?.id,
+    command: quoteCompletionCommand || {
+      state: saving
+        ? "loading"
+        : /fail|error|unable/i.test(String(saveMessage || ""))
+          ? "failure"
+          : String(saveMessage || "").trim()
+            ? "success"
+            : "idle",
+      message: saveMessage
+    }
+  }) : null, [
+    currentSaveBlockers,
+    editingQuote,
+    livingCommercialTwin,
+    quoteCompletionCommand,
+    quoteCompletionConfiguredActions,
+    quoteDirty,
+    readiness,
+    saveMessage,
+    saving
+  ]);
 
   const logActivity = (label) => {
     activityIdRef.current += 1;
@@ -623,13 +667,32 @@ export default function ProposalComposer({
     setActivityLog((current) => [entry, ...current].slice(0, ACTIVITY_LOG_LIMIT));
   };
 
-  const requestSave = () => {
+  const requestSave = (options = {}) => {
+    const commandRunner = options?.command === true;
     setPulseOpen(true);
     if (saveAction.mode === "review") {
       pendingSaveReviewFocusRef.current = true;
-      return;
+      return {
+        state: "recovery",
+        message: "Review the named draft requirements before saving.",
+        recovery: { label: "Review save requirements" }
+      };
     }
-    onSaveQuote?.();
+    const saveHandler = commandRunner && typeof onQuoteCompletionSave === "function"
+      ? onQuoteCompletionSave
+      : onSaveQuote;
+    if (typeof saveHandler !== "function") {
+      return {
+        state: "recovery",
+        message: "The governed save action is not available here.",
+        recovery: { label: "Review save requirements" }
+      };
+    }
+    const result = saveHandler();
+    if (!commandRunner && result && typeof result.catch === "function") {
+      result.catch(() => {});
+    }
+    return result;
   };
 
   useEffect(() => {
@@ -785,6 +848,57 @@ export default function ProposalComposer({
         });
       }
     });
+  };
+
+  const runQuoteCompletionAction = async (action) => {
+    if (action?.kind === "resolve_field") {
+      const blockerId = String(action.id || "").replace(/^resolve:/u, "");
+      const blocker = currentSaveBlockers.find((item) => String(item?.id || "") === blockerId);
+      if (blocker) {
+        revealSaveBlocker(blocker);
+      } else if (action.destination?.selector) {
+        setPulseOpen(false);
+        if (action.destination.domainId) openDomain(action.destination.domainId);
+        nextUiFrame(() => focusRecoveryTarget(action.destination.selector, {
+          activate: action.destination.activate,
+          focusSelector: action.destination.focusSelector
+        }));
+      }
+      return { state: "recovery", message: action.reason };
+    }
+    if (action?.kind === "save_revision") {
+      const result = await requestSave({ command: true });
+      if (!result || ["failure", "failed", "recovery", "stale", "cancelled"].includes(
+        String(result?.state || result?.status || "").trim().toLowerCase()
+      )) {
+        return result || {
+          state: "recovery",
+          message: "The exact revision was not confirmed as saved.",
+          recovery: { label: "Try saving again" }
+        };
+      }
+      return { state: "success", message: "The exact revision was saved." };
+    }
+    if (action?.kind === "recover_evidence") {
+      const target = document.querySelector('[data-capability-id="commercial-scenario-workbench"]');
+      if (target) {
+        target.scrollIntoView?.({ behavior: "smooth", block: "start" });
+        const focusTarget = target.querySelector(
+          "button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex='-1'])"
+        ) || target;
+        if (focusTarget === target && !target.hasAttribute("tabindex")) target.setAttribute("tabindex", "-1");
+        focusTarget.focus?.({ preventScroll: true });
+        return { state: "success", message: "Opened the current commercial evidence." };
+      }
+    }
+    if (typeof onQuoteCompletionNavigate === "function") {
+      return onQuoteCompletionNavigate(action);
+    }
+    return {
+      state: "recovery",
+      message: action?.reason || "The exact proposal destination is not available here.",
+      recovery: { label: "Try exact destination again" }
+    };
   };
 
   const commitField = (field) => (value) => {
@@ -1247,6 +1361,16 @@ export default function ProposalComposer({
 
       <div className="pc-pulse-block pc-draft-activity">
         <p className="pc-eyebrow">Draft activity</p>
+        {quoteCompletionCommandPathEnabled && QuoteCompletionCommandPath ? (
+          <Suspense fallback={<p className="status-strip" role="status">Loading quote completion…</p>}>
+            <QuoteCompletionCommandPath
+              enabled
+              projection={quoteCompletion}
+              onAction={runQuoteCompletionAction}
+              surface="proposal_composer"
+            />
+          </Suspense>
+        ) : (
         <div
           className="pc-save-readiness"
           data-state={saveReadinessState}
@@ -1288,6 +1412,7 @@ export default function ProposalComposer({
             </div>
           ) : null}
         </div>
+        )}
         <button
           type="button"
           className="pc-section-action pc-activity-toggle"
@@ -1319,7 +1444,7 @@ export default function ProposalComposer({
         <button type="button" className="pc-ghost" onClick={() => setPreviewOpen(true)}>
           Preview client view
         </button>
-        <button
+        {!quoteCompletionCommandPathEnabled ? <button
           type="button"
           className="pc-cta"
           onClick={requestSave}
@@ -1328,7 +1453,7 @@ export default function ProposalComposer({
           data-testid="pc-save"
         >
           {saveAction.label}
-        </button>
+        </button> : null}
         {compareEnabled ? (
           <button
             type="button"
@@ -1369,7 +1494,7 @@ export default function ProposalComposer({
             {header.saveState.label}
           </p>
           <div className="pc-header-actions">
-            <button
+            {!quoteCompletionCommandPathEnabled ? <button
               type="button"
               className="pc-cta pc-compact"
               onClick={requestSave}
@@ -1378,7 +1503,7 @@ export default function ProposalComposer({
               data-testid="pc-save-header"
             >
               {saveAction.label}
-            </button>
+            </button> : null}
             <button type="button" className="pc-ghost" onClick={() => setPreviewOpen(true)}>
               Preview client view
             </button>
@@ -1673,6 +1798,7 @@ export default function ProposalComposer({
               <button
                 type="button"
                 className="pc-section-action"
+                data-testid="pc-edit-experience"
                 aria-expanded={experienceEditorOpen}
                 onClick={() => setExperienceEditorOpen((open) => !open)}
               >
@@ -2291,7 +2417,7 @@ export default function ProposalComposer({
           {investment.perGuest !== null ? <small>{currency(investment.perGuest)} / guest</small> : null}
         </p>
         <div className="pc-mobile-actions">
-          <button
+          {!quoteCompletionCommandPathEnabled ? <button
             type="button"
             className="pc-cta pc-compact"
             onClick={requestSave}
@@ -2300,7 +2426,7 @@ export default function ProposalComposer({
             data-testid="pc-save-mobile"
           >
             {saveAction.label}
-          </button>
+          </button> : null}
           <button
             type="button"
             className="pc-mobile-details"

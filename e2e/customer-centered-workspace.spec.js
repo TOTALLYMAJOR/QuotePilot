@@ -435,6 +435,7 @@ test.describe("customer-centered workspace", () => {
   });
 
   test("Messages keeps event conversations segregated and stays usable at phone width", async ({ page }) => {
+    await page.clock.setFixedTime(new Date("2026-08-13T12:00:00.000Z"));
     await page.addInitScript(() => {
       const sharedCustomer = { name: "Jordan Customer", email: "jordan@example.test" };
       localStorage.setItem("quoteWizard.quotes", JSON.stringify([

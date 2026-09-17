@@ -192,6 +192,7 @@ function OpportunityEvidence({ opportunity }) {
 }
 
 function OpportunityCard({
+  learningContext = null,
   opportunity,
   onOpenQuote,
   onOpenQuoteEdit,
@@ -233,6 +234,7 @@ function OpportunityCard({
         {opportunity.type === "post_event_closeout" && (
           <>
             <PostEventCloseoutReviewAction
+              learningContext={learningContext}
               opportunity={opportunity}
               available={closeoutReviewAvailable}
               workflowScope={workflowScope}
@@ -309,6 +311,7 @@ export function CustomerRevenueOpportunitiesPresentation({
   onCreateRebook,
   rebookCreationAvailable = true,
   closeoutReviewAvailable = true,
+  learningContext = null,
   workflowScope = null,
   onCloseoutReceipt,
   focusedCloseoutQuoteId = "",
@@ -385,6 +388,7 @@ export function CustomerRevenueOpportunitiesPresentation({
             <div className="customer-card-list">
               {opportunities.map((opportunity) => (
                 <OpportunityCard
+                  learningContext={learningContext}
                   key={opportunity.id}
                   opportunity={opportunity}
                   onOpenQuote={onOpenQuote}

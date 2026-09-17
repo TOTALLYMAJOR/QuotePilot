@@ -1,11 +1,63 @@
 # Changelog
 
-Last updated: 2026-09-14 15:10:39 CDT
+Last updated: 2026-09-17 14:01:00 CDT
+
+## Unreleased — Quote-to-Confidence local candidate
+
+- Keep the six default-off Quote-to-Confidence capabilities out of disabled
+  bundles with compile-time gates and lazy presentation boundaries. Exact
+  config-free local matrix builds measure 3,657,288 / 385,181 bytes for
+  compatibility and 4,962,837 / 446,522 bytes for Ambient. The exact
+  production CI environments measure 3,657,606 / 385,181 and 4,963,155 /
+  446,541 bytes respectively; exact-PR CI run `35265592125` confirmed the
+  compatibility result. The temporary exception is pinned to those larger
+  literal production-matrix artifacts without percentage or future-growth
+  headroom.
+
+- Fence cancelled capture rollback to its exact persisted line-claim revision, leaving newer reconciliation claims and their replacement protection untouched.
+
+- Stop subsequent mobile count requests when the account, organization, location, role, or capture gates change; retain any already-started line outcome in its original device draft. Permit reviewed empty-shortage rebases and independent cancellation, with resolution read from the backend. Share exact recorded-cost comparison preparation across App and the enabled Legacy decision surface.
+
+- Require presentation-only capability contracts to own no callable exports; read and mutation authorities retain their complete lifecycle contracts, enforced by downgrade rejection tests.
+
+- Bind each new presentation surface to its own asserted state contract. Preserve malformed versus contradictory learning evidence, reload parent accepted sources on refresh, and report category aggregates with unavailable zero-denominator rates.
+
+- Add separately default-off quote completion, decision packet, exception-first Inventory, internal supply planning, mobile count capture, and post-event learning gates. The completion command points to one existing field or action; comparison and accepted handoff retain exact revision and receipt references.
+- Add server-owned internal supply-plan draft, approval, rebase and cancellation receipts, with transactionally current shortage/source evidence. Add authoritative revision-fenced physical stock counts; neither capability contacts suppliers, places orders, reserves expected supply, or changes commercial policy.
+- Add seven-day native IndexedDB shelf drafts for an already-loaded app, per-line exact-request reconciliation and retained conflicts. Offline is device persistence, not server persistence or cold-start support.
+- Add read-only accepted-event learning with separate attendance, ingredient, correction, saved-cost-basis and financial rows. Recommendations route to existing authorities. Only a matching recipe/pack publication receipt plus explicit operator confirmation creates an applied observation; template/workflow application tracking and event-bound receiving remain blocked by integration.
+- Reconcile capability/field-state contracts and Product Intelligence measurement obligations. Local source and automated evidence do not establish hosted, provider, production, human acceptance, adoption, or catering outcomes.
 
 All notable project changes are documented in this file.
 
 ## Unreleased — Event and Commercial activation receipt correction
 
+- Enforce the Product Intelligence System with a fail-closed structural and
+  change-impact validator in `lane:core`. Task plans now classify explicit
+  catering-value/product-intelligence work correctly, emit the required actor,
+  job, improvement, outcome/metric, guardrail, and evidence fields, and require
+  the index plus release/experiment ledger. The PR template exposes the same
+  declaration, while mechanical work requires an explicit not-applicable
+  rationale instead of an invented catering benefit.
+- Add the canonical QuotePilot Product Intelligence System: eight linked
+  catering-value artifacts covering outcomes, user capabilities, metric
+  definitions, privacy-bounded observation signals, baseline/target policy,
+  owner/customer journeys, quality guardrails, and a release/experiment ledger.
+  Existing analytics and authority records are mapped as implemented,
+  derivable, partial, or not yet observable; proposed targets remain pending
+  owner acceptance and no new runtime telemetry or outcome claim is implied.
+- Repair the connected Firebase authentication and tenant-isolation browser
+  acceptance suite to use the unambiguous header **New quote** control, the
+  quote-builder **Account** identity surface, and the routed Quote/Conversation
+  workspaces after the Calm Four shell migration.
+- Extend the exact-tenant `ragnakok-realistic-v1` population operation with a
+  revision-fenced, idempotent margin-cost seed. It copies only complete,
+  current Inventory recipe-cost projections onto otherwise uncosted
+  fixture-owned menu rows, preserves every selling price, excludes
+  operator/unclassified rows, records explicit synthetic provenance, advances
+  the catalog revision once, and binds pricing confirmation to the resolved
+  verified tenant administrator. Rows without recipe evidence remain uncosted
+  and margin continues to fail closed.
 - Make candidate preflight verify enabled Secret Manager metadata for every
   Google Calendar and Model Assist binding before it can reserve an immutable
   receipt or attempt a Firebase mutation. The preflight still never reads or

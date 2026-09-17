@@ -1,12 +1,18 @@
-import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import "./ambientSurfaceGrammar.css";
 import AuthGate from "./components/AuthGate";
+import GovernedQuoteStartsTest from "./components/GovernedQuoteStarts";
+import { scheduleGovernedTemplateDestinationFocus } from "./components/governedQuoteStartFocus";
 import { RebookQuoteReviewBanner } from "./components/CustomerRebookDraftAction";
 import LiveBreakdown from "./components/LiveBreakdown";
-import ProposalComposer, { buildDraftSaveBlockers } from "./components/ProposalComposer";
+import ProposalComposer, {
+  buildDraftSaveBlockers,
+  QuoteEditorModeSurface
+} from "./components/ProposalComposer";
 import CatalogReadNotice from "./components/CatalogReadNotice";
 import QuoteCatalogRevisionReviewPanel from "./components/QuoteCatalogRevisionReviewPanel";
 import { buildMarginPresentation } from "./components/marginPresentation";
+import { buildRecordedCostMarginComparison } from "./lib/decisionPacketMarginComparison";
 import ProductBrandLockup from "./components/ProductBrandLockup";
 import WorkspaceActionFeedbackNotice, {
   buildWorkspaceActionFeedbackFollowUpIdentity,
@@ -27,10 +33,17 @@ import {
   WorkspaceLazyTool,
   WorkspaceToolSurface
 } from "./components/WorkspaceSurfaceBoundary";
+
 import { StepEvent, StepMenu, StepReview, StepServices } from "./components/WizardSteps";
 import CreateIntake from "./components/CreateIntake";
 import ChangeRequestPanel from "./components/ChangeRequestPanel";
 import { parseIntentDraftWithModel } from "./lib/intentParseClient";
+import { resolveQuoteCompletionCommandPathGate } from "./lib/quoteCompletionGate";
+import { resolveDecisionPacketGate } from "./lib/decisionPacketGate";
+import {
+  resolveQuoteWizardCompletionDestination,
+  scheduleQuoteCompletionDestinationFocus
+} from "./lib/quoteCompletionDestination";
 import { applyProposalToForm, proposalTouchedFields } from "./components/changeRequestParse";
 import {
   clearDraftSnapshot,
@@ -89,6 +102,7 @@ import {
   reconcileCatalogSelections
 } from "./lib/catalogSelectionReconciliation";
 import { buildProposalReadiness } from "./lib/quoteWorkflow";
+import { buildRoleSafeQuoteActionController } from "./lib/quoteHistoryController";
 import {
   buildUnifiedCommercialConsequenceReview,
   buildUnifiedConsequenceProposedForm,
@@ -157,6 +171,27 @@ import {
   beginWizardAnalyticsSession,
   recordProductAnalyticsEvent
 } from "quotepilot-active-product-analytics";
+
+const DECISION_PACKET_BUILD_ENABLED = import.meta.env.MODE === "test"
+  || import.meta.env.VITE_DECISION_PACKET_ENABLED === "true";
+const QUOTE_COMPLETION_BUILD_ENABLED = import.meta.env.MODE === "test"
+  || import.meta.env.VITE_QUOTE_COMPLETION_COMMAND_PATH_ENABLED === "true";
+const POST_EVENT_LEARNING_BUILD_ENABLED = import.meta.env.MODE === "test"
+  || import.meta.env.VITE_POST_EVENT_LEARNING_ENABLED === "true";
+const QUOTE_CONFIDENCE_BUILD_ENABLED = QUOTE_COMPLETION_BUILD_ENABLED
+  || DECISION_PACKET_BUILD_ENABLED
+  || POST_EVENT_LEARNING_BUILD_ENABLED
+  || import.meta.env.VITE_INVENTORY_EXCEPTION_WORKSPACE_ENABLED === "true"
+  || import.meta.env.VITE_EVENT_SUPPLY_ACTION_PLAN_ENABLED === "true"
+  || import.meta.env.VITE_INVENTORY_MOBILE_CAPTURE_ENABLED === "true";
+const GovernedQuoteStarts = import.meta.env.MODE === "test"
+  ? GovernedQuoteStartsTest
+  : DECISION_PACKET_BUILD_ENABLED
+    ? lazy(() => import("./components/GovernedQuoteStarts"))
+    : null;
+const PostEventLearningReviewBanner = POST_EVENT_LEARNING_BUILD_ENABLED
+  ? lazy(() => import("./components/PostEventLearningReviewBanner"))
+  : null;
 
 const AMBIENT_UI_ENABLED = import.meta.env.VITE_AMBIENT_UI_ENABLED === "1"
   || import.meta.env.VITE_AMBIENT_UI_ENABLED === "true"
@@ -608,7 +643,15 @@ function normalizeFeatureFlags(input) {
     crmSync: source.crmSync !== false,
     guidedSelling: source.guidedSelling !== false,
     aiAssist,
-    aiAutopilot: aiAssist && source.aiAutopilot === true
+    aiAutopilot: aiAssist && source.aiAutopilot === true,
+    ...(QUOTE_CONFIDENCE_BUILD_ENABLED ? {
+      quoteCompletionCommandPath: source.quoteCompletionCommandPath === true,
+      decisionPacket: source.decisionPacket === true,
+      postEventLearning: source.postEventLearning === true,
+      inventoryExceptionWorkspace: source.inventoryExceptionWorkspace === true,
+      eventSupplyActionPlan: source.eventSupplyActionPlan === true,
+      inventoryMobileCapture: source.inventoryMobileCapture === true
+    } : {})
   };
 }
 
@@ -860,10 +903,13 @@ function ambientOpportunityArrivalInput(target = {}) {
   };
 }
 
-function ambientQuoteAdministrationArrivalInput(quoteId, context = {}) {
+export function ambientQuoteAdministrationArrivalInput(quoteId, context = {}) {
   const normalizedQuoteId = String(quoteId || "").trim();
   const sourceObjectType = String(context?.object?.type || "").trim();
-  const proposal = sourceObjectType === "customer-decision-artifact";
+  const acceptedRevisionId = String(context?.acceptedRevisionId || "").trim();
+  const acceptanceReceiptId = String(context?.acceptanceReceiptId || "").trim();
+  const acceptedRevisionHandoff = Boolean(acceptedRevisionId || acceptanceReceiptId);
+  const proposal = sourceObjectType === "customer-decision-artifact" || acceptedRevisionHandoff;
   const payment = sourceObjectType === "commercial-evidence";
   return {
     destination: "administration",
@@ -875,7 +921,10 @@ function ambientQuoteAdministrationArrivalInput(quoteId, context = {}) {
           ? "payment-evidence"
           : "opportunity"
     },
-    focus: { quoteId: normalizedQuoteId },
+    focus: {
+      quoteId: normalizedQuoteId,
+      ...(acceptedRevisionHandoff ? { acceptedRevisionId, acceptanceReceiptId } : {})
+    },
     intentId: proposal
       ? "review_proposal_controls"
       : payment
@@ -1772,11 +1821,16 @@ export default function App({
   const historyFocusQuoteId = browserRoute.params?.quoteId
     || quoteAdministrationArrival?.focus?.quoteId
     || historyTarget.quoteId;
+  const historyTargetMatchesFocus = historyTarget.quoteId
+    && historyTarget.quoteId === historyFocusQuoteId;
   const historyFocusAction = quoteAdministrationArrival
     ? "administration"
-    : historyTarget.quoteId && historyTarget.quoteId === historyFocusQuoteId
+    : historyTargetMatchesFocus
       ? historyTarget.action
       : "";
+  const historyFocusDestinationAction = historyTargetMatchesFocus
+    ? historyTarget.destinationAction
+    : "";
   const historyFocusReason = quoteAdministrationArrival?.reasonId
     || (historyTarget.quoteId && historyTarget.quoteId === historyFocusQuoteId
       ? historyTarget.reason
@@ -2774,6 +2828,56 @@ export default function App({
     effectiveSettings
   ]);
   const featureFlags = effectiveSettings.featureFlags || DEFAULT_FEATURE_FLAGS;
+  const quoteCompletionCommandPathEnabled = QUOTE_COMPLETION_BUILD_ENABLED && resolveQuoteCompletionCommandPathGate({
+    buildValue: import.meta.env.VITE_QUOTE_COMPLETION_COMMAND_PATH_ENABLED,
+    tenantValue: featureFlags.quoteCompletionCommandPath
+  });
+  const decisionPacketEnabled = DECISION_PACKET_BUILD_ENABLED && resolveDecisionPacketGate({
+    buildValue: import.meta.env.VITE_DECISION_PACKET_ENABLED,
+    tenantValue: featureFlags.decisionPacket
+  });
+  const proposalComposerQuoteActionController = useMemo(() => (
+    QUOTE_COMPLETION_BUILD_ENABLED && editingQuote?.id
+      ? buildRoleSafeQuoteActionController({
+          quote: editingQuote,
+          currentUserRole: authSession.role,
+          source: ["firebase", "firebase-org"].includes(catalog.source) ? "firebase" : catalog.source
+        })
+      : null
+  ), [authSession.role, catalog.source, editingQuote]);
+  const navigateProposalQuoteCompletion = useMemo(() => QUOTE_COMPLETION_BUILD_ENABLED ? (action) => {
+    const quoteId = String(action?.objectContext?.quoteId || editingQuote?.id || "").trim();
+    if (!quoteId) {
+      return {
+        status: "recovery",
+        reason: "The exact quote could not be identified.",
+        nextResolution: "Reopen the saved quote before continuing."
+      };
+    }
+    const livingOpportunity = action?.destination?.surfaceId === "living-opportunity";
+    const destinationAction = String(action?.destination?.actionId || "").trim();
+    setHistoryTarget({
+      quoteId,
+      action: "administration",
+      destinationAction,
+      reason: action?.reason || "Review the exact quote completion destination."
+    });
+    const handoff = createWorkspaceArrivalHandoff(livingOpportunity
+      ? {
+          destination: "opportunity",
+          object: { id: quoteId, type: "opportunity" },
+          focus: { quoteId },
+          intentId: "review_proposal_gap"
+        }
+      : {
+          destination: "administration",
+          object: { id: quoteId, type: "customer-decision-artifact" },
+          focus: { quoteId },
+          intentId: "review_proposal_controls"
+        });
+    if (!handoff.ok) return { status: "recovery", ...handoff.recovery };
+    return navigateAmbientTaskHandoff(handoff, `quote-completion:${action?.id || "review"}`);
+  } : undefined, [editingQuote?.id, navigateAmbientTaskHandoff]);
   const customerPortalEnabled = featureFlags.customerPortal !== false;
   const eventScheduleEnabled = featureFlags.eventSchedule !== false;
   const integrationsEnabled = featureFlags.integrationsOps !== false;
@@ -2888,6 +2992,17 @@ export default function App({
     : "";
   const quoteEditReady = Boolean(quoteEditRouteId && editingQuote.id === quoteEditRouteId);
   const isEditingQuote = quoteEditReady;
+  const livingTwinMarginComparison = useMemo(() => DECISION_PACKET_BUILD_ENABLED && decisionPacketEnabled ? buildRecordedCostMarginComparison({
+    isEditingQuote, editingQuote, catalog, effectiveSettings, proposedMargin
+  }) : null, [
+    catalog,
+    decisionPacketEnabled,
+    editingQuote.baseForm,
+    editingQuote.pricingCatalogAuthority?.catalogRevision,
+    effectiveSettings,
+    isEditingQuote,
+    proposedMargin
+  ]);
   const inventoryRecipeExtension = useInventoryRecipeExtension({
     active: adminOpen || catalogRouteOpen || catalogModalOpen || isEditingQuote,
     organizationId: authSession.organizationId,
@@ -3087,6 +3202,7 @@ export default function App({
     previewError: changeImpactPresentationError,
     previewScopeCurrent: !changeImpactPresentationError,
     commercialModel: changeImpactPreview.model,
+    marginComparison: livingTwinMarginComparison,
     authorityState: changeImpactPreview.authorityState,
     authorizationRequired: changeImpactPreview.authorizationRequired,
     authorizationReceiptId: changeImpactPreview.authorizationReceiptId,
@@ -3130,6 +3246,7 @@ export default function App({
     form.guests,
     inventoryGuestScenarioEligible,
     livingTwinBaseQuoteRevisionId,
+    livingTwinMarginComparison,
     authoritativeStaffingObservation,
     effectiveProposedStaffingEventWindowState,
     effectiveProposedStaffingRequirements,
@@ -5595,7 +5712,8 @@ export default function App({
       draftPatch = null,
       draftIntent = null,
       ambientCatalogContext = null,
-      attendanceSubmission = null
+      attendanceSubmission = null,
+      quoteCompletionDestination = null
     } = {},
     ambientArrival = null
   ) => {
@@ -5687,7 +5805,12 @@ export default function App({
     setGlobalEventTypeId(draftRuntime.eventTypeId);
     setAttendanceChange(attendanceSubmission);
     setForm(attendanceSubmission ? { ...draftRuntime.form, guests: attendanceSubmission.count } : draftRuntime.form);
-    setEditingQuote(draftRuntime.editingQuote);
+    setEditingQuote({
+      ...draftRuntime.editingQuote,
+      status: quote.status,
+      portalExpiresAtISO: quote.portalExpiresAtISO || quote.expiresAtISO || "",
+      workflow: quote.workflow && typeof quote.workflow === "object" ? quote.workflow : {}
+    });
     const packageMenuDraftIntent = draftRuntime.ambientDraftIntent?.family === "package_menu"
       ? draftRuntime.ambientDraftIntent
       : null;
@@ -5701,7 +5824,6 @@ export default function App({
     setAvailabilityBlock(null);
     setAvailabilityNotice("");
     setHistoryTarget({ quoteId: "", reason: "" });
-    setStep(1);
     if (navigateToRoute) navigateWorkspace(buildQuoteEditPath(quote.id));
     beginWizardAnalyticsSession({
       organizationId: authSession.organizationId,
@@ -5721,6 +5843,16 @@ export default function App({
     });
     const ambientFocusField = draftRuntime.ambientDraftIntent?.focusField || "";
     wizardRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    if (QUOTE_COMPLETION_BUILD_ENABLED) {
+      const quoteCompletionFocus = scheduleQuoteCompletionDestinationFocus(quoteCompletionDestination, {
+        editorMode: proposalComposerActive ? "composer" : "guided",
+        root: wizardRef,
+        setStep: proposalComposerActive ? null : setStep
+      });
+      if (!proposalComposerActive && quoteCompletionFocus.step === null) setStep(1);
+    } else {
+      setStep(1);
+    }
     window.requestAnimationFrame(() => {
       const exactField = ambientFocusField
         ? wizardRef.current?.querySelector(`[data-ambient-field="${ambientFocusField}"]`)
@@ -6427,9 +6559,14 @@ export default function App({
     onClose: returnWorkspaceHome,
     surfaceProps: {
       organizationId: authSession.organizationId,
+      userId: currentUserUid,
       role: authSession.role,
       browserEnabled: INVENTORY_AUTHORITY_UI_ENABLED,
-      tenantEnabled: inventoryTenantEnabled
+      tenantEnabled: inventoryTenantEnabled,
+      events: commercialSnapshot.quotes,
+      exceptionWorkspaceEnabled: import.meta.env.VITE_INVENTORY_EXCEPTION_WORKSPACE_ENABLED === "true" && featureFlags.inventoryExceptionWorkspace === true,
+      eventSupplyActionPlanEnabled: import.meta.env.VITE_EVENT_SUPPLY_ACTION_PLAN_ENABLED === "true" && featureFlags.eventSupplyActionPlan === true,
+      inventoryMobileCaptureEnabled: import.meta.env.VITE_INVENTORY_MOBILE_CAPTURE_ENABLED === "true" && featureFlags.inventoryMobileCapture === true
     },
     route: { mounted: inventoryRouteMounted, open: inventoryRouteOpen },
     modal: { mounted: false, open: false }
@@ -6590,6 +6727,30 @@ export default function App({
   const draftReviewSurfaces = (
     <>
       {draftRecoveryBanner}
+      {!isEditingQuote && GovernedQuoteStarts && (
+        <Suspense fallback={<p className="status-strip" role="status">Loading governed quote starts...</p>}><GovernedQuoteStarts
+          enabled={decisionPacketEnabled}
+          templates={effectiveSettings.eventTemplates}
+          onUseBlank={() => {
+            setBuilderMode("guided");
+            setStep(1);
+            window.requestAnimationFrame(() => {
+              wizardRef.current?.querySelector('[data-ambient-field="eventName"]')?.focus({ preventScroll: true });
+            });
+          }}
+          onReviewTemplate={() => {
+            const editorMode = proposalComposerActive ? "composer" : "guided";
+            if (editorMode === "guided") {
+              setStep(1);
+            }
+            scheduleGovernedTemplateDestinationFocus({
+              editorMode,
+              root: editorMode === "guided" ? wizardRef : document
+            });
+          }}
+          onReviewPriorAccepted={() => navigateWorkspace(WORKSPACE_PATHS.customers)}
+        /></Suspense>
+      )}
       {AMBIENT_PILOT_COMMANDS_ENABLED && AmbientPilotScenarioReview && pilotScenarioDraftReview && (
         <RecoverableErrorBoundary
           active
@@ -6897,6 +7058,11 @@ export default function App({
         : ""}
       saveBlockers={proposalComposerSaveBlockers}
       saveMessage={submitState.message}
+      {...(QUOTE_COMPLETION_BUILD_ENABLED ? {
+        quoteCompletionCommandPathEnabled,
+        quoteCompletionConfiguredActions: proposalComposerQuoteActionController?.actionState || null,
+        onQuoteCompletionNavigate: navigateProposalQuoteCompletion
+      } : {})}
       compareEnabled={quoteCompareEnabled}
       catalogLoading={catalog.loading}
       onFieldChange={handleStep1FieldChange}
@@ -6904,13 +7070,17 @@ export default function App({
       onPatchForm={handleComposerPatch}
       onTemplateChange={applyEventTemplate}
       onEventTypeChange={handleEventTypeChange}
-      onSaveQuote={() => void handleSubmitQuote()}
+      onSaveQuote={() => handleSubmitQuote()}
+      {...(QUOTE_COMPLETION_BUILD_ENABLED ? {
+        onQuoteCompletionSave: () => handleSubmitQuote({ propagateError: true })
+      } : {})}
       onOpenCompare={() => openWorkspaceTool(setCompareOpen)}
       onGuidedMode={() => setBuilderMode("guided")}
       reviewSurfaces={draftReviewSurfaces}
       statusNotes={builderStatusNotes}
       changeImpactSurface={changeImpactSurface}
       livingCommercialTwin={isEditingQuote ? {
+        ...(DECISION_PACKET_BUILD_ENABLED ? { decisionPacketEnabled } : {}),
         projection: livingCommercialTwinProjection,
         scopeKey: livingTwinScopeKey,
         baseQuoteRevisionId: livingTwinBaseQuoteRevisionId,
@@ -7091,6 +7261,7 @@ export default function App({
       ambientOpportunity={AMBIENT_UI_ENABLED && resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.QUOTE_DETAIL}
       ambientNavigation={AMBIENT_UI_ENABLED}
     >
+      {PostEventLearningReviewBanner ? <Suspense fallback={null}><PostEventLearningReviewBanner organizationId={authSession.organizationId} principalId={currentUserUid} role={authSession.role} enabled={POST_EVENT_LEARNING_BUILD_ENABLED && featureFlags.postEventLearning === true} /></Suspense> : null}
       {AMBIENT_UI_ENABLED && AmbientGlobalPilotSurface && (
         <RecoverableErrorBoundary
           active={globalPilotSurfaceOpen}
@@ -7415,6 +7586,12 @@ export default function App({
             currentUserRole={authSession.role}
             currentUserUid={authSession.user?.uid || ""}
             workflowEnabled={EVENT_OPERATING_SPINE_UI_ENABLED && catalog.settings?.eventOperatingSpineEnabled === true}
+            postEventLearningEnabled={POST_EVENT_LEARNING_BUILD_ENABLED && featureFlags.postEventLearning === true}
+            learningInventoryEnabled={INVENTORY_AUTHORITY_UI_ENABLED && inventoryTenantEnabled}
+            onReviewLearning={POST_EVENT_LEARNING_BUILD_ENABLED && authSession.isAdmin ? async (proposal) => {
+              const { navigateLearningReview } = await import("./lib/postEventLearningNavigation");
+              return navigateLearningReview(proposal, currentUserUid, navigateWorkspace);
+            } : undefined}
             ambientMode={AMBIENT_UI_ENABLED}
             arrivalContext={workspaceArrivalContext?.surfaceId === "client-overview"
               ? workspaceArrivalContext
@@ -7664,8 +7841,10 @@ export default function App({
           />
         )}
         {catalogReadNotice}
-        {proposalComposerSurface}
-        {!proposalComposerActive && (
+        <QuoteEditorModeSurface
+          composerActive={proposalComposerActive}
+          composerSurface={proposalComposerSurface}
+        >
         <>
         <section className="panel wizard-panel">
           {draftReviewSurfaces}
@@ -7812,6 +7991,22 @@ export default function App({
                 totals={totals}
                 settings={effectiveSettings}
                 readiness={proposalReadiness}
+                {...(QUOTE_COMPLETION_BUILD_ENABLED ? {
+                quoteCompletionCommandPathEnabled,
+                quoteCompletionSaveBlockers: proposalComposerSaveBlockers,
+                onQuoteCompletionAction: (action) => {
+                  const focusResult = scheduleQuoteCompletionDestinationFocus(
+                    resolveQuoteWizardCompletionDestination(action?.destination), {
+                      root: wizardRef,
+                      setStep
+                    }
+                  );
+                  if (focusResult.step !== null || focusResult.scheduled) {
+                    return { state: "success", message: "Opened the exact quote destination." };
+                  }
+                  return { state: "recovery", message: action?.reason };
+                }
+                } : {})}
               />
             )}
             {!catalog.loading && step === 5 && (
@@ -7905,7 +8100,7 @@ export default function App({
           guestBand={guestBand}
         />
         </>
-        )}
+        </QuoteEditorModeSurface>
       </main>
       )}
 
@@ -7952,6 +8147,7 @@ export default function App({
             ambientPricingCatalog={AMBIENT_UI_ENABLED ? catalog : null}
             ambientPricingSettings={AMBIENT_UI_ENABLED ? effectiveSettings : null}
             inquiryShowcaseEnabled={INQUIRY_SHOWCASE_UI_ENABLED}
+            decisionPacketEnabled={decisionPacketEnabled}
             globalPilotRequest={AMBIENT_UI_ENABLED && globalPilotRequest?.target === "living_opportunity"
               ? globalPilotRequest
               : null}
@@ -7959,6 +8155,7 @@ export default function App({
             onGlobalPilotResolution={AMBIENT_UI_ENABLED ? handleGlobalPilotResolution : undefined}
             focusQuoteId={historyFocusQuoteId}
             focusAction={historyFocusAction}
+            focusDestinationAction={historyFocusDestinationAction}
             focusReason={historyFocusReason}
             arrivalContext={workspaceArrivalContext?.surfaceId === "living-opportunity"
               || workspaceArrivalContext?.surfaceId === "quote-administration"
@@ -8012,6 +8209,17 @@ export default function App({
                   consequence: "The current opportunity remains open and unchanged.",
                   nextResolution: "Return to Opportunities and reopen the exact quote."
                 };
+              }
+              const destinationAction = String(
+                context?.quoteCompletionDestination?.actionId || ""
+              ).trim();
+              if (destinationAction) {
+                setHistoryTarget({
+                  quoteId: normalizedQuoteId,
+                  action: "administration",
+                  destinationAction,
+                  reason: context.reason || "Review the exact proposal control."
+                });
               }
               return navigateAmbientQuoteAdministration(normalizedQuoteId, context);
             }}

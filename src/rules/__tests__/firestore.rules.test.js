@@ -261,6 +261,16 @@ const SERVER_OWNED_INVENTORY_PATHS = Object.freeze([
     "revisions",
     "plan-v1"
   ],
+  ["organizations", "org-a", "eventSupplyActionPlans", "q1"],
+  [
+    "organizations",
+    "org-a",
+    "eventSupplyActionPlans",
+    "q1",
+    "revisions",
+    "supply-plan-v1"
+  ],
+  ["organizations", "org-a", "eventSupplyActionPlanReceipts", "receipt-1"],
   ["organizations", "org-a", "eventIngredientExecutions", "q1"],
   [
     "organizations",

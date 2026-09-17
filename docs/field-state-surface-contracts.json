@@ -20,6 +20,12 @@
   },
   "surfaces": [
     {
+      "id": "post-event-learning-recommendations",
+      "path": "src/components/PostEventLearningPanel.jsx",
+      "markers": ["FieldStateIndicator", "data-field-state-surface=\"post-event-learning-recommendations\""],
+      "testPath": "src/components/__tests__/postEventLearningPanel.test.jsx"
+    },
+    {
       "id": "field-state-indicator",
       "path": "src/components/FieldStateIndicator.jsx",
       "markers": [

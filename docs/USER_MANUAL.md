@@ -1,6 +1,72 @@
 # User Manual
 
-Last updated: 2026-09-14 02:59:23 CDT
+Last updated: 2026-09-17 11:51:38 CDT
+
+## Quote-to-Confidence workflows
+
+These source-candidate workflows are disabled by default. Administrators must
+explicitly enable both a reviewed build flag and its tenant `featureFlags`
+entry; this document does not authorize activation.
+
+| Tenant flag | Build gate |
+|---|---|
+| `quoteCompletionCommandPath` | `VITE_QUOTE_COMPLETION_COMMAND_PATH_ENABLED` |
+| `decisionPacket` | `VITE_DECISION_PACKET_ENABLED` |
+| `inventoryExceptionWorkspace` | `VITE_INVENTORY_EXCEPTION_WORKSPACE_ENABLED` |
+| `eventSupplyActionPlan` | `VITE_EVENT_SUPPLY_ACTION_PLAN_ENABLED` |
+| `inventoryMobileCapture` | `VITE_INVENTORY_MOBILE_CAPTURE_ENABLED` |
+| `postEventLearning` | `VITE_POST_EVENT_LEARNING_ENABLED` |
+
+Inventory also retains its existing build/tenant/admin gates. Supply callables
+retain their separate server enablement and App Check configuration; a browser
+gate never grants server permission.
+Learning is available through the existing customer-centered Client overview and
+authoritative closeout follow-up. Its Inventory comparisons additionally require
+the existing Inventory read gates; financial evidence retains its own authority.
+
+1. **Complete a quote.** Follow the one outcome-named action in Composer,
+   Guided review, or Living Opportunity. It opens the existing missing field,
+   review, exact revision save, or governed proposal control. Dirty revisions
+   cannot borrow sent state; accepted history remains immutable.
+2. **Review a decision.** Compare Guests, Menu, Price, Margin, Staffing and
+   Supply independently. Blank, current Library template and accepted-event
+   rebook starts preserve provenance and require ordinary staff review. The
+   decision packet retains the accepted revision and receipt through handoff;
+   conflicting or stale evidence exposes recovery, never acceptance/payment.
+3. **Resolve an Inventory exception.** Open Inventory, inspect the prioritized
+   shortage/count/cost/conversion/contention cards, and expand the seven-axis
+   ledger when needed. An internal supply plan is an operator-edited draft.
+   Save before approving the exact saved revision; rebase after source drift.
+   An uncertain command exposes **Check exact supply request**. Do not create
+   a new action until the original receipt or definitive rejection is known.
+   Keep this review open while reconciling: supply request context is tab-memory,
+   unlike durable shelf-count drafts. Reload is not a reconciliation action.
+   Approval does not contact a supplier, order goods, authorize spend, or
+   change stock. Refreshed allocation evidence alone can resolve a shortage.
+4. **Count the shelf.** In an already-loaded Inventory workspace, select the
+   exact location and search for an ingredient. Barcode scanning is optional;
+   manual search always works. **Save count to device** stores a seven-day
+   IndexedDB draft for this organization, signed-in user and location. Offline
+   saves are not server-confirmed. Reconnect and submit clean lines; retain
+   conflicts and partial receipts, reconcile unknown requests, and explicitly
+   reset rejected/conflicted lines before recording a revised observation.
+5. **Learn after the event.** In Client overview, open the due or completed
+   event follow-up, then expand **Review policy, recorded costs and event learning**.
+   Learning reads begin only when that detail is opened. **Learn from this event** compares the immutable accepted
+   source. **Refresh learning evidence** also reloads the owning Client quote,
+   accepted revision and closeout, not just subordinate reads. Malformed evidence
+   remains `schema_drift`, contradictory sources remain `contradictory`, and
+   unavailable reads remain unavailable; none becomes a zero actual.
+   The comparison uses the accepted
+   priced count with attendance, and saved requirements with consumption and
+   waste, per base unit. Financial capture stays separate and provisional until
+   declared complete; saved planning-basis cost is not actual COGS. Review a
+   recommendation in Library or Inventory. The source context follows in tab
+   memory and disappears on reload. Existing editors own changes and approval.
+   Only a matching recipe/pack publication receipt followed by your explicit
+   confirmation records an applied observation. Template/workflow adoption
+   tracking and event-bound receiving remain unavailable. No suggestion sets
+   price, margin, rates, thresholds, yield, pack contents or supplier policy.
 
 ## Purpose
 This guide explains day-to-day usage of QuotePilot for staff users and admins.
@@ -1519,6 +1585,18 @@ operational records, ten example opportunities/events, Staffing plans,
 approvals, and workflow/event ledgers. Use these records to exercise Library,
 Opportunities, Operations, Staff, Workflow, approvals, pricing, and margin
 presentation as one connected system.
+
+An approved `populate:inventory:ragnakok` apply also copies only complete,
+current `ragnakok-realistic-v1` recipe-cost projections onto otherwise
+uncosted fixture-owned menu rows. The operation never derives cost from selling
+price, never changes a selling price, and never touches unclassified or
+operator-owned menu records. It advances the catalog revision once, binds a
+fresh pricing confirmation to the resolved verified tenant administrator, and
+fails closed if the catalog revision or projection evidence changes between
+planning and commit. The copied values remain explicitly synthetic planning
+evidence and must be replaced before they are relied on as operating cost
+truth. Menu rows without complete recipe-cost projections remain uncosted, so
+staff margin presentation stays unavailable when one of those rows is selected.
 
 The production `ragnakok-operations` deployment profile is also the only
 profile allowed to expose the coupled Commercial Change and Event Spine server

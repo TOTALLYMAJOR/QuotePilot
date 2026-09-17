@@ -1332,6 +1332,22 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // Internal supply action-plan heads, immutable revisions, and command
+    // receipts are callable-owned. They may contain supplier/cost planning
+    // notes but never vendor, purchase-order, reservation, or commercial
+    // authority, and browsers have no direct read or write path.
+    match /organizations/{orgId}/eventSupplyActionPlans/{quoteId} {
+      allow read, write: if false;
+    }
+
+    match /organizations/{orgId}/eventSupplyActionPlans/{quoteId}/revisions/{planRevisionId} {
+      allow read, write: if false;
+    }
+
+    match /organizations/{orgId}/eventSupplyActionPlanReceipts/{receiptId} {
+      allow read, write: if false;
+    }
+
     // Event ingredient execution heads and immutable revisions are physical-use
     // authority. Browsers consume only the bounded, exact-event projection
     // below; direct reads and every mutation stay server-owned.

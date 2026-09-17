@@ -29,6 +29,8 @@ const BASE_QUOTE = {
   latestVersionNumber: 7,
   createdAtISO: "2026-08-11T12:00:00.000Z",
   updatedAtISO: "2026-08-11T18:00:00.000Z",
+  // This fixture exercises editable draft objects, not time-derived expiry.
+  expiresAtISO: "2099-09-11T18:00:00.000Z",
   customer: {
     name: "Maya Bennett",
     email: "maya@example.test",
@@ -1137,7 +1139,9 @@ test.describe("Ambient intelligent-object browser verification", () => {
     await page.setViewportSize({ width: 1440, height: 1000 });
     await page.goto(`/app/customers/${CONVERSATION_ARRIVAL_QUOTE.customerId}`);
 
-    await expect(page.getByRole("heading", { name: "Conversations", exact: true })).toBeVisible();
+    // Customer 360 now keeps supporting conversations in an explicit disclosure.
+    await page.locator('[data-client-disclosure="conversations"] > summary').click();
+    await expect(page.getByRole("heading", { name: "Quote conversations", exact: true })).toBeVisible();
     await page.getByRole("button", { name: "Open conversation", exact: true }).click();
     await expect(page).toHaveURL(/\/app\/messages\?/u);
 
