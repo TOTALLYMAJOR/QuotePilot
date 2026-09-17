@@ -1,6 +1,6 @@
 # Documentation System
 
-Last updated: 2026-09-17 02:01:13 CDT
+Last updated: 2026-09-17 02:53:24 CDT
 
 ## Purpose
 This repository uses a layered canonical documentation model.
@@ -161,6 +161,7 @@ for operator review.
 | Product outcomes, capability-to-value mapping, metrics, observation schema, baselines/targets, journeys, guardrails, and release/experiment decisions | `docs/PRODUCT_INTELLIGENCE.md` and `docs/product-intelligence/` | Outcome authority and traceability only. Feature implementation remains in the Feature Matrix; operational truth remains in Project Status; shipped history remains in the Changelog; runtime and provider receipts retain their own authority. |
 | Release workflow/process policy | `docs/VERSION_CONTROL.md` | References this doc for ownership rules. |
 | Agent policy and skill governance | `docs/AGENT_GOVERNANCE.md` | `docs/SKILLS.md` remains index-only. |
+| External engineering-skill repository configuration | `docs/agents/*.md` | Subordinate consumer configuration for the selected issue tracker, triage-label mapping, and domain-document layout. These files do not replace canonical product, agent-governance, runtime, release, or operational authorities. |
 | Cloud/local orchestration policy and lane contracts | `docs/ORCHESTRATION_BLUEPRINT.md` | Operational commands and scenarios live in `docs/ORCHESTRATION_RUNBOOK.md`. |
 | Repository operating-system maturity | `docs/REPOSITORY_OPERATING_SYSTEM_AUDIT.md` | Adapted solo-agent harness assessment and target architecture; it summarizes but does not replace the owning governance docs. |
 | Portable Codex Desktop governance prompt series | `docs/PORTABLE_CODEX_GOVERNANCE_PROMPT_SERIES.md` | Transferable organization/repository bootstrap prompts for the Commanding Governance Overlay archetype. It is a template and does not govern QuotePilot runtime, release, provider, or product behavior. |

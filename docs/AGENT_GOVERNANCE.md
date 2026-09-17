@@ -1,6 +1,6 @@
 # Agent Governance
 
-Last updated: 2026-09-17 02:01:13 CDT
+Last updated: 2026-09-17 02:53:24 CDT
 
 ## Scope
 This document defines governance for repository-managed agent and skill assets under `.codex/skills/`.
@@ -16,6 +16,21 @@ This document defines governance for repository-managed agent and skill assets u
 - Agent interface metadata: `.codex/skills/*/agents/openai.yaml`
 - Skill references/scripts: `.codex/skills/*/references/`, `.codex/skills/*/scripts/`
 - Index only: `docs/SKILLS.md`
+
+## External Engineering Skill Configuration
+
+Repository-local configuration consumed by externally installed engineering
+skills lives under `docs/agents/`:
+
+- `issue-tracker.md`: selected tracker and bounded command conventions.
+- `triage-labels.md`: mapping from canonical triage roles to tracker labels.
+- `domain.md`: domain glossary and ADR discovery rules.
+
+These subordinate files configure skill consumption only. They do not approve
+external skill source, expand repository or provider authority, or replace
+QuotePilot's canonical product, runtime, release, evidence, or governance
+documents. Installing or updating a global skill remains an external operation
+and is not a repository deployment.
 
 ## Validation Requirements
 - Maintainer skill checks:
