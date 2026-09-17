@@ -42,7 +42,7 @@ const COMMAND_KINDS = new Set([
   "publish_pack_conversion", "publish_menu_recipe", "compile_event_ingredient_demand",
   "receive_stock", "allocate_event_ingredients", "release_event_ingredients",
   "reconcile_event_ingredients", "record_event_ingredient_execution",
-  "correct_event_ingredient_execution"
+  "correct_event_ingredient_execution", "record_stock_count"
 ]);
 
 function isRecord(value) {
@@ -208,6 +208,7 @@ function normalizeCommand(value) {
   else if (value.kind === "opening_balance") inventory.normalizeOpeningBalanceRequest(value);
   else if (value.kind === "record_ingredient_cost") inventory.normalizeCostEvidenceRequest(value);
   else if (value.kind === "receive_stock") inventory.normalizeReceivingRequest(value);
+  else if (value.kind === "record_stock_count") inventory.normalizeStockCountRequest(value);
   else if (value.kind === "allocate_event_ingredients") allocation.normalizeAllocateRequest(value);
   else if (value.kind === "release_event_ingredients") allocation.normalizeReleaseRequest(value);
   else if (value.kind === "reconcile_event_ingredients") reconciliation.normalizeReconcileRequest(value);
@@ -2252,6 +2253,17 @@ function createInventoryAuthorityRuntime({
       onHandMicros: planned.nextStockState.onHandMicros,
       onHandQuantity: inventory.formatQuantityMicros(planned.nextStockState.onHandMicros)
     });
+    if (commandKind === "record_stock_count") return Object.freeze({
+      schemaVersion: inventory.INVENTORY_SCHEMA_VERSION,
+      ingredientId: planned.movement.ingredientId,
+      locationId: planned.movement.locationId,
+      movementId: planned.movement.movementId,
+      stockRevision: planned.nextStockState.revision,
+      countedQuantity: planned.movement.countedQuantity,
+      countedQuantityMicros: planned.movement.countedQuantityMicros,
+      signedDeltaMicros: planned.movement.signedDeltaMicros,
+      onHandQuantity: inventory.formatQuantityMicros(planned.nextStockState.onHandMicros)
+    });
     if (["allocate_event_ingredients", "release_event_ingredients", "reconcile_event_ingredients"].includes(commandKind)) {
       const result = {
         schemaVersion: inventory.INVENTORY_SCHEMA_VERSION,
@@ -3422,6 +3434,60 @@ function createInventoryAuthorityRuntime({
               nowISO
             }) });
             writes.push(...impactWrites);
+          } else if (commandKind === "record_stock_count") {
+            const stockRef = refs.stockStates.doc(inventory.stockStateId(ingredientId, envelope.command.locationId));
+            const locationRef = refs.locations.doc(envelope.command.locationId);
+            const [stockSnap, locationSnap] = await Promise.all([tx.get(stockRef), tx.get(locationRef)]);
+            if (!stockSnap.exists || !locationSnap.exists) {
+              throw new inventory.InventoryIngredientError(
+                "failed-precondition",
+                "Stock count requires an opened ingredient stock state and active location."
+              );
+            }
+            const stockState = storedCanonical(stockSnap.data() || {}, "stock state", {
+              organizationId: envelope.organizationId,
+              ingredientId,
+              locationId: envelope.command.locationId,
+              documentId: stockSnap.id
+            });
+            const location = storedCanonical(locationSnap.data() || {}, "location", {
+              organizationId: envelope.organizationId,
+              locationId: envelope.command.locationId,
+              documentId: locationSnap.id
+            });
+            planned = inventory.planStockCount({
+              organizationId: envelope.organizationId,
+              requestId: envelope.requestId,
+              request: envelope.command,
+              ingredient: inputs.ingredient,
+              location,
+              stockState,
+              actor,
+              nowISO
+            });
+            priorRevision = stockState.revision;
+            const nextIngredient = Object.freeze({
+              ...inputs.ingredient,
+              movementCount: inputs.ingredient.movementCount + 1,
+              updatedAtISO: nowISO,
+              updatedBy: actor
+            });
+            const stockStates = inputs.stockStates
+              .filter((state) => state.stockStateId !== planned.nextStockState.stockStateId)
+              .concat(planned.nextStockState);
+            writes.push(
+              { operation: "create", ref: refs.movements.doc(planned.movement.movementId), value: planned.movement },
+              { operation: "set", ref: stockRef, value: planned.nextStockState },
+              { operation: "set", ref: inputs.ingredientRef, value: nextIngredient },
+              { operation: "set", ref: projectionRef, value: ingredientProjection({
+                ingredient: nextIngredient,
+                stockStates,
+                costState: inputs.costState,
+                allocationFences: inputs.allocationFences,
+                packConversionHeads: inputs.packConversionHeads,
+                nowISO
+              }) }
+            );
           } else if (commandKind === "publish_pack_conversion") {
             if (!inputs.ingredient) {
               throw new inventory.InventoryIngredientError("not-found", "Create the ingredient before publishing a purchase pack conversion.");
@@ -3505,6 +3571,7 @@ function createInventoryAuthorityRuntime({
           : commandKind === "upsert_ingredient" ? planned.ingredient.revision
             : commandKind === "opening_balance" ? planned.nextStockState.revision
               : commandKind === "receive_stock" ? planned.nextStockState.revision
+                : commandKind === "record_stock_count" ? planned.nextStockState.revision
                 : ["allocate_event_ingredients", "release_event_ingredients", "reconcile_event_ingredients"].includes(commandKind)
                   ? planned.plan.allocationRevision
                   : ["record_event_ingredient_execution", "correct_event_ingredient_execution"].includes(commandKind)

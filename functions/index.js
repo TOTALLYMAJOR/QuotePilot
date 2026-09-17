@@ -277,6 +277,7 @@ const {
   emptyScheduleFence
 } = require("./operationalStaffingRuntime");
 const { createInventoryAuthorityRuntime } = require("./inventoryAuthority");
+const { createEventSupplyActionPlanRuntime } = require("./eventSupplyActionPlanCore.cjs");
 const {
   STAFF_DIRECTORY_AUTHORITY_VERSION,
   StaffDirectoryAuthorityError,
@@ -421,6 +422,16 @@ const inventoryAuthorityRuntime = createInventoryAuthorityRuntime({
   globalEnabled: inventoryAuthorityGlobalEnabled,
   logger: functions.logger
 });
+const eventSupplyActionPlanRuntime = createEventSupplyActionPlanRuntime({
+  db,
+  FieldValue,
+  HttpsError: functions.https.HttpsError,
+  assertStaff,
+  normalizeOrganizationId,
+  isOrganizationRecordActive,
+  globalEnabled: inventoryAuthorityGlobalEnabled,
+  logger: functions.logger
+});
 exports.getInventoryWorkspace = functions
   .runWith({ enforceAppCheck: false })
   .region(REGION)
@@ -429,6 +440,14 @@ exports.applyInventoryCommand = functions
   .runWith({ enforceAppCheck: false })
   .region(REGION)
   .https.onCall((data, context) => inventoryAuthorityRuntime.applyInventoryCommand(data, context));
+exports.getEventSupplyActionPlan = functions
+  .runWith({ enforceAppCheck: false })
+  .region(REGION)
+  .https.onCall((data, context) => eventSupplyActionPlanRuntime.getEventSupplyActionPlan(data, context));
+exports.applyEventSupplyActionPlanCommand = functions
+  .runWith({ enforceAppCheck: false })
+  .region(REGION)
+  .https.onCall((data, context) => eventSupplyActionPlanRuntime.applyEventSupplyActionPlanCommand(data, context));
 exports.previewEventInventory = functions
   .runWith({ enforceAppCheck: false })
   .region(REGION)

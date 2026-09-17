@@ -243,6 +243,18 @@ const receivingCommand = (overrides = {}) => ({
   ...overrides
 });
 
+const stockCountCommand = (overrides = {}) => ({
+  kind: "record_stock_count",
+  ingredientId: "chicken",
+  locationId: "main-kitchen",
+  countedQuantity: "37.5",
+  baseUnitId: "lb",
+  occurredAtISO: EVIDENCE_TIME,
+  note: "Human-confirmed shelf count",
+  expectedStockRevision: 1,
+  ...overrides
+});
+
 const costCommand = (overrides = {}) => ({
   kind: "record_ingredient_cost",
   ingredientId: "chicken",
@@ -736,6 +748,46 @@ describe("ingredient inventory authority runtime", () => {
       stock: { onHandMicros: 55000000, stockRevision: 3 },
       cost: { costRevision: 1, basisQuantityMicros: 10000000, totalCostMinor: 3000 }
     });
+  });
+
+  test("records an exact human stock count idempotently and refuses stale or substituted evidence", async () => {
+    const harness = createHarness();
+    await configureChicken(harness);
+    await harness.runtime.applyInventoryCommand(
+      envelope(openingCommand(), "opening-before-count-0001"), adminContext
+    );
+    const request = envelope(stockCountCommand(), "stock-count-chicken-0001");
+    const first = await harness.runtime.applyInventoryCommand(request, adminContext);
+    expect(first).toMatchObject({
+      ok: true,
+      idempotent: false,
+      commandKind: "record_stock_count",
+      result: {
+        ingredientId: "chicken",
+        locationId: "main-kitchen",
+        stockRevision: 2,
+        countedQuantity: "37.5",
+        countedQuantityMicros: 37_500_000,
+        signedDeltaMicros: -2_500_000,
+        onHandQuantity: "37.5"
+      }
+    });
+    const movement = harness.db.store.get(
+      `organizations/${ORGANIZATION_ID}/inventoryMovements/${first.result.movementId}`
+    );
+    expect(inventory.verifyMovement(movement)).toBe(movement);
+    await expect(harness.runtime.applyInventoryCommand(request, adminContext))
+      .resolves.toEqual({ ...first, idempotent: true });
+    await expect(harness.runtime.applyInventoryCommand(envelope(
+      stockCountCommand({ countedQuantity: "38" }), "stock-count-chicken-0001"
+    ), adminContext)).rejects.toMatchObject({ code: "already-exists" });
+    await expect(harness.runtime.applyInventoryCommand(envelope(
+      stockCountCommand({ expectedStockRevision: 1 }), "stock-count-chicken-stale-0002"
+    ), adminContext)).rejects.toMatchObject({ code: "aborted" });
+    await expect(harness.runtime.applyInventoryCommand(envelope(
+      { ...stockCountCommand({ expectedStockRevision: 2 }), purchaseOrderId: "forbidden" },
+      "stock-count-chicken-extra-0003"
+    ), adminContext)).rejects.toMatchObject({ code: "invalid-argument" });
   });
 
   test("rejects stale receiving revisions before writing quantity or cost evidence", async () => {

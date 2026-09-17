@@ -224,7 +224,9 @@ describe("direct production deployment safety", () => {
 
     for (const [functionName, nextFunctionName] of [
       ["getInventoryWorkspace", "applyInventoryCommand"],
-      ["applyInventoryCommand", "previewEventInventory"],
+      ["applyInventoryCommand", "getEventSupplyActionPlan"],
+      ["getEventSupplyActionPlan", "applyEventSupplyActionPlanCommand"],
+      ["applyEventSupplyActionPlanCommand", "previewEventInventory"],
       ["previewEventInventory", "invalidateEventIngredientsOnQuoteChange"]
     ]) {
       const start = functionsSource.indexOf(`exports.${functionName} = functions`);
@@ -311,14 +313,15 @@ describe("direct production deployment safety", () => {
     );
     const batches = planFunctionDeployBatches(ids);
 
-    expect(ids).toHaveLength(150);
-    expect(new Set(ids).size).toBe(150);
+    expect(ids).toHaveLength(152);
+    expect(new Set(ids).size).toBe(152);
     expect(ids).toEqual(expect.arrayContaining([
       "getEventOperatingSnapshot", "applyEventOperatingCommand", "recordPostEventActualAttendance", "getWorkflowConfiguration",
       "applyWorkflowDefinitionCommand", "getQuoteAttendance", "submitQuoteAttendanceResponse",
       "getWorkflowPackSnapshot", "applyWorkflowPackCommand",
       "getEventOperationalNotesSnapshot", "applyEventOperationalNoteCommand",
-      "getInventoryWorkspace", "applyInventoryCommand", "previewEventInventory",
+      "getInventoryWorkspace", "applyInventoryCommand", "getEventSupplyActionPlan",
+      "applyEventSupplyActionPlanCommand", "previewEventInventory",
       "invalidateEventIngredientsOnQuoteChange", "invalidateEventIngredientsOnRecipeChange",
       "invalidateEventIngredientsOnMenuCostChange",
       "getPublishedInquiryShowcase", "submitPublicInquiry", "resolveInquirySubmission",
@@ -328,7 +331,7 @@ describe("direct production deployment safety", () => {
       "dismissInquiry", "purgeExpiredInquiries"
     ]));
     expect(FUNCTIONS_DEPLOY_BATCH_SIZE).toBe(35);
-    expect(batches.map((batch) => batch.length)).toEqual([35, 35, 35, 35, 10]);
+    expect(batches.map((batch) => batch.length)).toEqual([35, 35, 35, 35, 12]);
     expect(batches.flat()).toEqual(ids);
     expect(Math.max(...batches.map((batch) => batch.length))).toBeLessThan(50);
     expect(fs.readFileSync(FIREBASE_STUB, "utf8")).toContain(

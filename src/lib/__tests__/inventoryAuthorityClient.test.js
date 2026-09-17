@@ -579,6 +579,18 @@ function responseFor(payload, resultOverrides = {}) {
     result = { schemaVersion: 2, ingredientId: payload.command.ingredientId, revision: payload.command.expectedRevision + 1, baseUnitId: payload.command.baseUnitId, active: payload.command.active, affectedMenuItemIds: [] };
   } else if (payload.command.kind === "opening_balance") {
     result = { schemaVersion: 2, ingredientId: payload.command.ingredientId, locationId: payload.command.locationId, movementId: `imv_${"c".repeat(48)}`, stockRevision: payload.command.expectedStockRevision + 1, onHandMicros: 40_000_000, onHandQuantity: payload.command.quantity };
+  } else if (payload.command.kind === "record_stock_count") {
+    result = {
+      schemaVersion: 2,
+      ingredientId: payload.command.ingredientId,
+      locationId: payload.command.locationId,
+      movementId: `imv_${"9".repeat(48)}`,
+      stockRevision: payload.command.expectedStockRevision + 1,
+      countedQuantity: payload.command.countedQuantity,
+      countedQuantityMicros: 37_500_000,
+      signedDeltaMicros: -2_500_000,
+      onHandQuantity: payload.command.countedQuantity
+    };
   } else {
     if (payload.command.kind === "publish_pack_conversion") {
       result = { schemaVersion: 2, ingredientId: payload.command.ingredientId, packUnitId: payload.command.packUnitId, packConversionRevisionId: PACK_CONVERSION_REVISION_ID, revision: payload.command.expectedRevision + 1, affectedMenuItemIds: [] };
@@ -895,6 +907,45 @@ describe("inventory schema-v2 command authority", () => {
       ...ADMIN_SCOPE,
       requestId: `inventory_request_${"8".repeat(32)}`,
       command: { ...command, purchaseOrderId: "invented" }
+    })).rejects.toThrow(/unsupported fields/i);
+  });
+
+  test("submits only an exact nonnegative stock count and validates its authoritative receipt", async () => {
+    const command = {
+      kind: "record_stock_count",
+      ingredientId: "chicken",
+      locationId: "main-kitchen",
+      countedQuantity: "37.5",
+      baseUnitId: "lb",
+      occurredAtISO: NOW,
+      note: "Human-confirmed shelf count",
+      expectedStockRevision: 1
+    };
+    mocks.callable.mockImplementation(async (payload) => ({ data: responseFor(payload) }));
+    await expect(applyInventoryCommand({
+      ...ADMIN_SCOPE,
+      requestId: `inventory_request_${"d".repeat(32)}`,
+      command
+    })).resolves.toMatchObject({
+      commandKind: "record_stock_count",
+      confirmation: {
+        stockRevision: 2,
+        countedQuantity: "37.5",
+        signedDeltaMicros: -2_500_000
+      }
+    });
+    expect(mocks.callable.mock.calls.at(-1)[0].command).toEqual(command);
+    await expect(applyInventoryCommand({
+      ...ADMIN_SCOPE,
+      organizationId: "org-stock-count-negative",
+      requestId: `inventory_request_${"e".repeat(32)}`,
+      command: { ...command, countedQuantity: "-1" }
+    })).rejects.toThrow(/canonical decimal/i);
+    await expect(applyInventoryCommand({
+      ...ADMIN_SCOPE,
+      organizationId: "org-stock-count-extra",
+      requestId: `inventory_request_${"f".repeat(32)}`,
+      command: { ...command, supplierId: "forbidden" }
     })).rejects.toThrow(/unsupported fields/i);
   });
 
