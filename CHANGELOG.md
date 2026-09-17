@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-09-17 02:01:13 CDT
+Last updated: 2026-09-17 02:53:24 CDT
 
 All notable project changes are documented in this file.
 
@@ -20,6 +20,18 @@ All notable project changes are documented in this file.
   Existing analytics and authority records are mapped as implemented,
   derivable, partial, or not yet observable; proposed targets remain pending
   owner acceptance and no new runtime telemetry or outcome claim is implied.
+- Repair the connected Firebase authentication and tenant-isolation browser
+  acceptance suite to use the current **New quote** work-area control,
+  **Workspace & tools** identity surface, and routed Quote/Conversation
+  workspaces after the Calm Four shell migration.
+- Extend the exact-tenant `ragnakok-realistic-v1` population operation with a
+  revision-fenced, idempotent margin-cost seed. It copies only complete,
+  current Inventory recipe-cost projections onto otherwise uncosted
+  fixture-owned menu rows, preserves every selling price, excludes
+  operator/unclassified rows, records explicit synthetic provenance, advances
+  the catalog revision once, and binds pricing confirmation to the resolved
+  verified tenant administrator. Rows without recipe evidence remain uncosted
+  and margin continues to fail closed.
 - Make candidate preflight verify enabled Secret Manager metadata for every
   Google Calendar and Model Assist binding before it can reserve an immutable
   receipt or attempt a Firebase mutation. The preflight still never reads or

@@ -1,6 +1,6 @@
 # Version Control Playbook
 
-Last updated: 2026-09-14 08:30:32 CDT
+Last updated: 2026-09-15 00:15:41 CDT
 
 ## Goals
 - Keep `main` stable and deployable.
@@ -56,6 +56,15 @@ explicit owner promotion after real-run review.
   each verify that deploy receipt, update only their declared setting fields,
   and prove provider readback. Do not substitute a console edit or direct
   Firestore write.
+- The `ragnakok-realistic-v1` population may seed menu cost only from a
+  complete, current same-tenant Inventory recipe-cost projection and only when
+  the target menu row is explicitly fixture-owned and has no recorded cost.
+  The guarded transaction must recheck the exact catalog revision and every
+  projection digest, preserve selling prices and operator/unclassified rows,
+  advance the revision once, record synthetic provenance, bind a fresh pricing
+  confirmation to the resolved verified administrator, and prove provider
+  readback. A successful dry run or source test does not authorize the provider
+  mutation.
 - The coordinated `all-qualified-features` profile supersedes the split
   founder-pilot release path only for an explicitly authorized full promotion.
   It is accepted exclusively by Firebase `all` and Vercel, pins the compiled

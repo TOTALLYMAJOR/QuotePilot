@@ -34,6 +34,8 @@ const ALLOWED_PROJECTS = new Set(["quotepilot-staging-20260804", "tonicatering"]
 const FIXTURE_EVIDENCE_AT_ISO = "2026-09-10T09:00:00.000Z";
 const IMPORT_BATCH_ID = "ragnakok-realistic-v1-menu-0001";
 const BASELINE_SCRIPT = fileURLToPath(new URL("./seed-firestore-menu.mjs", import.meta.url));
+const RECIPE_COST_SEED_SOURCES = new Set(["seed-script", "starter-catalog-pack"]);
+const RECIPE_COST_SEED_MODEL = "ragnakok-recipe-cost-seed-v1";
 
 class PopulationError extends Error {
   constructor(message) {
@@ -408,6 +410,165 @@ function selectRecipeCandidates(menuItems) {
   return candidates.slice(0, RECIPE_TARGET);
 }
 
+export function planRecipeBackedMenuCostSeed({ menuItems = [], projections = [], organizationId = ORGANIZATION_ID } = {}) {
+  const projectionByMenuItemId = new Map(
+    projections.map((projection) => [String(projection?.menuItemId || projection?.id || "").trim(), projection])
+  );
+  const updates = [];
+  const excluded = {
+    alreadyCosted: 0,
+    ineligibleSource: 0,
+    inactive: 0,
+    projectionUnavailable: 0
+  };
+
+  for (const menuItem of menuItems) {
+    const menuItemId = String(menuItem?.id || "").trim();
+    if (!menuItemId || menuItem?.active === false) {
+      excluded.inactive += 1;
+      continue;
+    }
+    if (typeof menuItem?.costMinor === "number" && Number.isSafeInteger(menuItem.costMinor) && menuItem.costMinor >= 0) {
+      excluded.alreadyCosted += 1;
+      continue;
+    }
+    if (!RECIPE_COST_SEED_SOURCES.has(String(menuItem?.source || "").trim())) {
+      excluded.ineligibleSource += 1;
+      continue;
+    }
+    const projection = projectionByMenuItemId.get(menuItemId);
+    const projectedCostMinor = projection?.cost?.projectedCostMinor;
+    const projectionEligible = projection?.organizationId === organizationId
+      && projection?.menuItemId === menuItemId
+      && projection?.status === "complete"
+      && projection?.freshness === "current"
+      && projection?.cost?.status === "complete"
+      && projection?.cost?.currency === "USD"
+      && Number.isSafeInteger(projectedCostMinor)
+      && projectedCostMinor >= 0
+      && String(projection?.cost?.resultDigest || "").trim();
+    if (!projectionEligible) {
+      excluded.projectionUnavailable += 1;
+      continue;
+    }
+    updates.push(Object.freeze({
+      menuItemId,
+      costMinor: projectedCostMinor,
+      projectionResultDigest: projection.cost.resultDigest,
+      recipeRevisionId: String(projection.recipeRevisionId || projection.cost.recipeRevisionId || "").trim(),
+      sourceDigest: String(projection.sourceDigest || "").trim()
+    }));
+  }
+
+  return Object.freeze({
+    model: RECIPE_COST_SEED_MODEL,
+    eligibleCount: updates.length,
+    updates: Object.freeze(updates),
+    excluded: Object.freeze(excluded)
+  });
+}
+
+function menuCostSeedPlanFromState(state, organizationId) {
+  return planRecipeBackedMenuCostSeed({
+    organizationId,
+    menuItems: state.menuItems.docs.map((snapshot) => ({ id: snapshot.id, ...(snapshot.data() || {}) })),
+    projections: state.menuCostProjections.docs.map((snapshot) => ({ id: snapshot.id, ...(snapshot.data() || {}) }))
+  });
+}
+
+async function seedRecipeBackedMenuCosts({ db, organizationId, actor, state, apply }) {
+  const initialPlan = menuCostSeedPlanFromState(state, organizationId);
+  const expectedCatalogRevision = Math.max(0, Number(state.settings?.catalogRevision || 0));
+  if (!apply || initialPlan.eligibleCount === 0) {
+    return Object.freeze({
+      model: initialPlan.model,
+      plannedCount: initialPlan.eligibleCount,
+      appliedCount: 0,
+      catalogRevision: expectedCatalogRevision,
+      excluded: initialPlan.excluded
+    });
+  }
+
+  const organizationRef = db.collection("organizations").doc(organizationId);
+  const settingsRef = organizationRef.collection("settings").doc("config");
+  const nowISO = new Date().toISOString();
+  let appliedCatalogRevision = expectedCatalogRevision;
+  await db.runTransaction(async (tx) => {
+    const menuRefs = initialPlan.updates.map((entry) => organizationRef.collection("menuItems").doc(entry.menuItemId));
+    const projectionRefs = initialPlan.updates.map((entry) => organizationRef.collection(COLLECTIONS.menuCostProjections).doc(entry.menuItemId));
+    const snapshots = await tx.getAll(settingsRef, ...menuRefs, ...projectionRefs);
+    const settingsSnapshot = snapshots[0];
+    const currentSettings = settingsSnapshot.data() || {};
+    if (Number(currentSettings.catalogRevision || 0) !== expectedCatalogRevision) {
+      throw new PopulationError("Catalog revision changed after the margin-cost dry run. Refresh and retry.");
+    }
+    const menuSnapshots = snapshots.slice(1, 1 + menuRefs.length);
+    const projectionSnapshots = snapshots.slice(1 + menuRefs.length);
+    const transactionPlan = planRecipeBackedMenuCostSeed({
+      organizationId,
+      menuItems: menuSnapshots.map((snapshot) => ({ id: snapshot.id, ...(snapshot.data() || {}) })),
+      projections: projectionSnapshots.map((snapshot) => ({ id: snapshot.id, ...(snapshot.data() || {}) }))
+    });
+    if (transactionPlan.eligibleCount !== initialPlan.eligibleCount) {
+      throw new PopulationError("Recipe-backed margin-cost evidence changed after planning. Refresh and retry.");
+    }
+    transactionPlan.updates.forEach((entry, index) => {
+      const planned = initialPlan.updates[index];
+      if (
+        entry.menuItemId !== planned.menuItemId
+        || entry.costMinor !== planned.costMinor
+        || entry.projectionResultDigest !== planned.projectionResultDigest
+      ) {
+        throw new PopulationError("Recipe-backed margin-cost evidence changed after planning. Refresh and retry.");
+      }
+    });
+
+    appliedCatalogRevision = expectedCatalogRevision + 1;
+    transactionPlan.updates.forEach((entry, index) => {
+      tx.update(menuRefs[index], {
+        costMinor: entry.costMinor,
+        fixtureCostEvidence: {
+          model: RECIPE_COST_SEED_MODEL,
+          classification: "synthetic_founder_pilot_projection",
+          populationVersion: POPULATION_VERSION,
+          projectionResultDigest: entry.projectionResultDigest,
+          recipeRevisionId: entry.recipeRevisionId,
+          sourceDigest: entry.sourceDigest,
+          note: "Synthetic recipe-cost projection; replace with reviewed operating cost evidence before live use."
+        },
+        updatedAtISO: nowISO
+      });
+    });
+    tx.set(settingsRef, {
+      catalogRevision: appliedCatalogRevision,
+      pricingSetupConfirmed: true,
+      pricingConfirmation: {
+        actorUid: actor.uid,
+        actorEmail: actor.email,
+        confirmedAtISO: nowISO,
+        confirmedCatalogRevision: appliedCatalogRevision
+      },
+      pricingConfirmationReason: `Operator-authorized ${POPULATION_VERSION} recipe-cost fixture publication`,
+      marginCostPopulationModel: RECIPE_COST_SEED_MODEL,
+      marginCostPopulationUpdatedAtISO: nowISO,
+      updatedAtISO: nowISO
+    }, { merge: true });
+  });
+
+  const verifiedState = await readState({ db, organizationId });
+  const remainingPlan = menuCostSeedPlanFromState(verifiedState, organizationId);
+  if (remainingPlan.eligibleCount !== 0 || Number(verifiedState.settings?.catalogRevision || 0) !== appliedCatalogRevision) {
+    throw new PopulationError("Recipe-backed margin-cost seed did not pass provider readback.");
+  }
+  return Object.freeze({
+    model: initialPlan.model,
+    plannedCount: initialPlan.eligibleCount,
+    appliedCount: initialPlan.eligibleCount,
+    catalogRevision: appliedCatalogRevision,
+    excluded: remainingPlan.excluded
+  });
+}
+
 async function ensureRecipes({ runtime, db, organizationId, ingredientIdByKey }) {
   const state = await readState({ db, organizationId });
   const catalogRevision = Math.max(0, Number(state.settings?.catalogRevision || 0));
@@ -474,6 +635,13 @@ async function main() {
       recipes: Math.max(state.recipeHeads.size, RECIPE_TARGET)
     },
     tenantGateChangePlanned,
+    marginCostSeed: await seedRecipeBackedMenuCosts({
+      db,
+      organizationId: options.organizationId,
+      actor,
+      state,
+      apply: false
+    }),
     evidenceClassification: "synthetic founder-pilot projection; not counted stock or supplier-confirmed cost",
     commercialConsequence: "menu import advances catalog revision and requires pricing review before authoritative quote saves"
   };
@@ -502,6 +670,14 @@ async function main() {
     state
   });
   await ensureRecipes({ runtime, db, organizationId: options.organizationId, ingredientIdByKey });
+  state = await readState({ db, organizationId: options.organizationId });
+  const marginCostSeed = await seedRecipeBackedMenuCosts({
+    db,
+    organizationId: options.organizationId,
+    actor,
+    state,
+    apply: true
+  });
   const verified = await readState({ db, organizationId: options.organizationId });
   const counts = countsFromState(verified);
   if (counts.menuItems < MENU_TARGET || counts.recipeHeads < RECIPE_TARGET) {
@@ -521,6 +697,7 @@ async function main() {
       skippedCount: importResult.skippedCount,
       idempotentReplay: importResult.idempotentReplay === true
     },
+    marginCostSeed,
     counts,
     pricingReviewRequired: counts.pricingSetupConfirmed !== true
   }, null, 2));

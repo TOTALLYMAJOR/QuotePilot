@@ -1,6 +1,6 @@
 # User Manual
 
-Last updated: 2026-09-14 02:59:23 CDT
+Last updated: 2026-09-15 00:15:41 CDT
 
 ## Purpose
 This guide explains day-to-day usage of QuotePilot for staff users and admins.
@@ -1519,6 +1519,18 @@ operational records, ten example opportunities/events, Staffing plans,
 approvals, and workflow/event ledgers. Use these records to exercise Library,
 Opportunities, Operations, Staff, Workflow, approvals, pricing, and margin
 presentation as one connected system.
+
+An approved `populate:inventory:ragnakok` apply also copies only complete,
+current `ragnakok-realistic-v1` recipe-cost projections onto otherwise
+uncosted fixture-owned menu rows. The operation never derives cost from selling
+price, never changes a selling price, and never touches unclassified or
+operator-owned menu records. It advances the catalog revision once, binds a
+fresh pricing confirmation to the resolved verified tenant administrator, and
+fails closed if the catalog revision or projection evidence changes between
+planning and commit. The copied values remain explicitly synthetic planning
+evidence and must be replaced before they are relied on as operating cost
+truth. Menu rows without complete recipe-cost projections remain uncosted, so
+staff margin presentation stays unavailable when one of those rows is selected.
 
 The production `ragnakok-operations` deployment profile is also the only
 profile allowed to expose the coupled Commercial Change and Event Spine server
