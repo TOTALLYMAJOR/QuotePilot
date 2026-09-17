@@ -91,6 +91,7 @@ const catalog = {
 const composerMenuDestination = Object.freeze({
   surfaceId: "proposal-composer",
   step: 3,
+  domainId: "experience",
   selector: '[data-testid="pc-edit-menu"]',
   focusSelector: "#pc-menu-search",
   activate: true
@@ -99,6 +100,7 @@ const composerMenuDestination = Object.freeze({
 const composerExperienceDestination = Object.freeze({
   surfaceId: "proposal-composer",
   step: 2,
+  domainId: "experience",
   selector: '[data-testid="pc-edit-experience"]',
   activate: true
 });
@@ -421,6 +423,10 @@ describe("quote completion surface integrations", () => {
     expect(container.querySelector('[data-testid="pc-edit-menu"]')).not.toBeNull();
     expect(container.querySelector('[data-ambient-field="menuItems"]')).toBeNull();
     expect(composerSearch).not.toBeNull();
+    expect(container.querySelector('[data-testid="commercial-workbench-object"]')?.getAttribute("data-active-domain"))
+      .toBe("experience");
+    expect(container.querySelector('[data-testid="workbench-domain-experience"]')?.getAttribute("aria-current"))
+      .toBe("step");
     expect(document.activeElement).toBe(composerSearch);
   });
 

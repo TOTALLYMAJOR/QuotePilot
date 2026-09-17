@@ -84,6 +84,10 @@ export function scheduleQuoteCompletionDestinationFocus(destination, {
     : destinationSnapshot;
   const selector = text(resolvedDestination?.selector);
   const focusSelector = text(resolvedDestination?.focusSelector);
+  const domainId = text(resolvedDestination?.domainId);
+  const composerDomainId = editorMode === "composer" && /^[a-z][a-z0-9_-]{0,31}$/u.test(domainId)
+    ? domainId
+    : "";
   const step = editorMode === "composer" ? Number.NaN : Number(resolvedDestination?.step);
   const boundedStep = Number.isInteger(step) && step >= 1 && step <= 5 ? step : null;
   if (boundedStep !== null && typeof setStep === "function") setStep(boundedStep);
@@ -95,6 +99,9 @@ export function scheduleQuoteCompletionDestinationFocus(destination, {
   const schedule = frameScheduler(requestFrame);
   schedule(() => {
     const firstRoot = resolveRoot(root);
+    if (composerDomainId) {
+      query(firstRoot, `[data-testid="workbench-domain-${composerDomainId}"]`)?.click?.();
+    }
     const activationTarget = query(firstRoot, selector);
     if (resolvedDestination?.activate === true && activationTarget && !activationTarget.disabled) {
       activationTarget.click?.();
