@@ -1,6 +1,6 @@
 # Task 3 — Internal supply plan and authoritative stock count
 
-Last updated: 2026-09-17 09:09:59 CDT
+Last updated: 2026-09-17 09:17:42 CDT
 
 ## Outcome
 
@@ -28,6 +28,15 @@ Fix round 1 planner start: `2026-09-17T13:56:23.100Z` for `task-3-fix-round-1-so
 - Only live `shortage` or `reserved` allocations with current supporting evidence are eligible. `released` and `settled` allocations are stale/ineligible and cannot be rebased into a resolved plan. Resolution still requires an eligible refreshed allocation with zero shortages.
 - The client canonicalizes counted quantities before the callable payload, pending-attempt record, receipt comparison, and projection reconciliation. Both `37.500` to `37.5` and `0.000` to `0` succeed without weakening exact micros checks.
 
+## Quote-source fingerprint remediation
+
+Fix round 2 planner start: `2026-09-17T14:12:18.681Z` for `task-3-fix-round-2-quote-source-fingerprint-serialization` (`core`, high risk).
+
+- Quote and immutable quote-version evidence now use a private, domain-separated SHA-256 fingerprint over a deterministic typed canonical representation. It supports finite decimal prices, totals, and rates; normalizes negative zero; and supports JavaScript `Date` plus exact persisted Firestore Timestamp-like `{seconds, nanoseconds}` and `{_seconds, _nanoseconds}` values.
+- The serializer sorts object keys, distinguishes scalar types, bounds depth and node count, and fails closed with `data-loss` for non-finite or unsafe numbers, invalid timestamps, unsupported types or prototypes, symbol keys, undefined values, and cycles.
+- The inventory quantity digest and its integer-only safeguards were not changed. This quote-only fingerprint does not calculate or authorize a price; it binds the exact current commercial evidence used by the supply-plan freshness check.
+- Realistic quote/version fixtures exercise decimal menu price, subtotal, total, tax rate, and both persisted Timestamp shapes. A one-cent total drift changes the quote fingerprint, marks the plan stale, and refuses approval; non-finite and unsupported quote evidence are rejected deterministically.
+
 ## Changed implementation and tests
 
 - Server authority: `functions/eventSupplyActionPlanCore.cjs`, `functions/inventoryIngredientCore.cjs`, `functions/inventoryAuthority.js`, `functions/index.js`.
@@ -48,6 +57,7 @@ Fix round 1 planner start: `2026-09-17T13:56:23.100Z` for `task-3-fix-round-1-so
 - `npm run check:project-state`: passed (12 capabilities, 10 blockers, 1 proof event, 5 commercial evidence records).
 - `git diff --check`: passed.
 - Fix round 1 began with 7 expected red regressions. After implementation, focused Task 3 coverage passed 155/155; full unit passed 6018 with 100 skipped across 506 passing and 3 skipped files; Firestore rules passed 96/96; and the production build passed.
+- Fix round 2 began with all 15 supply-runtime tests red because the former inventory digest rejected realistic decimal quote evidence. After the quote-domain serializer was introduced, the supply runtime passed 15/15 and all focused Task 3 suites passed 158/158 across 6 files. Firestore rules passed 96/96 and the production build passed. The full unit suite was not rerun because this round did not change a shared core or the inventory digest; the fix-round-1 full-unit result above remains the latest full-suite evidence.
 
 ## Bounded residuals and Task 5 obligations
 
@@ -59,3 +69,5 @@ Fix round 1 planner start: `2026-09-17T13:56:23.100Z` for `task-3-fix-round-1-so
 Planner completion: `2026-09-17T13:51:59.804Z` (`auth_rules`, high risk). The completion file set includes the approved refinement to the live ingredient core and its focused tests.
 
 Fix round 1 planner completion: `2026-09-17T14:06:52.454Z` (`core`, high risk).
+
+Fix round 2 planner completion: `2026-09-17T14:17:57.830Z` (`core`, high risk). The emitted canonical documentation and Product Intelligence obligations remain assigned to Task 5; this remediation changed no canonical authority documents.

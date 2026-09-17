@@ -206,12 +206,28 @@ function evidenceFixture({ required = 50_000_000, onHand = 40_000_000, terminalS
     id: QUOTE,
     organizationId: ORG,
     activeVersionId: requirement.quoteRevisionId,
-    selection: { packageId: "", packageInclusions: { menuItems: [] }, menuItems: ["menu-chicken"], menuItemsSnapshot: [{ id: "menu-chicken", name: "Chicken" }] }
+    selection: {
+      packageId: "",
+      packageInclusions: { menuItems: [] },
+      menuItems: ["menu-chicken"],
+      menuItemsSnapshot: [{ id: "menu-chicken", name: "Chicken", price: 18.75 }]
+    },
+    pricing: { subtotal: 1875.5, taxRate: 0.0825, total: 2030.22875 },
+    acceptedAt: { seconds: 1_796_000_000, nanoseconds: 123_000_000 }
   };
   return { plan, head, requirement, projection, recipeHead, stockState: opened, fences, quote: {
     id: QUOTE, organizationId: ORG, status: "accepted", activeVersionId: requirement.quoteRevisionId,
-    versionMeta: { versionId: requirement.quoteRevisionId }
-  }, quoteVersion: { versionId: requirement.quoteRevisionId, quoteId: QUOTE, organizationId: ORG, snapshot: quoteSnapshot } };
+    versionMeta: { versionId: requirement.quoteRevisionId },
+    total: 2030.22875,
+    taxRate: 0.0825,
+    updatedAt: { _seconds: 1_796_000_100, _nanoseconds: 456_000_000 }
+  }, quoteVersion: {
+    versionId: requirement.quoteRevisionId,
+    quoteId: QUOTE,
+    organizationId: ORG,
+    createdAt: { seconds: 1_796_000_000, nanoseconds: 999_000_000 },
+    snapshot: quoteSnapshot
+  } };
 }
 
 function harness({ fixture = evidenceFixture(), role = "admin", contextRole = role, enabled = true } = {}) {
@@ -481,6 +497,35 @@ describe("event supply action plan authority", () => {
     await expect(h.runtime.applyEventSupplyActionPlanCommand(request(
       fenced("approve", initial.source, 1, { confirmation: "approve_internal_supply_plan" }), "supply-fingerprint-approve-0002"
     ), h.context)).rejects.toMatchObject({ code: "aborted" });
+  });
+
+  test("fingerprints realistic decimal quote evidence and detects an exact total drift", async () => {
+    const h = harness();
+    const initial = await h.runtime.getEventSupplyActionPlan({ schemaVersion: 1, organizationId: ORG, quoteId: QUOTE }, h.context);
+    expect(initial.source).toMatchObject({ eligible: true });
+    await h.runtime.applyEventSupplyActionPlanCommand(request(
+      fenced("save_draft", initial.source, 0, { edits: [edit(initial.source)] }), "supply-decimal-draft-0001"
+    ), h.context);
+    const quotePath = `organizations/${ORG}/quotes/${QUOTE}`;
+    h.db.store.set(quotePath, { ...h.db.store.get(quotePath), total: 2030.23875 });
+    const changed = await h.runtime.getEventSupplyActionPlan({ schemaVersion: 1, organizationId: ORG, quoteId: QUOTE }, h.context);
+    expect(changed).toMatchObject({ stale: true, resolution: "stale", source: { eligible: true } });
+    expect(changed.source.quoteRevisionFingerprint).not.toBe(initial.source.quoteRevisionFingerprint);
+    await expect(h.runtime.applyEventSupplyActionPlanCommand(request(
+      fenced("approve", initial.source, 1, { confirmation: "approve_internal_supply_plan" }), "supply-decimal-approve-0002"
+    ), h.context)).rejects.toMatchObject({ code: "aborted" });
+  });
+
+  test.each([
+    ["non-finite number", (fixture) => { fixture.quote.taxRate = Number.NaN; }],
+    ["unsupported value", (fixture) => { fixture.quoteVersion.snapshot.unsupported = 1n; }]
+  ])("rejects %s in quote fingerprint evidence deterministically", async (_label, mutate) => {
+    const fixture = evidenceFixture();
+    mutate(fixture);
+    const h = harness({ fixture });
+    await expect(h.runtime.getEventSupplyActionPlan(
+      { schemaVersion: 1, organizationId: ORG, quoteId: QUOTE }, h.context
+    )).rejects.toMatchObject({ code: "data-loss" });
   });
 
   test.each(["released", "settled"])("refuses %s allocation evidence and never derives resolved", async (terminalState) => {

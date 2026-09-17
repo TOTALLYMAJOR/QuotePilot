@@ -1,5 +1,6 @@
 "use strict";
 
+const { createHash } = require("node:crypto");
 const inventory = require("./inventoryIngredientCore.cjs");
 const allocation = require("./inventoryIngredientAllocationCore.cjs");
 const inventoryAuthority = require("./inventoryAuthority.js");
@@ -9,6 +10,8 @@ const SUPPLY_PLAN_AUTHORITY_VERSION = "event-supply-action-plan-v1";
 const SUPPLY_PLAN_BOUNDARY = "Internal planning evidence only. It does not contact a vendor, create a purchase order or reservation, authorize spend, confirm supply, or change commercial or inventory authority.";
 const MAX_EDITS = 100;
 const MAX_CONDITIONS = 10;
+const MAX_QUOTE_SOURCE_DEPTH = 64;
+const MAX_QUOTE_SOURCE_NODES = 50_000;
 const SHA256 = /^[a-f0-9]{64}$/u;
 
 class EventSupplyActionPlanError extends Error {
@@ -37,6 +40,82 @@ function boundedText(value, label, maximum, { allowEmpty = false } = {}) {
 function fingerprint(value, label) {
   if (typeof value !== "string" || !SHA256.test(value)) fail("invalid-argument", `${label} must be an exact SHA-256 fingerprint.`);
   return value;
+}
+
+function quoteSourceCanonicalSerialize(value, label = "quote source") {
+  const ancestors = new WeakSet();
+  let nodes = 0;
+  const walk = (entry, path, depth) => {
+    nodes += 1;
+    if (nodes > MAX_QUOTE_SOURCE_NODES || depth > MAX_QUOTE_SOURCE_DEPTH) {
+      fail("data-loss", `${label} exceeds the bounded canonical evidence contract.`);
+    }
+    if (entry === null) return ["null"];
+    if (typeof entry === "string") return ["string", entry];
+    if (typeof entry === "boolean") return ["boolean", entry];
+    if (typeof entry === "number") {
+      if (!Number.isFinite(entry) || Math.abs(entry) > Number.MAX_SAFE_INTEGER) {
+        fail("data-loss", `${path} contains non-finite or unsafe numeric evidence.`);
+      }
+      const normalized = Object.is(entry, -0) ? 0 : entry;
+      return Number.isSafeInteger(normalized)
+        ? ["integer", String(normalized)]
+        : ["decimal", normalized.toString()];
+    }
+    if (entry instanceof Date) {
+      const milliseconds = entry.getTime();
+      if (!Number.isSafeInteger(milliseconds)) fail("data-loss", `${path} contains an invalid timestamp.`);
+      const seconds = Math.floor(milliseconds / 1000);
+      const nanoseconds = (milliseconds - seconds * 1000) * 1_000_000;
+      return ["timestamp", String(seconds), String(nanoseconds).padStart(9, "0")];
+    }
+    if (!entry || typeof entry !== "object") fail("data-loss", `${path} contains unsupported evidence.`);
+    const directTimestamp = (Object.hasOwn(entry, "seconds") || Object.hasOwn(entry, "nanoseconds"))
+      ? { seconds: entry.seconds, nanoseconds: entry.nanoseconds, keys: ["nanoseconds", "seconds"] }
+      : (Object.hasOwn(entry, "_seconds") || Object.hasOwn(entry, "_nanoseconds"))
+        ? { seconds: entry._seconds, nanoseconds: entry._nanoseconds, keys: ["_nanoseconds", "_seconds"] }
+        : null;
+    if (directTimestamp) {
+      const ownKeys = Object.keys(entry).sort();
+      if (ownKeys.length !== 2 || ownKeys.some((key, index) => key !== directTimestamp.keys[index])
+        || !Number.isSafeInteger(directTimestamp.seconds)
+        || !Number.isInteger(directTimestamp.nanoseconds)
+        || directTimestamp.nanoseconds < 0 || directTimestamp.nanoseconds > 999_999_999) {
+        fail("data-loss", `${path} contains an invalid persisted timestamp.`);
+      }
+      return [
+        "timestamp", String(directTimestamp.seconds),
+        String(directTimestamp.nanoseconds).padStart(9, "0")
+      ];
+    }
+    if (ancestors.has(entry)) fail("data-loss", `${path} contains cyclic evidence.`);
+    ancestors.add(entry);
+    try {
+      if (Array.isArray(entry)) {
+        return ["array", entry.map((child, index) => walk(child, `${path}[${index}]`, depth + 1))];
+      }
+      const prototype = Object.getPrototypeOf(entry);
+      if ((prototype !== Object.prototype && prototype !== null)
+        || Object.getOwnPropertySymbols(entry).length > 0) {
+        fail("data-loss", `${path} contains unsupported persisted evidence.`);
+      }
+      const keys = Object.keys(entry).sort();
+      return ["object", keys.map((key) => {
+        if (entry[key] === undefined) fail("data-loss", `${path}.${key} is undefined.`);
+        return [key, walk(entry[key], `${path}.${key}`, depth + 1)];
+      })];
+    } finally {
+      ancestors.delete(entry);
+    }
+  };
+  return JSON.stringify(walk(value, label, 0));
+}
+
+function quoteSourceFingerprint(value) {
+  return createHash("sha256")
+    .update("event-supply-action-plan-quote-source-v1\u0000")
+    .update(quoteSourceCanonicalSerialize(value, "supply quote revision source"))
+    .digest("hex");
 }
 function planIdFor(organizationId, quoteId) {
   return `esap_${inventory.digest({ organizationId: inventory.opaqueId(organizationId), quoteId: inventory.opaqueId(quoteId) }, "supply plan identity").slice(0, 48)}`;
@@ -211,7 +290,7 @@ function sourceFromEvidence(value, identity = {}) {
   const shortageFingerprint = inventory.digest(shortages, "supply shortage source");
   const requirementFingerprint = inventory.digest({ head, requirementRecord }, "supply requirement source");
   const eventProjectionFingerprint = inventory.digest(projection, "supply event projection source");
-  const quoteRevisionFingerprint = inventory.digest({ quote: value.quote, quoteVersion: value.quoteVersion }, "supply quote revision source");
+  const quoteRevisionFingerprint = quoteSourceFingerprint({ quote: value.quote, quoteVersion: value.quoteVersion });
   const recipeFingerprint = inventory.digest(verifiedRecipeHeads, "supply recipe source");
   const stockFingerprint = inventory.digest(verifiedStockStates, "supply stock source");
   const fenceFingerprint = inventory.digest(verifiedFences, "supply allocation fence source");
@@ -690,6 +769,8 @@ module.exports = {
   createEventSupplyActionPlanRuntime,
   normalizeCommand,
   planIdFor,
+  quoteSourceCanonicalSerialize,
+  quoteSourceFingerprint,
   receiptIdFor,
   revisionIdFor,
   sourceFromEvidence,
