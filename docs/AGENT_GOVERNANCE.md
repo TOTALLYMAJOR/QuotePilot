@@ -1,6 +1,6 @@
 # Agent Governance
 
-Last updated: 2026-09-08 15:16:08 CDT
+Last updated: 2026-09-17 02:01:13 CDT
 
 ## Scope
 This document defines governance for repository-managed agent and skill assets under `.codex/skills/`.
@@ -40,6 +40,7 @@ This document defines governance for repository-managed agent and skill assets u
   - `npm run evidence:index`
   - `npm run status:product`
   - `npm run check:product-drift`
+  - `npm run check:product-intelligence`
   - `npm run check:docs:governance`
   - `npm run check:perf:bundle`
   - `npm run check:perf:cwv`
@@ -86,6 +87,13 @@ adds `catering-domain-intelligence` to `dependencies.requiredSkills`, adds
 current QuotePilot authorities to `readFirst`, and keeps advisory domain
 references separate so the agent can form a provisional action before reading
 them.
+
+Every packet also emits `productIntelligence.disposition`, the required
+catering-value declaration fields, and whether `not_applicable` requires a
+rationale. Applicable work requires the Product Intelligence index and
+release/experiment ledger to move together. The planner always emits
+`npm run check:product-intelligence`; the gate validates the canonical graph
+and change-impact mappings before `lane:core` may pass.
 
 For applicable work, the required reasoning order is: reconstruct the user
 objective, inspect repository authority and implementation, form a provisional

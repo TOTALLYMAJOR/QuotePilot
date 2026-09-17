@@ -7,6 +7,27 @@
     "update",
     "complete"
   ],
+  "productIntelligence": {
+    "validation": "npm run check:product-intelligence",
+    "requiredFields": [
+      "actor",
+      "jobOrDecision",
+      "expectedImprovement",
+      "outcomeOrMetricIds",
+      "guardrailIds",
+      "evidenceNeeded"
+    ],
+    "notApplicableRequiresRationale": true,
+    "docRequirements": [
+      {
+        "mode": "all",
+        "paths": [
+          "docs/PRODUCT_INTELLIGENCE.md",
+          "docs/product-intelligence/RELEASE_EXPERIMENT_LEDGER.md"
+        ]
+      }
+    ]
+  },
   "modelTiers": {
     "economy": {
       "defaultModel": "gpt-5.6-luna",
@@ -368,8 +389,17 @@
       "reporting": {
         "taskKeywords": [
           "analytics",
+          "baseline",
+          "catering value",
           "dashboard",
+          "event schema",
+          "experiment",
+          "funnel",
+          "guardrail",
+          "instrumentation",
           "metric",
+          "product intelligence",
+          "product outcome",
           "reporting"
         ],
         "pathFragments": [
@@ -377,11 +407,14 @@
           "dashboard",
           "evidence/",
           "measures",
+          "product-intelligence",
+          "product_intelligence",
           "reporting"
         ],
         "authorityReads": [
           "docs/COMMERCIAL_TRUTH_LOOP_ADR.md",
-          "docs/DESIGN_PRINCIPLES.md"
+          "docs/DESIGN_PRINCIPLES.md",
+          "docs/PRODUCT_INTELLIGENCE.md"
         ],
         "referenceSlices": [
           ".codex/skills/catering-domain-intelligence/references/ux-customer-experience.md"

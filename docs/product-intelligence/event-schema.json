@@ -1,0 +1,219 @@
+{
+  "schemaVersion": 1,
+  "catalogVersion": "2026-09-16",
+  "purpose": "Canonical observation map for QuotePilot product outcomes. It documents implemented analytics events and authoritative records that should be derived rather than duplicated.",
+  "statusVocabulary": [
+    "implemented",
+    "derivable",
+    "partial",
+    "specified_not_implemented",
+    "blocked"
+  ],
+  "captureModes": [
+    "client_product_event",
+    "derive_from_authority_record",
+    "structured_human_receipt"
+  ],
+  "privacy": {
+    "allowedIdentity": [
+      "organizationId",
+      "pseudonymous sessionId",
+      "bounded actor role where needed for authorization evidence"
+    ],
+    "prohibited": [
+      "customer name",
+      "customer email",
+      "customer phone",
+      "free text",
+      "message body",
+      "payment token",
+      "provider secret",
+      "raw request body",
+      "full URL",
+      "unbounded record identifier as a metric label"
+    ],
+    "rule": "Product analytics may observe interaction. Commercial, operational, payment, delivery, and acceptance outcomes are derived from their owning records and receipts rather than asserted by a client event."
+  },
+  "clientEventEnvelope": {
+    "required": {
+      "schemaVersion": "integer",
+      "organizationId": "bounded identifier",
+      "eventName": "allowlisted identifier",
+      "sessionId": "pseudonymous bounded identifier",
+      "sequence": "positive integer",
+      "mode": "create | edit",
+      "occurredAtISO": "ISO-8601 timestamp",
+      "receivedAtISO": "server ISO-8601 timestamp"
+    },
+    "deduplication": "sha256(organizationId + newline + sessionId + newline + sequence)",
+    "currentBatchLimit": 25,
+    "currentSummaryWindowDays": {
+      "minimum": 7,
+      "default": 30,
+      "maximum": 90
+    },
+    "currentSummaryEventLimit": 2500
+  },
+  "signals": [
+    {
+      "id": "SIG-001",
+      "name": "wizard_started",
+      "captureMode": "client_product_event",
+      "status": "implemented",
+      "stage": "quote",
+      "requiredFields": [],
+      "metricIds": ["MET-01", "MET-02"],
+      "sourcePaths": ["src/lib/productAnalyticsCore.js", "functions/productAnalytics.js"]
+    },
+    {
+      "id": "SIG-002",
+      "name": "wizard_step_completed",
+      "captureMode": "client_product_event",
+      "status": "implemented",
+      "stage": "quote",
+      "requiredFields": ["step: integer 1..5"],
+      "metricIds": ["MET-02"],
+      "sourcePaths": ["src/lib/productAnalyticsCore.js", "functions/productAnalytics.js"]
+    },
+    {
+      "id": "SIG-003",
+      "name": "addon_selected_or_removed",
+      "captureMode": "client_product_event",
+      "status": "implemented",
+      "stage": "quote",
+      "requiredFields": ["eventName: addon_selected | addon_removed", "addonId: bounded catalog identifier"],
+      "metricIds": [],
+      "sourcePaths": ["src/lib/productAnalyticsCore.js", "functions/productAnalytics.js"]
+    },
+    {
+      "id": "SIG-004",
+      "name": "quote_saved",
+      "captureMode": "client_product_event",
+      "status": "implemented",
+      "stage": "quote",
+      "requiredFields": [],
+      "metricIds": ["MET-01"],
+      "sourcePaths": ["src/lib/productAnalyticsCore.js", "functions/productAnalytics.js"]
+    },
+    {
+      "id": "SIG-005",
+      "name": "first_intent_observed",
+      "captureMode": "client_product_event",
+      "status": "implemented",
+      "stage": "quote",
+      "requiredFields": [],
+      "metricIds": ["MET-03"],
+      "sourcePaths": ["src/lib/productAnalyticsAmbient.js", "functions/productAnalytics.js"]
+    },
+    {
+      "id": "SIG-006",
+      "name": "priced_draft_receipt_observed",
+      "captureMode": "client_product_event",
+      "status": "implemented",
+      "stage": "quote",
+      "requiredFields": ["durationMs", "pricingAuthority: server_authoritative", "storage: firebase"],
+      "metricIds": ["MET-03"],
+      "sourcePaths": ["src/lib/productAnalyticsAmbient.js", "functions/productAnalytics.js"]
+    },
+    {
+      "id": "SIG-007",
+      "name": "ambient_primary_action_assessed",
+      "captureMode": "client_product_event",
+      "status": "implemented",
+      "stage": "cross_journey",
+      "requiredFields": ["primary: true", "deadlineMs: 250", "deadClick", "optional acknowledgementMs", "optional resultKind"],
+      "metricIds": ["MET-04"],
+      "sourcePaths": ["src/lib/productAnalyticsAmbient.js", "functions/productAnalytics.js"]
+    },
+    {
+      "id": "SIG-008",
+      "name": "ambient_issue_surfaced_or_resolved",
+      "captureMode": "client_product_event",
+      "status": "implemented",
+      "stage": "cross_journey",
+      "requiredFields": ["eventName: ambient_issue_surfaced | ambient_issue_resolved", "allowlisted issueCategory", "durationMs on resolved"],
+      "metricIds": ["MET-05"],
+      "sourcePaths": ["src/lib/productAnalyticsAmbient.js", "functions/productAnalytics.js"]
+    },
+    {
+      "id": "SIG-009",
+      "name": "proposal_decision_transition",
+      "captureMode": "derive_from_authority_record",
+      "status": "derivable",
+      "stage": "proposal",
+      "requiredFields": ["organization", "quote/version", "issuance receipt", "decision receipt or expiry", "authoritative timestamps"],
+      "metricIds": ["MET-06", "MET-07"],
+      "sourcePaths": ["functions/quoteDelivery.js", "functions/proposalAcceptance.js", "functions/commercialChangeAuthority.js"]
+    },
+    {
+      "id": "SIG-010",
+      "name": "commercial_reconciliation_result",
+      "captureMode": "derive_from_authority_record",
+      "status": "derivable",
+      "stage": "closeout",
+      "requiredFields": ["eligible record", "evidence availability", "finding verdict", "integer-cent discrepancy", "evaluation instant"],
+      "metricIds": ["MET-08", "MET-09", "MET-10"],
+      "sourcePaths": ["docs/truthloop-evidence-contract.json", "truthloop/src/quotepilot_truthloop"]
+    },
+    {
+      "id": "SIG-011",
+      "name": "operational_basis_currentness",
+      "captureMode": "derive_from_authority_record",
+      "status": "specified_not_implemented",
+      "stage": "planning",
+      "requiredFields": ["commercial basis revision", "consumer domain", "projection revision", "currentness", "owner", "observedAtISO"],
+      "metricIds": ["MET-11", "MET-12"],
+      "sourcePaths": ["functions/commercialDependencyGraphCore.cjs", "docs/EVENT_WORKSPACE_ADR.md"]
+    },
+    {
+      "id": "SIG-012",
+      "name": "payment_ambiguity_resolution",
+      "captureMode": "derive_from_authority_record",
+      "status": "partial",
+      "stage": "payment",
+      "requiredFields": ["attempt identity", "obligation identity", "dispatch state", "provider state", "ledger state", "ambiguity opened/resolved timestamps"],
+      "metricIds": ["MET-13", "MET-17"],
+      "sourcePaths": ["functions/paymentDispatchState.js", "functions/paymentLedger.js", "functions/stripeProviderState.js"]
+    },
+    {
+      "id": "SIG-013",
+      "name": "event_closeout_recorded",
+      "captureMode": "derive_from_authority_record",
+      "status": "partial",
+      "stage": "closeout",
+      "requiredFields": ["accepted version", "event completion evidence", "actual attendance receipt", "correction history", "recordedAtISO"],
+      "metricIds": ["MET-14"],
+      "sourcePaths": ["functions/postEventCloseout.js", "functions/quoteAttendance.js", "docs/ATTENDANCE_STATE_ADR.md"]
+    },
+    {
+      "id": "SIG-014",
+      "name": "safe_rebook_created",
+      "captureMode": "derive_from_authority_record",
+      "status": "specified_not_implemented",
+      "stage": "relationship",
+      "requiredFields": ["new quote identity", "origin identity", "safe copied-field manifest", "excluded authority manifest", "createdAtISO"],
+      "metricIds": ["MET-15"],
+      "sourcePaths": ["src/lib/quoteStore.js"]
+    },
+    {
+      "id": "SIG-015",
+      "name": "human_workflow_assessment",
+      "captureMode": "structured_human_receipt",
+      "status": "specified_not_implemented",
+      "stage": "pilot",
+      "requiredFields": ["study ID", "participant role", "comparable task ID", "completion result", "elapsed time", "material corrections", "preference", "recordedAtISO"],
+      "metricIds": ["MET-16"],
+      "sourcePaths": ["docs/DELIVERY_PLANNING_PROGRAM.md"]
+    },
+    {
+      "id": "SIG-016",
+      "name": "critical_integrity_incident",
+      "captureMode": "derive_from_authority_record",
+      "status": "partial",
+      "stage": "guardrail",
+      "requiredFields": ["incident class", "evidence class", "affected release", "containment", "owner decision", "recordedAtISO"],
+      "metricIds": ["MET-17"],
+      "sourcePaths": [".github/SECURITY.md", "PROJECT_STATUS.md", "docs/LAUNCH_RUNBOOK.md"]
+    }
+  ]
+}

@@ -1,6 +1,6 @@
 # Orchestration Runbook
 
-Last updated: 2026-09-08 15:16:08 CDT
+Last updated: 2026-09-17 02:01:13 CDT
 
 ## Purpose
 Operational usage guide for orchestration lanes, CI behavior, and release evidence expectations.
@@ -35,6 +35,12 @@ npm run plan:task -- --task "Fix Proposal Composer mobile overflow" \
 Copy `lifecycle.recordedAt` into the completion report. Governed documentation
 uses the local `Last updated: YYYY-MM-DD HH:MM:SS TZ` header instead; the docs
 gate requires that value to advance whenever the document changes.
+
+Inspect `productIntelligence` in the same packet. When its disposition is
+`required`, record the actor, catering job or decision, expected improvement,
+outcome or metric IDs, guardrail IDs, evidence need, and release/experiment
+ledger entry before implementation. When it is `not_applicable_allowed`, use
+`not_applicable` only for genuinely mechanical work and record the rationale.
 
 For a UI-classified plan, confirm `dependencies.requiredSkills` contains
 `design-language` before editing. Load it completely, then read
@@ -192,6 +198,7 @@ documentation, UI, and core changes, the minimum closeout remains:
 ```bash
 npm run check:env
 npm run build
+npm run check:product-intelligence
 npm run check:docs:governance
 ```
 

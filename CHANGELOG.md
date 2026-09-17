@@ -1,11 +1,25 @@
 # Changelog
 
-Last updated: 2026-09-14 15:10:39 CDT
+Last updated: 2026-09-17 02:01:13 CDT
 
 All notable project changes are documented in this file.
 
 ## Unreleased — Event and Commercial activation receipt correction
 
+- Enforce the Product Intelligence System with a fail-closed structural and
+  change-impact validator in `lane:core`. Task plans now classify explicit
+  catering-value/product-intelligence work correctly, emit the required actor,
+  job, improvement, outcome/metric, guardrail, and evidence fields, and require
+  the index plus release/experiment ledger. The PR template exposes the same
+  declaration, while mechanical work requires an explicit not-applicable
+  rationale instead of an invented catering benefit.
+- Add the canonical QuotePilot Product Intelligence System: eight linked
+  catering-value artifacts covering outcomes, user capabilities, metric
+  definitions, privacy-bounded observation signals, baseline/target policy,
+  owner/customer journeys, quality guardrails, and a release/experiment ledger.
+  Existing analytics and authority records are mapped as implemented,
+  derivable, partial, or not yet observable; proposed targets remain pending
+  owner acceptance and no new runtime telemetry or outcome claim is implied.
 - Make candidate preflight verify enabled Secret Manager metadata for every
   Google Calendar and Model Assist binding before it can reserve an immutable
   receipt or attempt a Firebase mutation. The preflight still never reads or

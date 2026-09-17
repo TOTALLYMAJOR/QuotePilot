@@ -9,6 +9,17 @@
 - required_lanes: auto / manual override (list lanes if override)
 - doc_impact: canonical docs touched (`README.md`, `PROJECT_STATUS.md`, `DEV_TASKS.md`, `CHANGELOG.md`, `docs/DOC_SYSTEM.md`)
 
+## Product Intelligence Contract
+- disposition: required / not_applicable
+- If `not_applicable`, rationale:
+- Actor:
+- Catering job or decision:
+- Expected improvement:
+- Outcome or metric IDs:
+- Guardrail IDs:
+- Evidence needed:
+- Release / experiment ledger entry:
+
 ## Lane Evidence
 - [ ] `lane:quick` (`npm run lane:quick`)
 - [ ] `lane:core` (`npm run lane:core`)
@@ -22,6 +33,7 @@
 - [ ] `npm run check:env`
 - [ ] `npm run build`
 - [ ] `npm run check:capability-surfaces` (required for backend/data authority changes)
+- [ ] `npm run check:product-intelligence`
 - [ ] Manual behavior check completed (if needed)
 
 ## Capability Surfacing Contract
