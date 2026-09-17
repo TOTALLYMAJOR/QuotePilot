@@ -11,7 +11,7 @@ vi.mock("../CustomerCommercialMeasures", () => ({ default: () => null }));
 vi.mock("../CustomerCommercialTimeline", () => ({ default: () => null }));
 vi.mock("../RevenueAutopilotCustomerControls", () => ({ default: () => null }));
 vi.mock("../../hooks/useCatalogSetupDraft", () => ({ useCatalogSetupDraft: () => ({ draft: null, loading: false, changes: [] }) }));
-vi.mock("../../lib/firebase", async () => ({ ...(await vi.importActual("../../lib/firebase")), firebaseReady: true, auth: { currentUser: { uid: "admin-one" } }, cloudFunctions: {}, db: {} }));
+vi.mock("../../lib/firebase", () => ({ firebaseReady: true, auth: { currentUser: { uid: "admin-one" } }, cloudFunctions: {}, db: {} }));
 vi.mock("firebase/functions", () => ({ httpsCallable: () => mock.call }));
 vi.mock("../../lib/eventOperatingActualsClient", async () => ({ ...(await vi.importActual("../../lib/eventOperatingActualsClient")), getEventOperatingActualsSnapshot: mock.actuals }));
 vi.mock("../../lib/inventoryAuthorityClient", async () => ({
