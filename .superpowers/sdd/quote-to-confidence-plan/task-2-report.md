@@ -15,6 +15,15 @@ Implemented and locally validated the Release 2 decision presentation behind the
 - Local fallback decision, acceptance, and payment records remain explicitly unavailable, and unsupported payment states are contradictory rather than silently normalized.
 - Added the default-off tenant flag `featureFlags.decisionPacket` and build gate `VITE_DECISION_PACKET_ENABLED`. Both must be explicitly enabled. The Legacy app normalizes and preserves the flag but does not expose a new Legacy-only surface.
 
+## Review fix round 1
+
+- Restored the pre-Task-2 workbench rendering and review eligibility when `decisionPacket` is off. The six-row comparison and its fail-closed review block now apply only when both the build and tenant gates enable the release.
+- Hardened all six comparison rows. Guest, price, and margin require exact matching deltas; price requires a valid currency; staffing requires coverage state and gap totals; supply requires a coverage state consistent with its shortage count. Malformed evidence that claims to be healthy is downgraded to `schema_drift` and cannot reach review.
+- Template starts now open the actual destination disclosure and focus the actual template control in both Guided and Composer modes. The interaction tests click the governed start action against the real mode components.
+- Accepted-revision handoff now requires the active accepted revision, a portal decision bound to the same acceptance receipt ID, and matching quote/receipt portal issuance identities. Delivery provenance cannot override the active accepted revision, and Quote History preserves both accepted-revision and receipt IDs in its existing administration destination.
+- The decision-packet headline claims an exact handoff only when that handoff is actually available.
+- Repaired the two inherited Task 1 expectations narrowly: the ambient marker count now includes the three added customer/event fields, and the Step Event snapshot records only those corresponding markers.
+
 ## Authority and domain review
 
 The catering-domain reconsideration result is **BOUND**. The presentation reduces re-entry and review effort, but it does not turn a template, previous event, scenario, acceptance receipt, or payment label into a new authority. Blank and template starts enter the ordinary quote draft; prior accepted events enter the existing exact-version rebook selection and staff review; the decision packet routes to existing quote administration only after matching the accepted revision and receipt. Supply remains a read projection and does not reserve stock, staffing remains recorded assignment versus projected requirement, and margin uses recorded costs only.
@@ -23,11 +32,9 @@ No customer decision, signature, acceptance, charge, booking, delivery, price, s
 
 ## Validation evidence
 
-- Final Task 2 projection/UI suites: **PASS** — 4 files, 47 tests.
-- Expanded Task 2 integration suites: **PASS** — 10 files, 99 tests, covering Quote History, scenario workbench, living-twin, and hook/lib integration.
-- Task 1 preservation suites: **PASS** — 8 files, 119 tests.
-- Repository unit suite: **PARTIAL** — 502 files passed, 3 skipped, 2 failed; 5,970 tests passed, 100 skipped, 2 failed. Both failures are inherited Task 1 fixture drift in unchanged Task 2 files: `ambientEventLogisticsEditorFocus.test.jsx` still expects five ambient markers although Task 1 added three exact destination markers, and `wizardVisualSnapshots.test.jsx` retains the pre-Task-1 Step Event snapshot. `WizardSteps.jsx` and both failing test files are unchanged by Task 2.
-- `npm run build`: **PASS** — final Vite production build completed in 30.05s.
+- Review-fix projection/UI/integration suites: **PASS** — 6 files, 52 tests, including actual Guided/Composer click-through focus, gate-off compatibility, malformed-evidence fail-closed behavior, receipt/revision/issuance mismatch handling, exact Quote History destination identity, and both inherited expectation repairs.
+- Repository unit suite: **PASS** — 504 files passed, 3 skipped; 5,989 tests passed, 100 skipped.
+- `npm run build`: **PASS** — final Vite production build completed in 34.51s.
 - `npm run check:project-state`: **PASS**.
 - `git diff --check`: **PASS**.
 - `npm run check:env`: **BLOCKED BY LOCAL ENVIRONMENT** — the isolated worktree has none of the six required `VITE_FIREBASE_*` values. No values were fabricated or committed.
@@ -54,12 +61,13 @@ Until Task 5 completes that reconciliation, release integration must not treat t
 
 - Start: `2026-09-17T12:23:40.085Z`
 - Complete: `2026-09-17T12:47:15.917Z`
+- Review fix round 1 start: `2026-09-17T12:51:41.509Z`
+- Review fix round 1 complete: `2026-09-17T13:10:42.293Z`
 
 ## Residual concerns
 
 - The feature cannot appear in a normal build until both gates are explicitly enabled.
 - Canonical capability and Product Intelligence registration is deliberately pending Task 5.
-- The repository-wide suite retains two inherited Task 1 fixture failures described above; Task 2's focused suites and all Task 1 preservation suites pass.
 - Connected provider, hosted, production, and human-acceptance behavior was not exercised by this local slice.
 
 ## Development impact

@@ -28,6 +28,16 @@ function whole(value) {
   return Number.isSafeInteger(value) && value >= 0 ? value : null;
 }
 
+function integer(value) {
+  return Number.isSafeInteger(value) ? value : null;
+}
+
+function approximatelyEqual(left, right) {
+  return finite(left) !== null
+    && finite(right) !== null
+    && Math.abs(left - right) <= 1e-9;
+}
+
 function freeze(value, seen = new WeakSet()) {
   if (!value || typeof value !== "object" || seen.has(value)) return value;
   seen.add(value);
@@ -88,6 +98,10 @@ function unavailableRow(id, label, state, reason) {
   };
 }
 
+function malformedRow(id, label, reason) {
+  return unavailableRow(id, label, "schema_drift", reason);
+}
+
 function staffingSummary(value) {
   const required = whole(value?.totalRequired);
   const assigned = whole(value?.totalAssigned);
@@ -95,19 +109,32 @@ function staffingSummary(value) {
   return `${required} required · ${assigned} assigned`;
 }
 
+function staffingSnapshotValid(value) {
+  const coverageState = text(value?.coverageState).toLowerCase();
+  const required = whole(value?.totalRequired);
+  const assigned = whole(value?.totalAssigned);
+  const gap = whole(value?.totalGap);
+  if (required === null || assigned === null || gap === null
+    || !["not_required", "coverage_confirmed", "attention"].includes(coverageState)) {
+    return false;
+  }
+  if (coverageState === "not_required") return required === 0 && gap === 0;
+  if (coverageState === "coverage_confirmed") return gap === 0;
+  return gap > 0;
+}
+
 function staffingDifference(current, proposed) {
   const currentRequired = whole(current?.totalRequired);
   const proposedRequired = whole(proposed?.totalRequired);
-  const proposedAssigned = whole(proposed?.totalAssigned);
-  if (currentRequired === null || proposedRequired === null || proposedAssigned === null) {
+  const proposedGap = whole(proposed?.totalGap);
+  if (currentRequired === null || proposedRequired === null || proposedGap === null) {
     return "Not available";
   }
   const requirementDelta = proposedRequired - currentRequired;
-  const gap = Math.max(0, proposedRequired - proposedAssigned);
   const requirement = requirementDelta === 0
     ? "No requirement change"
     : `${requirementDelta > 0 ? "+" : "−"}${Math.abs(requirementDelta)} required`;
-  return `${requirement} · ${gap} uncovered`;
+  return `${requirement} · ${proposedGap} uncovered`;
 }
 
 function supplyShortageCount(value) {
@@ -129,6 +156,13 @@ function supplySummary(value) {
   return "Coverage unknown";
 }
 
+function supplySnapshotValid(value) {
+  const coverage = text(value?.coverageState).toLowerCase();
+  const shortages = whole(value?.shortageCount);
+  if (shortages === null || !["covered", "shortage"].includes(coverage)) return false;
+  return coverage === "covered" ? shortages === 0 : shortages > 0;
+}
+
 function supplyDifference(current, proposed) {
   const before = supplyShortageCount(current);
   const after = supplyShortageCount(proposed);
@@ -144,19 +178,27 @@ export function buildCommercialConsequenceComparison(projection = {}) {
   const fulfillment = record(projection.fulfillment) ? projection.fulfillment : {};
   const currentGuests = whole(scenario.currentGuestCount);
   const proposedGuests = whole(scenario.proposedGuestCount);
-  const guests = currentGuests !== null && proposedGuests !== null
+  const guestDelta = integer(scenario.guestDelta);
+  const guests = currentGuests !== null
+    && proposedGuests !== null
+    && guestDelta !== null
+    && guestDelta === proposedGuests - currentGuests
     ? {
         id: "guests",
         label: "Guests",
         current: `${currentGuests} guests`,
         proposed: `${proposedGuests} guests`,
-        difference: proposedGuests === currentGuests
+        difference: guestDelta === 0
           ? "No change"
-          : `${proposedGuests > currentGuests ? "+" : "−"}${Math.abs(proposedGuests - currentGuests)} guests`,
+          : `${guestDelta > 0 ? "+" : "−"}${Math.abs(guestDelta)} guests`,
         evidenceState: "available",
         reason: "Saved priced count compared with the current session proposal."
       }
-    : unavailableRow("guests", "Guests", "missing", "The saved and proposed guest counts must both be present.");
+    : malformedRow(
+        "guests",
+        "Guests",
+        "The saved count, proposed count, and exact matching guest delta are required."
+      );
 
   const menuNames = Array.isArray(scenario.selectedMenuItemNames)
     ? [...new Set(scenario.selectedMenuItemNames.map(text).filter(Boolean))]
@@ -180,45 +222,71 @@ export function buildCommercialConsequenceComparison(projection = {}) {
 
   const commercial = record(consequences.commercial) ? consequences.commercial : {};
   const commercialState = evidenceState(commercial.evidenceState);
-  const price = HEALTHY_EVIDENCE_STATES.has(commercialState)
-    && finite(commercial.total?.before) !== null
-    && finite(commercial.total?.proposedAfter) !== null
+  const priceBefore = finite(commercial.total?.before);
+  const priceAfter = finite(commercial.total?.proposedAfter);
+  const priceDelta = finite(commercial.total?.delta);
+  const commercialCurrency = text(commercial.currency).toUpperCase();
+  const priceShapeValid = priceBefore !== null
+    && priceAfter !== null
+    && priceDelta !== null
+    && /^[A-Z]{3}$/u.test(commercialCurrency)
+    && approximatelyEqual(priceDelta, priceAfter - priceBefore);
+  const price = HEALTHY_EVIDENCE_STATES.has(commercialState) && priceShapeValid
     ? {
         id: "price",
         label: "Price",
-        current: money(commercial.total.before, commercial.currency),
-        proposed: money(commercial.total.proposedAfter, commercial.currency),
-        difference: signedMoney(commercial.total.delta, commercial.currency),
+        current: money(priceBefore, commercialCurrency),
+        proposed: money(priceAfter, commercialCurrency),
+        difference: signedMoney(priceDelta, commercialCurrency),
         evidenceState: commercialState,
         reason: "Values come from the existing authoritative commercial preview."
       }
-    : unavailableRow(
-        "price",
-        "Price",
-        commercialState,
-        "The exact authoritative price preview is not current for this scenario."
-      );
+    : HEALTHY_EVIDENCE_STATES.has(commercialState)
+      ? malformedRow(
+          "price",
+          "Price",
+          "The authoritative price preview is missing exact values, currency, or a matching delta."
+        )
+      : unavailableRow(
+          "price",
+          "Price",
+          commercialState,
+          "The exact authoritative price preview is not current for this scenario."
+        );
 
   const marginEvidence = record(consequences.margin) ? consequences.margin : {};
   const marginState = evidenceState(marginEvidence.evidenceState, "missing");
-  const margin = HEALTHY_EVIDENCE_STATES.has(marginState)
-    && finite(marginEvidence.before) !== null
-    && finite(marginEvidence.proposedAfter) !== null
+  const marginBefore = finite(marginEvidence.before);
+  const marginAfter = finite(marginEvidence.proposedAfter);
+  const marginDelta = finite(marginEvidence.delta);
+  const marginShapeValid = marginBefore !== null
+    && marginAfter !== null
+    && marginDelta !== null
+    && marginBefore <= 1
+    && marginAfter <= 1
+    && approximatelyEqual(marginDelta, marginAfter - marginBefore);
+  const margin = HEALTHY_EVIDENCE_STATES.has(marginState) && marginShapeValid
     ? {
         id: "margin",
         label: "Margin",
-        current: percent(marginEvidence.before),
-        proposed: percent(marginEvidence.proposedAfter),
-        difference: signedPercent(marginEvidence.delta),
+        current: percent(marginBefore),
+        proposed: percent(marginAfter),
+        difference: signedPercent(marginDelta),
         evidenceState: marginState,
         reason: "Recorded-cost presentation only; no missing cost is estimated."
       }
-    : unavailableRow(
-        "margin",
-        "Margin",
-        marginState,
-        "Complete recorded-cost coverage for both snapshots is required before margin can be compared."
-      );
+    : HEALTHY_EVIDENCE_STATES.has(marginState)
+      ? malformedRow(
+          "margin",
+          "Margin",
+          "The recorded-cost margin evidence is missing exact values or a matching delta."
+        )
+      : unavailableRow(
+          "margin",
+          "Margin",
+          marginState,
+          "Complete recorded-cost coverage for both snapshots is required before margin can be compared."
+        );
 
   const people = record(fulfillment.people) ? fulfillment.people : {};
   const peopleState = evidenceState(
@@ -226,7 +294,12 @@ export function buildCommercialConsequenceComparison(projection = {}) {
   );
   const staffingCurrent = staffingSummary(people.current);
   const staffingProposed = staffingSummary(people.proposed);
-  const staffing = HEALTHY_EVIDENCE_STATES.has(peopleState) && staffingCurrent && staffingProposed
+  const staffingShapeValid = staffingSnapshotValid(people.current)
+    && staffingSnapshotValid(people.proposed);
+  const staffing = HEALTHY_EVIDENCE_STATES.has(peopleState)
+    && staffingShapeValid
+    && staffingCurrent
+    && staffingProposed
     ? {
         id: "staffing",
         label: "Staffing",
@@ -236,12 +309,18 @@ export function buildCommercialConsequenceComparison(projection = {}) {
         evidenceState: peopleState,
         reason: "Current operator-confirmed assignments compared with existing projected requirements."
       }
-    : unavailableRow(
-        "staffing",
-        "Staffing",
-        peopleState,
-        "Current staffing evidence and proposed requirements must both be complete and current."
-      );
+    : HEALTHY_EVIDENCE_STATES.has(peopleState)
+      ? malformedRow(
+          "staffing",
+          "Staffing",
+          "Staffing coverage, totals, and gaps must be internally consistent for both snapshots."
+        )
+      : unavailableRow(
+          "staffing",
+          "Staffing",
+          peopleState,
+          "Current staffing evidence and proposed requirements must both be complete and current."
+        );
 
   const supplyEvidence = record(fulfillment.supply) ? fulfillment.supply : {};
   const supplyState = evidenceState(
@@ -249,7 +328,12 @@ export function buildCommercialConsequenceComparison(projection = {}) {
   );
   const supplyCurrent = supplySummary(supplyEvidence.current);
   const supplyProposed = supplySummary(supplyEvidence.proposed);
-  const supply = HEALTHY_EVIDENCE_STATES.has(supplyState) && supplyCurrent && supplyProposed
+  const supplyShapeValid = supplySnapshotValid(supplyEvidence.current)
+    && supplySnapshotValid(supplyEvidence.proposed);
+  const supply = HEALTHY_EVIDENCE_STATES.has(supplyState)
+    && supplyShapeValid
+    && supplyCurrent
+    && supplyProposed
     ? {
         id: "supply",
         label: "Supply",
@@ -259,12 +343,18 @@ export function buildCommercialConsequenceComparison(projection = {}) {
         evidenceState: supplyState,
         reason: "Exact current inventory projection evidence only; this does not reserve stock."
       }
-    : unavailableRow(
-        "supply",
-        "Supply",
-        supplyState,
-        "Current and proposed supply evidence must both be complete and current."
-      );
+    : HEALTHY_EVIDENCE_STATES.has(supplyState)
+      ? malformedRow(
+          "supply",
+          "Supply",
+          "Supply coverage and shortage counts must be present and internally consistent for both snapshots."
+        )
+      : unavailableRow(
+          "supply",
+          "Supply",
+          supplyState,
+          "Current and proposed supply evidence must both be complete and current."
+        );
 
   const rows = [guests, menu, price, margin, staffing, supply];
   const blockingEvidenceStates = [...new Set(
@@ -370,19 +460,29 @@ function acceptanceEvidence(quote) {
   }
   const receiptId = text(receipt.receiptId);
   const receiptRevisionId = text(receipt.quoteRevisionId);
-  const expectedRevisionId = text(quote?.deliveryEvidence?.revisionId || quote?.activeVersionId);
+  const expectedRevisionId = text(quote?.activeVersionId || quote?.versionMeta?.versionId);
   const issuedAtISO = text(quote?.portalIssuedAtISO);
   const receiptIssuedAtISO = text(receipt.portalIssuedAtISO);
-  if (!receiptId || !receiptRevisionId || !expectedRevisionId) {
+  const decisionReceiptId = text(quote?.portalDecision?.requestId);
+  if (!receiptId || !receiptRevisionId || !expectedRevisionId || !issuedAtISO
+    || !receiptIssuedAtISO || !decisionReceiptId) {
     return {
       evidenceState: "schema_drift",
       receiptId: receiptId || null,
       acceptedRevisionId: null,
-      reason: "The acceptance receipt is missing exact revision identity."
+      reason: "The acceptance receipt is missing exact receipt, revision, or portal issuance identity."
+    };
+  }
+  if (decisionReceiptId !== receiptId) {
+    return {
+      evidenceState: "contradictory",
+      receiptId,
+      acceptedRevisionId: null,
+      reason: "The accepted portal decision and acceptance receipt identities disagree."
     };
   }
   if (receiptRevisionId !== expectedRevisionId
-    || (issuedAtISO && receiptIssuedAtISO && issuedAtISO !== receiptIssuedAtISO)) {
+    || issuedAtISO !== receiptIssuedAtISO) {
     return {
       evidenceState: "stale",
       receiptId,

@@ -28,6 +28,7 @@ import { StepEvent, StepMenu, StepReview, StepServices } from "./components/Wiza
 import CreateIntake from "./components/CreateIntake";
 import { parseIntentDraftWithModel } from "./lib/intentParseClient";
 import { resolveQuoteCompletionCommandPathGate } from "./lib/quoteCompletionGate";
+import { resolveDecisionPacketGate } from "./lib/quoteConfidenceDecisionPacket";
 import {
   resolveQuoteWizardCompletionDestination,
   scheduleQuoteCompletionDestinationFocus
@@ -1428,6 +1429,10 @@ function LegacyAppCore({
   const quoteCompletionCommandPathEnabled = resolveQuoteCompletionCommandPathGate({
     buildValue: import.meta.env.VITE_QUOTE_COMPLETION_COMMAND_PATH_ENABLED,
     tenantValue: featureFlags.quoteCompletionCommandPath
+  });
+  const decisionPacketEnabled = resolveDecisionPacketGate({
+    buildValue: import.meta.env.VITE_DECISION_PACKET_ENABLED,
+    tenantValue: featureFlags.decisionPacket
   });
   const proposalComposerQuoteActionController = useMemo(() => (
     editingQuote?.id
@@ -4209,6 +4214,7 @@ function LegacyAppCore({
       statusNotes={builderStatusNotes}
       changeImpactSurface={changeImpactSurface}
       livingCommercialTwin={isEditingQuote ? {
+        decisionPacketEnabled,
         projection: livingCommercialTwinProjection,
         scopeKey: livingTwinScopeKey,
         baseQuoteRevisionId: livingTwinBaseQuoteRevisionId,

@@ -52,6 +52,6 @@ describe("Ambient event-logistics editor focus targets", () => {
     expect(host.querySelector('[data-ambient-field="hours"]')).toMatchObject({ type: "number" });
     expect(host.querySelector('[data-ambient-field="venue"]')).toMatchObject({ type: "text" });
     expect(host.querySelector('[data-ambient-field="venueAddress"]')).toMatchObject({ type: "text" });
-    expect(host.querySelectorAll("[data-ambient-field]")).toHaveLength(5);
+    expect(host.querySelectorAll("[data-ambient-field]")).toHaveLength(8);
   });
 });

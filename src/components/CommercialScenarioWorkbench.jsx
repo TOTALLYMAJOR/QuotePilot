@@ -348,6 +348,7 @@ function focusGovernedReview() {
 
 function CommercialScenarioWorkbenchReady({
   projection,
+  decisionPacketEnabled = false,
   resolvedScopeKey,
   resolvedBaseRevisionId,
   resolvedCurrentGuestCount,
@@ -536,7 +537,8 @@ function CommercialScenarioWorkbenchReady({
   const activeProposalChanged = activeScenario.guestCount !== snapshot.currentScenario.guestCount
     || (exactProjectionUsable && visibleProjection?.scenario?.proposalChanged === true);
   const consequenceComparison = buildCommercialConsequenceComparison(visibleProjection || {});
-  const consequenceEvidenceReady = consequenceComparison.canContinueToGovernedReview;
+  const consequenceEvidenceReady = !decisionPacketEnabled
+    || consequenceComparison.canContinueToGovernedReview;
   const currentPreviewLoading = currentDraftChanged && projection?.state === "loading";
   const workbenchUpdating = !isCurrent
     && !retryAvailable
@@ -682,10 +684,12 @@ function CommercialScenarioWorkbenchReady({
             currentGuestCount={snapshot.currentScenario.guestCount}
           />
 
-          <ConsequenceComparison
-            activeScenario={activeScenario}
-            visibleProjection={visibleProjection}
-          />
+          {decisionPacketEnabled ? (
+            <ConsequenceComparison
+              activeScenario={activeScenario}
+              visibleProjection={visibleProjection}
+            />
+          ) : null}
 
           {showingRetainedProjection ? (
             <p className="csw-retained-note">

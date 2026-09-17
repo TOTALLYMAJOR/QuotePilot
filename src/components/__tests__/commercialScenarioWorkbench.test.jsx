@@ -41,7 +41,13 @@ function projection(guests, {
   proposalChanged = guests !== CURRENT_GUESTS,
   state = "partial",
   nextAction = null,
-  previewError = ""
+  previewError = "",
+  marginEvidence = {
+    evidenceState: "available",
+    before: 0.31,
+    proposedAfter: 0.27,
+    delta: -0.04
+  }
 } = {}) {
   const shortage = guests > 137;
   const total = 12_480 + ((guests - CURRENT_GUESTS) * 88.8);
@@ -82,12 +88,7 @@ function projection(guests, {
           delta: deposit - 3_120
         }
       },
-      margin: {
-        evidenceState: "available",
-        before: 0.31,
-        proposedAfter: 0.27,
-        delta: -0.04
-      },
+      margin: marginEvidence,
       inventory: {
         evidenceState: guests === CURRENT_GUESTS ? "not_applicable" : "available",
         cost: {
@@ -133,8 +134,18 @@ function projection(guests, {
       people: {
         evidenceState: "available",
         freshness: "current",
-        current: { totalAssigned: 6, totalRequired: 6, totalGap: 0 },
-        proposed: { totalAssigned: 6, totalRequired: guests >= 168 ? 7 : 6 },
+        current: {
+          coverageState: "coverage_confirmed",
+          totalAssigned: 6,
+          totalRequired: 6,
+          totalGap: 0
+        },
+        proposed: {
+          coverageState: guests >= 168 ? "attention" : "coverage_confirmed",
+          totalAssigned: 6,
+          totalRequired: guests >= 168 ? 7 : 6,
+          totalGap: guests >= 168 ? 1 : 0
+        },
         resilience: { evidenceState: "available", eligibleProfileCount: 2 },
         staffingHeadroom: {
           state: "missing",
@@ -149,12 +160,14 @@ function projection(guests, {
         current: {
           guestCount: CURRENT_GUESTS,
           coverageState: "covered",
+          shortageCount: 0,
           shortages: [],
           projectedCost: { state: "available", currency: "USD", amountMinor: 80_000 }
         },
         proposed: {
           guestCount: guests,
           coverageState: shortage ? "shortage" : "covered",
+          shortageCount: supplyShortages.length,
           shortages: supplyShortages,
           projectedCost: { state: "available", currency: "USD", amountMinor: ingredientCost }
         },
@@ -278,6 +291,7 @@ describe("CommercialScenarioWorkbench", () => {
         baseQuoteRevisionId={REVISION}
         currentGuestCount={CURRENT_GUESTS}
         proposedGuestCount={175}
+        decisionPacketEnabled
         previewDebounceMs={0}
         clock={() => "2026-09-09T16:00:00.000Z"}
         idFactory={({ slot }) => `scenario-${slot.toLowerCase()}`}
@@ -295,6 +309,67 @@ describe("CommercialScenarioWorkbench", () => {
     expect(panel.textContent).toContain("Supply");
     expect(panel.textContent).toContain("Difference");
     expect(panel.textContent).toContain("Current evidence");
+  });
+
+  test("keeps the Task 1 workbench render and review eligibility unchanged while the gate is off", async () => {
+    const request = requestEnvelope({ guestCount: 175 });
+    act(() => root.render(
+      <CommercialScenarioWorkbench
+        projection={projection(175, {
+          workbenchRequest: request,
+          state: "ready",
+          marginEvidence: {
+            evidenceState: "available",
+            before: 0.31,
+            proposedAfter: 0.27
+          }
+        })}
+        scopeKey={SCOPE}
+        baseQuoteRevisionId={REVISION}
+        currentGuestCount={CURRENT_GUESTS}
+        proposedGuestCount={175}
+        onReviewForCommitment={vi.fn()}
+        previewDebounceMs={0}
+        clock={() => "2026-09-09T16:00:00.000Z"}
+        idFactory={({ slot }) => `scenario-${slot.toLowerCase()}`}
+      />
+    ));
+
+    await act(async () => Promise.resolve());
+    expect(container.querySelector('[data-consequence-comparison="current-proposed-difference"]'))
+      .toBeNull();
+    expect(button("Review change")?.disabled).toBe(false);
+  });
+
+  test("fails closed on malformed consequence evidence only when the gate is enabled", async () => {
+    const request = requestEnvelope({ guestCount: 175 });
+    act(() => root.render(
+      <CommercialScenarioWorkbench
+        projection={projection(175, {
+          workbenchRequest: request,
+          state: "ready",
+          marginEvidence: {
+            evidenceState: "available",
+            before: 0.31,
+            proposedAfter: 0.27
+          }
+        })}
+        scopeKey={SCOPE}
+        baseQuoteRevisionId={REVISION}
+        currentGuestCount={CURRENT_GUESTS}
+        proposedGuestCount={175}
+        onReviewForCommitment={vi.fn()}
+        decisionPacketEnabled
+        previewDebounceMs={0}
+        clock={() => "2026-09-09T16:00:00.000Z"}
+        idFactory={({ slot }) => `scenario-${slot.toLowerCase()}`}
+      />
+    ));
+
+    await act(async () => Promise.resolve());
+    expect(container.querySelector('[data-consequence-comparison="current-proposed-difference"]'))
+      .not.toBeNull();
+    expect(button("Resolve evidence before review")?.disabled).toBe(true);
   });
 
   test("resolves and restores the exact inventory constraint by editing the active scenario", () => {

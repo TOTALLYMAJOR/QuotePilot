@@ -1,7 +1,9 @@
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import "./ambientSurfaceGrammar.css";
 import AuthGate from "./components/AuthGate";
-import GovernedQuoteStarts from "./components/GovernedQuoteStarts";
+import GovernedQuoteStarts, {
+  scheduleGovernedTemplateDestinationFocus
+} from "./components/GovernedQuoteStarts";
 import { RebookQuoteReviewBanner } from "./components/CustomerRebookDraftAction";
 import LiveBreakdown from "./components/LiveBreakdown";
 import ProposalComposer, {
@@ -6739,15 +6741,13 @@ export default function App({
             });
           }}
           onReviewTemplate={() => {
-            if (PROPOSAL_COMPOSER_ENABLED) {
-              setBuilderMode("composer");
-            } else {
-              setBuilderMode("guided");
+            const editorMode = proposalComposerActive ? "composer" : "guided";
+            if (editorMode === "guided") {
               setStep(1);
             }
-            window.requestAnimationFrame(() => {
-              document.getElementById("proposal-event-template")?.focus({ preventScroll: true });
-              wizardRef.current?.querySelector('[data-choice-field="event-template"] select')?.focus({ preventScroll: true });
+            scheduleGovernedTemplateDestinationFocus({
+              editorMode,
+              root: editorMode === "guided" ? wizardRef : document
             });
           }}
           onReviewPriorAccepted={() => navigateWorkspace(WORKSPACE_PATHS.customers)}
@@ -7078,6 +7078,7 @@ export default function App({
       statusNotes={builderStatusNotes}
       changeImpactSurface={changeImpactSurface}
       livingCommercialTwin={isEditingQuote ? {
+        decisionPacketEnabled,
         projection: livingCommercialTwinProjection,
         scopeKey: livingTwinScopeKey,
         baseQuoteRevisionId: livingTwinBaseQuoteRevisionId,

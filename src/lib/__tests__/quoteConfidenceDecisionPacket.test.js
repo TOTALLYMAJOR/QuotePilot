@@ -13,6 +13,7 @@ function consequenceProjection(overrides = {}) {
     scenario: {
       currentGuestCount: 80,
       proposedGuestCount: 96,
+      guestDelta: 16,
       selectedMenuItemNames: ["Braised chicken", "Market greens"],
       ...overrides.scenario
     },
@@ -34,8 +35,18 @@ function consequenceProjection(overrides = {}) {
       people: {
         evidenceState: "available",
         freshness: "current",
-        current: { totalRequired: 5, totalAssigned: 5, totalGap: 0 },
-        proposed: { totalRequired: 6, totalAssigned: 5, totalGap: 1 }
+        current: {
+          coverageState: "coverage_confirmed",
+          totalRequired: 5,
+          totalAssigned: 5,
+          totalGap: 0
+        },
+        proposed: {
+          coverageState: "attention",
+          totalRequired: 6,
+          totalAssigned: 5,
+          totalGap: 1
+        }
       },
       supply: {
         evidenceState: "available",
@@ -98,6 +109,54 @@ describe("quote-to-confidence consequence comparison", () => {
       expect(comparison.blockingEvidenceStates).toContain(evidenceState);
     }
   );
+
+  test.each([
+    ["guests", { scenario: { guestDelta: 99 } }],
+    ["price", { consequences: { commercial: {
+      evidenceState: "available",
+      currency: "USD",
+      total: { before: 8_000, proposedAfter: 9_200 }
+    } } }],
+    ["margin", { consequences: { margin: {
+      evidenceState: "available",
+      before: 0.31,
+      proposedAfter: 0.27,
+      delta: 0.04
+    } } }],
+    ["staffing", { fulfillment: { people: {
+      evidenceState: "available",
+      freshness: "current",
+      current: {
+        coverageState: "coverage_confirmed",
+        totalRequired: 5,
+        totalAssigned: 5,
+        totalGap: 0
+      },
+      proposed: {
+        coverageState: "coverage_confirmed",
+        totalRequired: 6,
+        totalAssigned: 5,
+        totalGap: 1
+      }
+    } } }],
+    ["supply", { fulfillment: { supply: {
+      evidenceState: "available",
+      freshness: "current",
+      current: { coverageState: "covered", shortageCount: 1 },
+      proposed: { coverageState: "shortage", shortageCount: 2 }
+    } } }]
+  ])("downgrades malformed available %s evidence and blocks review", (rowId, overrides) => {
+    const comparison = buildCommercialConsequenceComparison(consequenceProjection(overrides));
+    const row = comparison.rows.find((entry) => entry.id === rowId);
+
+    expect(row).toMatchObject({
+      current: "Not available",
+      proposed: "Not available",
+      difference: "Not available",
+      evidenceState: "schema_drift"
+    });
+    expect(comparison.canContinueToGovernedReview).toBe(false);
+  });
 });
 
 describe("governed quote starts", () => {
@@ -135,7 +194,7 @@ describe("decision packet projection", () => {
     portalDecision: {
       decision: "accepted",
       submittedAtISO: "2026-09-17T10:30:00.000Z",
-      requestId: "decision-17"
+      requestId: "acceptance-17"
     },
     acceptanceReceipt: {
       receiptId: "acceptance-17",
@@ -183,6 +242,82 @@ describe("decision packet projection", () => {
     expect(packet.acceptance.evidenceState).toBe("stale");
     expect(packet.internalHandoff).toMatchObject({
       evidenceState: "stale",
+      action: null
+    });
+  });
+
+  test("fails closed when the accepted decision points at a different receipt", () => {
+    const packet = buildDecisionPacketProjection({
+      quote: {
+        ...acceptedQuote,
+        portalDecision: { ...acceptedQuote.portalDecision, requestId: "acceptance-other" }
+      },
+      source: "firebase"
+    });
+
+    expect(packet.state).toBe("blocked");
+    expect(packet.acceptance.evidenceState).toBe("contradictory");
+    expect(packet.internalHandoff.action).toBeNull();
+  });
+
+  test("fails closed when the acceptance receipt points at a different portal issuance", () => {
+    const packet = buildDecisionPacketProjection({
+      quote: {
+        ...acceptedQuote,
+        acceptanceReceipt: {
+          ...acceptedQuote.acceptanceReceipt,
+          portalIssuedAtISO: "2026-09-17T09:59:59.000Z"
+        }
+      },
+      source: "firebase"
+    });
+
+    expect(packet.state).toBe("blocked");
+    expect(packet.acceptance.evidenceState).toBe("stale");
+    expect(packet.internalHandoff.action).toBeNull();
+  });
+
+  test("uses the active accepted revision instead of an unrelated delivery revision", () => {
+    const packet = buildDecisionPacketProjection({
+      quote: {
+        ...acceptedQuote,
+        deliveryEvidence: { revisionId: "delivery-revision-from-an-older-send" }
+      },
+      source: "firebase"
+    });
+
+    expect(packet).toMatchObject({
+      state: "ready",
+      acceptance: { acceptedRevisionId: "v17", evidenceState: "available" },
+      internalHandoff: {
+        acceptedRevisionId: "v17",
+        acceptanceReceiptId: "acceptance-17",
+        action: "open_existing_accepted_revision"
+      }
+    });
+  });
+
+  test.each([
+    ["decision receipt link", {
+      portalDecision: { ...acceptedQuote.portalDecision, requestId: "" }
+    }],
+    ["quote issuance", { portalIssuedAtISO: "" }],
+    ["receipt issuance", {
+      acceptanceReceipt: { ...acceptedQuote.acceptanceReceipt, portalIssuedAtISO: "" }
+    }],
+    ["accepted revision", {
+      acceptanceReceipt: { ...acceptedQuote.acceptanceReceipt, quoteRevisionId: "" }
+    }]
+  ])("withholds the accepted-revision handoff when %s identity is missing", (_label, patch) => {
+    const packet = buildDecisionPacketProjection({
+      quote: { ...acceptedQuote, ...patch },
+      source: "firebase"
+    });
+
+    expect(packet.state).toBe("blocked");
+    expect(packet.acceptance.evidenceState).toBe("schema_drift");
+    expect(packet.internalHandoff).toMatchObject({
+      acceptedRevisionId: null,
       action: null
     });
   });

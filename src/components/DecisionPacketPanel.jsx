@@ -53,7 +53,11 @@ export default function DecisionPacketPanel({
           <p className="eyebrow">Read-only composition</p>
           <h3 id="decision-packet-title">Decision packet</h3>
         </div>
-        <span>{packet.state === "ready" ? "Exact handoff ready" : "Evidence needs review"}</span>
+        <span>{handoffAvailable
+          ? "Exact handoff ready"
+          : packet.state === "ready"
+            ? "Decision evidence current"
+            : "Evidence needs review"}</span>
       </header>
       <ol aria-label="Customer decision through internal handoff">
         <Stage title="Customer decision" evidence={packet.portalDecision}>

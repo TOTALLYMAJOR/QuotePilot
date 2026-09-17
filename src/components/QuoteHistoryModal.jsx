@@ -2912,10 +2912,12 @@ export function QuoteHistoryView({
             quote={focusedQuote}
             source={state.source}
             onOpenAcceptedRevision={typeof onOpenQuoteAdministration === "function"
-              ? () => onOpenQuoteAdministration(focusedQuote.id, {
+              ? (destination) => onOpenQuoteAdministration(focusedQuote.id, {
                   reason: "Review the exact accepted revision from the decision packet.",
                   consequence: "The decision packet remains read-only; quote administration retains every existing authority check.",
-                  nextResolution: "Continue only from the matching accepted revision and acceptance receipt."
+                  nextResolution: "Continue only from the matching accepted revision and acceptance receipt.",
+                  acceptedRevisionId: destination.acceptedRevisionId,
+                  acceptanceReceiptId: destination.acceptanceReceiptId
                 })
               : undefined}
           />

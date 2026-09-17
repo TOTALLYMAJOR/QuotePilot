@@ -131,6 +131,45 @@ afterEach(() => {
 });
 
 describe("Quote History Commercial Dependency integration", () => {
+  test("preserves the exact accepted revision and receipt in the administration handoff", async () => {
+    const onOpenQuoteAdministration = vi.fn();
+    const acceptedQuote = {
+      ...QUOTE,
+      status: "accepted",
+      activeVersionId: "v0017",
+      portalKey: "portal-key",
+      portalIssuedAtISO: "2026-09-17T10:00:00.000Z",
+      portalDecision: {
+        decision: "accepted",
+        requestId: "acceptance-17",
+        submittedAtISO: "2026-09-17T10:30:00.000Z"
+      },
+      acceptanceReceipt: {
+        receiptId: "acceptance-17",
+        quoteRevisionId: "v0017",
+        portalIssuedAtISO: "2026-09-17T10:00:00.000Z",
+        acceptedAtISO: "2026-09-17T10:30:00.000Z"
+      },
+      payment: {
+        depositStatus: "paid",
+        finalBalance: { status: "unpaid" }
+      }
+    };
+    mocks.getQuoteHistory.mockResolvedValue({ source: "firebase", quotes: [acceptedQuote] });
+    mount({ decisionPacketEnabled: true, onOpenQuoteAdministration });
+    await settle();
+
+    const action = [...container.querySelectorAll("button")]
+      .find((button) => button.textContent.includes("Open accepted revision"));
+    expect(action).toBeTruthy();
+    act(() => action.click());
+
+    expect(onOpenQuoteAdministration).toHaveBeenCalledWith("quote-42", expect.objectContaining({
+      acceptedRevisionId: "v0017",
+      acceptanceReceiptId: "acceptance-17"
+    }));
+  });
+
   test("binds the focused Firebase quote to the same-tenant dependency surface", async () => {
     mocks.getQuoteHistory.mockResolvedValue({ source: "firebase", quotes: [QUOTE] });
     mount();
