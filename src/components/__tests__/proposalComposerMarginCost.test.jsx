@@ -10,7 +10,7 @@ afterEach(() => {
 async function loadComposerWithMarginGate() {
   vi.resetModules();
   vi.stubEnv("VITE_PILOT_MARGINS_ENABLED", "true");
-  const mod = await import("../ProposalComposer");
+  const mod = await import("../ProposalComposerImpl");
   return mod.default;
 }
 
