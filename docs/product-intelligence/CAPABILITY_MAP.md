@@ -1,6 +1,17 @@
 # Capability / Functional Map
 
-Last updated: 2026-09-16 23:25:23 CDT
+Last updated: 2026-09-17 10:51:24 CDT
+
+## Quote-to-Confidence extension
+
+The local candidate strengthens `CAP-03` and `CAP-04` through one completion
+command, six independent consequences, governed starts and exact accepted handoff;
+`CAP-05` and `CAP-06` through internal supply plans and exception-first/mobile
+Inventory; and `CAP-09` through recommendation-only post-event learning. It maps
+to `OUT-02`, `OUT-03`, `OUT-05`, `OUT-06` and `MET-19`–`MET-21`.
+All remain default-off source candidates with local evidence only. The UI
+reuses existing catalog/setup-draft and Inventory adoption authority and cannot
+infer price, margin, rate, threshold, conversion, supplier or readiness policy.
 
 ## Purpose and evidence boundary
 

@@ -72,14 +72,14 @@ describe("product intelligence governance", () => {
     const result = runCheck(REPOSITORY_ROOT);
 
     expect(result.status, result.stderr).toBe(0);
-    expect(result.stdout).toMatch(/6 outcomes, 12 capabilities, 18 metrics, 16 signals/i);
+    expect(result.stdout).toMatch(/6 outcomes, 12 capabilities, 21 metrics, 21 signals/i);
   });
 
   test("rejects a signal that references an unknown metric", () => {
     const root = makeFixture();
     const schemaPath = path.join(root, "docs/product-intelligence/event-schema.json");
     const schema = JSON.parse(fs.readFileSync(schemaPath, "utf8"));
-    schema.signals[0].metricIds = ["MET-999"];
+    schema.signals.find((signal) => signal.id === "SIG-001").metricIds = ["MET-999"];
     fs.writeFileSync(schemaPath, `${JSON.stringify(schema, null, 2)}\n`);
 
     const result = runCheck(root);
@@ -107,7 +107,7 @@ describe("product intelligence governance", () => {
     const root = makeFixture();
     const schemaPath = path.join(root, "docs/product-intelligence/event-schema.json");
     const schema = JSON.parse(fs.readFileSync(schemaPath, "utf8"));
-    schema.signals[0].sourcePaths.push("src/missing-product-signal.js");
+    schema.signals.find((signal) => signal.id === "SIG-001").sourcePaths.push("src/missing-product-signal.js");
     fs.writeFileSync(schemaPath, `${JSON.stringify(schema, null, 2)}\n`);
 
     const result = runCheck(root);
@@ -131,7 +131,7 @@ describe("product intelligence governance", () => {
 
     expect(result.status).toBe(1);
     expect(result.stderr).toContain(
-      "LED-001 decision adopt requires explicit outcome evidence"
+      "LED-006 decision adopt requires explicit outcome evidence"
     );
   });
 

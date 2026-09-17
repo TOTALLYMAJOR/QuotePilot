@@ -1,6 +1,14 @@
 # QuotePilot Product Intelligence System
 
-Last updated: 2026-09-17 02:12:28 CDT
+Last updated: 2026-09-17 10:51:24 CDT
+
+## Quote-to-Confidence measurement extension
+
+The local, default-off candidate adds `MET-19`–`MET-21`, categorical completion
+and learning signals `SIG-017`–`SIG-021`, five named operator journeys, and
+`BASE-09` with a 14-day pre-exposure baseline. Fewer than 50 eligible observations
+per compared cohort are informational only. `LED-006` records source/local
+implementation without adoption or outcome claims. No baseline has been collected.
 
 ## Purpose
 

@@ -1,6 +1,49 @@
 # Ingredient Inventory and Menu-Costing Authority
 
-Last updated: 2026-09-13 01:37:10 CDT
+Last updated: 2026-09-17 10:51:24 CDT
+
+## Quote-to-Confidence extension — local source candidate
+
+The separately gated internal supply response is `event-supply-action-plan-v1`.
+Its organization-scoped current head lives at `eventSupplyActionPlans/{quoteId}`,
+with immutable `revisions/{revisionId}` and `eventSupplyActionPlanReceipts/{receiptId}`.
+The `getEventSupplyActionPlan` and `applyEventSupplyActionPlanCommand` callables
+own reads and `save_draft / approve / rebase / cancel`. Same-tenant admins mutate;
+staff may read through the callable, while the current Inventory page remains
+admin-only. Browser collection access is denied. The existing Inventory global
+gate and `inventoryAuthorityEnabled` tenant setting, current principal,
+organization, expected plan revision and exact allocation/shortage/source
+fingerprints remain enforced. App Check remains monitoring-only in these
+callable wrappers (`enforceAppCheck: false`); no enforcement claim is made.
+Approval binds the actor and exact revision;
+rebase removes obsolete approval. Only refreshed eligible allocation evidence
+closing every shortage derives resolution. This is no supplier order, contact,
+reservation or spend authorization.
+
+`record_stock_count` records an observed nonnegative quantity against the exact
+ingredient/location/base unit and expected stock revision, retaining occurrence
+time, actor, signed server-derived delta, immutable movement and idempotent
+receipt. Existing movement verification remains backward compatible.
+
+The optional exception workspace reorders attention without merging Inventory
+axes. `inventory-capture-draft-v1` is native IndexedDB, scoped to organization,
+principal and location, expires after seven days, and uses revisioned
+compare-and-swap updates. Each line preserves its immutable command/request,
+observation time and receipt. Unknown outcomes reconcile that request before
+stock-revision comparison; only a new observation uses a new request. Independent
+lines retain partial receipts and conflicts. This supports an already-loaded
+app offline, never cold launch or server confirmation while disconnected.
+
+`post-event-learning-proposal-v1` reads the exact accepted quote and immutable
+version plus attendance, requirement/allocation/execution/correction and available
+financial actuals. It never aggregates unlike units, infers actual COGS, rewrites
+accepted evidence, or applies pricing, margins, rates, thresholds or supplier
+policy. Existing event projections expose no event-bound receiving journal, so
+that row remains `blocked_by_integration`. Recipe/template/pack/workflow proposals
+carry rationale and source references only. Existing Library/Inventory/setup-draft
+authorities retain all adoption; recipe/pack applied telemetry additionally needs
+a matching publication receipt and operator confirmation. Template/workflow
+receipt correlation is currently blocked by integration, not fabricated.
 
 Status: Accepted scope correction; corrected Phases 2 through 8 are merged in
 the v0.18 source line, the Inventory backend is deployed and exact-tenant

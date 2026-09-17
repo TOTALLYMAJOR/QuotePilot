@@ -47,6 +47,22 @@ test.describe("Task 4 exception-first inventory", () => {
       await expect(page.getByRole("button", { name: "Scan barcode" })).toHaveCount(0);
       await expectNoHorizontalOverflow(page);
 
+      // Shortage to operator-reviewed internal plan; this synthetic adapter never contacts a supplier.
+      await page.getByLabel("Event supply plan").selectOption("quote-accepted");
+      const supply = page.locator('[data-capability-id="event-supply-action-plan"]');
+      await supply.getByLabel("Supplier reference", { exact: true }).fill("operator-supplier");
+      await supply.getByLabel("Supplier label", { exact: true }).fill("Operator reviewed supplier");
+      await supply.getByLabel("Planned quantity (lb)").fill("5");
+      await supply.getByText("Exact policy and offer evidence", { exact: true }).click();
+      await supply.getByLabel("Policy fingerprint").fill("d".repeat(64));
+      await supply.getByLabel("Offer fingerprint").fill("e".repeat(64));
+      await supply.getByRole("button", { name: "Save internal draft" }).click();
+      await expect(supply).toHaveAttribute("data-capability-state", "receipt");
+      await supply.getByRole("checkbox").check();
+      await supply.getByRole("button", { name: "Approve internal plan" }).click();
+      await expect(supply.locator("[data-supply-truth]")).toContainText("Plan: approved");
+      await expectNoHorizontalOverflow(page);
+
       const disclosure = page.getByText("Seven-axis inventory ledger", { exact: true });
       await disclosure.focus();
       await expect(disclosure).toBeFocused();
@@ -65,6 +81,8 @@ test.describe("Task 4 exception-first inventory", () => {
       await expect(page.getByText("Offline: counts are local device truth only", { exact: false })).toBeVisible();
       await expect(page.getByRole("button", { name: "Submit clean counts" })).toBeDisabled();
       await page.evaluate(() => window.dispatchEvent(new Event("online")));
+      await page.getByRole("button", { name: "Submit clean counts" }).click();
+      await expect(page.locator('[data-capture-line-state="submitted"]')).toContainText("mock-chicken");
 
       await page.evaluate(() => window.inventoryTask4Harness.setMode("loading"));
       await expect(main).toHaveAttribute("data-capability-state", "loading");
@@ -80,6 +98,7 @@ test.describe("Task 4 exception-first inventory", () => {
       const results = await new AxeBuilder({ page }).include("main").analyze();
       expect(results.violations).toEqual([]);
       await expectNoHorizontalOverflow(page);
+      await main.screenshot({ path: test.info().outputPath(`inventory-${viewport.width}.png`) });
     });
   }
 
@@ -99,6 +118,8 @@ test.describe("Task 4 exception-first inventory", () => {
       page.getByRole("button", { name: "Save count to device" }).click(),
       peer.getByRole("button", { name: "Save count to device" }).click()
     ]);
+    await expect(page.getByRole("status").filter({ hasText: "Count saved on this device only" })).toBeVisible();
+    await expect(peer.getByRole("status").filter({ hasText: "Count saved on this device only" })).toBeVisible();
 
     await page.reload();
     await mountFixture(page, { navigate: false });

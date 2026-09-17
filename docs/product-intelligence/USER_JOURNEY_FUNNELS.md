@@ -1,6 +1,19 @@
 # User Journey and Funnel Model
 
-Last updated: 2026-09-16 23:25:23 CDT
+Last updated: 2026-09-17 10:51:24 CDT
+
+## Five Quote-to-Confidence journeys
+
+| Journey | Named moment of truth | Observation |
+|---|---|---|
+| New quote to sendable | One exact blocker action reaches its existing field; the saved revision is reviewable before any send continuation. | `MET-19`, `MET-20`; retain save and provider boundaries. |
+| Customer decision to accepted handoff | Existing portal decision, issuance, receipt and active immutable revision agree at the receiving staff surface. | `MET-06`, `MET-11`; a source mismatch is recovery. |
+| Shortage to internal supply review | Admin reviews current shortage evidence, saves and explicitly approves that same plan revision. | `MET-12`; no supplier contact, order, reservation or physical receiving is implied. |
+| Offline shelf count to authoritative receipt | Device draft survives reconnect; exact clean lines submit independently and conflicts/unknowns remain recoverable. | `MET-17`, `GRD-15`; offline device truth is separate from server persistence. |
+| Completed event to learning review | Accepted-source variances support a recommendation; an operator edits through an existing authority and confirms a matching receipt where available. | `MET-21`; no universal score, automatic adoption or outcome claim. |
+
+Responsive local fixtures exercise desktop, 768px and 390px presentations.
+Browser mocks are explicit and are not hosted Firebase, customer or provider proof.
 
 Status: mixed evidence. Product touchpoints and authority boundaries are
 repository-grounded. Emotional states, switching triggers, and perceived value

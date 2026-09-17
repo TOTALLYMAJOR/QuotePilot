@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { InventoryWorkspaceView } from "../src/components/InventoryWorkspace";
 import "../src/styles.css";
@@ -74,6 +74,7 @@ const attempts = Object.fromEntries(["location", "ingredient", "stock", "stock_c
 const access = { organizationId: ORG, role: "admin", readEnabled: true, mutationEnabled: true, reason: "" };
 
 function Harness() {
+  const supplyPlan = useRef(null);
   const [mode, setMode] = useState("current");
   const [userId, setUserId] = useState("e2e-admin");
   const [riceRevision, setRiceRevision] = useState(2);
@@ -107,7 +108,7 @@ function Harness() {
         getPlan: async () => ({
           resolution: "not_started",
           stale: false,
-          plan: null,
+          plan: supplyPlan.current,
           source: {
             eligible: true,
             allocationFingerprint: "a".repeat(64),
@@ -116,7 +117,12 @@ function Harness() {
             shortages: [{ ingredientId: "chicken", locationId: "main-kitchen", baseUnitId: "lb", shortageQuantity: "5" }]
           }
         }),
-        applyPlan: async () => { throw new Error("Fixture does not submit authority commands."); }
+        applyPlan: async ({ command }) => {
+          supplyPlan.current = command.kind === "save_draft"
+            ? { status: "draft", planRevision: (supplyPlan.current?.planRevision || 0) + 1, edits: command.edits }
+            : { ...supplyPlan.current, status: "approved", planRevision: supplyPlan.current.planRevision + 1 };
+          return { receipt: { receiptId: "mock-internal-supply-receipt" } };
+        }
       }}
       mobileCaptureProps={{
         organizationId: ORG,

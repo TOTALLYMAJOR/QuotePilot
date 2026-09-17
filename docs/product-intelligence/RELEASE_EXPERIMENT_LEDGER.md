@@ -1,6 +1,36 @@
 # Release and Experiment Ledger
 
-Last updated: 2026-09-17 02:12:28 CDT
+Last updated: 2026-09-17 10:51:24 CDT
+
+## LED-006 — Quote-to-Confidence local candidate
+
+Status: `no_outcome_claim`. Owner decision: pending. Recorded: 2026-09-17 UTC.
+
+Catering value: the owner-operator needs to finish an explainable quote, hand off
+the accepted promise, resolve supply exceptions, capture shelf facts and reuse
+event learning with less repeated work. The expected improvement is directional
+speed and reliability, mapped to `CAP-03`, `CAP-04`, `CAP-05`, `CAP-06`,
+`CAP-09`; `OUT-02`, `OUT-03`, `OUT-05`, `OUT-06`; and
+`MET-19`, `MET-20`, `MET-21`. Guardrails: `GRD-01`, `GRD-02`,
+`GRD-04`, `GRD-06`, `GRD-07`, `GRD-09`, `GRD-10`, `GRD-11`,
+`GRD-12`, `GRD-14`, `GRD-15`, `GRD-16`.
+
+Exposure: isolated `codex/quote-to-confidence` source candidate; all six new
+build/tenant gates default off. No hosted or production cohort is active under
+this entry. Disable the relevant flag to withdraw presentation; server policy
+and historical records retain their own authority. Five slices changed together,
+so any later before/after association is confounded unless exposure is recorded.
+
+Measurement: `BASE-09`, 14-day baseline and comparable 14-day follow-up;
+`TGT-17`, `TGT-18` remain directional proposals. Fewer than 50 eligible
+observations per cohort are informational. Report missing analytics sessions,
+unsupported adoption receipts, source staleness and bounded-read truncation.
+Available evidence is source plus local automated validation recorded in the
+Task 5 report. No observed production values, frozen baseline, human preference,
+measured outcome or causal attribution exists. Required next evidence: reviewed
+hosted role journeys, human acceptance and an explicitly approved real baseline.
+Broader existing-surface browser failures remain separately recorded in the Task
+5 report; focused automated success does not qualify a release or expand exposure.
 
 ## Purpose
 
@@ -24,6 +54,7 @@ do not own.
 
 | Entry | Exposure | Catering-value hypothesis | Primary metrics | Guardrails | Evidence currently available | Decision |
 |---|---|---|---|---|---|---|
+| `LED-006` | Quote-to-Confidence isolated local candidate; flags off | Clear next actions, exact handoffs and operator-reviewed learning reduce repeated work without transferring authority. | `MET-19`, `MET-20`, `MET-21` | `GRD-01`, `GRD-04`, `GRD-07`, `GRD-09`, `GRD-16` | Local evidence only; 14-day `BASE-09` remains uncollected; fewer than 50 eligible observations are informational. | `no_outcome_claim` |
 | `LED-001` | `v0.15.0` product-analytics and Ambient metric extension | Clearer next actions and authoritative priced-draft feedback reduce quote friction and issue-resolution time. | `MET-01`–`MET-05` | `GRD-09`, `GRD-10`, `GRD-16` | Source/deployment history and bounded summary logic exist; no frozen production baseline or causal comparison is recorded. | `no_outcome_claim` |
 | `LED-002` | `v0.17.0` commitment-to-execution and Event Preflight foundations | Accepted work can move into operational review with fewer hidden blockers and stale consumers. | `MET-07`, `MET-11`, `MET-12` | `GRD-04`, `GRD-07`, `GRD-15` | Source/release evidence exists; operational handoff coverage and late-discovery metrics are not centrally observable. | `no_outcome_claim` |
 | `LED-003` | `v0.18.0` commercial platform and Inventory Phases 2–8; `v0.18.1` Inventory transport correction | Recorded costs, recipes, exact stock/cost evidence, and governed commercial configuration improve quote explainability and operational preparation. | `MET-08`, `MET-11`, `MET-12` | `GRD-01`–`GRD-03`, `GRD-06`, `GRD-07` | Source, CI, provider deployment, synthetic tenant population, and partial authenticated read evidence exist. Physical Inventory, real cost, human workflow, and outcome evidence remain absent. | `no_outcome_claim` |

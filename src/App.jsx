@@ -1,6 +1,8 @@
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import "./ambientSurfaceGrammar.css";
 import AuthGate from "./components/AuthGate";
+import PostEventLearningReviewBanner from "./components/PostEventLearningReviewBanner";
+import { openLearningReview } from "./lib/postEventLearningReview";
 import GovernedQuoteStarts, {
   scheduleGovernedTemplateDestinationFocus
 } from "./components/GovernedQuoteStarts";
@@ -624,6 +626,7 @@ function normalizeFeatureFlags(input) {
     aiAutopilot: aiAssist && source.aiAutopilot === true,
     quoteCompletionCommandPath: source.quoteCompletionCommandPath === true,
     decisionPacket: source.decisionPacket === true,
+    postEventLearning: source.postEventLearning === true,
     inventoryExceptionWorkspace: source.inventoryExceptionWorkspace === true,
     eventSupplyActionPlan: source.eventSupplyActionPlan === true,
     inventoryMobileCapture: source.inventoryMobileCapture === true
@@ -6580,9 +6583,9 @@ export default function App({
       browserEnabled: INVENTORY_AUTHORITY_UI_ENABLED,
       tenantEnabled: inventoryTenantEnabled,
       events: commercialSnapshot.quotes,
-      exceptionWorkspaceEnabled: featureFlags.inventoryExceptionWorkspace === true,
-      eventSupplyActionPlanEnabled: featureFlags.eventSupplyActionPlan === true,
-      inventoryMobileCaptureEnabled: featureFlags.inventoryMobileCapture === true
+      exceptionWorkspaceEnabled: import.meta.env.VITE_INVENTORY_EXCEPTION_WORKSPACE_ENABLED === "true" && featureFlags.inventoryExceptionWorkspace === true,
+      eventSupplyActionPlanEnabled: import.meta.env.VITE_EVENT_SUPPLY_ACTION_PLAN_ENABLED === "true" && featureFlags.eventSupplyActionPlan === true,
+      inventoryMobileCaptureEnabled: import.meta.env.VITE_INVENTORY_MOBILE_CAPTURE_ENABLED === "true" && featureFlags.inventoryMobileCapture === true
     },
     route: { mounted: inventoryRouteMounted, open: inventoryRouteOpen },
     modal: { mounted: false, open: false }
@@ -7273,6 +7276,7 @@ export default function App({
       ambientOpportunity={AMBIENT_UI_ENABLED && resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.QUOTE_DETAIL}
       ambientNavigation={AMBIENT_UI_ENABLED}
     >
+      <PostEventLearningReviewBanner organizationId={authSession.organizationId} principalId={currentUserUid} role={authSession.role} enabled={import.meta.env.VITE_POST_EVENT_LEARNING_ENABLED === "true" && featureFlags.postEventLearning === true} />
       {AMBIENT_UI_ENABLED && AmbientGlobalPilotSurface && (
         <RecoverableErrorBoundary
           active={globalPilotSurfaceOpen}
@@ -7597,6 +7601,13 @@ export default function App({
             currentUserRole={authSession.role}
             currentUserUid={authSession.user?.uid || ""}
             workflowEnabled={EVENT_OPERATING_SPINE_UI_ENABLED && catalog.settings?.eventOperatingSpineEnabled === true}
+            postEventLearningEnabled={import.meta.env.VITE_POST_EVENT_LEARNING_ENABLED === "true" && featureFlags.postEventLearning === true}
+            learningInventoryEnabled={INVENTORY_AUTHORITY_UI_ENABLED && inventoryTenantEnabled}
+            onReviewLearning={authSession.isAdmin ? async (proposal) => {
+              if (!openLearningReview(proposal, currentUserUid)) throw new Error("The exact learning review context is unavailable.");
+              navigateWorkspace(proposal.destination === "inventory" ? WORKSPACE_PATHS.inventory : WORKSPACE_PATHS.catalog);
+              return { status: "review_opened" };
+            } : undefined}
             ambientMode={AMBIENT_UI_ENABLED}
             arrivalContext={workspaceArrivalContext?.surfaceId === "client-overview"
               ? workspaceArrivalContext

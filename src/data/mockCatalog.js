@@ -347,7 +347,8 @@ export const DEFAULT_FEATURE_FLAGS = {
   decisionPacket: false,
   inventoryExceptionWorkspace: false,
   eventSupplyActionPlan: false,
-  inventoryMobileCapture: false
+  inventoryMobileCapture: false,
+  postEventLearning: false
 };
 
 export const DEFAULT_SETTINGS = {
@@ -863,6 +864,7 @@ function normalizeFeatureFlags(input, legacySettings = {}) {
       source.eventSupplyActionPlan,
       DEFAULT_FEATURE_FLAGS.eventSupplyActionPlan
     ),
+    postEventLearning: source.postEventLearning === true,
     inventoryMobileCapture: toBoolean(
       source.inventoryMobileCapture,
       DEFAULT_FEATURE_FLAGS.inventoryMobileCapture

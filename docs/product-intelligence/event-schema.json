@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "catalogVersion": "2026-09-16",
+  "catalogVersion": "2026-09-17",
   "purpose": "Canonical observation map for QuotePilot product outcomes. It documents implemented analytics events and authoritative records that should be derived rather than duplicated.",
   "statusVocabulary": [
     "implemented",
@@ -55,6 +55,36 @@
     "currentSummaryEventLimit": 2500
   },
   "signals": [
+    {
+      "id": "SIG-017", "name": "quote_completion_action_shown",
+      "captureMode": "client_product_event", "status": "implemented", "stage": "quote",
+      "requiredFields": ["completionState, actionKind, surface: allowlisted categories"], "metricIds": ["MET-19"],
+      "sourcePaths": ["src/lib/productAnalyticsAmbient.js", "functions/productAnalytics.js"]
+    },
+    {
+      "id": "SIG-018", "name": "quote_completion_action_resolved",
+      "captureMode": "client_product_event", "status": "implemented", "stage": "quote",
+      "requiredFields": ["completionState, actionKind, surface, result: allowlisted categories"], "metricIds": ["MET-19"],
+      "sourcePaths": ["src/lib/productAnalyticsAmbient.js", "functions/productAnalytics.js"]
+    },
+    {
+      "id": "SIG-019", "name": "quote_completion_sendable_reached",
+      "captureMode": "client_product_event", "status": "implemented", "stage": "quote",
+      "requiredFields": [], "metricIds": ["MET-20"],
+      "sourcePaths": ["src/lib/productAnalyticsAmbient.js", "functions/productAnalytics.js"]
+    },
+    {
+      "id": "SIG-020", "name": "post_event_learning_proposed",
+      "captureMode": "client_product_event", "status": "implemented", "stage": "closeout",
+      "requiredFields": ["category: recipe | template | pack_conversion | workflow"], "metricIds": ["MET-21"],
+      "sourcePaths": ["src/components/PostEventLearningPanel.jsx", "src/lib/productAnalyticsAmbient.js", "functions/productAnalytics.js"]
+    },
+    {
+      "id": "SIG-021", "name": "post_event_learning_applied",
+      "captureMode": "client_product_event", "status": "partial", "stage": "closeout",
+      "requiredFields": ["category: recipe | pack_conversion", "authority: existing_authority_receipt"], "metricIds": ["MET-21"],
+      "sourcePaths": ["src/components/PostEventLearningReviewBanner.jsx", "src/lib/postEventLearningReview.js", "src/lib/productAnalyticsAmbient.js", "functions/productAnalytics.js"]
+    },
     {
       "id": "SIG-001",
       "name": "wizard_started",

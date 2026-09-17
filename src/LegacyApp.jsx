@@ -578,6 +578,7 @@ function normalizeFeatureFlags(input) {
     aiAutopilot: aiAssist && source.aiAutopilot === true,
     quoteCompletionCommandPath: source.quoteCompletionCommandPath === true,
     decisionPacket: source.decisionPacket === true,
+    postEventLearning: source.postEventLearning === true,
     inventoryExceptionWorkspace: source.inventoryExceptionWorkspace === true,
     eventSupplyActionPlan: source.eventSupplyActionPlan === true,
     inventoryMobileCapture: source.inventoryMobileCapture === true
@@ -4639,9 +4640,9 @@ function LegacyAppCore({
             browserEnabled={INVENTORY_AUTHORITY_UI_ENABLED}
             tenantEnabled={inventoryTenantEnabled}
             events={commercialSnapshot.quotes}
-            exceptionWorkspaceEnabled={featureFlags.inventoryExceptionWorkspace === true}
-            eventSupplyActionPlanEnabled={featureFlags.eventSupplyActionPlan === true}
-            inventoryMobileCaptureEnabled={featureFlags.inventoryMobileCapture === true}
+            exceptionWorkspaceEnabled={import.meta.env.VITE_INVENTORY_EXCEPTION_WORKSPACE_ENABLED === "true" && featureFlags.inventoryExceptionWorkspace === true}
+            eventSupplyActionPlanEnabled={import.meta.env.VITE_EVENT_SUPPLY_ACTION_PLAN_ENABLED === "true" && featureFlags.eventSupplyActionPlan === true}
+            inventoryMobileCaptureEnabled={import.meta.env.VITE_INVENTORY_MOBILE_CAPTURE_ENABLED === "true" && featureFlags.inventoryMobileCapture === true}
           />
         </WorkspaceLazyRoute>
       )}

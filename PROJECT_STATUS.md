@@ -1,6 +1,23 @@
 # Project Status
 
-Last updated: 2026-09-16 04:06:58 CDT
+Last updated: 2026-09-17 10:51:24 CDT
+
+## Quote-to-Confidence candidate qualification
+
+The isolated `codex/quote-to-confidence` worktree contains five implementation
+slices with separately default-off quote-completion, decision-packet,
+exception-first Inventory, supply-plan, mobile-capture and learning gates.
+Local verification is recorded in `task-5-report.md`; this candidate has no
+hosted activation, deployment, provider, production-user, human-acceptance or
+outcome evidence. Six required local Firebase web configuration values remain
+absent from the isolated worktree. Existing production receipts below are
+historical and do not apply to this candidate. Event-bound receiving attribution
+and compatible template/workflow learning-adoption receipts remain integration
+gaps; physical inventory valuation policy remains unresolved.
+Broader gate-off browser probes also retain Ambient inspector overflow and
+Library/legacy workspace navigation or assertion failures documented in the
+Task 5 report. Focused journey evidence is not a repository-wide browser-green
+or release-readiness claim.
 
 ## Current evidence boundary
 

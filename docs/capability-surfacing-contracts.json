@@ -1,7 +1,251 @@
 {
   "schemaVersion": 1,
-  "catalogVersion": 91,
+  "catalogVersion": 92,
   "contracts": [
+    {
+      "reviewRevision": 1,
+      "status": "active",
+      "deliveryType": "user_relevant",
+      "audiences": [
+        "organization_admins",
+        "organization_sales"
+      ],
+      "backendExports": [
+        "functions/index.js#getEventSupplyActionPlan",
+        "functions/index.js#applyEventSupplyActionPlanCommand"
+      ],
+      "affectedBackendExports": [
+        "functions/index.js#getEventSupplyActionPlan",
+        "functions/index.js#applyEventSupplyActionPlanCommand"
+      ],
+      "documentationPaths": [
+        "docs/FEATURE_MATRIX.md",
+        "docs/USER_MANUAL.md",
+        "docs/INVENTORY_AUTHORITY_ADR.md"
+      ],
+      "documentationLocators": [
+        {
+          "path": "docs/FEATURE_MATRIX.md",
+          "locator": "## Quote-to-Confidence local candidate"
+        },
+        {
+          "path": "docs/USER_MANUAL.md",
+          "locator": "## Quote-to-Confidence workflows"
+        }
+      ],
+      "surfaceReview": "changed",
+      "surfaceReviewNote": "Default-off local candidate; current role and exact revision boundaries remain in force.",
+      "stateExceptions": {},
+      "safeOutcome": "Operators inspect exact accepted-source facts and recovery without adding customer, supplier, pricing or universal event-readiness authority.",
+      "id": "event-supply-action-plan",
+      "capabilityKind": "mixed_surface",
+      "summary": "Server-owned internal supply plans retain exact source fences, approved revisions and idempotent receipts without vendor action.",
+      "backendPaths": [
+        "functions/eventSupplyActionPlanCore.cjs",
+        "functions/index.js",
+        "src/lib/eventSupplyActionPlanClient.js",
+        "firestore.rules"
+      ],
+      "frontendPaths": [
+        "src/components/InventoryWorkspace.jsx",
+        "src/App.jsx"
+      ],
+      "entryPointLocators": [
+        {
+          "path": "src/components/InventoryWorkspace.jsx",
+          "locator": "data-capability-id=\"event-supply-action-plan\""
+        }
+      ],
+      "testPaths": [
+        "src/components/__tests__/supplyPlanIntegrationStates.test.jsx",
+        "src/components/__tests__/inventoryWorkspace.test.jsx"
+      ],
+      "testLocators": [
+        {
+          "path": "src/components/__tests__/supplyPlanIntegrationStates.test.jsx",
+          "locator": "retains exact uncertain supply command and reconciles without a new identity"
+        }
+      ],
+      "stateEvidence": [
+        {
+          "state": "loading",
+          "path": "src/components/__tests__/supplyPlanIntegrationStates.test.jsx",
+          "locator": "asserts exact supply read states and recovery markers",
+          "assertionLocator": "data-capability-state=\"loading\""
+        },
+        {
+          "state": "empty",
+          "path": "src/components/__tests__/supplyPlanIntegrationStates.test.jsx",
+          "locator": "asserts exact supply read states and recovery markers",
+          "assertionLocator": "data-capability-state=\"empty\""
+        },
+        {
+          "state": "success",
+          "path": "src/components/__tests__/supplyPlanIntegrationStates.test.jsx",
+          "locator": "asserts exact supply read states and recovery markers",
+          "assertionLocator": "data-capability-state=\"success\""
+        },
+        {
+          "state": "stale",
+          "path": "src/components/__tests__/supplyPlanIntegrationStates.test.jsx",
+          "locator": "asserts exact supply read states and recovery markers",
+          "assertionLocator": "data-capability-state=\"stale\""
+        },
+        {
+          "state": "partial",
+          "path": "src/components/__tests__/supplyPlanIntegrationStates.test.jsx",
+          "locator": "asserts exact supply read states and recovery markers",
+          "assertionLocator": "data-capability-state=\"partial\""
+        },
+        {
+          "state": "error",
+          "path": "src/components/__tests__/supplyPlanIntegrationStates.test.jsx",
+          "locator": "asserts exact supply read states and recovery markers",
+          "assertionLocator": "data-capability-state=\"error\""
+        },
+        {
+          "state": "recovery",
+          "path": "src/components/__tests__/supplyPlanIntegrationStates.test.jsx",
+          "locator": "asserts exact supply read states and recovery markers",
+          "assertionLocator": "data-capability-state=\"recovery\""
+        },
+        {
+          "state": "ready",
+          "path": "src/components/__tests__/supplyPlanIntegrationStates.test.jsx",
+          "locator": "asserts exact supply read states and recovery markers",
+          "assertionLocator": "data-capability-state=\"ready\""
+        },
+        {
+          "state": "submitting",
+          "path": "src/components/__tests__/supplyPlanIntegrationStates.test.jsx",
+          "locator": "retains exact uncertain supply command and reconciles without a new identity",
+          "assertionLocator": "data-capability-state=\"submitting\""
+        },
+        {
+          "state": "uncertain",
+          "path": "src/components/__tests__/supplyPlanIntegrationStates.test.jsx",
+          "locator": "retains exact uncertain supply command and reconciles without a new identity",
+          "assertionLocator": "data-capability-state=\"uncertain\""
+        },
+        {
+          "state": "reconciliation",
+          "path": "src/components/__tests__/supplyPlanIntegrationStates.test.jsx",
+          "locator": "retains exact uncertain supply command and reconciles without a new identity",
+          "assertionLocator": "data-capability-state=\"reconciliation\""
+        },
+        {
+          "state": "receipt",
+          "path": "src/components/__tests__/supplyPlanIntegrationStates.test.jsx",
+          "locator": "retains exact uncertain supply command and reconciles without a new identity",
+          "assertionLocator": "data-capability-state=\"receipt\""
+        }
+      ]
+    },
+    {
+      "reviewRevision": 1,
+      "status": "active",
+      "deliveryType": "user_relevant",
+      "audiences": [
+        "organization_admins",
+        "organization_sales"
+      ],
+      "backendExports": [],
+      "affectedBackendExports": [],
+      "documentationPaths": [
+        "docs/FEATURE_MATRIX.md",
+        "docs/USER_MANUAL.md",
+        "docs/INVENTORY_AUTHORITY_ADR.md"
+      ],
+      "documentationLocators": [
+        {
+          "path": "docs/FEATURE_MATRIX.md",
+          "locator": "## Quote-to-Confidence local candidate"
+        },
+        {
+          "path": "docs/USER_MANUAL.md",
+          "locator": "## Quote-to-Confidence workflows"
+        }
+      ],
+      "surfaceReview": "changed",
+      "surfaceReviewNote": "Default-off local candidate; current role and exact revision boundaries remain in force.",
+      "stateExceptions": {},
+      "safeOutcome": "Operators inspect exact accepted-source facts and recovery without adding customer, supplier, pricing or universal event-readiness authority.",
+      "id": "post-event-learning",
+      "capabilityKind": "read_surface",
+      "summary": "Read-only accepted-revision learning compares independent attendance, requirement, allocation, execution, correction and financial evidence. Recommendations only; receiving and incompatible adoption receipts remain blocked by integration.",
+      "backendPaths": [
+        "src/lib/postEventLearningProjection.js",
+        "src/lib/postEventLearningReview.js"
+      ],
+      "frontendPaths": [
+        "src/components/PostEventLearningPanel.jsx",
+        "src/components/PostEventLearningReviewBanner.jsx",
+        "src/components/PostEventCloseoutReviewAction.jsx",
+        "src/components/CustomerRevenueOpportunities.jsx",
+        "src/components/CustomerWorkspaceView.jsx",
+        "src/App.jsx"
+      ],
+      "entryPointLocators": [
+        {
+          "path": "src/components/PostEventLearningPanel.jsx",
+          "locator": "data-capability-id=\"post-event-learning\""
+        }
+      ],
+      "testPaths": [
+        "src/components/__tests__/postEventLearningPanel.test.jsx",
+        "src/lib/__tests__/postEventLearningProjection.test.js"
+      ],
+      "testLocators": [
+        {
+          "path": "src/components/__tests__/postEventLearningPanel.test.jsx",
+          "locator": "requires the exact authority receipt plus operator confirmation for applied observation"
+        }
+      ],
+      "stateEvidence": [
+        {
+          "state": "loading",
+          "path": "src/components/__tests__/postEventLearningPanel.test.jsx",
+          "locator": "asserts learning read lifecycle markers including partial evidence and explicit recovery",
+          "assertionLocator": "data-capability-state=\"loading\""
+        },
+        {
+          "state": "empty",
+          "path": "src/components/__tests__/postEventLearningPanel.test.jsx",
+          "locator": "asserts learning read lifecycle markers including partial evidence and explicit recovery",
+          "assertionLocator": "data-capability-state=\"empty\""
+        },
+        {
+          "state": "success",
+          "path": "src/components/__tests__/postEventLearningPanel.test.jsx",
+          "locator": "asserts learning read lifecycle markers including partial evidence and explicit recovery",
+          "assertionLocator": "data-capability-state=\"success\""
+        },
+        {
+          "state": "stale",
+          "path": "src/components/__tests__/postEventLearningPanel.test.jsx",
+          "locator": "asserts learning read lifecycle markers including partial evidence and explicit recovery",
+          "assertionLocator": "data-capability-state=\"stale\""
+        },
+        {
+          "state": "partial",
+          "path": "src/components/__tests__/postEventLearningPanel.test.jsx",
+          "locator": "asserts learning read lifecycle markers including partial evidence and explicit recovery",
+          "assertionLocator": "data-capability-state=\"partial\""
+        },
+        {
+          "state": "error",
+          "path": "src/components/__tests__/postEventLearningPanel.test.jsx",
+          "locator": "asserts learning read lifecycle markers including partial evidence and explicit recovery",
+          "assertionLocator": "data-capability-state=\"error\""
+        },
+        {
+          "state": "recovery",
+          "path": "src/components/__tests__/postEventLearningPanel.test.jsx",
+          "locator": "asserts learning read lifecycle markers including partial evidence and explicit recovery",
+          "assertionLocator": "data-capability-state=\"recovery\""
+        }
+      ]
+    },
     {
       "id": "bounded-security-operations-audit",
       "reviewRevision": 2,
@@ -1849,14 +2093,14 @@
     },
     {
       "id": "bounded-commercial-reporting",
-      "reviewRevision": 3,
+      "reviewRevision": 4,
       "status": "active",
       "deliveryType": "user_relevant",
       "capabilityKind": "read_surface",
       "audiences": [
         "staff"
       ],
-      "summary": "The routed Reporting workspace derives bounded displayed-record commercial measures with explicit denominators, source and freshness evidence, retained stale recovery, and Firebase-backed provider-confirmed deposit qualification. Its product-event summary also presents privacy-bounded client-observed Ambient primary-action assessments, exact server-authoritative Firebase priced-draft save receipts, and same-session exact-category issue-resolution pairs without turning those observations into server timing telemetry.",
+      "summary": "The routed Reporting workspace derives bounded displayed-record commercial measures with explicit denominators, source and freshness evidence, retained stale recovery, and Firebase-backed provider-confirmed deposit qualification. Its product-event summary also presents privacy-bounded client-observed Ambient primary-action assessments, exact server-authoritative Firebase priced-draft save receipts, and same-session exact-category issue-resolution pairs without turning those observations into server timing telemetry. Quote completion and learning aggregates are categorical client observations; application requires an existing receipt plus operator confirmation.",
       "backendPaths": [
         "functions/index.js",
         "functions/productAnalytics.js",
@@ -2539,14 +2783,14 @@
     },
     {
       "id": "commercial-change-impact-preview",
-      "reviewRevision": 11,
+      "reviewRevision": 12,
       "status": "active",
       "deliveryType": "user_relevant",
       "capabilityKind": "read_surface",
       "audiences": [
         "staff"
       ],
-      "summary": "The trusted Quote Edit flow presents the Living Commercial Twin as a session-only Commercial Scenario Workbench: immutable Current plus at most Scenario A and B, exact 1-400 guest experiments, cached switching, and exact consequence fencing. One Layer-3 FulfillmentIntelligence presenter renders the rebuildable fulfillmentProjection-v1 without merging authority. fulfillment-decision-answer-v1 may compose exact guest, Supply, menu-causality, quote-value, Staffing, BEO, and optional sourcing evidence, but it is supported or conditional only when People and Supply are both current and complete. Retained evidence withholds current decision claims and actions. inventory-sourcing-preview-v1 must match the proposed Inventory requirement revision, projection digest, scenario fingerprint, and exact shortage quantity; purchase quantity remains distinct from shortfall coverage. The normal app supplies no sourcing preview, and invalid or missing evidence cannot name a supplier or best resolution.",
+      "summary": "The trusted Quote Edit flow presents the Living Commercial Twin as a session-only Commercial Scenario Workbench: immutable Current plus at most Scenario A and B, exact 1-400 guest experiments, cached switching, and exact consequence fencing. One Layer-3 FulfillmentIntelligence presenter renders the rebuildable fulfillmentProjection-v1 without merging authority. fulfillment-decision-answer-v1 may compose exact guest, Supply, menu-causality, quote-value, Staffing, BEO, and optional sourcing evidence, but it is supported or conditional only when People and Supply are both current and complete. Retained evidence withholds current decision claims and actions. inventory-sourcing-preview-v1 must match the proposed Inventory requirement revision, projection digest, scenario fingerprint, and exact shortage quantity; purchase quantity remains distinct from shortfall coverage. The normal app supplies no sourcing preview, and invalid or missing evidence cannot name a supplier or best resolution. Default-off completion and decisionPacket presentation composes exact-field actions, governed starts, six consequences and receipt-pinned handoff. New lifecycle states remain distinct from the parent read lifecycle.",
       "backendPaths": [
         "functions/commercialChangeImpactPreview.js",
         "functions/commercialPlatformCore.cjs",
@@ -2575,7 +2819,11 @@
         "src/lib/pricingV2.js",
         "src/lib/pricingV2Core.cjs",
         "src/lib/quoteStore.js",
-        "src/lib/unifiedCommercialConsequenceReview.js"
+        "src/lib/unifiedCommercialConsequenceReview.js",
+        "src/lib/quoteCompletionProjection.js",
+        "src/lib/quoteCompletionGate.js",
+        "src/lib/quoteCompletionDestination.js",
+        "src/lib/quoteConfidenceDecisionPacket.js"
       ],
       "backendExports": [
         "functions/index.js#calculateQuotePricing"
@@ -2601,7 +2849,10 @@
         "src/hooks/useCommercialScenarioWorkbench.js",
         "src/hooks/useEventIngredientProjection.js",
         "src/hooks/useFulfillmentStaffingSnapshot.js",
-        "src/styles.css"
+        "src/styles.css",
+        "src/components/QuoteCompletionCommandPath.jsx",
+        "src/components/DecisionPacketPanel.jsx",
+        "src/components/GovernedQuoteStarts.jsx"
       ],
       "entryPointLocators": [
         {
@@ -2631,6 +2882,18 @@
         {
           "path": "src/components/UnifiedCommercialConsequenceReview.jsx",
           "locator": "data-capability-id=\"unified-commercial-consequence-review\""
+        },
+        {
+          "path": "src/components/QuoteCompletionCommandPath.jsx",
+          "locator": "data-capability-id=\"quote-completion-command-path\""
+        },
+        {
+          "path": "src/components/DecisionPacketPanel.jsx",
+          "locator": "data-capability-id=\"quote-decision-packet\""
+        },
+        {
+          "path": "src/components/GovernedQuoteStarts.jsx",
+          "locator": "data-capability-id=\"governed-quote-starts\""
         }
       ],
       "testPaths": [
@@ -2663,7 +2926,11 @@
         "src/lib/__tests__/ambientLibrary.test.js",
         "src/components/__tests__/ambientLibraryRoute.test.jsx",
         "src/lib/__tests__/unifiedCommercialConsequenceReview.test.js",
-        "src/components/__tests__/unifiedCommercialConsequenceReview.test.jsx"
+        "src/components/__tests__/unifiedCommercialConsequenceReview.test.jsx",
+        "src/components/__tests__/quoteCompletionCommandPath.test.jsx",
+        "src/components/__tests__/quoteConfidenceSurfaces.test.jsx",
+        "src/lib/__tests__/quoteCompletionProjection.test.js",
+        "src/lib/__tests__/quoteConfidenceDecisionPacket.test.js"
       ],
       "testLocators": [
         {
@@ -2789,6 +3056,10 @@
         {
           "path": "src/components/__tests__/unifiedCommercialConsequenceReview.test.jsx",
           "locator": "renders all six groups, named sources, and three outcomes"
+        },
+        {
+          "path": "src/components/__tests__/quoteConfidenceSurfaces.test.jsx",
+          "locator": "renders a labelled four-stage read-only packet with an internal handoff"
         }
       ],
       "documentationPaths": [
@@ -9710,14 +9981,14 @@
     },
     {
       "id": "ingredient-inventory-workspace",
-      "reviewRevision": 5,
+      "reviewRevision": 6,
       "status": "active",
       "deliveryType": "user_relevant",
       "capabilityKind": "mixed_surface",
       "audiences": [
         "organization_admins"
       ],
-      "summary": "A triple-gated Operations workspace lets same-tenant administrators create ingredient and stock-location definitions, record fractional opening stock and later receiving, independently retain exact purchase-cost evidence, publish explicit ingredient-specific purchase packs, and observe on-hand, committed, and available-to-allocate projections in realtime.",
+      "summary": "A triple-gated Operations workspace lets same-tenant administrators create ingredient and stock-location definitions, record fractional opening stock and later receiving, independently retain exact purchase-cost evidence, publish explicit ingredient-specific purchase packs, and observe on-hand, committed, and available-to-allocate projections in realtime. Separately default-off exception and scoped seven-day IndexedDB capture surfaces preserve exact-revision stock count authority.",
       "backendPaths": [
         "firestore.rules",
         "functions/index.js",
@@ -9725,7 +9996,8 @@
         "functions/inventoryAuthorityCore.cjs",
         "functions/inventoryIngredientCore.cjs",
         "scripts/inventory-ingredient-emulator-acceptance.mjs",
-        "src/lib/inventoryAuthorityClient.js"
+        "src/lib/inventoryAuthorityClient.js",
+        "src/lib/inventoryCaptureDraft.js"
       ],
       "backendExports": [
         "functions/index.js#getInventoryWorkspace",
@@ -9763,7 +10035,9 @@
         "src/lib/__tests__/inventoryProductionRoute.test.js",
         "src/lib/__tests__/workspaceRoutes.test.js",
         "src/lib/__tests__/workspaceShellModel.test.js",
-        "src/rules/__tests__/firestore.rules.test.js"
+        "src/rules/__tests__/firestore.rules.test.js",
+        "src/lib/__tests__/inventoryCaptureDraft.test.js",
+        "e2e/inventory-exception-workspace.spec.js"
       ],
       "testLocators": [
         {

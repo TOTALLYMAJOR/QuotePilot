@@ -1,6 +1,14 @@
 # Changelog
 
-Last updated: 2026-09-17 03:12:06 CDT
+Last updated: 2026-09-17 10:51:24 CDT
+
+## Unreleased — Quote-to-Confidence local candidate
+
+- Add separately default-off quote completion, decision packet, exception-first Inventory, internal supply planning, mobile count capture, and post-event learning gates. The completion command points to one existing field or action; comparison and accepted handoff retain exact revision and receipt references.
+- Add server-owned internal supply-plan draft, approval, rebase and cancellation receipts, with transactionally current shortage/source evidence. Add authoritative revision-fenced physical stock counts; neither capability contacts suppliers, places orders, reserves expected supply, or changes commercial policy.
+- Add seven-day native IndexedDB shelf drafts for an already-loaded app, per-line exact-request reconciliation and retained conflicts. Offline is device persistence, not server persistence or cold-start support.
+- Add read-only accepted-event learning with separate attendance, ingredient, correction, saved-cost-basis and financial rows. Recommendations route to existing authorities. Only a matching recipe/pack publication receipt plus explicit operator confirmation creates an applied observation; template/workflow application tracking and event-bound receiving remain blocked by integration.
+- Reconcile capability/field-state contracts and Product Intelligence measurement obligations. Local source and automated evidence do not establish hosted, provider, production, human acceptance, adoption, or catering outcomes.
 
 All notable project changes are documented in this file.
 

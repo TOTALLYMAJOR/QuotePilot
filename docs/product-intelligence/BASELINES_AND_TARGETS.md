@@ -1,6 +1,20 @@
 # Baselines and Targets
 
-Last updated: 2026-09-16 23:25:23 CDT
+Last updated: 2026-09-17 10:51:24 CDT
+
+## Quote-to-Confidence baseline and directional targets
+
+| ID | Protocol | Current disposition |
+|---|---|---|
+| `BASE-09` | Freeze 14 consecutive pre-exposure days of eligible real owner-operator work, then observe a comparable 14-day enabled cohort. Segment tenant, role, journey, create/edit, evidence state and release/flag exposure. Exclude fixtures, tests, emulator traffic and incomplete source bindings; report missingness and the 2,500-event summary bound. | Uncollected; no production exposure authorized by this document. |
+| `TGT-17` | Directionally increase `MET-19` and `MET-20` while reducing time and navigation to a reviewable quote; do not worsen `MET-07`, `MET-12` or `MET-17`. | Proposed hypothesis, not achieved or release policy. |
+| `TGT-18` | Directionally increase useful, receipt-backed `MET-21` learning application while preserving operator judgment and every authority guardrail. | Proposed hypothesis; no adoption target for unavailable receipt categories. |
+
+A cohort with **fewer than 50 eligible observations is informational only**;
+50 is a reporting threshold, not statistical or causal proof. Do not infer
+supplier, pricing, margin, staffing, quantity or tolerance policy from baseline
+history. An owner must assess comparable evidence and explicitly adopt, revise,
+stop or investigate in the release ledger.
 
 ## Current baseline status
 

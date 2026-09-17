@@ -14,7 +14,9 @@ const AMBIENT_EVENT_NAMES = new Set([
   "ambient_issue_resolved",
   "quote_completion_action_shown",
   "quote_completion_action_resolved",
-  "quote_completion_sendable_reached"
+  "quote_completion_sendable_reached",
+  "post_event_learning_proposed",
+  "post_event_learning_applied"
 ]);
 const AMBIENT_RESULT_KINDS = new Set([
   "context",
@@ -76,6 +78,11 @@ function normalizeIssueCategory(value) {
 
 function sanitizeAmbientDimensions(eventName, dimensions = {}) {
   if (!AMBIENT_EVENT_NAMES.has(eventName)) return null;
+  if (eventName.startsWith("post_event_learning_")) {
+    if (!["recipe", "template", "pack_conversion", "workflow"].includes(dimensions.category)) return null;
+    if (eventName === "post_event_learning_applied" && dimensions.authority !== "existing_authority_receipt") return null;
+    return { category: dimensions.category, ...(eventName === "post_event_learning_applied" ? { authority: "existing_authority_receipt" } : {}) };
+  }
   if (eventName === "first_intent_observed") return {};
   if (eventName === "priced_draft_receipt_observed") {
     const durationMs = boundedProductAnalyticsInteger(dimensions.durationMs, {
@@ -353,6 +360,16 @@ export function recordQuoteCompletionSendableReached({ surface } = {}) {
     completionState: "sendable",
     surface
   });
+}
+
+export function recordPostEventLearningProposed({ category } = {}) {
+  return enqueueProductAnalyticsEvent("post_event_learning_proposed", { category });
+}
+
+// Navigation or acknowledgment is not application. Call only after an exact existing-authority receipt.
+export function recordPostEventLearningApplied({ category, receiptVerified = false } = {}) {
+  if (receiptVerified !== true) return false;
+  return enqueueProductAnalyticsEvent("post_event_learning_applied", { category, authority: "existing_authority_receipt" });
 }
 
 export function resetProductAnalyticsIssueObservationState() {

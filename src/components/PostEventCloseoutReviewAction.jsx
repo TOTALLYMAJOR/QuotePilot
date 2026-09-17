@@ -13,6 +13,7 @@ import {
 } from "../lib/postEventCloseoutClient";
 import AdaptiveChoiceField from "./AdaptiveChoiceField";
 import StatusChip from "./StatusChip";
+import PostEventLearningPanel from "./PostEventLearningPanel";
 import "../styles/customer-closeout.css";
 import {
   formatWorkspaceDate,
@@ -117,6 +118,7 @@ export default function PostEventCloseoutReviewAction({
   opportunity,
   available = true,
   workflowScope = null,
+  learningContext = null,
   onReceipt
 }) {
   const view = useMemo(
@@ -124,6 +126,7 @@ export default function PostEventCloseoutReviewAction({
     [available, opportunity]
   );
   const [notes, setNotes] = useState({});
+  const [supportingDetailsOpen, setSupportingDetailsOpen] = useState(false);
   const projectedActualAttendance = opportunity?.reviewedAction?.actualAttendance || null;
   const [confirmedActualAttendance, setConfirmedActualAttendance] = useState(null);
   const actualAttendance = confirmedActualAttendance || projectedActualAttendance;
@@ -557,11 +560,19 @@ export default function PostEventCloseoutReviewAction({
           {mutation.receipt?.requestId ? <> Request <code>{mutation.receipt.requestId}</code>.</> : null}
         </div>
       )}
-      <details className="staff-evidence-disclosure closeout-supporting-detail">
-        <summary>Review policy and recorded costs</summary>
+      <details className="staff-evidence-disclosure closeout-supporting-detail" onToggle={(event) => setSupportingDetailsOpen(event.currentTarget.open)}>
+        <summary>{learningContext?.enabled ? "Review policy, recorded costs and event learning" : "Review policy and recorded costs"}</summary>
         <p className="source-note">{view.detail}</p>
       {WorkflowPackPolicyPanel && available && view.authoritative && workflowScope?.enabled && <Suspense fallback={<p role="status">Loading closeout coordination...</p>}><WorkflowPackPolicyPanel {...workflowScope} organizationId={opportunity.organizationId} quoteId={opportunity.quoteId} workflowKind="closeout_follow_up" sourceVersionId={opportunity.reviewedAction?.sourceVersionId || ""} sourceReceiptId={opportunity.reviewedAction?.acceptanceReceiptId || ""} domainRevision={mutation.receipt?.receiptId || opportunity.reviewedAction?.completedAtISO || ""} otherMutationBlocked={["submitting", "uncertain", "reconciliation", "error", "recovery"].includes(mutation.state)} /></Suspense>}
       {EventActualsCloseoutSummary && available && view.authoritative && ["due", "overdue", "completed"].includes(view.state) && <Suspense fallback={<p role="status">Loading closeout actuals...</p>}><EventActualsCloseoutSummary {...closeoutActualsSource(opportunity)} available={available} /></Suspense>}
+      {supportingDetailsOpen && learningContext?.enabled && available && view.authoritative && ["due", "overdue", "completed"].includes(view.state) && <PostEventLearningPanel
+        enabled organizationId={opportunity.organizationId}
+        quote={learningContext.quotes?.find((quote) => quote.id === opportunity.quoteId) || {}}
+        acceptedVersion={learningContext.versions?.filter((version) => version.quoteId === opportunity.quoteId && (version.versionId || version.id) === opportunity.reviewedAction?.sourceVersionId).length === 1 ? learningContext.versions.find((version) => version.quoteId === opportunity.quoteId && (version.versionId || version.id) === opportunity.reviewedAction?.sourceVersionId) : null}
+        closeout={{ ...opportunity.reviewedAction, actualAttendance }} source={workflowScope?.source}
+        role={workflowScope?.role} principalId={workflowScope?.principalId}
+        inventoryEnabled={learningContext.inventoryEnabled} onReview={learningContext.onReview}
+      />}
       </details>
     </section>
   );

@@ -1,6 +1,22 @@
 # Success Metric Specification
 
-Last updated: 2026-09-16 23:25:23 CDT
+Last updated: 2026-09-17 10:51:24 CDT
+
+## Quote-to-Confidence diagnostic measures
+
+| Metric ID | Definition and denominator | Observation and boundary |
+|---|---|---|
+| `MET-19` | Successful completion-action resolutions / completion actions shown within the bounded summary window, plus raw numerator/denominator. | `SIG-017`, `SIG-018`; aggregate client diagnostics, not paired unique-event outcome conversion. Repeated exposure and missing telemetry can bias the ratio. Zero denominator is unavailable. |
+| `MET-20` | Count of eligible quote-session sendable transitions; report observed sessions and exposure window separately. | `SIG-019`; sendable is neither sent nor accepted. No standalone success rate is inferred. |
+| `MET-21` | Proposed and explicitly receipt-confirmed applied learning observations, separated by category and eligible exposure window. | `SIG-020`, `SIG-021`; client observations only, not a proposal-level conversion rate. Recipe/pack receipt confirmation is supported; template/workflow correlation remains blocked by integration. |
+
+Summary fields are `quoteCompletion.actionsShown / actionsResolved /
+actionResolutionRate / sendableReached` and `postEventLearning.proposed / applied`.
+Only categorical dimensions and the existing bounded organization/session envelope
+are persisted. Quote IDs, proposal IDs, source references, quantities, money,
+customer fields and rationale never enter event dimensions. These signals use
+the existing analytics session; absent sessions or failed telemetry yield missing
+observations, never invented counts. No product outcome baseline is yet collected.
 
 ## Measurement rules
 

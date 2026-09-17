@@ -13,7 +13,9 @@ const ANALYTICS_EVENT_NAMES = new Set([
   "ambient_issue_resolved",
   "quote_completion_action_shown",
   "quote_completion_action_resolved",
-  "quote_completion_sendable_reached"
+  "quote_completion_sendable_reached",
+  "post_event_learning_proposed",
+  "post_event_learning_applied"
 ]);
 const AMBIENT_RESULT_KINDS = new Set([
   "context",
@@ -156,6 +158,14 @@ function sanitizeAnalyticsEvent(raw, { organizationId, receivedAtISO }) {
       throw new ProductAnalyticsError("invalid-argument", "Completed wizard step is invalid.");
     }
     event.step = step;
+  }
+  if (eventName.startsWith("post_event_learning_")) {
+    if (!["recipe", "template", "pack_conversion", "workflow"].includes(raw?.category)
+      || (eventName === "post_event_learning_applied" && raw?.authority !== "existing_authority_receipt")) {
+      throw new ProductAnalyticsError("invalid-argument", "Learning observations require an allowed category and application receipt boundary.");
+    }
+    event.category = raw.category;
+    if (eventName === "post_event_learning_applied") event.authority = "existing_authority_receipt";
   }
   if (eventName === "addon_selected" || eventName === "addon_removed") {
     event.addonId = requireIdentifier(raw?.addonId, "Add-on ID", 120);
@@ -307,6 +317,8 @@ function summarizeAnalyticsEvents(rawEvents = []) {
   let quoteCompletionActionsShown = 0;
   let quoteCompletionActionsResolved = 0;
   let quoteCompletionSendableReached = 0;
+  let learningProposed = 0;
+  let learningApplied = 0;
   const intentToPricedDraftDurations = [];
   const issueResolutionDurations = [];
   const issueResolutionDurationsByCategory = new Map();
@@ -363,6 +375,8 @@ function summarizeAnalyticsEvents(rawEvents = []) {
         quoteCompletionActionsShown += 1;
         return;
       }
+      if (event?.eventName === "post_event_learning_proposed") { learningProposed += 1; return; }
+      if (event?.eventName === "post_event_learning_applied" && event.authority === "existing_authority_receipt") { learningApplied += 1; return; }
       if (
         event?.eventName === "quote_completion_action_resolved"
         && event?.result === "success"
@@ -428,6 +442,7 @@ function summarizeAnalyticsEvents(rawEvents = []) {
           ...summarizeDurations(issueResolutionDurationsByCategory.get(issueCategory))
         }))
     },
+    postEventLearning: { observationSource: "client", proposed: learningProposed, applied: learningApplied },
     quoteCompletion: {
       observationSource: "client",
       actionsShown: quoteCompletionActionsShown,

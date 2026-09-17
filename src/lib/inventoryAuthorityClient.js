@@ -2,6 +2,8 @@ import { collection, doc, limit, onSnapshot, orderBy, query } from "firebase/fir
 import { httpsCallable } from "firebase/functions";
 import { auth, cloudFunctions, db, firebaseReady } from "./firebase";
 
+import { observeLearningInventoryReceipt } from "./postEventLearningReview";
+
 export const INVENTORY_AUTHORITY_SCHEMA_VERSION = 2;
 export const INVENTORY_AUTHORITY_VERSION = "inventory-ingredient-authority-v2";
 export const INVENTORY_INGREDIENT_PROJECTION_LIMIT = 200;
@@ -1195,6 +1197,7 @@ async function executeAttempt(attempt) {
     const response = await call(canonicalClone(attempt.payload, "Inventory callable request"));
     const result = normalizeResultOrUncertain(response?.data, attempt);
     pendingAttempts.delete(attempt.key);
+    observeLearningInventoryReceipt(attempt, result);
     return result;
   } catch (error) {
     markAttemptError(attempt, error);

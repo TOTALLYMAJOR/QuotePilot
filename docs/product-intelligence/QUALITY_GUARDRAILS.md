@@ -1,6 +1,20 @@
 # Quality and Reliability Guardrails
 
-Last updated: 2026-09-16 23:25:23 CDT
+Last updated: 2026-09-17 10:51:24 CDT
+
+## Quote-to-Confidence application
+
+`GRD-01`, `GRD-02`, `GRD-04`, `GRD-06`, `GRD-07`, `GRD-09`,
+`GRD-10`, `GRD-11`, `GRD-12`, `GRD-14` and `GRD-15` govern all five
+journeys. New build and tenant gates default off; server gates still apply.
+Internal supply approval is never a vendor action. Device drafts never imply
+server persistence or cold-start offline support. Source drift blocks adoption;
+unknown commands reconcile their exact identity before new requests. Learning
+never changes prices, margins, rates, thresholds, supplier policy, recipe yield
+or conversion contents automatically. An applied observation requires both the
+existing exact publication receipt and explicit operator confirmation; no click,
+route change, recommendation or test fixture may substitute. Incompatible
+receipt categories and event-bound receiving remain blocked by integration.
 
 ## Purpose
 

@@ -24,6 +24,17 @@ function event(eventName, sequence, extra = {}) {
 }
 
 describe("product analytics server contract", () => {
+  test("keeps learning observations categorical and requires a receipt-backed applied category", () => {
+    const proposed = sanitizeAnalyticsEvent(event("post_event_learning_proposed", 2, { category: "recipe", quoteId: "private-quote", sourceReferences: ["private-receipt"], rationale: "private free text", price: 99 }), context);
+    expect(proposed).toMatchObject({ eventName: "post_event_learning_proposed", category: "recipe" });
+    for (const key of ["quoteId", "sourceReferences", "rationale", "price"]) expect(proposed).not.toHaveProperty(key);
+    expect(() => sanitizeAnalyticsEvent(event("post_event_learning_applied", 3, { category: "recipe" }), context)).toThrow();
+    expect(() => sanitizeAnalyticsEvent(event("post_event_learning_proposed", 3, { category: "pricing" }), context)).toThrow();
+    const applied = sanitizeAnalyticsEvent(event("post_event_learning_applied", 3, { category: "recipe", authority: "existing_authority_receipt", receiptId: "private" }), context);
+    expect(applied).not.toHaveProperty("receiptId");
+    const summary = summarizeAnalyticsEvents([sanitizeAnalyticsEvent(event("wizard_started", 1), context), proposed, applied]);
+    expect(summary.postEventLearning).toEqual({ observationSource: "client", proposed: 1, applied: 1 });
+  });
   test("keeps only allow-listed, non-PII dimensions and derives a stable retry ID", () => {
     const sanitized = sanitizeAnalyticsEvent({
       ...event("addon_selected", 2, { addonId: "dessert-bar" }),
@@ -178,6 +189,7 @@ describe("product analytics server contract", () => {
       { ...event("wizard_started", 1), sessionId: "session-other-1234" }
     ];
     expect(summarizeAnalyticsEvents(events)).toEqual({
+      postEventLearning: { observationSource: "client", proposed: 0, applied: 0 },
       sessionsStarted: 2,
       quotesSaved: 1,
       completionRate: 50,

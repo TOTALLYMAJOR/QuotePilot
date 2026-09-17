@@ -938,6 +938,7 @@ export function EventSupplyActionPlanPanel({
   enabled = false,
   organizationId,
   role = "customer",
+  principalId = "",
   events = [],
   getPlan = getEventSupplyActionPlan,
   applyPlan = applyEventSupplyActionPlanCommand
@@ -951,8 +952,10 @@ export function EventSupplyActionPlanPanel({
   const [approvalChecked, setApprovalChecked] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
   const generation = useRef(0);
+  const pendingSupplyRequest = useRef(null);
 
   const resetSelectionState = useCallback(() => {
+    pendingSupplyRequest.current = null;
     generation.current += 1;
     setRead({ state: "empty", value: null, error: "" });
     setEdits([]);
@@ -1017,7 +1020,7 @@ export function EventSupplyActionPlanPanel({
     setQuoteId("");
     resetSelectionState();
     return () => { generation.current += 1; };
-  }, [enabled, organizationId, resetSelectionState, role]);
+  }, [enabled, organizationId, principalId, resetSelectionState, role]);
   useEffect(() => {
     if (quoteId && !choices.some((event) => event.id === quoteId)) {
       setQuoteId("");
@@ -1029,7 +1032,8 @@ export function EventSupplyActionPlanPanel({
   const value = read.value;
   const plan = value?.plan;
   const source = value?.source;
-  const canEdit = role === "admin" && ["current", "stale"].includes(read.state) && source?.eligible === true;
+  const unresolvedSupply = ["submitting", "uncertain", "reconciliation", "error"].includes(attempt.state);
+  const canEdit = role === "admin" && !unresolvedSupply && ["current", "stale"].includes(read.state) && source?.eligible === true;
   const editSignature = signatureFor(edits);
   const dirty = plan?.status === "draft" ? editSignature !== savedSignature : edits.length > 0;
   const editReady = edits.length > 0 && edits.every((edit) => (
@@ -1046,11 +1050,11 @@ export function EventSupplyActionPlanPanel({
     )));
   };
 
-  const submit = async (kind) => {
+  const submit = async (kind, reconcile = false) => {
     if (!quoteId || !source) return;
     const current = generation.current + 1;
     generation.current = current;
-    setAttempt({ state: "submitting", error: "", receipt: null });
+    setAttempt({ state: reconcile ? "reconciliation" : "submitting", error: "", receipt: null });
     try {
       const common = {
         kind,
@@ -1065,34 +1069,41 @@ export function EventSupplyActionPlanPanel({
         : kind === "cancel"
           ? { kind, quoteId, expectedPlanRevision: plan?.planRevision || 0, reason: cancelReason.trim() }
           : { ...common, edits: commandEditsFor(edits) };
-      const result = await applyPlan({ organizationId, quoteId, role, requestId: buildEventSupplyActionPlanRequestId(), command });
+      const input = reconcile ? pendingSupplyRequest.current : { organizationId, quoteId, role, requestId: buildEventSupplyActionPlanRequestId(), command };
+      if (!input) throw Object.assign(new Error("The exact prior request is unavailable. Refresh source evidence before continuing."), { code: "failed-precondition" });
+      pendingSupplyRequest.current = input;
+      const result = await applyPlan(input);
       if (generation.current !== current) return;
+      pendingSupplyRequest.current = null;
       setAttempt({ state: "receipt", error: "", receipt: result.receipt });
       setApprovalChecked(false);
       await load(quoteId, { preserveAttempt: true });
     } catch (error) {
-      if (generation.current === current) setAttempt({ state: "error", error: safeMessage(error, "The internal supply plan was not changed."), receipt: null });
+      if (generation.current === current) {
+        const definitive = ["invalid-argument", "permission-denied", "unauthenticated", "failed-precondition", "aborted", "not-found", "already-exists"].includes(String(error?.code || "").replace(/^functions\//u, ""));
+        setAttempt({ state: definitive ? "error" : "uncertain", error: safeMessage(error, definitive ? "The command was rejected. Review source evidence before a new request." : "No matching receipt returned. Check this exact request; completion is unknown."), receipt: null });
+      }
     }
   };
 
   return (
-    <section className="panel inventory-supply-plan" data-capability-id="event-supply-action-plan" data-capability-state={attempt.state === "submitting" ? "submitting" : attempt.state === "receipt" ? "receipt" : attempt.state === "error" ? "error" : read.state === "current" ? "ready" : read.state} aria-labelledby="inventory-supply-title">
+    <section className="panel inventory-supply-plan" data-capability-id="event-supply-action-plan" data-capability-state={attempt.state !== "ready" ? attempt.state : read.state === "current" ? "ready" : read.state} aria-labelledby="inventory-supply-title">
       <p className="eyebrow">Event shortage response</p>
       <h2 id="inventory-supply-title">Internal supply action plan</h2>
       <p className="muted"><strong>Internal plan only.</strong> This surface does not contact a vendor, create a purchase order or reservation, change stock, or authorize commercial scope.</p>
       <label className="field">
         Accepted or booked event
-        <select aria-label="Event supply plan" value={quoteId} onChange={(event) => { const next = event.target.value; setQuoteId(next); resetSelectionState(); if (next) load(next); }}>
+        <select aria-label="Event supply plan" value={quoteId} disabled={unresolvedSupply} onChange={(event) => { const next = event.target.value; setQuoteId(next); resetSelectionState(); if (next) load(next); }}>
           <option value="">Select exact event</option>
           {choices.map((event) => <option key={event.id} value={event.id}>{eventLabel(event)}</option>)}
         </select>
       </label>
       {!choices.length && <p className="source-note" data-capability-state="empty">No accepted or booked event is available for internal supply planning.</p>}
       {read.state === "loading" && <p className="status-strip" role="status">Loading exact shortage and plan evidence…</p>}
-      {read.state === "error" && <div className="error-note" role="alert"><p>{read.error}</p><button type="button" className="ghost" onClick={() => load(quoteId)}>Try exact plan again</button></div>}
+      {read.state === "error" && <div className="error-note" role="alert"><p>{read.error}</p><button type="button" className="ghost" data-capability-state="recovery" onClick={() => load(quoteId)}>Try exact plan again</button></div>}
       {value && (
         <div className="inventory-supply-plan-body">
-          <div className={value.stale ? "warning-note" : "status-strip"} data-supply-truth={value.stale ? "stale" : value.resolution} role="status">
+          <div className={value.stale ? "warning-note" : "status-strip"} data-capability-state={value.stale ? "stale" : source?.eligible ? "success" : "partial"} data-supply-truth={value.stale ? "stale" : value.resolution} role="status">
             Plan: {plan?.status || "not started"} · Resolution: {value.resolution.replaceAll("_", " ")}.
             {value.stale && " Source evidence changed. Rebase before approval."}
           </div>
@@ -1124,7 +1135,9 @@ export function EventSupplyActionPlanPanel({
           )}
           {attempt.state === "submitting" && <p className="status-strip" role="status">Submitting the exact internal-plan command…</p>}
           {attempt.state === "receipt" && <p className="status-strip" data-capability-state="receipt" role="status">Command receipt recorded. Refreshed plan truth is shown above.</p>}
-          {attempt.state === "error" && <p className="error-note" role="alert">{attempt.error}</p>}
+          {attempt.state === "uncertain" && <div data-capability-state="uncertain"><p role="alert">{attempt.error}</p><button type="button" className="ghost" onClick={() => submit(pendingSupplyRequest.current?.command.kind, true)}>Check exact supply request</button></div>}
+          {attempt.state === "reconciliation" && <p data-capability-state="reconciliation" role="status">Checking the unchanged request for its immutable receipt…</p>}
+          {attempt.state === "error" && <div className="error-note" role="alert"><p>{attempt.error}</p><button type="button" className="ghost" data-capability-state="recovery" onClick={() => { pendingSupplyRequest.current = null; setAttempt({ state: "recovery", error: "", receipt: null }); setApprovalChecked(false); void load(quoteId, { preserveAttempt: true }); }}>Reset rejected supply request</button></div>}
         </div>
       )}
     </section>
@@ -1509,7 +1522,7 @@ export function InventoryWorkspaceView({
           {exceptionWorkspaceEnabled && (
             <InventoryExceptionWorkspace ingredients={ingredients} current={read.state === "current" && sourcesCurrent} />
           )}
-          {eventSupplyActionPlanEnabled && <EventSupplyActionPlanPanel enabled {...supplyPlanProps} />}
+          {eventSupplyActionPlanEnabled && <EventSupplyActionPlanPanel key={JSON.stringify([supplyPlanProps.organizationId, supplyPlanProps.principalId, supplyPlanProps.role])} enabled {...supplyPlanProps} />}
           {inventoryMobileCaptureEnabled && (
             <InventoryMobileCapturePanel
               enabled
@@ -1783,6 +1796,7 @@ export default function InventoryWorkspace({
       inventoryMobileCaptureEnabled={inventoryMobileCaptureEnabled && access.mutationEnabled}
       supplyPlanProps={{
         organizationId,
+        principalId: userId,
         role,
         events,
         getPlan: getSupplyPlan,

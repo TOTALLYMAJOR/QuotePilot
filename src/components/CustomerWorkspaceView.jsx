@@ -358,6 +358,9 @@ export default function CustomerWorkspaceView({
   currentUserRole = "staff",
   currentUserUid = "",
   workflowEnabled = false,
+  postEventLearningEnabled = false,
+  learningInventoryEnabled = false,
+  onReviewLearning,
   ambientMode = false,
   arrivalContext = null,
   arrivalAttempted = false,
@@ -857,6 +860,7 @@ export default function CustomerWorkspaceView({
 
         <section id="customer-panel-overview" role="tabpanel" aria-labelledby="customer-tab-overview" tabIndex={0} hidden={activeTab !== "overview"}>
           <CustomerRevenueOpportunities
+            learningContext={{ enabled: postEventLearningEnabled && !state.loading && !state.stale && !state.revenueRadarError, inventoryEnabled: learningInventoryEnabled, quotes: workspace.quotes, versions: workspace.proposalVersions, onReview: onReviewLearning }}
             workflowScope={{ principalId: currentUserUid, role: currentUserRole, enabled: workflowEnabled, source: workspace.source }}
             radar={state.revenueRadar}
             focusedCloseoutQuoteId={revealedCloseout?.scopeKey === requestedScopeKey ? revealedCloseout.quoteId : ""}
