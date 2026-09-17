@@ -22,7 +22,7 @@ describe("Proposal Composer quote-acceleration boundary", () => {
   });
 
   test("assigns the heavy implementation, not the facade, to the quote-builder chunk", () => {
-    expect(VITE_SOURCE).toContain('/src/components/ProposalComposerImpl.jsx');
-    expect(VITE_SOURCE).not.toContain('/src/components/ProposalComposer.jsx\")\n            || normalizedId.endsWith(\"/src/components/proposalComposerPresentation.js');
+    expect(VITE_SOURCE).toContain('normalizedId.endsWith("/src/components/ProposalComposerImpl.jsx")');
+    expect(VITE_SOURCE).not.toContain('normalizedId.endsWith("/src/components/ProposalComposer.jsx")');
   });
 });
