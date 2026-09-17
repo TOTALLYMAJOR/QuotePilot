@@ -83,6 +83,7 @@ import {
   reconcileCatalogSelections
 } from "./lib/catalogSelectionReconciliation";
 import { buildProposalReadiness } from "./lib/quoteWorkflow";
+import { buildRoleSafeQuoteActionController } from "./lib/quoteHistoryController";
 import { recommendationWouldChangeForm } from "./lib/recommendationState";
 import { PRODUCT_NAME } from "./lib/productIdentity";
 import {
@@ -116,6 +117,7 @@ import {
   WORKSPACE_PATHS,
   WORKSPACE_ROUTE_IDS
 } from "./lib/workspaceRoutes";
+import { createWorkspaceArrivalHandoff } from "./lib/workspaceArrivalContract";
 import { recordDiagnosticError, setDiagnosticsUserContext } from "./lib/sessionDiagnostics";
 import { createRebookQuoteDraft } from "./lib/rebookQuoteClient";
 import { clearTenantContextCache } from "./lib/tenantDomainService";
@@ -1419,6 +1421,38 @@ function LegacyAppCore({
     buildValue: import.meta.env.VITE_QUOTE_COMPLETION_COMMAND_PATH_ENABLED,
     tenantValue: featureFlags.quoteCompletionCommandPath
   });
+  const proposalComposerQuoteActionController = useMemo(() => (
+    editingQuote?.id
+      ? buildRoleSafeQuoteActionController({
+          quote: editingQuote,
+          currentUserRole: authSession.role,
+          source: ["firebase", "firebase-org"].includes(catalog.source) ? "firebase" : catalog.source
+        })
+      : null
+  ), [authSession.role, catalog.source, editingQuote]);
+  const navigateProposalQuoteCompletion = useCallback((action) => {
+    const quoteId = String(action?.objectContext?.quoteId || editingQuote?.id || "").trim();
+    if (!quoteId) return { status: "recovery", reason: "The exact quote could not be identified." };
+    const livingOpportunity = action?.destination?.surfaceId === "living-opportunity";
+    const handoff = createWorkspaceArrivalHandoff(livingOpportunity
+      ? {
+          destination: "opportunity",
+          object: { id: quoteId, type: "opportunity" },
+          focus: { quoteId },
+          intentId: "review_proposal_gap"
+        }
+      : {
+          destination: "administration",
+          object: { id: quoteId, type: "customer-decision-artifact" },
+          focus: { quoteId },
+          intentId: "review_proposal_controls"
+        });
+    if (!handoff.ok) return { status: "recovery", ...handoff.recovery };
+    const result = navigateWorkspace(handoff.navigation.path, { state: handoff.navigation.state });
+    return ["blocked", "guarded"].includes(result?.status)
+      ? { status: "recovery", reason: "The exact quote destination is currently guarded." }
+      : { status: "pending", contract: handoff.contract };
+  }, [editingQuote?.id, navigateWorkspace]);
   const customerPortalEnabled = featureFlags.customerPortal !== false;
   const eventScheduleEnabled = featureFlags.eventSchedule !== false;
   const integrationsEnabled = featureFlags.integrationsOps !== false;
@@ -3234,6 +3268,9 @@ function LegacyAppCore({
       id: quote.id,
       quoteNumber: quote.quoteNumber || quote.id,
       activeVersionId: quote.activeVersionId || quote.versionMeta?.versionId || "",
+      status: quote.status,
+      portalExpiresAtISO: quote.portalExpiresAtISO || quote.expiresAtISO || "",
+      workflow: quote.workflow && typeof quote.workflow === "object" ? quote.workflow : {},
       customerId: quote.customerId || "",
       organizationId: quote.organizationId || authSession.organizationId || "",
       rebooking: quote.rebooking && typeof quote.rebooking === "object"
@@ -4132,6 +4169,8 @@ function LegacyAppCore({
       saveBlockers={proposalComposerSaveBlockers}
       saveMessage={submitState.message}
       quoteCompletionCommandPathEnabled={quoteCompletionCommandPathEnabled}
+      quoteCompletionConfiguredActions={proposalComposerQuoteActionController?.actionState || null}
+      onQuoteCompletionNavigate={navigateProposalQuoteCompletion}
       compareEnabled={quoteCompareEnabled}
       catalogLoading={catalog.loading}
       onFieldChange={handleStep1FieldChange}
@@ -4139,7 +4178,7 @@ function LegacyAppCore({
       onPatchForm={handleComposerPatch}
       onTemplateChange={applyEventTemplate}
       onEventTypeChange={handleEventTypeChange}
-      onSaveQuote={() => void handleSubmitQuote()}
+      onSaveQuote={() => handleSubmitQuote({ propagateError: true })}
       onOpenCompare={() => openWorkspaceTool(setCompareOpen)}
       onGuidedMode={() => setBuilderMode("guided")}
       reviewSurfaces={draftReviewSurfaces}

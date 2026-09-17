@@ -872,6 +872,128 @@ describe("AmbientLivingOpportunity", () => {
     expect(QUOTE).toEqual(before);
   });
 
+  test("routes the quote-completion proposal gap through the existing exact editor handoff", async () => {
+    const onEditQuote = vi.fn(() => ({ status: "opened" }));
+    mount({
+      onEditQuote,
+      quoteCompletionCommandPathEnabled: true,
+      quoteActionController: {
+        actionState: {
+          state: { versionSaved: true, providerAccepted: false },
+          actions: {
+            send_quote: {
+              id: "send_quote",
+              label: "Send proposal",
+              visible: true,
+              enabled: true
+            }
+          },
+          primaryAction: {
+            id: "send_quote",
+            label: "Send proposal",
+            visible: true,
+            enabled: true
+          }
+        }
+      }
+    });
+    const command = container.querySelector('[data-capability-id="quote-completion-command-path"]');
+
+    expect(command?.dataset.capabilityState).toBe("blocked");
+    await act(async () => command.querySelector("button").click());
+
+    expect(onEditQuote).toHaveBeenCalledOnce();
+    expect(onEditQuote.mock.calls[0][0]).toBe(QUOTE);
+    expect(onEditQuote.mock.calls[0][1]).toMatchObject({
+      arrivalContext: {
+        object: {
+          id: "proposal",
+          type: "customer-decision-artifact",
+          opportunityId: "quote-alpha"
+        },
+        reason: expect.stringContaining("exact proposal completeness"),
+        consequence: expect.stringContaining("Nothing is repriced, saved, published, sent, rotated, or recovered"),
+        nextResolution: expect.stringContaining("Save only through the existing authoritative quote workflow")
+      },
+      draftPatch: null
+    });
+    expect(onEditQuote.mock.calls[0][1].arrivalContext).not.toHaveProperty("kind");
+    expect(command.dataset.commandState).toBe("success");
+  });
+
+  test("routes a sendable quote-completion action through the exact governed proposal-controls handoff", async () => {
+    const quote = Object.freeze({
+      ...QUOTE,
+      updatedAtISO: "2026-08-12T10:42:00.000Z",
+      customer: Object.freeze({
+        ...QUOTE.customer,
+        phone: "205-555-0142"
+      }),
+      event: Object.freeze({
+        ...QUOTE.event,
+        hours: 6
+      }),
+      totals: Object.freeze({
+        subtotal: 7_800,
+        tax: 600,
+        total: 8_400,
+        deposit: 2_520
+      }),
+      pricing: Object.freeze({
+        authority: "server_authoritative",
+        calculatedAt: "2026-08-12T10:41:30.000Z",
+        grandTotal: 8_400
+      }),
+      portalKey: "proposal-living-opportunity-key-000001",
+      portalIssuedAtISO: "2026-08-12T10:42:00.000Z",
+      portalExpiresAtISO: "2027-09-11T10:42:00.000Z",
+      workflow: Object.freeze({ quoteDelivery: Object.freeze({}) })
+    });
+    const onOpenLegacyWorkspace = vi.fn(() => ({ status: "opened" }));
+    mount({
+      quote,
+      source: "firebase",
+      onOpenLegacyWorkspace,
+      quoteCompletionCommandPathEnabled: true,
+      quoteActionController: {
+        actionState: {
+          state: { versionSaved: true, providerAccepted: false },
+          actions: {
+            send_quote: {
+              id: "send_quote",
+              label: "Send proposal",
+              visible: true,
+              enabled: true
+            }
+          },
+          primaryAction: {
+            id: "send_quote",
+            label: "Send proposal",
+            visible: true,
+            enabled: true
+          }
+        }
+      }
+    }, {
+      ...CONTEXT,
+      role: "admin",
+      sourceFreshness: { state: "fresh", observedAt: "2026-08-12T10:42:01.000Z" }
+    });
+    const command = container.querySelector('[data-capability-id="quote-completion-command-path"]');
+
+    expect(command?.dataset.capabilityState).toBe("sendable");
+    await act(async () => command.querySelector("button").click());
+
+    expect(onOpenLegacyWorkspace).toHaveBeenCalledOnce();
+    expect(onOpenLegacyWorkspace.mock.calls[0][0]).toMatchObject({
+      object: { id: "proposal", type: "customer-decision-artifact", label: "Proposal" },
+      reason: expect.stringContaining("Prepare proposal, Send proposal, Replace customer link, or Review delivery"),
+      consequence: expect.stringContaining("independently recheck role, exact revision"),
+      nextResolution: expect.stringContaining("Choose Prepare, Send, Replace customer link, or Review delivery")
+    });
+    expect(command.dataset.commandState).toBe("success");
+  });
+
   test("presents a missing phone as recommended contact detail without proposal-blocking language", () => {
     const onEditQuote = vi.fn(() => ({ status: "opened" }));
     const quote = {

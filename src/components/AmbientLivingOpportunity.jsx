@@ -1119,7 +1119,9 @@ const AmbientLivingOpportunity = forwardRef(function AmbientLivingOpportunity({
       || proposalInspectRef.current;
     const action = model.actions.inspectProposal;
     const runtimeToken = beginAction(action);
-    if (!runtimeToken) return;
+    if (!runtimeToken) {
+      return { state: "recovery", message: "The current proposal evidence is already opening." };
+    }
     openExclusiveContext("proposal");
     acknowledge({
       action,
@@ -1136,6 +1138,7 @@ const AmbientLivingOpportunity = forwardRef(function AmbientLivingOpportunity({
         isEmpty: false
       }
     });
+    return { state: "success", message: "Opened the current proposal evidence." };
   };
 
   const openPackageContext = () => {
@@ -1310,7 +1313,9 @@ const AmbientLivingOpportunity = forwardRef(function AmbientLivingOpportunity({
         ? model.actions.primary
         : model.actions.openPricedEditor);
     const runtimeToken = beginAction(action);
-    if (!runtimeToken) return;
+    if (!runtimeToken) {
+      return { state: "recovery", message: "The exact editor handoff is already in progress." };
+    }
     if (!ordinaryEditAllowed || typeof onEditQuote !== "function") {
       emitFeedback("warning");
       acknowledge({
@@ -1323,7 +1328,7 @@ const AmbientLivingOpportunity = forwardRef(function AmbientLivingOpportunity({
         nextActionId: "back-to-opportunities",
         nextResolution: "Return to Opportunities or ask an authorized role to review the quote."
       });
-      return;
+      return { state: "recovery", message: model.editBoundary };
     }
     if (hasStaffingScenario && staffing.basisGuestCount !== model.staffingObject.guestCount) {
       emitFeedback("warning");
@@ -1337,7 +1342,7 @@ const AmbientLivingOpportunity = forwardRef(function AmbientLivingOpportunity({
         nextActionId: model.actions.useStaffingRecommendation.id,
         nextResolution: "Reapply the staffing recommendation for the current guest scenario, then stage it again."
       });
-      return;
+      return { state: "stale", message: "The staffing recommendation no longer matches the current guest scenario." };
     }
     const eventPatch = {
       ...(hasGuestScenario ? { guests: Number(guestCount) } : {}),
@@ -1365,7 +1370,7 @@ const AmbientLivingOpportunity = forwardRef(function AmbientLivingOpportunity({
         nextActionId: action.id,
         nextResolution: "Refresh the opportunity to load its exact active revision, then continue the scenario again."
       });
-      return;
+      return { state: "stale", message: "The latest saved quote revision is unavailable." };
     }
     const draftPatch = Object.keys(eventPatch).length > 0
       ? {
@@ -1419,9 +1424,14 @@ const AmbientLivingOpportunity = forwardRef(function AmbientLivingOpportunity({
         nextActionId: action.id,
         nextResolution: navigationResult.nextResolution || "Keep the current work or try the priced editor again when it is safe to leave."
       });
-      return;
+      return {
+        state: "recovery",
+        message: navigationResult.reason || "The route change was cancelled before the editor opened.",
+        recovery: { label: action.outcomeLabel || "Try editor again" }
+      };
     }
     emitFeedback("ready");
+    return { state: "success", message: "Opened the exact saved quote in the governed editor." };
   };
 
   const continueEventLogisticsInEditor = async (kind) => {
@@ -2222,10 +2232,18 @@ const AmbientLivingOpportunity = forwardRef(function AmbientLivingOpportunity({
     }
   };
 
-  const openProposalControls = () => {
+  const openProposalControls = async () => {
     const action = model.actions.openProposalControls;
-    if (!action.enabled || typeof onOpenLegacyWorkspace !== "function") return;
+    if (!action.enabled || typeof onOpenLegacyWorkspace !== "function") {
+      return {
+        state: "recovery",
+        message: action.disabledReason || "The governed proposal controls are unavailable."
+      };
+    }
     const runtimeToken = beginAction(action);
+    if (!runtimeToken) {
+      return { state: "recovery", message: "The governed proposal controls are already opening." };
+    }
     const nextResolution = "Choose Prepare, Send, Replace customer link, or Review delivery. QuotePilot will recheck the current quote and delivery details first.";
     const pendingResult = acknowledge({
       action,
@@ -2236,7 +2254,7 @@ const AmbientLivingOpportunity = forwardRef(function AmbientLivingOpportunity({
       deferRuntime: true
     });
     try {
-      const navigationResult = onOpenLegacyWorkspace({
+      const navigationResult = await onOpenLegacyWorkspace({
         object: action.arrivalContract.object,
         reason: action.arrivalContract.reason,
         consequence: action.arrivalContract.consequence,
@@ -2253,7 +2271,11 @@ const AmbientLivingOpportunity = forwardRef(function AmbientLivingOpportunity({
           nextActionId: "dismiss-proposal-context",
           nextResolution: navigationResult.nextResolution || "Continue reviewing the proposal details or close this panel."
         });
-        return;
+        return {
+          state: "recovery",
+          message: navigationResult.reason || "The existing proposal-control handoff was cancelled.",
+          recovery: { label: action.outcomeLabel }
+        };
       }
       actionRuntime.acknowledge(runtimeToken, {
         result: pendingResult,
@@ -2262,6 +2284,7 @@ const AmbientLivingOpportunity = forwardRef(function AmbientLivingOpportunity({
           isEmpty: false
         }
       });
+      return { state: "success", message: "Opened the governed proposal controls for this quote." };
     } catch (error) {
       emitFeedback("warning");
       acknowledge({
@@ -2274,6 +2297,11 @@ const AmbientLivingOpportunity = forwardRef(function AmbientLivingOpportunity({
         nextActionId: "dismiss-proposal-context",
         nextResolution: "Continue reviewing the proposal details or close this panel."
       });
+      return {
+        state: "failure",
+        message: error?.userMessage || "The existing role-safe proposal controls could not be opened.",
+        recovery: { label: action.outcomeLabel }
+      };
     }
   };
 
@@ -3192,25 +3220,15 @@ const AmbientLivingOpportunity = forwardRef(function AmbientLivingOpportunity({
   const runQuoteCompletionAction = async (action) => {
     const surfaceId = String(action?.destination?.surfaceId || "");
     if (surfaceId === "quote-administration") {
-      if (!model.actions.openProposalControls.enabled) {
-        return { state: "recovery", message: model.actions.openProposalControls.disabledReason };
-      }
-      openProposalControls();
-      return { state: "success", message: "Opened the governed proposal controls." };
+      return openProposalControls();
     }
     if (surfaceId === "living-opportunity") {
-      openProposalContext();
-      return { state: "success", message: "Opened the current proposal evidence." };
+      return openProposalContext();
     }
-    if (typeof onEditQuote === "function") {
-      const result = await onEditQuote(quote, {
-        arrivalContext: {
-          kind: "quote_completion",
-          actionId: action.id,
-          destination: action.destination
-        }
+    if (["proposal-composer", "quote-review"].includes(surfaceId)) {
+      return openEditor({
+        requestedAction: model.actions.reviewProposalInEditor
       });
-      return result || { state: "success", message: "Opened the exact proposal destination." };
     }
     return { state: "recovery", message: "The exact proposal destination is not available here." };
   };

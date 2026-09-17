@@ -520,7 +520,8 @@ export default function ProposalComposer({
   onOpenCatalogPricing = null,
   quoteCompletionCommandPathEnabled = false,
   quoteCompletionConfiguredActions = null,
-  quoteCompletionCommand = null
+  quoteCompletionCommand = null,
+  onQuoteCompletionNavigate = null
 }) {
   const [menuEditorOpen, setMenuEditorOpen] = useState(false);
   const [ratesEditorOpen, setRatesEditorOpen] = useState(false);
@@ -660,9 +661,20 @@ export default function ProposalComposer({
     setPulseOpen(true);
     if (saveAction.mode === "review") {
       pendingSaveReviewFocusRef.current = true;
-      return;
+      return {
+        state: "recovery",
+        message: "Review the named draft requirements before saving.",
+        recovery: { label: "Review save requirements" }
+      };
     }
-    onSaveQuote?.();
+    if (typeof onSaveQuote !== "function") {
+      return {
+        state: "recovery",
+        message: "The governed save action is not available here.",
+        recovery: { label: "Review save requirements" }
+      };
+    }
+    return onSaveQuote();
   };
 
   useEffect(() => {
@@ -820,7 +832,7 @@ export default function ProposalComposer({
     });
   };
 
-  const runQuoteCompletionAction = (action) => {
+  const runQuoteCompletionAction = async (action) => {
     if (action?.kind === "resolve_field") {
       const blockerId = String(action.id || "").replace(/^resolve:/u, "");
       const blocker = currentSaveBlockers.find((item) => String(item?.id || "") === blockerId);
@@ -837,10 +849,38 @@ export default function ProposalComposer({
       return { state: "recovery", message: action.reason };
     }
     if (action?.kind === "save_revision") {
-      requestSave();
-      return { state: "loading", message: "Saving the exact revision." };
+      const result = await requestSave();
+      if (!result || ["failure", "failed", "recovery", "stale", "cancelled"].includes(
+        String(result?.state || result?.status || "").trim().toLowerCase()
+      )) {
+        return result || {
+          state: "recovery",
+          message: "The exact revision was not confirmed as saved.",
+          recovery: { label: "Try saving again" }
+        };
+      }
+      return { state: "success", message: "The exact revision was saved." };
     }
-    return { state: "recovery", message: action?.reason || "Review the current proposal." };
+    if (action?.kind === "recover_evidence") {
+      const target = document.querySelector('[data-capability-id="commercial-scenario-workbench"]');
+      if (target) {
+        target.scrollIntoView?.({ behavior: "smooth", block: "start" });
+        const focusTarget = target.querySelector(
+          "button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex='-1'])"
+        ) || target;
+        if (focusTarget === target && !target.hasAttribute("tabindex")) target.setAttribute("tabindex", "-1");
+        focusTarget.focus?.({ preventScroll: true });
+        return { state: "success", message: "Opened the current commercial evidence." };
+      }
+    }
+    if (typeof onQuoteCompletionNavigate === "function") {
+      return onQuoteCompletionNavigate(action);
+    }
+    return {
+      state: "recovery",
+      message: action?.reason || "The exact proposal destination is not available here.",
+      recovery: { label: "Try exact destination again" }
+    };
   };
 
   const commitField = (field) => (value) => {

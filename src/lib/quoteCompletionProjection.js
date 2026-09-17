@@ -155,6 +155,14 @@ function deepFreeze(value) {
   return Object.freeze(value);
 }
 
+function clonePresentationValue(value) {
+  if (Array.isArray(value)) return value.map(clonePresentationValue);
+  if (!value || typeof value !== "object") return value;
+  return Object.fromEntries(
+    Object.entries(value).map(([key, nested]) => [key, clonePresentationValue(nested)])
+  );
+}
+
 function text(value) {
   return typeof value === "string" ? value.trim() : "";
 }
@@ -183,11 +191,11 @@ function actionLabelForBlocker(blocker) {
 
 function normalizeBlocker(raw, source) {
   const id = canonicalBlockerId(raw?.id);
-  const destination = raw?.destination || DESTINATIONS[id] || {
+  const destination = clonePresentationValue(raw?.destination || DESTINATIONS[id] || {
     surfaceId: source === "proposal" ? "quote-review" : "proposal-composer",
     step: source === "proposal" ? 4 : undefined,
     selector: '[data-testid="pc-save-readiness"]'
-  };
+  });
   return {
     id,
     label: text(raw?.message || raw?.label) || "Review this requirement.",
@@ -339,9 +347,6 @@ function selectNextAction({
       destination: firstBlocker.destination
     };
   }
-  if (state === "sendable") {
-    return configuredNextAction(actionState.actions.send_quote, context);
-  }
   if (draftDirty || actionState?.state?.versionSaved !== true) {
     return {
       id: "save_exact_revision",
@@ -350,12 +355,15 @@ function selectNextAction({
       enabled: true,
       reason: "Sending requires an exact saved proposal revision.",
       objectContext: context,
-      destination: saveRevisionDestination || {
+      destination: clonePresentationValue(saveRevisionDestination || {
         surfaceId: "proposal-composer",
         actionId: "save_quote",
         quoteId: context.quoteId
-      }
+      })
     };
+  }
+  if (state === "sendable") {
+    return configuredNextAction(actionState.actions.send_quote, context);
   }
   if (actionState?.primaryAction) return configuredNextAction(actionState.primaryAction, context);
   return {
@@ -458,13 +466,17 @@ export function buildQuoteCompletionProjection({
 
   const lifecycleStatus = text(quote?.status).toLowerCase();
   const providerAccepted = actionState?.state?.providerAccepted === true;
+  const exactRevisionSaved = draftDirty !== true && actionState?.state?.versionSaved === true;
   const state = ["accepted", "booked"].includes(lifecycleStatus)
     ? "accepted"
     : providerAccepted
       ? "sent"
       : blockerGroups.length > 0
         ? "blocked"
-        : readiness?.complete === true && sendAction?.visible === true && sendAction?.enabled === true
+        : exactRevisionSaved
+          && readiness?.complete === true
+          && sendAction?.visible === true
+          && sendAction?.enabled === true
           ? "sendable"
           : "review_required";
   const boundedState = COMPLETION_STATES.has(state) ? state : "review_required";

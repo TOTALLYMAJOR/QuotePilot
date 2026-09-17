@@ -134,6 +134,97 @@ describe("quote completion surface integrations", () => {
     expect(props.onSaveQuote).toHaveBeenCalledTimes(1);
   });
 
+  test("Proposal Composer continues a saved revision through the governed configured destination", async () => {
+    const onQuoteCompletionNavigate = vi.fn(() => ({
+      status: "pending",
+      message: "Opening exact quote administration."
+    }));
+    const props = composerProps({
+      quoteCompletionCommandPathEnabled: true,
+      quoteDirty: false,
+      saveMessage: "Editing Q-1. Save will update this quote.",
+      editingQuote: {
+        id: "quote-1",
+        activeVersionId: "v0001",
+        status: "draft"
+      },
+      quoteCompletionConfiguredActions: {
+        state: { versionSaved: true, providerAccepted: false },
+        actions: {
+          send_quote: {
+            id: "send_quote",
+            label: "Send proposal",
+            visible: true,
+            enabled: true
+          }
+        },
+        primaryAction: {
+          id: "send_quote",
+          label: "Send proposal",
+          visible: true,
+          enabled: true
+        }
+      },
+      onQuoteCompletionNavigate
+    });
+    await act(async () => root.render(<ProposalComposer {...props} />));
+    const panel = container.querySelector('[data-capability-id="quote-completion-command-path"]');
+
+    expect(panel?.dataset.capabilityState).toBe("sendable");
+    expect(panel?.querySelector("button")?.disabled).toBe(false);
+    expect(panel?.querySelector("button")?.textContent).toContain("Send proposal");
+    await act(async () => panel.querySelector("button").click());
+
+    expect(onQuoteCompletionNavigate).toHaveBeenCalledWith(expect.objectContaining({
+      id: "send_quote",
+      kind: "send_proposal",
+      destination: expect.objectContaining({
+        surfaceId: "quote-administration",
+        quoteId: "quote-1"
+      })
+    }));
+    expect(panel.dataset.commandState).toBe("success");
+  });
+
+  test("Proposal Composer opens and focuses its exact Living evidence destination", async () => {
+    const props = composerProps({
+      quoteCompletionCommandPathEnabled: true,
+      quoteDirty: false,
+      editingQuote: { id: "quote-1", activeVersionId: "v0001", status: "draft" },
+      quoteCompletionConfiguredActions: {
+        state: { versionSaved: true, providerAccepted: false },
+        actions: {},
+        primaryAction: null
+      },
+      livingCommercialTwin: {
+        scopeKey: "org-1:quote-1:v0001",
+        baseQuoteRevisionId: "v0001",
+        currentGuestCount: 80,
+        proposedGuestCount: 80,
+        projection: {
+          state: "stale",
+          reason: "The consequence evidence is stale.",
+          nextAction: { label: "Review current evidence" }
+        }
+      }
+    });
+    await act(async () => {
+      root.render(<ProposalComposer {...props} />);
+    });
+    await act(async () => {
+      await vi.dynamicImportSettled();
+    });
+    const panel = container.querySelector('[data-capability-id="quote-completion-command-path"]');
+    const evidence = container.querySelector('[data-capability-id="commercial-scenario-workbench"]');
+
+    expect(panel?.querySelector("button")?.textContent).toContain("Review current evidence");
+    expect(evidence).not.toBeNull();
+    await act(async () => panel.querySelector("button").click());
+
+    expect(panel.dataset.commandState).toBe("success");
+    expect(evidence.contains(document.activeElement) || document.activeElement === evidence).toBe(true);
+  });
+
   test("review step replaces the legacy percentage as primary UX only when enabled", () => {
     const legacy = renderToStaticMarkup(
       <StepReview form={form} totals={totals} settings={settings} readiness={readiness} />

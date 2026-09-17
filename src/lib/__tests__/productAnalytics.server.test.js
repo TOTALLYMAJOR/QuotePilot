@@ -340,6 +340,12 @@ describe("product analytics server contract", () => {
         surface: "proposal_composer",
         result: "recovery"
       }),
+      event("quote_completion_action_resolved", 5, {
+        completionState: "sendable",
+        actionKind: "send_proposal",
+        surface: "proposal_composer",
+        result: "success"
+      }),
       event("quote_completion_sendable_reached", 4, {
         completionState: "sendable",
         surface: "review"

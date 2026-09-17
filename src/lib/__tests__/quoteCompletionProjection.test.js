@@ -124,6 +124,58 @@ describe("quote-completion-contract-v1", () => {
     });
   });
 
+  test("requires the dirty exact revision to be saved before exposing send", () => {
+    const projection = buildQuoteCompletionProjection({
+      quote: { id: "quote-1", activeVersionId: "v0004", status: "draft" },
+      readiness: readiness(),
+      configuredActions: configuredActions(),
+      livingOpportunity: { state: "unchanged" },
+      draftDirty: true
+    });
+
+    expect(projection.state).toBe("review_required");
+    expect(projection.nextAction).toMatchObject({
+      id: "save_exact_revision",
+      kind: "save_revision",
+      destination: { surfaceId: "proposal-composer", actionId: "save_quote" }
+    });
+  });
+
+  test("clones caller-owned destinations before freezing the presentation contract", () => {
+    const blockerDestination = {
+      surfaceId: "proposal-composer",
+      selector: "#caller-owned-field"
+    };
+    const saveRevisionDestination = {
+      surfaceId: "proposal-composer",
+      actionId: "caller-owned-save"
+    };
+    const blocked = buildQuoteCompletionProjection({
+      quote: { id: "quote-1", activeVersionId: "v0004", status: "draft" },
+      readiness: readiness({ complete: false }),
+      saveBlockers: [{
+        id: "custom-field",
+        message: "Review the custom field.",
+        destination: blockerDestination
+      }]
+    });
+    const dirty = buildQuoteCompletionProjection({
+      quote: { id: "quote-1", activeVersionId: "v0004", status: "draft" },
+      readiness: readiness(),
+      draftDirty: true,
+      saveRevisionDestination
+    });
+
+    expect(blocked.nextAction.destination).not.toBe(blockerDestination);
+    expect(dirty.nextAction.destination).not.toBe(saveRevisionDestination);
+    expect(Object.isFrozen(blockerDestination)).toBe(false);
+    expect(Object.isFrozen(saveRevisionDestination)).toBe(false);
+    blockerDestination.selector = "#still-mutable";
+    saveRevisionDestination.actionId = "still-mutable";
+    expect(blocked.nextAction.destination.selector).toBe("#caller-owned-field");
+    expect(dirty.nextAction.destination.actionId).toBe("caller-owned-save");
+  });
+
   test("requires current provider acceptance before classifying a sent lifecycle as sent", () => {
     const quote = { id: "quote-1", activeVersionId: "v0004", status: "sent" };
     const notAccepted = buildQuoteCompletionProjection({

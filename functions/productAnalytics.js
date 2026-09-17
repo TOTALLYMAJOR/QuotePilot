@@ -363,7 +363,10 @@ function summarizeAnalyticsEvents(rawEvents = []) {
         quoteCompletionActionsShown += 1;
         return;
       }
-      if (event?.eventName === "quote_completion_action_resolved") {
+      if (
+        event?.eventName === "quote_completion_action_resolved"
+        && event?.result === "success"
+      ) {
         quoteCompletionActionsResolved += 1;
         return;
       }

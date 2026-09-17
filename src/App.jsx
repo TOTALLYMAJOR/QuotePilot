@@ -90,6 +90,7 @@ import {
   reconcileCatalogSelections
 } from "./lib/catalogSelectionReconciliation";
 import { buildProposalReadiness } from "./lib/quoteWorkflow";
+import { buildRoleSafeQuoteActionController } from "./lib/quoteHistoryController";
 import {
   buildUnifiedCommercialConsequenceReview,
   buildUnifiedConsequenceProposedForm,
@@ -2780,6 +2781,41 @@ export default function App({
     buildValue: import.meta.env.VITE_QUOTE_COMPLETION_COMMAND_PATH_ENABLED,
     tenantValue: featureFlags.quoteCompletionCommandPath
   });
+  const proposalComposerQuoteActionController = useMemo(() => (
+    editingQuote?.id
+      ? buildRoleSafeQuoteActionController({
+          quote: editingQuote,
+          currentUserRole: authSession.role,
+          source: ["firebase", "firebase-org"].includes(catalog.source) ? "firebase" : catalog.source
+        })
+      : null
+  ), [authSession.role, catalog.source, editingQuote]);
+  const navigateProposalQuoteCompletion = useCallback((action) => {
+    const quoteId = String(action?.objectContext?.quoteId || editingQuote?.id || "").trim();
+    if (!quoteId) {
+      return {
+        status: "recovery",
+        reason: "The exact quote could not be identified.",
+        nextResolution: "Reopen the saved quote before continuing."
+      };
+    }
+    const livingOpportunity = action?.destination?.surfaceId === "living-opportunity";
+    const handoff = createWorkspaceArrivalHandoff(livingOpportunity
+      ? {
+          destination: "opportunity",
+          object: { id: quoteId, type: "opportunity" },
+          focus: { quoteId },
+          intentId: "review_proposal_gap"
+        }
+      : {
+          destination: "administration",
+          object: { id: quoteId, type: "customer-decision-artifact" },
+          focus: { quoteId },
+          intentId: "review_proposal_controls"
+        });
+    if (!handoff.ok) return { status: "recovery", ...handoff.recovery };
+    return navigateAmbientTaskHandoff(handoff, `quote-completion:${action?.id || "review"}`);
+  }, [editingQuote?.id, navigateAmbientTaskHandoff]);
   const customerPortalEnabled = featureFlags.customerPortal !== false;
   const eventScheduleEnabled = featureFlags.eventSchedule !== false;
   const integrationsEnabled = featureFlags.integrationsOps !== false;
@@ -5693,7 +5729,12 @@ export default function App({
     setGlobalEventTypeId(draftRuntime.eventTypeId);
     setAttendanceChange(attendanceSubmission);
     setForm(attendanceSubmission ? { ...draftRuntime.form, guests: attendanceSubmission.count } : draftRuntime.form);
-    setEditingQuote(draftRuntime.editingQuote);
+    setEditingQuote({
+      ...draftRuntime.editingQuote,
+      status: quote.status,
+      portalExpiresAtISO: quote.portalExpiresAtISO || quote.expiresAtISO || "",
+      workflow: quote.workflow && typeof quote.workflow === "object" ? quote.workflow : {}
+    });
     const packageMenuDraftIntent = draftRuntime.ambientDraftIntent?.family === "package_menu"
       ? draftRuntime.ambientDraftIntent
       : null;
@@ -6904,6 +6945,8 @@ export default function App({
       saveBlockers={proposalComposerSaveBlockers}
       saveMessage={submitState.message}
       quoteCompletionCommandPathEnabled={quoteCompletionCommandPathEnabled}
+      quoteCompletionConfiguredActions={proposalComposerQuoteActionController?.actionState || null}
+      onQuoteCompletionNavigate={navigateProposalQuoteCompletion}
       compareEnabled={quoteCompareEnabled}
       catalogLoading={catalog.loading}
       onFieldChange={handleStep1FieldChange}
@@ -6911,7 +6954,7 @@ export default function App({
       onPatchForm={handleComposerPatch}
       onTemplateChange={applyEventTemplate}
       onEventTypeChange={handleEventTypeChange}
-      onSaveQuote={() => void handleSubmitQuote()}
+      onSaveQuote={() => handleSubmitQuote({ propagateError: true })}
       onOpenCompare={() => openWorkspaceTool(setCompareOpen)}
       onGuidedMode={() => setBuilderMode("guided")}
       reviewSurfaces={draftReviewSurfaces}
