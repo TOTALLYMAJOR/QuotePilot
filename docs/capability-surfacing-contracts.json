@@ -1,9 +1,9 @@
 {
   "schemaVersion": 1,
-  "catalogVersion": 93,
+  "catalogVersion": 94,
   "contracts": [
     {
-      "reviewRevision": 1,
+      "reviewRevision": 2,
       "status": "active",
       "deliveryType": "user_relevant",
       "capabilityKind": "presentation_surface",
@@ -29,9 +29,10 @@
         "sent",
         "accepted"
       ],
-      "summary": "Distinct quote-completion-command-path presentation with its own declared lifecycle and no new authority.",
+      "summary": "Distinct quote-completion-command-path presentation with its own declared lifecycle, exact arrival handoff, and no new authority.",
       "backendPaths": [
-        "src/lib/quoteCompletionProjection.js"
+        "src/lib/quoteCompletionProjection.js",
+        "src/lib/workspaceArrivalContract.js"
       ],
       "frontendPaths": [
         "src/components/QuoteCompletionCommandPath.jsx"
