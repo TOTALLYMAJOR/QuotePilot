@@ -1,6 +1,6 @@
 # Success Metric Specification
 
-Last updated: 2026-09-17 10:51:24 CDT
+Last updated: 2026-09-17 11:56:08 CDT
 
 ## Quote-to-Confidence diagnostic measures
 
@@ -12,6 +12,9 @@ Last updated: 2026-09-17 10:51:24 CDT
 
 Summary fields are `quoteCompletion.actionsShown / actionsResolved /
 actionResolutionRate / sendableReached` and `postEventLearning.proposed / applied`.
+`postEventLearning.categories` retains one `{category, proposed, applied}` row for
+recipe, template, pack conversion and workflow. With no shown completion actions,
+`quoteCompletion.actionResolutionRate` is `null` (unavailable), never a zero rate.
 Only categorical dimensions and the existing bounded organization/session envelope
 are persisted. Quote IDs, proposal IDs, source references, quantities, money,
 customer fields and rationale never enter event dimensions. These signals use

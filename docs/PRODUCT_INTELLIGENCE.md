@@ -1,6 +1,6 @@
 # QuotePilot Product Intelligence System
 
-Last updated: 2026-09-17 11:51:38 CDT
+Last updated: 2026-09-17 11:57:30 CDT
 
 ## Quote-to-Confidence measurement extension
 
@@ -12,6 +12,8 @@ implementation without adoption or outcome claims. No baseline has been collecte
 Reporting retains proposed and receipt-confirmed counts separately for recipe,
 template, pack-conversion and workflow categories. A zero completion-action
 denominator yields an unavailable (`null`) resolution rate, not zero performance.
+Presentation-only capability contracts are export-free: callable ownership and
+complete read/mutation lifecycles remain with existing authority contracts.
 
 ## Purpose
 

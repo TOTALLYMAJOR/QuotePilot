@@ -880,6 +880,9 @@ export function validateCapabilitySurfacing({
     if (!CAPABILITY_KINDS.has(contract?.capabilityKind)) {
       errors.push(`${contract.id}: capabilityKind is not recognized.`);
     }
+    if (contract?.capabilityKind === "presentation_surface" && stringList(contract.backendExports).length) {
+      errors.push(`${contract.id}: presentation surfaces cannot own callable exports; retain read or mutation exports in their authority contract.`);
+    }
     if (contract?.deliveryType === "user_relevant" && HEADLESS_KINDS.has(contract?.capabilityKind)) {
       errors.push(`${contract.id}: headless capability kinds cannot be user_relevant.`);
     }

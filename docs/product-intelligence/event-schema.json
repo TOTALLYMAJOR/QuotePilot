@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "catalogVersion": "2026-09-17",
-  "purpose": "Canonical observation map for QuotePilot product outcomes. It documents implemented analytics events and authoritative records that should be derived rather than duplicated.",
+  "purpose": "Canonical observation map for QuotePilot product outcomes. It documents implemented analytics events and authoritative records that should be derived rather than duplicated. Learning summaries retain counts by category; a zero completion-action denominator produces a null resolution rate. These summary semantics add no captured event fields.",
   "statusVocabulary": [
     "implemented",
     "derivable",

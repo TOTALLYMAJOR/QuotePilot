@@ -1,6 +1,6 @@
 # Capability / Functional Map
 
-Last updated: 2026-09-17 10:51:24 CDT
+Last updated: 2026-09-17 11:56:08 CDT
 
 ## Quote-to-Confidence extension
 
@@ -12,6 +12,9 @@ to `OUT-02`, `OUT-03`, `OUT-05`, `OUT-06` and `MET-19`–`MET-21`.
 All remain default-off source candidates with local evidence only. The UI
 reuses existing catalog/setup-draft and Inventory adoption authority and cannot
 infer price, margin, rate, threshold, conversion, supplier or readiness policy.
+Presentation-only contracts own no callable exports. Read and mutation callables
+retain their existing authority owners and full lifecycle requirements; UI
+composition contracts cannot replace or downgrade those controls (`CAP-12`).
 
 ## Purpose and evidence boundary
 

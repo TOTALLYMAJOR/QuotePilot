@@ -1,5 +1,36 @@
 # Task 5 — post-event learning and Quote-to-Confidence integration
 
+## Review fix round 2 — export-free presentation contracts
+
+The checker now forbids callable ownership in every `presentation_surface`
+contract. Read and mutation exports remain with their authority contracts and
+full lifecycle requirements. The previous read-callable downgrade fixture is
+now a rejection regression, paired with mutation-callable rejection and a valid
+projection-only, zero-export presentation case. Existing state-binding checks
+remain intact. No product runtime or authority implementation changed.
+
+Canonical notes clarify this policy and the previous round's category aggregates
+and `null` zero-denominator semantics. The cumulative governance window required
+Changelog, the Product Intelligence index, Capability Map, Success Metrics and event-schema documentation;
+the schema's purpose note changes no captured field or event contract.
+
+Validation: 59/59 tests in capability, Product Intelligence and project-state
+governance suites (`/tmp/quote-confidence-fix2-focused.log`); capability, docs,
+Product Intelligence, field-state and project-state gates passed. Default build
+passed with 373 modules in 26.20s (`/tmp/quote-confidence-fix2-build.log`).
+Maintainer quick/environment check retains the same six missing Firebase vars.
+Full unit/browser/rules runs were not repeated for this checker/documentation-only
+correction; round 1's runtime evidence remains unchanged. `git diff --check`
+passed. Self-review confirms both read and mutation downgrade rejection and no
+new callable owner in presentation contracts.
+
+Planner preflight: `2026-09-17T16:54:34.045Z`; same task/files completion:
+**`2026-09-17T16:56:47.941Z`**. Recommendation: process/medium, balanced/medium;
+no in-process model switch. Verify-tier graph checks remain
+`GRAPH_COVERAGE_BLOCKED` at the old generation; authorized bounded source
+implementation only. Development impact: governance can no longer bypass an
+authority's required lifecycle by relabeling it as UI presentation.
+
 ## Review fix round 1
 
 - Registered distinct completion lifecycle/feedback, decision packet, governed

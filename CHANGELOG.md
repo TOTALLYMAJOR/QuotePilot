@@ -1,8 +1,10 @@
 # Changelog
 
-Last updated: 2026-09-17 11:51:38 CDT
+Last updated: 2026-09-17 11:56:08 CDT
 
 ## Unreleased — Quote-to-Confidence local candidate
+
+- Require presentation-only capability contracts to own no callable exports; read and mutation authorities retain their complete lifecycle contracts, enforced by downgrade rejection tests.
 
 - Bind each new presentation surface to its own asserted state contract. Preserve malformed versus contradictory learning evidence, reload parent accepted sources on refresh, and report category aggregates with unavailable zero-denominator rates.
 
