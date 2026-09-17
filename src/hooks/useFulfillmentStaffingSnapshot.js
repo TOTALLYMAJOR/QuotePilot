@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getOperationalStaffingSnapshot } from "../lib/operationalStaffingClient";
+import { scheduleDeferredClientWork } from "../lib/deferredClientWork";
 
 export const FULFILLMENT_STAFFING_MAX_AGE_MS = 5 * 60 * 1_000;
 
@@ -73,6 +74,10 @@ export function expireFulfillmentStaffingRead(
  * saved quote revision. Proposed guest-count edits are deliberately absent
  * from the identity: pure Fulfillment composition reacts locally without
  * reloading the staff directory on every keystroke.
+ *
+ * The first read yields to the quote editor's initial browser work when idle
+ * scheduling is available. Explicit refreshes and focus refreshes remain
+ * immediate, and the authority/read contract is otherwise unchanged.
  */
 export function useFulfillmentStaffingSnapshot({
   active = false,
@@ -143,9 +148,11 @@ export function useFulfillmentStaffingSnapshot({
     generationRef.current += 1;
     if (!active || !text(organizationId) || !text(quoteId) || !text(savedQuoteRevisionId)) {
       setRead(initialRead(identity));
-      return;
+      return undefined;
     }
-    void load({ retain: false }).catch(() => {});
+    return scheduleDeferredClientWork(() => {
+      void load({ retain: false }).catch(() => {});
+    });
   }, [active, identity, load, organizationId, quoteId, savedQuoteRevisionId]);
 
   useEffect(() => {
