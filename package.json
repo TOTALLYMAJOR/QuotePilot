@@ -83,7 +83,7 @@
     "deploy:vercel": "node ./scripts/deploy-vercel-production.mjs"
   },
   "dependencies": {
-    "firebase": "^11.0.0",
+    "firebase": "^12.18.0",
     "jspdf": "^4.2.0",
     "prop-types": "^15.8.1",
     "react": "^18.3.1",
