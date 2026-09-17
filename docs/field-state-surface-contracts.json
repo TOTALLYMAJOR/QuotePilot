@@ -206,7 +206,7 @@
     },
     {
       "id": "proposal-composer-choice-states",
-      "path": "src/components/ProposalComposer.jsx",
+      "path": "src/components/ProposalComposerImpl.jsx",
       "markers": [
         "id=\"proposal-event-template\"",
         "AdaptiveChoiceField"
