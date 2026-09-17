@@ -164,6 +164,8 @@ export default function QuoteCompletionCommandPath({
       {command.message ? (
         <p
           className="quote-completion-command__message"
+          data-capability-id="quote-completion-command-feedback"
+          data-capability-state={command.state}
           role={["failure", "stale"].includes(command.state) ? "alert" : "status"}
         >
           {command.message}

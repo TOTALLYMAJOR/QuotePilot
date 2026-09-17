@@ -1,6 +1,6 @@
 # QuotePilot Product Intelligence System
 
-Last updated: 2026-09-17 10:51:24 CDT
+Last updated: 2026-09-17 11:51:38 CDT
 
 ## Quote-to-Confidence measurement extension
 
@@ -9,6 +9,9 @@ and learning signals `SIG-017`–`SIG-021`, five named operator journeys, and
 `BASE-09` with a 14-day pre-exposure baseline. Fewer than 50 eligible observations
 per compared cohort are informational only. `LED-006` records source/local
 implementation without adoption or outcome claims. No baseline has been collected.
+Reporting retains proposed and receipt-confirmed counts separately for recipe,
+template, pack-conversion and workflow categories. A zero completion-action
+denominator yields an unavailable (`null`) resolution rate, not zero performance.
 
 ## Purpose
 

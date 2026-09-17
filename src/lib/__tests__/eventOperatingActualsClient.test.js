@@ -24,6 +24,16 @@ test("actuals zero captured subtotal is not completeness and unknown fields fail
   for (const malformed of [{ ...absent(), captureComplete: true }, { ...absent(), rawProviderData: {} }, { ...absent(), organizationId: "foreign" }, { ...absent(), currency: "EUR" }]) { transport.call.mockResolvedValueOnce({ data: envelope(malformed) }); await expect(client.getEventOperatingActualsSnapshot(scope)).rejects.toMatchObject({ code: "invalid-server-response" }); }
 });
 
+test("preserves bounded malformed and contradictory read evidence without exception text", async () => {
+  transport.call.mockResolvedValueOnce({ data: envelope({ ...absent(), unexpected: "private" }) });
+  await expect(client.getEventOperatingActualsSnapshot(scope)).rejects.toMatchObject({ code: "invalid-server-response", evidenceState: "schema_drift" });
+  transport.call.mockResolvedValueOnce({ data: { ...envelope(absent()), organizationId: "foreign" } });
+  await expect(client.getEventOperatingActualsSnapshot(scope)).rejects.toMatchObject({ code: "invalid-server-response", evidenceState: "contradictory" });
+  const wrong = result().snapshot; wrong.totals.totalCostCents += 1;
+  transport.call.mockResolvedValueOnce({ data: envelope(wrong) });
+  await expect(client.getEventOperatingActualsSnapshot(scope)).rejects.toMatchObject({ evidenceState: "contradictory" });
+});
+
 test("actuals records exact cents and minutes and normalizes declared text", async () => {
   const input = { ...command, description: "  Server labor\nBreak excluded  " }; transport.call.mockResolvedValueOnce({ data: result(input) });
   expect((await client.applyEventOperatingActualsCommand(input)).snapshot.totals).toMatchObject({ laborCostCents: 12500, durationMinutes: 120 });

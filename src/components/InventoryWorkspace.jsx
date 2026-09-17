@@ -176,7 +176,7 @@ export function buildInventoryExceptionCards(ingredients, { now = Date.now() } =
   return cards.sort((left, right) => left.priority - right.priority || left.title.localeCompare(right.title));
 }
 
-function InventoryExceptionWorkspace({ ingredients, current }) {
+export function InventoryExceptionWorkspace({ ingredients, current }) {
   const cards = useMemo(() => buildInventoryExceptionCards(ingredients), [ingredients]);
   return (
     <section className="panel inventory-exception-workspace" data-capability-id="inventory-exception-workspace" data-capability-state={!current ? "stale" : cards.length ? "ready" : "empty"} aria-labelledby="inventory-exceptions-title">
@@ -1443,7 +1443,7 @@ export function InventoryMobileCapturePanel({
   };
 
   return (
-    <section className="panel inventory-mobile-capture" data-capability-id="inventory-mobile-capture" data-capability-state={state.kind === "draft" ? "ready" : state.kind === "partial" ? "recovery" : state.kind === "offline" ? "stale" : state.kind} aria-labelledby="inventory-capture-title">
+    <section className="panel inventory-mobile-capture" data-capability-id="inventory-mobile-capture" data-capability-state={!online ? "stale" : state.kind === "draft" ? "ready" : state.kind === "partial" ? "recovery" : state.kind === "offline" ? "stale" : state.kind} aria-labelledby="inventory-capture-title">
       <p className="eyebrow">Walk the shelf</p>
       <h2 id="inventory-capture-title">Device stock-count draft</h2>
       <p className="muted">Manual search is always available. Drafts stay on this device for up to seven days and do not claim server persistence.</p>

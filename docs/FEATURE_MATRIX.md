@@ -1,6 +1,6 @@
 # Feature Matrix
 
-Last updated: 2026-09-17 10:51:24 CDT
+Last updated: 2026-09-17 11:51:38 CDT
 
 ## Quote-to-Confidence local candidate
 
@@ -17,6 +17,9 @@ All six tenant flags default off and require their matching build gates. See
 [workflow instructions](USER_MANUAL.md#quote-to-confidence-workflows) for gate
 names and [the release ledger](product-intelligence/RELEASE_EXPERIMENT_LEDGER.md)
 for the uncollected baseline. This candidate is source/local evidence only.
+Each composition has its own canonical capability marker and assertion-bound
+state contract; learning review distinguishes ready, review-required and receipt.
+Learning refresh reloads the owning accepted source as well as subordinate reads.
 
 This matrix maps the master feature checklist to current implementation and source locations.
 It is an inventory and chronology index, not the canonical detailed history or

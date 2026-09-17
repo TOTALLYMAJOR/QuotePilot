@@ -1,8 +1,14 @@
 # Documentation System
 
-Last updated: 2026-09-17 02:53:24 CDT
+Last updated: 2026-09-17 11:51:38 CDT
 
 ## Purpose
+Synchronous composition surfaces may use `presentation_surface` contracts with
+an explicit `surfaceId` and bounded `surfaceStates`. Every claimed state test must
+assert that same canonical surface identity as well as its state. Read and
+mutation surfaces retain their full required state models; presentation contracts
+cannot weaken or replace the owning authority contract.
+
 This repository uses a layered canonical documentation model.
 Each major topic has one source of truth. Other docs should link to that source instead of duplicating content.
 

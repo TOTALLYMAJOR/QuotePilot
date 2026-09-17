@@ -1,9 +1,604 @@
 {
   "schemaVersion": 1,
-  "catalogVersion": 92,
+  "catalogVersion": 93,
   "contracts": [
     {
       "reviewRevision": 1,
+      "status": "active",
+      "deliveryType": "user_relevant",
+      "capabilityKind": "presentation_surface",
+      "audiences": [
+        "staff"
+      ],
+      "backendExports": [],
+      "affectedBackendExports": [],
+      "documentationPaths": [
+        "docs/FEATURE_MATRIX.md",
+        "docs/USER_MANUAL.md"
+      ],
+      "surfaceReview": "changed",
+      "surfaceReviewNote": "Distinct gated presentation and assertion-bound lifecycle; existing authority remains unchanged.",
+      "stateExceptions": {},
+      "safeOutcome": "Operators inspect source-backed state and use existing authorized workflows without granting new write, pricing, supplier or acceptance authority.",
+      "id": "quote-completion-command-path",
+      "surfaceId": "quote-completion-command-path",
+      "surfaceStates": [
+        "blocked",
+        "review_required",
+        "sendable",
+        "sent",
+        "accepted"
+      ],
+      "summary": "Distinct quote-completion-command-path presentation with its own declared lifecycle and no new authority.",
+      "backendPaths": [
+        "src/lib/quoteCompletionProjection.js"
+      ],
+      "frontendPaths": [
+        "src/components/QuoteCompletionCommandPath.jsx"
+      ],
+      "entryPointLocators": [
+        {
+          "path": "src/components/QuoteCompletionCommandPath.jsx",
+          "locator": "data-capability-id=\"quote-completion-command-path\""
+        }
+      ],
+      "testPaths": [
+        "src/components/__tests__/quoteConfidenceCapabilityStates.test.jsx"
+      ],
+      "testLocators": [
+        {
+          "path": "src/components/__tests__/quoteConfidenceCapabilityStates.test.jsx",
+          "locator": "binds completion lifecycle states to its own surface"
+        }
+      ],
+      "stateEvidence": [
+        {
+          "state": "blocked",
+          "path": "src/components/__tests__/quoteConfidenceCapabilityStates.test.jsx",
+          "locator": "binds completion lifecycle states to its own surface",
+          "assertionLocator": "data-capability-state=\"blocked\""
+        },
+        {
+          "state": "review_required",
+          "path": "src/components/__tests__/quoteConfidenceCapabilityStates.test.jsx",
+          "locator": "binds completion lifecycle states to its own surface",
+          "assertionLocator": "data-capability-state=\"review_required\""
+        },
+        {
+          "state": "sendable",
+          "path": "src/components/__tests__/quoteConfidenceCapabilityStates.test.jsx",
+          "locator": "binds completion lifecycle states to its own surface",
+          "assertionLocator": "data-capability-state=\"sendable\""
+        },
+        {
+          "state": "sent",
+          "path": "src/components/__tests__/quoteConfidenceCapabilityStates.test.jsx",
+          "locator": "binds completion lifecycle states to its own surface",
+          "assertionLocator": "data-capability-state=\"sent\""
+        },
+        {
+          "state": "accepted",
+          "path": "src/components/__tests__/quoteConfidenceCapabilityStates.test.jsx",
+          "locator": "binds completion lifecycle states to its own surface",
+          "assertionLocator": "data-capability-state=\"accepted\""
+        }
+      ],
+      "documentationLocators": [
+        {
+          "path": "docs/FEATURE_MATRIX.md",
+          "locator": "| Completion command |"
+        },
+        {
+          "path": "docs/USER_MANUAL.md",
+          "locator": "**Complete a quote.**"
+        }
+      ]
+    },
+    {
+      "reviewRevision": 1,
+      "status": "active",
+      "deliveryType": "user_relevant",
+      "capabilityKind": "presentation_surface",
+      "audiences": [
+        "staff"
+      ],
+      "backendExports": [],
+      "affectedBackendExports": [],
+      "documentationPaths": [
+        "docs/FEATURE_MATRIX.md",
+        "docs/USER_MANUAL.md"
+      ],
+      "surfaceReview": "changed",
+      "surfaceReviewNote": "Distinct gated presentation and assertion-bound lifecycle; existing authority remains unchanged.",
+      "stateExceptions": {},
+      "safeOutcome": "Operators inspect source-backed state and use existing authorized workflows without granting new write, pricing, supplier or acceptance authority.",
+      "id": "quote-completion-command-feedback",
+      "surfaceId": "quote-completion-command-feedback",
+      "surfaceStates": [
+        "idle",
+        "loading",
+        "failure",
+        "stale",
+        "success",
+        "recovery"
+      ],
+      "summary": "Distinct quote-completion-command-feedback presentation with its own declared lifecycle and no new authority.",
+      "backendPaths": [
+        "src/lib/quoteCompletionDestination.js"
+      ],
+      "frontendPaths": [
+        "src/components/QuoteCompletionCommandPath.jsx"
+      ],
+      "entryPointLocators": [
+        {
+          "path": "src/components/QuoteCompletionCommandPath.jsx",
+          "locator": "data-capability-id=\"quote-completion-command-feedback\""
+        }
+      ],
+      "testPaths": [
+        "src/components/__tests__/quoteConfidenceCapabilityStates.test.jsx"
+      ],
+      "testLocators": [
+        {
+          "path": "src/components/__tests__/quoteConfidenceCapabilityStates.test.jsx",
+          "locator": "binds completion feedback states to its own surface"
+        }
+      ],
+      "stateEvidence": [
+        {
+          "state": "idle",
+          "path": "src/components/__tests__/quoteConfidenceCapabilityStates.test.jsx",
+          "locator": "binds completion feedback states to its own surface",
+          "assertionLocator": "data-capability-state=\"idle\""
+        },
+        {
+          "state": "loading",
+          "path": "src/components/__tests__/quoteConfidenceCapabilityStates.test.jsx",
+          "locator": "binds completion feedback states to its own surface",
+          "assertionLocator": "data-capability-state=\"loading\""
+        },
+        {
+          "state": "failure",
+          "path": "src/components/__tests__/quoteConfidenceCapabilityStates.test.jsx",
+          "locator": "binds completion feedback states to its own surface",
+          "assertionLocator": "data-capability-state=\"failure\""
+        },
+        {
+          "state": "stale",
+          "path": "src/components/__tests__/quoteConfidenceCapabilityStates.test.jsx",
+          "locator": "binds completion feedback states to its own surface",
+          "assertionLocator": "data-capability-state=\"stale\""
+        },
+        {
+          "state": "success",
+          "path": "src/components/__tests__/quoteConfidenceCapabilityStates.test.jsx",
+          "locator": "binds completion feedback states to its own surface",
+          "assertionLocator": "data-capability-state=\"success\""
+        },
+        {
+          "state": "recovery",
+          "path": "src/components/__tests__/quoteConfidenceCapabilityStates.test.jsx",
+          "locator": "binds completion feedback states to its own surface",
+          "assertionLocator": "data-capability-state=\"recovery\""
+        }
+      ],
+      "documentationLocators": [
+        {
+          "path": "docs/FEATURE_MATRIX.md",
+          "locator": "| Completion command |"
+        },
+        {
+          "path": "docs/USER_MANUAL.md",
+          "locator": "**Complete a quote.**"
+        }
+      ]
+    },
+    {
+      "reviewRevision": 1,
+      "status": "active",
+      "deliveryType": "user_relevant",
+      "capabilityKind": "presentation_surface",
+      "audiences": [
+        "staff"
+      ],
+      "backendExports": [],
+      "affectedBackendExports": [],
+      "documentationPaths": [
+        "docs/FEATURE_MATRIX.md",
+        "docs/USER_MANUAL.md"
+      ],
+      "surfaceReview": "changed",
+      "surfaceReviewNote": "Distinct gated presentation and assertion-bound lifecycle; existing authority remains unchanged.",
+      "stateExceptions": {},
+      "safeOutcome": "Operators inspect source-backed state and use existing authorized workflows without granting new write, pricing, supplier or acceptance authority.",
+      "id": "quote-decision-packet",
+      "surfaceId": "quote-decision-packet",
+      "surfaceStates": [
+        "ready",
+        "recovery"
+      ],
+      "summary": "Distinct quote-decision-packet presentation with its own declared lifecycle and no new authority.",
+      "backendPaths": [
+        "src/lib/quoteConfidenceDecisionPacket.js"
+      ],
+      "frontendPaths": [
+        "src/components/DecisionPacketPanel.jsx"
+      ],
+      "entryPointLocators": [
+        {
+          "path": "src/components/DecisionPacketPanel.jsx",
+          "locator": "data-capability-id=\"quote-decision-packet\""
+        }
+      ],
+      "testPaths": [
+        "src/components/__tests__/quoteConfidenceCapabilityStates.test.jsx"
+      ],
+      "testLocators": [
+        {
+          "path": "src/components/__tests__/quoteConfidenceCapabilityStates.test.jsx",
+          "locator": "binds decision packet readiness and recovery to its own surface"
+        }
+      ],
+      "stateEvidence": [
+        {
+          "state": "ready",
+          "path": "src/components/__tests__/quoteConfidenceCapabilityStates.test.jsx",
+          "locator": "binds decision packet readiness and recovery to its own surface",
+          "assertionLocator": "data-capability-state=\"ready\""
+        },
+        {
+          "state": "recovery",
+          "path": "src/components/__tests__/quoteConfidenceCapabilityStates.test.jsx",
+          "locator": "binds decision packet readiness and recovery to its own surface",
+          "assertionLocator": "data-capability-state=\"recovery\""
+        }
+      ],
+      "documentationLocators": [
+        {
+          "path": "docs/FEATURE_MATRIX.md",
+          "locator": "| Decision packet and governed starts |"
+        },
+        {
+          "path": "docs/USER_MANUAL.md",
+          "locator": "**Review a decision.**"
+        }
+      ]
+    },
+    {
+      "reviewRevision": 1,
+      "status": "active",
+      "deliveryType": "user_relevant",
+      "capabilityKind": "presentation_surface",
+      "audiences": [
+        "staff"
+      ],
+      "backendExports": [],
+      "affectedBackendExports": [],
+      "documentationPaths": [
+        "docs/FEATURE_MATRIX.md",
+        "docs/USER_MANUAL.md"
+      ],
+      "surfaceReview": "changed",
+      "surfaceReviewNote": "Distinct gated presentation and assertion-bound lifecycle; existing authority remains unchanged.",
+      "stateExceptions": {},
+      "safeOutcome": "Operators inspect source-backed state and use existing authorized workflows without granting new write, pricing, supplier or acceptance authority.",
+      "id": "governed-quote-starts",
+      "surfaceId": "governed-quote-starts",
+      "surfaceStates": [
+        "ready"
+      ],
+      "summary": "Distinct governed-quote-starts presentation with its own declared lifecycle and no new authority.",
+      "backendPaths": [
+        "src/lib/quoteConfidenceDecisionPacket.js"
+      ],
+      "frontendPaths": [
+        "src/components/GovernedQuoteStarts.jsx"
+      ],
+      "entryPointLocators": [
+        {
+          "path": "src/components/GovernedQuoteStarts.jsx",
+          "locator": "data-capability-id=\"governed-quote-starts\""
+        }
+      ],
+      "testPaths": [
+        "src/components/__tests__/quoteConfidenceCapabilityStates.test.jsx"
+      ],
+      "testLocators": [
+        {
+          "path": "src/components/__tests__/quoteConfidenceCapabilityStates.test.jsx",
+          "locator": "binds governed starts to the ready presentation surface"
+        }
+      ],
+      "stateEvidence": [
+        {
+          "state": "ready",
+          "path": "src/components/__tests__/quoteConfidenceCapabilityStates.test.jsx",
+          "locator": "binds governed starts to the ready presentation surface",
+          "assertionLocator": "data-capability-state=\"ready\""
+        }
+      ],
+      "documentationLocators": [
+        {
+          "path": "docs/FEATURE_MATRIX.md",
+          "locator": "| Decision packet and governed starts |"
+        },
+        {
+          "path": "docs/USER_MANUAL.md",
+          "locator": "Blank, current Library template and accepted-event"
+        }
+      ]
+    },
+    {
+      "reviewRevision": 1,
+      "status": "active",
+      "deliveryType": "user_relevant",
+      "capabilityKind": "presentation_surface",
+      "audiences": [
+        "organization_admins"
+      ],
+      "backendExports": [],
+      "affectedBackendExports": [],
+      "documentationPaths": [
+        "docs/FEATURE_MATRIX.md",
+        "docs/USER_MANUAL.md"
+      ],
+      "surfaceReview": "changed",
+      "surfaceReviewNote": "Distinct gated presentation and assertion-bound lifecycle; existing authority remains unchanged.",
+      "stateExceptions": {},
+      "safeOutcome": "Operators inspect source-backed state and use existing authorized workflows without granting new write, pricing, supplier or acceptance authority.",
+      "id": "inventory-exception-workspace",
+      "surfaceId": "inventory-exception-workspace",
+      "surfaceStates": [
+        "ready",
+        "empty",
+        "stale"
+      ],
+      "summary": "Distinct inventory-exception-workspace presentation with its own declared lifecycle and no new authority.",
+      "backendPaths": [
+        "src/lib/inventoryAuthorityClient.js"
+      ],
+      "frontendPaths": [
+        "src/components/InventoryWorkspace.jsx"
+      ],
+      "entryPointLocators": [
+        {
+          "path": "src/components/InventoryWorkspace.jsx",
+          "locator": "data-capability-id=\"inventory-exception-workspace\""
+        }
+      ],
+      "testPaths": [
+        "src/components/__tests__/quoteConfidenceCapabilityStates.test.jsx"
+      ],
+      "testLocators": [
+        {
+          "path": "src/components/__tests__/quoteConfidenceCapabilityStates.test.jsx",
+          "locator": "binds exception workspace ready empty and stale states to its own surface"
+        }
+      ],
+      "stateEvidence": [
+        {
+          "state": "ready",
+          "path": "src/components/__tests__/quoteConfidenceCapabilityStates.test.jsx",
+          "locator": "binds exception workspace ready empty and stale states to its own surface",
+          "assertionLocator": "data-capability-state=\"ready\""
+        },
+        {
+          "state": "empty",
+          "path": "src/components/__tests__/quoteConfidenceCapabilityStates.test.jsx",
+          "locator": "binds exception workspace ready empty and stale states to its own surface",
+          "assertionLocator": "data-capability-state=\"empty\""
+        },
+        {
+          "state": "stale",
+          "path": "src/components/__tests__/quoteConfidenceCapabilityStates.test.jsx",
+          "locator": "binds exception workspace ready empty and stale states to its own surface",
+          "assertionLocator": "data-capability-state=\"stale\""
+        }
+      ],
+      "documentationLocators": [
+        {
+          "path": "docs/FEATURE_MATRIX.md",
+          "locator": "| Exception-first Inventory and stock count |"
+        },
+        {
+          "path": "docs/USER_MANUAL.md",
+          "locator": "**Resolve an Inventory exception.**"
+        }
+      ]
+    },
+    {
+      "reviewRevision": 1,
+      "status": "active",
+      "deliveryType": "user_relevant",
+      "capabilityKind": "presentation_surface",
+      "audiences": [
+        "organization_admins"
+      ],
+      "backendExports": [],
+      "affectedBackendExports": [],
+      "documentationPaths": [
+        "docs/FEATURE_MATRIX.md",
+        "docs/USER_MANUAL.md"
+      ],
+      "surfaceReview": "changed",
+      "surfaceReviewNote": "Distinct gated presentation and assertion-bound lifecycle; existing authority remains unchanged.",
+      "stateExceptions": {},
+      "safeOutcome": "Operators inspect source-backed state and use existing authorized workflows without granting new write, pricing, supplier or acceptance authority.",
+      "id": "inventory-mobile-capture",
+      "surfaceId": "inventory-mobile-capture",
+      "surfaceStates": [
+        "loading",
+        "empty",
+        "ready",
+        "stale",
+        "submitting",
+        "recovery",
+        "receipt",
+        "error"
+      ],
+      "summary": "Distinct inventory-mobile-capture presentation with its own declared lifecycle and no new authority.",
+      "backendPaths": [
+        "src/lib/inventoryCaptureDraft.js"
+      ],
+      "frontendPaths": [
+        "src/components/InventoryWorkspace.jsx"
+      ],
+      "entryPointLocators": [
+        {
+          "path": "src/components/InventoryWorkspace.jsx",
+          "locator": "data-capability-id=\"inventory-mobile-capture\""
+        }
+      ],
+      "testPaths": [
+        "src/components/__tests__/quoteConfidenceCapabilityStates.test.jsx"
+      ],
+      "testLocators": [
+        {
+          "path": "src/components/__tests__/quoteConfidenceCapabilityStates.test.jsx",
+          "locator": "binds mobile capture lifecycle and recovery to its own surface"
+        }
+      ],
+      "stateEvidence": [
+        {
+          "state": "loading",
+          "path": "src/components/__tests__/quoteConfidenceCapabilityStates.test.jsx",
+          "locator": "binds mobile capture lifecycle and recovery to its own surface",
+          "assertionLocator": "data-capability-state=\"loading\""
+        },
+        {
+          "state": "empty",
+          "path": "src/components/__tests__/quoteConfidenceCapabilityStates.test.jsx",
+          "locator": "binds mobile capture lifecycle and recovery to its own surface",
+          "assertionLocator": "data-capability-state=\"empty\""
+        },
+        {
+          "state": "ready",
+          "path": "src/components/__tests__/quoteConfidenceCapabilityStates.test.jsx",
+          "locator": "binds mobile capture lifecycle and recovery to its own surface",
+          "assertionLocator": "data-capability-state=\"ready\""
+        },
+        {
+          "state": "stale",
+          "path": "src/components/__tests__/quoteConfidenceCapabilityStates.test.jsx",
+          "locator": "binds mobile capture lifecycle and recovery to its own surface",
+          "assertionLocator": "data-capability-state=\"stale\""
+        },
+        {
+          "state": "submitting",
+          "path": "src/components/__tests__/quoteConfidenceCapabilityStates.test.jsx",
+          "locator": "binds mobile capture lifecycle and recovery to its own surface",
+          "assertionLocator": "data-capability-state=\"submitting\""
+        },
+        {
+          "state": "recovery",
+          "path": "src/components/__tests__/quoteConfidenceCapabilityStates.test.jsx",
+          "locator": "binds mobile capture lifecycle and recovery to its own surface",
+          "assertionLocator": "data-capability-state=\"recovery\""
+        },
+        {
+          "state": "receipt",
+          "path": "src/components/__tests__/quoteConfidenceCapabilityStates.test.jsx",
+          "locator": "binds mobile capture lifecycle and recovery to its own surface",
+          "assertionLocator": "data-capability-state=\"receipt\""
+        },
+        {
+          "state": "error",
+          "path": "src/components/__tests__/quoteConfidenceCapabilityStates.test.jsx",
+          "locator": "binds mobile capture lifecycle and recovery to its own surface",
+          "assertionLocator": "data-capability-state=\"error\""
+        }
+      ],
+      "documentationLocators": [
+        {
+          "path": "docs/FEATURE_MATRIX.md",
+          "locator": "| Walk-the-shelf capture |"
+        },
+        {
+          "path": "docs/USER_MANUAL.md",
+          "locator": "**Count the shelf.**"
+        }
+      ]
+    },
+    {
+      "reviewRevision": 1,
+      "status": "active",
+      "deliveryType": "user_relevant",
+      "capabilityKind": "presentation_surface",
+      "audiences": [
+        "organization_admins"
+      ],
+      "backendExports": [],
+      "affectedBackendExports": [],
+      "documentationPaths": [
+        "docs/FEATURE_MATRIX.md",
+        "docs/USER_MANUAL.md"
+      ],
+      "surfaceReview": "changed",
+      "surfaceReviewNote": "Distinct gated presentation and assertion-bound lifecycle; existing authority remains unchanged.",
+      "stateExceptions": {},
+      "safeOutcome": "Operators inspect source-backed state and use existing authorized workflows without granting new write, pricing, supplier or acceptance authority.",
+      "id": "post-event-learning-review",
+      "surfaceId": "post-event-learning-review",
+      "surfaceStates": [
+        "ready",
+        "review_required",
+        "receipt"
+      ],
+      "summary": "Distinct post-event-learning-review presentation with its own declared lifecycle and no new authority.",
+      "backendPaths": [
+        "src/lib/postEventLearningReview.js"
+      ],
+      "frontendPaths": [
+        "src/components/PostEventLearningReviewBanner.jsx"
+      ],
+      "entryPointLocators": [
+        {
+          "path": "src/components/PostEventLearningReviewBanner.jsx",
+          "locator": "data-capability-id=\"post-event-learning-review\""
+        }
+      ],
+      "testPaths": [
+        "src/components/__tests__/postEventLearningPanel.test.jsx"
+      ],
+      "testLocators": [
+        {
+          "path": "src/components/__tests__/postEventLearningPanel.test.jsx",
+          "locator": "requires the exact authority receipt plus operator confirmation for applied observation"
+        }
+      ],
+      "stateEvidence": [
+        {
+          "state": "ready",
+          "path": "src/components/__tests__/postEventLearningPanel.test.jsx",
+          "locator": "requires the exact authority receipt plus operator confirmation for applied observation",
+          "assertionLocator": "data-capability-state=\"ready\""
+        },
+        {
+          "state": "review_required",
+          "path": "src/components/__tests__/postEventLearningPanel.test.jsx",
+          "locator": "requires the exact authority receipt plus operator confirmation for applied observation",
+          "assertionLocator": "data-capability-state=\"review_required\""
+        },
+        {
+          "state": "receipt",
+          "path": "src/components/__tests__/postEventLearningPanel.test.jsx",
+          "locator": "requires the exact authority receipt plus operator confirmation for applied observation",
+          "assertionLocator": "data-capability-state=\"receipt\""
+        }
+      ],
+      "documentationLocators": [
+        {
+          "path": "docs/FEATURE_MATRIX.md",
+          "locator": "| Post-event learning |"
+        },
+        {
+          "path": "docs/USER_MANUAL.md",
+          "locator": "Only a matching recipe/pack publication receipt"
+        }
+      ]
+    },
+    {
+      "reviewRevision": 2,
       "status": "active",
       "deliveryType": "user_relevant",
       "audiences": [
@@ -26,11 +621,11 @@
       "documentationLocators": [
         {
           "path": "docs/FEATURE_MATRIX.md",
-          "locator": "## Quote-to-Confidence local candidate"
+          "locator": "| Internal supply plan |"
         },
         {
           "path": "docs/USER_MANUAL.md",
-          "locator": "## Quote-to-Confidence workflows"
+          "locator": "Save before approving the exact saved revision"
         }
       ],
       "surfaceReview": "changed",
@@ -139,10 +734,11 @@
           "locator": "retains exact uncertain supply command and reconciles without a new identity",
           "assertionLocator": "data-capability-state=\"receipt\""
         }
-      ]
+      ],
+      "surfaceId": "event-supply-action-plan"
     },
     {
-      "reviewRevision": 1,
+      "reviewRevision": 2,
       "status": "active",
       "deliveryType": "user_relevant",
       "audiences": [
@@ -159,11 +755,11 @@
       "documentationLocators": [
         {
           "path": "docs/FEATURE_MATRIX.md",
-          "locator": "## Quote-to-Confidence local candidate"
+          "locator": "| Post-event learning |"
         },
         {
           "path": "docs/USER_MANUAL.md",
-          "locator": "## Quote-to-Confidence workflows"
+          "locator": "**Learn after the event.**"
         }
       ],
       "surfaceReview": "changed",
@@ -175,7 +771,8 @@
       "summary": "Read-only accepted-revision learning compares independent attendance, requirement, allocation, execution, correction and financial evidence. Recommendations only; receiving and incompatible adoption receipts remain blocked by integration.",
       "backendPaths": [
         "src/lib/postEventLearningProjection.js",
-        "src/lib/postEventLearningReview.js"
+        "src/lib/postEventLearningReview.js",
+        "src/lib/eventOperatingActualsClient.js"
       ],
       "frontendPaths": [
         "src/components/PostEventLearningPanel.jsx",
@@ -244,7 +841,8 @@
           "locator": "asserts learning read lifecycle markers including partial evidence and explicit recovery",
           "assertionLocator": "data-capability-state=\"recovery\""
         }
-      ]
+      ],
+      "surfaceId": "post-event-learning"
     },
     {
       "id": "bounded-security-operations-audit",
@@ -2783,7 +3381,7 @@
     },
     {
       "id": "commercial-change-impact-preview",
-      "reviewRevision": 12,
+      "reviewRevision": 13,
       "status": "active",
       "deliveryType": "user_relevant",
       "capabilityKind": "read_surface",
@@ -2882,18 +3480,6 @@
         {
           "path": "src/components/UnifiedCommercialConsequenceReview.jsx",
           "locator": "data-capability-id=\"unified-commercial-consequence-review\""
-        },
-        {
-          "path": "src/components/QuoteCompletionCommandPath.jsx",
-          "locator": "data-capability-id=\"quote-completion-command-path\""
-        },
-        {
-          "path": "src/components/DecisionPacketPanel.jsx",
-          "locator": "data-capability-id=\"quote-decision-packet\""
-        },
-        {
-          "path": "src/components/GovernedQuoteStarts.jsx",
-          "locator": "data-capability-id=\"governed-quote-starts\""
         }
       ],
       "testPaths": [

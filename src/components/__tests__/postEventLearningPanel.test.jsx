@@ -15,6 +15,33 @@ async function render(component) { container = document.createElement("div"); do
 afterEach(async () => { if (root) await act(async () => root.unmount()); container?.remove(); clearLearningReview(); });
 const projection = () => buildPostEventLearningProjection(learningFixture());
 describe("post-event learning component states", () => {
+  test.each([
+    ["malformed", {}, "schema_drift"],
+    ["missing identity", { snapshot: {} }, "schema_drift"],
+    ["malformed snapshot", { snapshot: { organizationId: "org-one", quoteId: "quote-one" } }, "schema_drift"],
+    ["foreign", { snapshot: { organizationId: "foreign", quoteId: "quote-one" } }, "contradictory"],
+    ["schema error", Object.assign(new Error("private detail"), { code: "invalid-server-response" }), "schema_drift"],
+    ["contradictory error", Object.assign(new Error("private detail"), { code: "invalid-server-response", evidenceState: "contradictory" }), "contradictory"],
+    ["unavailable", Object.assign(new Error("private detail"), { code: "unavailable" }), "unavailable"]
+  ])("preserves connected actuals %s evidence", async (_label, response, expected) => {
+    const input = learningFixture();
+    await render(<PostEventLearningPanel {...input} enabled role="admin" inventoryEnabled
+      subscribePlan={({ onData }) => { onData(input.planRead); return () => {}; }}
+      subscribeExecution={({ onData }) => { onData(input.executionRead); return () => {}; }}
+      readActuals={async () => { if (response instanceof Error) throw response; return response; }} />);
+    expect(container.querySelector('[data-learning-row="financial"] strong').textContent).toBe(expected.replaceAll("_", " "));
+    expect(container.textContent).not.toContain("private detail");
+    expect(container.querySelector('[data-learning-row="financial"]').textContent).not.toContain("Recorded:");
+  });
+  test("refreshes the owning accepted source rather than trapping missing versions", async () => {
+    const input = learningFixture(), refreshSource = vi.fn();
+    await render(<PostEventLearningPanel {...input} acceptedVersion={null} enabled role="admin" onRefreshSource={refreshSource} readActuals={async () => ({ snapshot: input.financialRead.snapshot })} />);
+    expect(container.innerHTML).toContain('data-capability-state="unavailable"');
+    await act(async () => container.querySelector("button").click());
+    expect(refreshSource).toHaveBeenCalledOnce();
+    await act(async () => root.render(<PostEventLearningPanel {...input} enabled role="admin" onRefreshSource={refreshSource} readActuals={async () => ({ snapshot: input.financialRead.snapshot })} />));
+    expect(container.querySelector('[data-learning-row="attendance"]')).not.toBeNull();
+  });
   test("fences late subscriptions and reads after principal or gate changes", async () => {
     const input = learningFixture(); let latePlan, lateExecution, finishActuals;
     const unsubPlan = vi.fn(), unsubExecution = vi.fn();
@@ -38,6 +65,7 @@ describe("post-event learning component states", () => {
   });
   test("asserts learning read lifecycle markers including partial evidence and explicit recovery", async () => {
     await render(<PostEventLearningView projection={projection()} loading />);
+    expect(container.innerHTML).toContain('data-capability-id="post-event-learning"');
     expect(container.innerHTML).toContain('data-capability-state="loading"');
     await act(async () => root.render(<PostEventLearningView projection={projection()} error="Failed read" />));
     expect(container.innerHTML).toContain('data-capability-state="error"');
@@ -66,12 +94,13 @@ describe("post-event learning component states", () => {
     const model = projection(), recipe = model.proposals.find((proposal) => proposal.category === "recipe");
     openLearningReview({ ...recipe, scope: model.scope }, "admin-one");
     const element = await render(<PostEventLearningReviewBanner enabled organizationId="org-one" principalId="admin-one" role="admin" />);
-    expect(element.querySelector('[data-capability-state="ready"]')).not.toBeNull();
+    expect(element.innerHTML).toContain('data-capability-id="post-event-learning-review"');
+    expect(element.innerHTML).toContain('data-capability-state="ready"');
     const attempt = { uid: "admin-one", payload: { command: { kind: "publish_menu_recipe", menuItemId: "dinner" } } };
     expect(observeLearningInventoryReceipt(attempt, { ok: true, organizationId: "foreign", receipt: { receiptId: "receipt" } })).toBe(false);
     await act(async () => observeLearningInventoryReceipt(attempt, { ok: true, organizationId: "org-one", receipt: { receiptId: "recipe-published" } }));
-    expect(element.querySelector('[data-capability-state="review_required"]')).not.toBeNull(); expect(getLearningReview().confirmed).toBe(false);
+    expect(element.innerHTML).toContain('data-capability-state="review_required"'); expect(getLearningReview().confirmed).toBe(false);
     await act(async () => [...element.querySelectorAll("button")].find((button) => button.textContent.startsWith("Confirm this receipt")).click());
-    expect(element.querySelector('[data-capability-state="receipt"]')).not.toBeNull(); expect(getLearningReview().confirmed).toBe(true);
+    expect(element.innerHTML).toContain('data-capability-state="receipt"'); expect(getLearningReview().confirmed).toBe(true);
   });
 });

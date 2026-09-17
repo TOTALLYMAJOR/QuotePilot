@@ -1,6 +1,6 @@
 # User Manual
 
-Last updated: 2026-09-17 10:51:24 CDT
+Last updated: 2026-09-17 11:51:38 CDT
 
 ## Quote-to-Confidence workflows
 
@@ -53,6 +53,11 @@ the existing Inventory read gates; financial evidence retains its own authority.
 5. **Learn after the event.** In Client overview, open the due or completed
    event follow-up, then expand **Review policy, recorded costs and event learning**.
    Learning reads begin only when that detail is opened. **Learn from this event** compares the immutable accepted
+   source. **Refresh learning evidence** also reloads the owning Client quote,
+   accepted revision and closeout, not just subordinate reads. Malformed evidence
+   remains `schema_drift`, contradictory sources remain `contradictory`, and
+   unavailable reads remain unavailable; none becomes a zero actual.
+   The comparison uses the accepted
    priced count with attendance, and saved requirements with consumption and
    waste, per base unit. Financial capture stays separate and provisional until
    declared complete; saved planning-basis cost is not actual COGS. Review a

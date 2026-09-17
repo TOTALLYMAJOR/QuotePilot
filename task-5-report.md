@@ -1,5 +1,57 @@
 # Task 5 — post-event learning and Quote-to-Confidence integration
 
+## Review fix round 1
+
+- Registered distinct completion lifecycle/feedback, decision packet, governed
+  starts, Inventory exception/mobile capture and learning-review contracts;
+  supply and connected-learning states now bind to their own canonical marker.
+  The checker rejects borrowed surface assertions and presentation overrides of
+  read/mutation state requirements. Synchronous presentation contracts enumerate
+  only their supported states; no artificial async lifecycle is claimed.
+- Actuals preserve bounded `schema_drift`, `contradictory`, stale and unavailable
+  evidence. Malformed or unavailable financial reads never become zero actuals.
+  Parent Client refresh reloads accepted quote, immutable version and closeout;
+  a source-less embedding offers a full-route reload rather than subordinate-only
+  retries. Existing callable error codes and write authority are unchanged.
+- Added two local mocked-authority integration cases through the actual Ambient
+  Client overview, record and closeout disclosures, connected learning reads,
+  the shared production navigation callback and real Library/Inventory route
+  components. Existing `applyInventoryCommand` validates/freeze-normalizes the
+  recipe/pack receipt; applied state still needs explicit operator confirmation.
+  These tests do not simulate adoption by directly calling the learning receipt
+  observer. They are delivered-component integration, not a full-App hosted test
+  or proof of a real catalog publication. Recipe/pack editors retain authority.
+- Reporting returns proposed/applied counts by all four supported categories;
+  zero completion-action denominator yields `null`, not a fabricated rate.
+  Event schema, pricing, policy and activation remain unchanged.
+- Current review preflight: `2026-09-17T16:35:26.291Z`; same task/files completion:
+  **`2026-09-17T16:49:36.365Z`**. Recommendation was process/high, frontier/high;
+  no in-process model switch claimed. Final bounded graph coverage still reports
+  changed/untracked paths at generation `2026-09-17T11:03:04Z`.
+
+Review-round validation:
+
+| Check | Result |
+|---|---|
+| Focused connected evidence, delivered integration, surface contracts and supply states | 89/89 tests, 7 files (`/tmp/quote-confidence-fix-focused-complete.log`). |
+| Full unit suite | 6,099 passed / 100 skipped; 512 files passed / 3 skipped, 293.61s (`/tmp/quote-confidence-fix-unit-final.log`). |
+| Seven required responsive journey cases | 7/7, 54.7s, 390/768/1440 plus native IndexedDB reload/conflict (`/tmp/quote-confidence-fix-e2e-final.log`). |
+| Default production build | 373 modules, passed in 64s (`/tmp/quote-confidence-fix-build.log`). |
+| All six gates and existing Inventory/Event/Ambient/workspace enabled build | 484 modules, passed in 60s (`/tmp/quote-confidence-fix-build-enabled.log`); local output `/tmp/quote-confidence-fix-enabled-build`. |
+| Capability surfaces, field states, docs governance, Product Intelligence, project state | Passed; logs `/tmp/quote-confidence-fix-{cap,fields,docs,pi,state}-final.log`. |
+| Environment and maintainer quick check | Six absent Firebase variables remain the expected isolated-worktree blocker; no credentials copied or invented. |
+| Firestore rules | Initial 96/96 evidence retained; this correction changes no rules, server inventory/closeout mutation authority, or stored data schema. |
+| Source hygiene | `git diff --check` passed. |
+
+Self-review checked distinct marker identity, fail-closed actuals state mapping,
+parent refresh, tab-memory-only navigation, normalized receipt correlation,
+explicit confirmation and category-only reporting. Invalid aggregate categories
+cannot access inherited object properties. No runtime expansion addressed the
+unrelated Library recovery-boundary or 768 internal-overflow residuals.
+All original broader browser qualification gaps and hosted/human boundaries
+remain in force. Development impact: stronger recoverability and contract-backed
+traceability for the delivered learning workflow, without new adoption authority.
+
 Status: implementation complete; local candidate with explicit broader browser
 qualification gaps. Required five-journey and direct decision/Composer regressions
 are green; no release-readiness claim.
@@ -47,7 +99,8 @@ used the user-authorized bounded direct-source fallback and task manifest.
 
 ## Validation
 
-Confirmed local results on the final runtime source:
+Confirmed local results on the initial Task 5 source (`21b188a`); review-round
+results above supersede the affected runtime/checker evidence:
 
 | Check | Result |
 |---|---|

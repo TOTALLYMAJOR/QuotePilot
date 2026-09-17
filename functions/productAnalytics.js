@@ -319,6 +319,7 @@ function summarizeAnalyticsEvents(rawEvents = []) {
   let quoteCompletionSendableReached = 0;
   let learningProposed = 0;
   let learningApplied = 0;
+  const learningByCategory = Object.fromEntries(["recipe", "template", "pack_conversion", "workflow"].map((category) => [category, { category, proposed: 0, applied: 0 }]));
   const intentToPricedDraftDurations = [];
   const issueResolutionDurations = [];
   const issueResolutionDurationsByCategory = new Map();
@@ -375,8 +376,8 @@ function summarizeAnalyticsEvents(rawEvents = []) {
         quoteCompletionActionsShown += 1;
         return;
       }
-      if (event?.eventName === "post_event_learning_proposed") { learningProposed += 1; return; }
-      if (event?.eventName === "post_event_learning_applied" && event.authority === "existing_authority_receipt") { learningApplied += 1; return; }
+      if (event?.eventName === "post_event_learning_proposed" && Object.hasOwn(learningByCategory, event.category)) { learningProposed += 1; learningByCategory[event.category].proposed += 1; return; }
+      if (event?.eventName === "post_event_learning_applied" && event.authority === "existing_authority_receipt" && Object.hasOwn(learningByCategory, event.category)) { learningApplied += 1; learningByCategory[event.category].applied += 1; return; }
       if (
         event?.eventName === "quote_completion_action_resolved"
         && event?.result === "success"
@@ -442,14 +443,14 @@ function summarizeAnalyticsEvents(rawEvents = []) {
           ...summarizeDurations(issueResolutionDurationsByCategory.get(issueCategory))
         }))
     },
-    postEventLearning: { observationSource: "client", proposed: learningProposed, applied: learningApplied },
+    postEventLearning: { observationSource: "client", proposed: learningProposed, applied: learningApplied, categories: Object.values(learningByCategory) },
     quoteCompletion: {
       observationSource: "client",
       actionsShown: quoteCompletionActionsShown,
       actionsResolved: quoteCompletionActionsResolved,
       actionResolutionRate: quoteCompletionActionsShown
         ? quoteCompletionActionsResolved / quoteCompletionActionsShown
-        : 0,
+        : null,
       sendableReached: quoteCompletionSendableReached
     }
   };

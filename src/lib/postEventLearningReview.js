@@ -1,3 +1,4 @@
+import { WORKSPACE_PATHS } from "./workspaceRoutes";
 // Tab-memory presentation context only. Reload clears it; it never authorizes a write.
 let current = null;
 const listeners = new Set();
@@ -9,6 +10,11 @@ export function openLearningReview(proposal, principalId) {
   if (!proposal?.scope?.organizationId || !principalId) return false;
   current = { ...structuredClone(proposal), principalId, receipt: null, confirmed: false };
   emit(); return true;
+}
+export function navigateLearningReview(proposal, principalId, navigate) {
+  if (!openLearningReview(proposal, principalId)) throw new Error("The exact learning review context is unavailable.");
+  navigate(proposal.destination === "inventory" ? WORKSPACE_PATHS.inventory : WORKSPACE_PATHS.catalog);
+  return { status: "review_opened" };
 }
 export function observeLearningInventoryReceipt(attempt, result) {
   if (!current || result?.ok !== true || current.scope.organizationId !== result.organizationId || current.principalId !== attempt.uid) return false;

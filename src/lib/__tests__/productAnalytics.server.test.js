@@ -33,7 +33,16 @@ describe("product analytics server contract", () => {
     const applied = sanitizeAnalyticsEvent(event("post_event_learning_applied", 3, { category: "recipe", authority: "existing_authority_receipt", receiptId: "private" }), context);
     expect(applied).not.toHaveProperty("receiptId");
     const summary = summarizeAnalyticsEvents([sanitizeAnalyticsEvent(event("wizard_started", 1), context), proposed, applied]);
-    expect(summary.postEventLearning).toEqual({ observationSource: "client", proposed: 1, applied: 1 });
+    expect(summary.postEventLearning).toMatchObject({ observationSource: "client", proposed: 1, applied: 1 });
+    expect(summary.postEventLearning.categories).toEqual([
+      { category: "recipe", proposed: 1, applied: 1 },
+      { category: "template", proposed: 0, applied: 0 },
+      { category: "pack_conversion", proposed: 0, applied: 0 },
+      { category: "workflow", proposed: 0, applied: 0 }
+    ]);
+    expect(summarizeAnalyticsEvents([]).quoteCompletion.actionResolutionRate).toBeNull();
+    const invalidCategory = summarizeAnalyticsEvents([sanitizeAnalyticsEvent(event("wizard_started", 1), context), { ...proposed, category: "__proto__" }]);
+    expect(invalidCategory.postEventLearning.proposed).toBe(0);
   });
   test("keeps only allow-listed, non-PII dimensions and derives a stable retry ID", () => {
     const sanitized = sanitizeAnalyticsEvent({
@@ -189,7 +198,7 @@ describe("product analytics server contract", () => {
       { ...event("wizard_started", 1), sessionId: "session-other-1234" }
     ];
     expect(summarizeAnalyticsEvents(events)).toEqual({
-      postEventLearning: { observationSource: "client", proposed: 0, applied: 0 },
+      postEventLearning: { observationSource: "client", proposed: 0, applied: 0, categories: ["recipe", "template", "pack_conversion", "workflow"].map((category) => ({ category, proposed: 0, applied: 0 })) },
       sessionsStarted: 2,
       quotesSaved: 1,
       completionRate: 50,
@@ -231,7 +240,7 @@ describe("product analytics server contract", () => {
         observationSource: "client",
         actionsShown: 0,
         actionsResolved: 0,
-        actionResolutionRate: 0,
+        actionResolutionRate: null,
         sendableReached: 0
       }
     });

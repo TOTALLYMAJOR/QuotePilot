@@ -149,6 +149,16 @@ function changedFiles(extra = []) {
 }
 
 describe("capability surfacing delivery gate", () => {
+  test("presentation state evidence is bound to its own canonical surface and cannot weaken authority states", () => {
+    const contract = userContract({ capabilityKind: "presentation_surface", surfaceId: "example", surfaceStates: ["ready"], entryPointLocators: [{ path: frontendPath, locator: 'data-capability-id="example"' }], stateEvidence: [{ state: "ready", path: testPath, locator: "renders its own ready state", assertionLocator: 'data-capability-state="ready"' }] });
+    const read = (surface) => `${readFixturePath()}\ndata-capability-id="example"\ntest("renders its own ready state", () => { expect(markup).toContain('data-capability-id="${surface}"'); expect(markup).toContain('data-capability-state="ready"'); });`;
+    const check = (value, surface = "example") => validateCapabilitySurfacing({ changedFiles: changedFiles(), manifest: manifest(value), baseManifest: manifest(userContract({ reviewRevision: 1 }), 1), pathExists: () => true, readPath: (file) => file === frontendPath ? 'data-capability-id="example"' : read(surface), currentBackendExports: ["functions/exampleCapability.js#getExampleCapability"], baseBackendExports: ["functions/exampleCapability.js#getExampleCapability"] });
+    expect(check(contract)).toEqual([]);
+    expect(check(contract, "another-surface").join(" ")).toContain("surface");
+    expect(check({ ...contract, surfaceStates: [] }).join(" ")).toContain("surfaceStates");
+    expect(check({ ...contract, surfaceStates: ["invented"] }).join(" ")).toContain("surfaceStates");
+    expect(check({ ...contract, capabilityKind: "read_surface" }).join(" ")).toContain("cannot override");
+  });
   test("is mechanically required by lane:core", () => {
     expect(packageJson.scripts["check:capability-surfaces"]).toBe(
       "node ./scripts/check-capability-surfacing.mjs"

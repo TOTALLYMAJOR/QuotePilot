@@ -14,6 +14,7 @@ async function approve() { await act(async () => container.querySelector('input[
 test("asserts exact supply read states and recovery markers", async () => {
   let resolve; const getPlan = vi.fn().mockImplementationOnce(() => new Promise((done) => { resolve = done; }));
   await mount(getPlan); expect(container.innerHTML).toContain('data-capability-state="empty"');
+  expect(container.innerHTML).toContain('data-capability-id="event-supply-action-plan"');
   await select(); expect(container.innerHTML).toContain('data-capability-state="loading"');
   await act(async () => resolve(snapshot())); expect(container.innerHTML).toContain('data-capability-state="success"'); expect(container.innerHTML).toContain('data-capability-state="ready"');
   getPlan.mockResolvedValueOnce({ ...snapshot(), stale: true }); await select(); expect(container.innerHTML).toContain('data-capability-state="stale"');
@@ -24,6 +25,7 @@ test("retains exact uncertain supply command and reconciles without a new identi
   let reject, resolve;
   const applyPlan = vi.fn().mockImplementationOnce(() => new Promise((done, fail) => { reject = fail; })).mockImplementationOnce(() => new Promise((done) => { resolve = done; }));
   await mount(vi.fn().mockResolvedValue(snapshot()), applyPlan); await select(); await approve();
+  expect(container.innerHTML).toContain('data-capability-id="event-supply-action-plan"');
   expect(container.innerHTML).toContain('data-capability-state="submitting"');
   await act(async () => reject(new Error("Response lost"))); expect(container.innerHTML).toContain('data-capability-state="uncertain"');
   expect(container.querySelector("select").disabled).toBe(true); expect(container.querySelector('[data-supply-command="approve"]')).toBeNull();

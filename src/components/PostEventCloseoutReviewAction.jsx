@@ -572,6 +572,7 @@ export default function PostEventCloseoutReviewAction({
         closeout={{ ...opportunity.reviewedAction, actualAttendance }} source={workflowScope?.source}
         role={workflowScope?.role} principalId={workflowScope?.principalId}
         inventoryEnabled={learningContext.inventoryEnabled} onReview={learningContext.onReview}
+        onRefreshSource={learningContext.onRefreshSource}
       />}
       </details>
     </section>

@@ -1,8 +1,10 @@
 # Changelog
 
-Last updated: 2026-09-17 10:51:24 CDT
+Last updated: 2026-09-17 11:51:38 CDT
 
 ## Unreleased — Quote-to-Confidence local candidate
+
+- Bind each new presentation surface to its own asserted state contract. Preserve malformed versus contradictory learning evidence, reload parent accepted sources on refresh, and report category aggregates with unavailable zero-denominator rates.
 
 - Add separately default-off quote completion, decision packet, exception-first Inventory, internal supply planning, mobile count capture, and post-event learning gates. The completion command points to one existing field or action; comparison and accepted handoff retain exact revision and receipt references.
 - Add server-owned internal supply-plan draft, approval, rebase and cancellation receipts, with transactionally current shortage/source evidence. Add authoritative revision-fenced physical stock counts; neither capability contacts suppliers, places orders, reserves expected supply, or changes commercial policy.
