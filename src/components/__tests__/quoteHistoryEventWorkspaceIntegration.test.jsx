@@ -250,6 +250,32 @@ describe("QuoteHistoryView event workspace integration", () => {
     expect(container.textContent).toContain("Showing 1 of 2 quotes");
   });
 
+  test("focuses the exact configured action received with an administration handoff", async () => {
+    act(() => {
+      root.render(
+        <QuoteHistoryView
+          open
+          presentation="embedded"
+          focusQuoteId={QUOTE.id}
+          focusAction="administration"
+          focusDestinationAction="edit"
+          currentUserRole="sales"
+          onClose={() => {}}
+          onBackToQuotes={() => {}}
+          onEditQuote={() => {}}
+        />
+      );
+    });
+    await settle();
+    await act(async () => {
+      await new Promise((resolve) => window.setTimeout(resolve, 50));
+    });
+
+    const exactAction = container.querySelector('[data-quote-action-id="edit"]');
+    expect(exactAction).not.toBeNull();
+    expect(document.activeElement).toBe(exactAction);
+  });
+
   test("accepts only an exact semantic Payment administration arrival", () => {
     const arrivalContext = {
       destination: "administration",

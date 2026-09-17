@@ -469,16 +469,17 @@ export function buildQuoteCompletionProjection({
   const exactRevisionSaved = draftDirty !== true && actionState?.state?.versionSaved === true;
   const state = ["accepted", "booked"].includes(lifecycleStatus)
     ? "accepted"
-    : providerAccepted
-      ? "sent"
-      : blockerGroups.length > 0
-        ? "blocked"
-        : exactRevisionSaved
-          && readiness?.complete === true
-          && sendAction?.visible === true
-          && sendAction?.enabled === true
-          ? "sendable"
-          : "review_required";
+    : blockerGroups.length > 0
+      ? "blocked"
+      : !exactRevisionSaved
+        ? "review_required"
+        : providerAccepted
+          ? "sent"
+          : readiness?.complete === true
+            && sendAction?.visible === true
+            && sendAction?.enabled === true
+            ? "sendable"
+            : "review_required";
   const boundedState = COMPLETION_STATES.has(state) ? state : "review_required";
   const projection = {
     schemaVersion: QUOTE_COMPLETION_CONTRACT_VERSION,

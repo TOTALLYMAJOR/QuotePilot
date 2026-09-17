@@ -1302,7 +1302,12 @@ const AmbientLivingOpportunity = forwardRef(function AmbientLivingOpportunity({
     };
   };
 
-  const openEditor = async ({ guestCount = null, staffing = null, requestedAction = null } = {}) => {
+  const openEditor = async ({
+    guestCount = null,
+    staffing = null,
+    requestedAction = null,
+    quoteCompletionDestination = null
+  } = {}) => {
     const hasGuestScenario = Number.isFinite(guestCount) && guestCount !== recordedGuestCount;
     const hasStaffingScenario = staffing && ["servers", "chefs", "bartenders"].every((field) => (
       Number.isInteger(Number(staffing[field]))
@@ -1403,7 +1408,11 @@ const AmbientLivingOpportunity = forwardRef(function AmbientLivingOpportunity({
     });
     let navigationResult;
     try {
-      navigationResult = await onEditQuote(quote, { arrivalContext, draftPatch });
+      navigationResult = await onEditQuote(quote, {
+        arrivalContext,
+        draftPatch,
+        ...(quoteCompletionDestination ? { quoteCompletionDestination } : {})
+      });
     } catch (error) {
       navigationResult = {
         status: "recovery",
@@ -2232,8 +2241,11 @@ const AmbientLivingOpportunity = forwardRef(function AmbientLivingOpportunity({
     }
   };
 
-  const openProposalControls = async () => {
+  const openProposalControls = async (requestedDestination = null) => {
     const action = model.actions.openProposalControls;
+    const quoteCompletionDestination = requestedDestination?.surfaceId
+      ? requestedDestination
+      : null;
     if (!action.enabled || typeof onOpenLegacyWorkspace !== "function") {
       return {
         state: "recovery",
@@ -2258,7 +2270,8 @@ const AmbientLivingOpportunity = forwardRef(function AmbientLivingOpportunity({
         object: action.arrivalContract.object,
         reason: action.arrivalContract.reason,
         consequence: action.arrivalContract.consequence,
-        nextResolution
+        nextResolution,
+        ...(quoteCompletionDestination ? { quoteCompletionDestination } : {})
       });
       if (["cancelled", "recovery"].includes(navigationResult?.status)) {
         acknowledge({
@@ -3220,14 +3233,15 @@ const AmbientLivingOpportunity = forwardRef(function AmbientLivingOpportunity({
   const runQuoteCompletionAction = async (action) => {
     const surfaceId = String(action?.destination?.surfaceId || "");
     if (surfaceId === "quote-administration") {
-      return openProposalControls();
+      return openProposalControls(action.destination);
     }
     if (surfaceId === "living-opportunity") {
       return openProposalContext();
     }
     if (["proposal-composer", "quote-review"].includes(surfaceId)) {
       return openEditor({
-        requestedAction: model.actions.reviewProposalInEditor
+        requestedAction: model.actions.reviewProposalInEditor,
+        quoteCompletionDestination: action.destination
       });
     }
     return { state: "recovery", message: "The exact proposal destination is not available here." };

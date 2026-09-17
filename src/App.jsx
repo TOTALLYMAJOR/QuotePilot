@@ -32,6 +32,10 @@ import CreateIntake from "./components/CreateIntake";
 import ChangeRequestPanel from "./components/ChangeRequestPanel";
 import { parseIntentDraftWithModel } from "./lib/intentParseClient";
 import { resolveQuoteCompletionCommandPathGate } from "./lib/quoteCompletionGate";
+import {
+  resolveQuoteWizardCompletionDestination,
+  scheduleQuoteCompletionDestinationFocus
+} from "./lib/quoteCompletionDestination";
 import { applyProposalToForm, proposalTouchedFields } from "./components/changeRequestParse";
 import {
   clearDraftSnapshot,
@@ -1775,11 +1779,16 @@ export default function App({
   const historyFocusQuoteId = browserRoute.params?.quoteId
     || quoteAdministrationArrival?.focus?.quoteId
     || historyTarget.quoteId;
+  const historyTargetMatchesFocus = historyTarget.quoteId
+    && historyTarget.quoteId === historyFocusQuoteId;
   const historyFocusAction = quoteAdministrationArrival
     ? "administration"
-    : historyTarget.quoteId && historyTarget.quoteId === historyFocusQuoteId
+    : historyTargetMatchesFocus
       ? historyTarget.action
       : "";
+  const historyFocusDestinationAction = historyTargetMatchesFocus
+    ? historyTarget.destinationAction
+    : "";
   const historyFocusReason = quoteAdministrationArrival?.reasonId
     || (historyTarget.quoteId && historyTarget.quoteId === historyFocusQuoteId
       ? historyTarget.reason
@@ -2800,6 +2809,13 @@ export default function App({
       };
     }
     const livingOpportunity = action?.destination?.surfaceId === "living-opportunity";
+    const destinationAction = String(action?.destination?.actionId || "").trim();
+    setHistoryTarget({
+      quoteId,
+      action: "administration",
+      destinationAction,
+      reason: action?.reason || "Review the exact quote completion destination."
+    });
     const handoff = createWorkspaceArrivalHandoff(livingOpportunity
       ? {
           destination: "opportunity",
@@ -5637,7 +5653,8 @@ export default function App({
       draftPatch = null,
       draftIntent = null,
       ambientCatalogContext = null,
-      attendanceSubmission = null
+      attendanceSubmission = null,
+      quoteCompletionDestination = null
     } = {},
     ambientArrival = null
   ) => {
@@ -5748,7 +5765,13 @@ export default function App({
     setAvailabilityBlock(null);
     setAvailabilityNotice("");
     setHistoryTarget({ quoteId: "", reason: "" });
-    setStep(1);
+    const wizardQuoteCompletionDestination = resolveQuoteWizardCompletionDestination(
+      quoteCompletionDestination
+    );
+    const quoteCompletionStep = Number(wizardQuoteCompletionDestination?.step);
+    setStep(Number.isInteger(quoteCompletionStep) && quoteCompletionStep >= 1 && quoteCompletionStep <= 5
+      ? quoteCompletionStep
+      : 1);
     if (navigateToRoute) navigateWorkspace(buildQuoteEditPath(quote.id));
     beginWizardAnalyticsSession({
       organizationId: authSession.organizationId,
@@ -5768,6 +5791,9 @@ export default function App({
     });
     const ambientFocusField = draftRuntime.ambientDraftIntent?.focusField || "";
     wizardRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    scheduleQuoteCompletionDestinationFocus(wizardQuoteCompletionDestination, {
+      root: wizardRef
+    });
     window.requestAnimationFrame(() => {
       const exactField = ambientFocusField
         ? wizardRef.current?.querySelector(`[data-ambient-field="${ambientFocusField}"]`)
@@ -6954,7 +6980,8 @@ export default function App({
       onPatchForm={handleComposerPatch}
       onTemplateChange={applyEventTemplate}
       onEventTypeChange={handleEventTypeChange}
-      onSaveQuote={() => handleSubmitQuote({ propagateError: true })}
+      onSaveQuote={() => handleSubmitQuote()}
+      onQuoteCompletionSave={() => handleSubmitQuote({ propagateError: true })}
       onOpenCompare={() => openWorkspaceTool(setCompareOpen)}
       onGuidedMode={() => setBuilderMode("guided")}
       reviewSurfaces={draftReviewSurfaces}
@@ -7865,10 +7892,14 @@ export default function App({
                 quoteCompletionCommandPathEnabled={quoteCompletionCommandPathEnabled}
                 quoteCompletionSaveBlockers={proposalComposerSaveBlockers}
                 onQuoteCompletionAction={(action) => {
-                  const destinationStep = Number(action?.destination?.step);
-                  if (Number.isInteger(destinationStep) && destinationStep >= 1 && destinationStep <= 5) {
-                    setStep(destinationStep);
-                    return { state: "success", message: `Opened step ${destinationStep}.` };
+                  const focusResult = scheduleQuoteCompletionDestinationFocus(
+                    resolveQuoteWizardCompletionDestination(action?.destination), {
+                      root: wizardRef,
+                      setStep
+                    }
+                  );
+                  if (focusResult.step !== null || focusResult.scheduled) {
+                    return { state: "success", message: "Opened the exact quote destination." };
                   }
                   return { state: "recovery", message: action?.reason };
                 }}
@@ -8019,6 +8050,7 @@ export default function App({
             onGlobalPilotResolution={AMBIENT_UI_ENABLED ? handleGlobalPilotResolution : undefined}
             focusQuoteId={historyFocusQuoteId}
             focusAction={historyFocusAction}
+            focusDestinationAction={historyFocusDestinationAction}
             focusReason={historyFocusReason}
             arrivalContext={workspaceArrivalContext?.surfaceId === "living-opportunity"
               || workspaceArrivalContext?.surfaceId === "quote-administration"
@@ -8072,6 +8104,17 @@ export default function App({
                   consequence: "The current opportunity remains open and unchanged.",
                   nextResolution: "Return to Opportunities and reopen the exact quote."
                 };
+              }
+              const destinationAction = String(
+                context?.quoteCompletionDestination?.actionId || ""
+              ).trim();
+              if (destinationAction) {
+                setHistoryTarget({
+                  quoteId: normalizedQuoteId,
+                  action: "administration",
+                  destinationAction,
+                  reason: context.reason || "Review the exact proposal control."
+                });
               }
               return navigateAmbientQuoteAdministration(normalizedQuoteId, context);
             }}

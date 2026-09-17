@@ -25,6 +25,10 @@ import { StepEvent, StepMenu, StepReview, StepServices } from "./components/Wiza
 import CreateIntake from "./components/CreateIntake";
 import { parseIntentDraftWithModel } from "./lib/intentParseClient";
 import { resolveQuoteCompletionCommandPathGate } from "./lib/quoteCompletionGate";
+import {
+  resolveQuoteWizardCompletionDestination,
+  scheduleQuoteCompletionDestinationFocus
+} from "./lib/quoteCompletionDestination";
 import ChangeRequestPanel from "./components/ChangeRequestPanel";
 import PilotCommandBar from "./components/LegacyPilotCommandBar";
 import { applyProposalToForm, proposalTouchedFields } from "./components/changeRequestParse";
@@ -1434,6 +1438,13 @@ function LegacyAppCore({
     const quoteId = String(action?.objectContext?.quoteId || editingQuote?.id || "").trim();
     if (!quoteId) return { status: "recovery", reason: "The exact quote could not be identified." };
     const livingOpportunity = action?.destination?.surfaceId === "living-opportunity";
+    const destinationAction = String(action?.destination?.actionId || "").trim();
+    setHistoryTarget({
+      quoteId,
+      action: "administration",
+      destinationAction,
+      reason: action?.reason || "Review the exact quote completion destination."
+    });
     const handoff = createWorkspaceArrivalHandoff(livingOpportunity
       ? {
           destination: "opportunity",
@@ -3153,7 +3164,10 @@ function LegacyAppCore({
     }
   };
 
-  const handleEditQuote = async (quote, { navigateToRoute = true } = {}) => {
+  const handleEditQuote = async (quote, {
+    navigateToRoute = true,
+    quoteCompletionDestination = null
+  } = {}) => {
     if (!quote?.id) return;
     if (
       navigateToRoute
@@ -3292,7 +3306,13 @@ function LegacyAppCore({
     setAvailabilityBlock(null);
     setAvailabilityNotice("");
     setHistoryTarget({ quoteId: "", reason: "" });
-    setStep(1);
+    const wizardQuoteCompletionDestination = resolveQuoteWizardCompletionDestination(
+      quoteCompletionDestination
+    );
+    const quoteCompletionStep = Number(wizardQuoteCompletionDestination?.step);
+    setStep(Number.isInteger(quoteCompletionStep) && quoteCompletionStep >= 1 && quoteCompletionStep <= 5
+      ? quoteCompletionStep
+      : 1);
     if (navigateToRoute) navigateWorkspace(buildQuoteEditPath(quote.id));
     beginWizardAnalyticsSession({
       organizationId: authSession.organizationId,
@@ -3307,6 +3327,9 @@ function LegacyAppCore({
         : `Editing ${quote.quoteNumber || quote.id}. Save will update this quote and keep a version snapshot.`
     });
     wizardRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    scheduleQuoteCompletionDestinationFocus(wizardQuoteCompletionDestination, {
+      root: wizardRef
+    });
     window.requestAnimationFrame(() => wizardRef.current?.focus({ preventScroll: true }));
   };
 
@@ -4178,7 +4201,8 @@ function LegacyAppCore({
       onPatchForm={handleComposerPatch}
       onTemplateChange={applyEventTemplate}
       onEventTypeChange={handleEventTypeChange}
-      onSaveQuote={() => handleSubmitQuote({ propagateError: true })}
+      onSaveQuote={() => handleSubmitQuote()}
+      onQuoteCompletionSave={() => handleSubmitQuote({ propagateError: true })}
       onOpenCompare={() => openWorkspaceTool(setCompareOpen)}
       onGuidedMode={() => setBuilderMode("guided")}
       reviewSurfaces={draftReviewSurfaces}
@@ -5028,10 +5052,14 @@ function LegacyAppCore({
                 quoteCompletionCommandPathEnabled={quoteCompletionCommandPathEnabled}
                 quoteCompletionSaveBlockers={proposalComposerSaveBlockers}
                 onQuoteCompletionAction={(action) => {
-                  const destinationStep = Number(action?.destination?.step);
-                  if (Number.isInteger(destinationStep) && destinationStep >= 1 && destinationStep <= 5) {
-                    setStep(destinationStep);
-                    return { state: "success", message: `Opened step ${destinationStep}.` };
+                  const focusResult = scheduleQuoteCompletionDestinationFocus(
+                    resolveQuoteWizardCompletionDestination(action?.destination), {
+                      root: wizardRef,
+                      setStep
+                    }
+                  );
+                  if (focusResult.step !== null || focusResult.scheduled) {
+                    return { state: "success", message: "Opened the exact quote destination." };
                   }
                   return { state: "recovery", message: action?.reason };
                 }}
@@ -5222,6 +5250,7 @@ function LegacyAppCore({
             tenantTimeZone={tenantTimeZone}
             focusQuoteId={browserRoute.params?.quoteId || historyTarget.quoteId}
             focusAction={historyTarget.action}
+            focusDestinationAction={historyTarget.destinationAction}
             focusReason={historyTarget.reason}
             onEditQuote={(quote) => {
               requestWorkflowAttentionRefresh({ force: true });

@@ -6,6 +6,10 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import ProposalComposer from "../ProposalComposer";
 import { StepReview } from "../WizardSteps";
 import { buildAmbientLivingOpportunityPresentation } from "../ambientLivingOpportunityPresentation";
+import {
+  resolveQuoteWizardCompletionDestination,
+  scheduleQuoteCompletionDestinationFocus
+} from "../../lib/quoteCompletionDestination";
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -134,6 +138,35 @@ describe("quote completion surface integrations", () => {
     expect(props.onSaveQuote).toHaveBeenCalledTimes(1);
   });
 
+  test("Proposal Composer reserves rejecting save propagation for the command runner", async () => {
+    const directSave = vi.fn(() => Promise.resolve({ status: "saved" }));
+    const commandSave = vi.fn(() => Promise.reject(new Error("save receipt unavailable")));
+    const props = composerProps({
+      onSaveQuote: directSave,
+      onQuoteCompletionSave: commandSave,
+      quoteDirty: true
+    });
+
+    await act(async () => root.render(<ProposalComposer {...props} />));
+    await act(async () => {
+      container.querySelector('[data-testid="pc-save-header"]').click();
+      await Promise.resolve();
+    });
+    expect(directSave).toHaveBeenCalledOnce();
+    expect(commandSave).not.toHaveBeenCalled();
+
+    await act(async () => root.render(
+      <ProposalComposer {...props} quoteCompletionCommandPathEnabled />
+    ));
+    await act(async () => {
+      container.querySelector('[data-capability-id="quote-completion-command-path"] button').click();
+      await Promise.resolve();
+    });
+    expect(commandSave).toHaveBeenCalledOnce();
+    expect(container.querySelector('[data-capability-id="quote-completion-command-path"]')?.dataset.commandState)
+      .toBe("failure");
+  });
+
   test("Proposal Composer continues a saved revision through the governed configured destination", async () => {
     const onQuoteCompletionNavigate = vi.fn(() => ({
       status: "pending",
@@ -245,6 +278,57 @@ describe("quote completion surface integrations", () => {
     expect(enabled).not.toContain("<progress");
     expect(enabled).toContain('data-capability-id="quote-completion-command-path"');
     expect(enabled).toContain("Compatibility details");
+  });
+
+  test("review-step handoff opens and focuses the exact destination field", async () => {
+    const setStep = vi.fn();
+    const onQuoteCompletionAction = vi.fn((action) => {
+      scheduleQuoteCompletionDestinationFocus(
+        resolveQuoteWizardCompletionDestination(action.destination), {
+          root: document,
+          setStep
+        }
+      );
+      return { state: "success", message: "Opened exact field." };
+    });
+    await act(async () => root.render(
+      <>
+        <StepReview
+          form={form}
+          totals={totals}
+          settings={settings}
+          readiness={readiness}
+          quoteCompletionCommandPathEnabled
+          quoteCompletionSaveBlockers={[{
+            id: "client-name",
+            message: "Add the client name.",
+            destination: {
+              surfaceId: "proposal-composer",
+              step: 1,
+              selector: '[data-ambient-action-id="pc-edit-client-name"]',
+              activate: true
+            }
+          }]}
+          onQuoteCompletionAction={onQuoteCompletionAction}
+        />
+        <input data-ambient-field="name" aria-label="Exact client name" />
+      </>
+    ));
+
+    await act(async () => {
+      container.querySelector('[data-capability-id="quote-completion-command-path"] button').click();
+      await new Promise((resolve) => window.setTimeout(resolve, 10));
+    });
+
+    expect(onQuoteCompletionAction).toHaveBeenCalledWith(expect.objectContaining({
+      destination: expect.objectContaining({
+        surfaceId: "proposal-composer",
+        step: 1,
+        selector: '[data-ambient-action-id="pc-edit-client-name"]'
+      })
+    }));
+    expect(setStep).toHaveBeenCalledWith(1);
+    expect(document.activeElement).toBe(container.querySelector('[data-ambient-field="name"]'));
   });
 
   test("Ambient presentation composes configured actions only behind the gate", () => {

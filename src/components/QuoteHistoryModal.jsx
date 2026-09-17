@@ -883,6 +883,7 @@ export function QuoteHistoryView({
   tenantTimeZone = "",
   focusQuoteId = "",
   focusAction = "",
+  focusDestinationAction = "",
   focusReason = "",
   arrivalContext = null,
   onArrivalResolution = null,
@@ -1387,7 +1388,7 @@ export function QuoteHistoryView({
     const returnFocusOwnsEntry = ["restoring", "restored"].includes(returnStatus?.state)
       && returnStatus?.entryId === workspaceNavigation?.location?.historyEntry?.entryId;
     if (returnFocusOwnsEntry) return;
-    const focusKey = `${focusQuoteId}:${String(focusAction || "").trim()}`;
+    const focusKey = `${focusQuoteId}:${String(focusAction || "").trim()}:${String(focusDestinationAction || "").trim()}`;
     if (focusedHandoffIdRef.current === focusKey) return;
     const normalizedAction = String(focusAction || "").trim();
     const administrationArrival = normalizedAction === "administration"
@@ -1419,19 +1420,37 @@ export function QuoteHistoryView({
     const targetQuote = state.quotes.find((quote) => quote.id === focusQuoteId);
     if (!targetQuote) return;
     if (normalizedAction === "administration") {
+      let destinationFrame = null;
       const frame = window.requestAnimationFrame(() => {
-        const administrationSummary = dialogRef.current?.querySelector(
-          '[data-quote-administration="true"] > summary'
-        );
-        if (!administrationSummary) return;
-        administrationSummary.focus({ preventScroll: true });
-        administrationSummary.scrollIntoView({ block: "start", inline: "nearest" });
-        if (administrationArrival && document.activeElement === administrationSummary) {
-          onArrivalResolution?.({ status: "resolved", quoteId: focusQuoteId });
-        }
-        focusedHandoffIdRef.current = focusKey;
+        destinationFrame = window.requestAnimationFrame(() => {
+          const administrationSummary = dialogRef.current?.querySelector(
+            '[data-quote-administration="true"] > summary'
+          );
+          const administrationDetails = administrationSummary?.closest("details") || null;
+          if (administrationDetails) administrationDetails.open = true;
+          const destinationAction = String(focusDestinationAction || "").trim();
+          const exactQuoteRow = Array.from(
+            dialogRef.current?.querySelectorAll("tr[data-quote-id]") || []
+          ).find((row) => row.dataset.quoteId === focusQuoteId);
+          const actionRoot = exactQuoteRow || administrationDetails;
+          const exactAction = destinationAction
+            ? Array.from(actionRoot?.querySelectorAll("[data-quote-action-id]") || [])
+              .find((element) => element.dataset.quoteActionId === destinationAction && !element.disabled)
+            : null;
+          const focusTarget = exactAction || administrationSummary || routeHeadingRef.current;
+          if (!focusTarget) return;
+          focusTarget.focus({ preventScroll: true });
+          focusTarget.scrollIntoView({ block: "start", inline: "nearest" });
+          if (administrationArrival && document.activeElement === focusTarget) {
+            onArrivalResolution?.({ status: "resolved", quoteId: focusQuoteId });
+          }
+          focusedHandoffIdRef.current = focusKey;
+        });
       });
-      return () => window.cancelAnimationFrame(frame);
+      return () => {
+        window.cancelAnimationFrame(frame);
+        if (destinationFrame !== null) window.cancelAnimationFrame(destinationFrame);
+      };
     }
     if (normalizedAction === "conversation") {
       const focusedConversation = resolveFocusedConversationQuote({
@@ -1471,6 +1490,7 @@ export function QuoteHistoryView({
     open,
     focusQuoteId,
     focusAction,
+    focusDestinationAction,
     state.loading,
     state.readComplete,
     state.quotes,

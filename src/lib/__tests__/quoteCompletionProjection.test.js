@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest";
 import { buildQuoteCompletionProjection } from "../quoteCompletionProjection";
+import { buildRoleSafeQuoteActionController } from "../quoteHistoryController";
 
 function readiness(overrides = {}) {
   return {
@@ -32,6 +33,44 @@ function configuredActions(overrides = {}) {
     },
     ...overrides
   };
+}
+
+function governedQuote(status) {
+  return {
+    id: `quote-${status}`,
+    quoteNumber: `Q-${status}`,
+    status,
+    activeVersionId: "v0001",
+    latestVersionNumber: 1,
+    portalKey: "portal-key-abcdefghijklmnopqrstuvwxyz",
+    portalIssuedAtISO: "2099-08-03T12:00:00.000Z",
+    portalExpiresAtISO: "2099-09-03T12:00:00.000Z",
+    totals: { total: 1000, deposit: 250 },
+    customer: { name: "Avery", email: "avery@example.com" },
+    payment: {
+      depositStatus: "unpaid",
+      finalBalance: { amountCents: 75000, status: "unpaid" }
+    },
+    booking: { confirmationStatus: "pending" },
+    workflow: {
+      approvalRequests: [],
+      quoteDelivery: {
+        revisionId: "v0001@2099-08-03T12:00:00.000Z",
+        state: "provider_accepted",
+        portalActivationState: "active",
+        providerMessageId: "provider-message-1",
+        providerAcceptedAtISO: "2099-08-03T12:01:00.000Z"
+      }
+    }
+  };
+}
+
+function governedActions(quote) {
+  return buildRoleSafeQuoteActionController({
+    quote,
+    currentUserRole: "admin",
+    source: "firebase"
+  }).actionState;
 }
 
 describe("quote-completion-contract-v1", () => {
@@ -208,6 +247,39 @@ describe("quote-completion-contract-v1", () => {
     });
   });
 
+  test.each(["sent", "viewed"])(
+    "keeps dirty editable %s revisions on blocker and save actions before lifecycle continuation",
+    (status) => {
+      const quote = governedQuote(status);
+      const configured = governedActions(quote);
+      expect(configured.state.providerAccepted).toBe(true);
+      expect(configured.primaryAction?.id).toBe("open_conversation");
+
+      const blocked = buildQuoteCompletionProjection({
+        quote,
+        readiness: readiness(),
+        saveBlockers: [{ id: "client-name", message: "Add the client name." }],
+        configuredActions: configured,
+        draftDirty: true
+      });
+      const needsSave = buildQuoteCompletionProjection({
+        quote,
+        readiness: readiness(),
+        configuredActions: configured,
+        draftDirty: true
+      });
+
+      expect(blocked.state).toBe("blocked");
+      expect(blocked.nextAction).toMatchObject({ id: "resolve:client-name", kind: "resolve_field" });
+      expect(needsSave.state).toBe("review_required");
+      expect(needsSave.nextAction).toMatchObject({
+        id: "save_exact_revision",
+        kind: "save_revision"
+      });
+      expect(needsSave.nextAction.id).not.toBe("open_conversation");
+    }
+  );
+
   test("keeps accepted authority terminal while exposing one configured continuation", () => {
     const projection = buildQuoteCompletionProjection({
       quote: { id: "quote-1", activeVersionId: "v0004", status: "accepted" },
@@ -246,6 +318,33 @@ describe("quote-completion-contract-v1", () => {
       kind: "review_proposal",
       destination: { surfaceId: "quote-administration", actionId: "review_acceptance" }
     });
+  });
+
+  test("keeps a dirty accepted record immutable with its real governed continuation", () => {
+    const quote = {
+      ...governedQuote("accepted"),
+      workflow: {
+        ...governedQuote("accepted").workflow,
+        approvalRequests: [{
+          id: "convert-contract-approval",
+          action: "convert_to_contract",
+          state: "approved",
+          executionState: "awaiting_execution"
+        }]
+      }
+    };
+    const projection = buildQuoteCompletionProjection({
+      quote,
+      readiness: readiness({ complete: false, gaps: [{ id: "customer-name", label: "Customer name" }] }),
+      saveBlockers: [{ id: "client-name", message: "Add the client name." }],
+      configuredActions: governedActions(quote),
+      draftDirty: true
+    });
+
+    expect(projection.state).toBe("accepted");
+    expect(projection.nextAction).toMatchObject({ id: "convert_contract", kind: "configured_action" });
+    expect(projection.nextAction.kind).not.toBe("save_revision");
+    expect(projection.nextAction.kind).not.toBe("resolve_field");
   });
 
   test.each(["loading", "success", "failure", "stale", "recovery"])(

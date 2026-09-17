@@ -506,6 +506,7 @@ export default function ProposalComposer({
   onTemplateChange,
   onEventTypeChange,
   onSaveQuote,
+  onQuoteCompletionSave = null,
   onOpenCompare,
   onGuidedMode,
   reviewSurfaces = null,
@@ -657,7 +658,8 @@ export default function ProposalComposer({
     setActivityLog((current) => [entry, ...current].slice(0, ACTIVITY_LOG_LIMIT));
   };
 
-  const requestSave = () => {
+  const requestSave = (options = {}) => {
+    const commandRunner = options?.command === true;
     setPulseOpen(true);
     if (saveAction.mode === "review") {
       pendingSaveReviewFocusRef.current = true;
@@ -667,14 +669,21 @@ export default function ProposalComposer({
         recovery: { label: "Review save requirements" }
       };
     }
-    if (typeof onSaveQuote !== "function") {
+    const saveHandler = commandRunner && typeof onQuoteCompletionSave === "function"
+      ? onQuoteCompletionSave
+      : onSaveQuote;
+    if (typeof saveHandler !== "function") {
       return {
         state: "recovery",
         message: "The governed save action is not available here.",
         recovery: { label: "Review save requirements" }
       };
     }
-    return onSaveQuote();
+    const result = saveHandler();
+    if (!commandRunner && result && typeof result.catch === "function") {
+      result.catch(() => {});
+    }
+    return result;
   };
 
   useEffect(() => {
@@ -849,7 +858,7 @@ export default function ProposalComposer({
       return { state: "recovery", message: action.reason };
     }
     if (action?.kind === "save_revision") {
-      const result = await requestSave();
+      const result = await requestSave({ command: true });
       if (!result || ["failure", "failed", "recovery", "stale", "cancelled"].includes(
         String(result?.state || result?.status || "").trim().toLowerCase()
       )) {

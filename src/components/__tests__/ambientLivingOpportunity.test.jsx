@@ -8,6 +8,7 @@ vi.mock("../QuoteAttendancePanel", () => ({ default: function AttendancePanel(pr
 } }));
 import AmbientLivingOpportunity from "../AmbientLivingOpportunity";
 import { AmbientContextProvider } from "../../context/AmbientContext";
+import { scheduleQuoteCompletionDestinationFocus } from "../../lib/quoteCompletionDestination";
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -873,7 +874,16 @@ describe("AmbientLivingOpportunity", () => {
   });
 
   test("routes the quote-completion proposal gap through the existing exact editor handoff", async () => {
-    const onEditQuote = vi.fn(() => ({ status: "opened" }));
+    const exactField = document.createElement("button");
+    exactField.type = "button";
+    exactField.dataset.ambientActionId = "pc-edit-hours";
+    document.body.append(exactField);
+    const onEditQuote = vi.fn((_quote, options) => {
+      scheduleQuoteCompletionDestinationFocus(options.quoteCompletionDestination, {
+        root: document
+      });
+      return { status: "opened" };
+    });
     mount({
       onEditQuote,
       quoteCompletionCommandPathEnabled: true,
@@ -915,10 +925,19 @@ describe("AmbientLivingOpportunity", () => {
         consequence: expect.stringContaining("Nothing is repriced, saved, published, sent, rotated, or recovered"),
         nextResolution: expect.stringContaining("Save only through the existing authoritative quote workflow")
       },
-      draftPatch: null
+      draftPatch: null,
+      quoteCompletionDestination: {
+        surfaceId: "proposal-composer",
+        step: 1,
+        selector: '[data-ambient-action-id="pc-edit-hours"]',
+        activate: true
+      }
     });
     expect(onEditQuote.mock.calls[0][1].arrivalContext).not.toHaveProperty("kind");
+    await settle();
+    expect(document.activeElement).toBe(exactField);
     expect(command.dataset.commandState).toBe("success");
+    exactField.remove();
   });
 
   test("routes a sendable quote-completion action through the exact governed proposal-controls handoff", async () => {
@@ -989,7 +1008,12 @@ describe("AmbientLivingOpportunity", () => {
       object: { id: "proposal", type: "customer-decision-artifact", label: "Proposal" },
       reason: expect.stringContaining("Prepare proposal, Send proposal, Replace customer link, or Review delivery"),
       consequence: expect.stringContaining("independently recheck role, exact revision"),
-      nextResolution: expect.stringContaining("Choose Prepare, Send, Replace customer link, or Review delivery")
+      nextResolution: expect.stringContaining("Choose Prepare, Send, Replace customer link, or Review delivery"),
+      quoteCompletionDestination: {
+        surfaceId: "quote-administration",
+        actionId: "send_quote",
+        quoteId: quote.id
+      }
     });
     expect(command.dataset.commandState).toBe("success");
   });

@@ -659,6 +659,7 @@ export function StepEvent({
           <Field label="Event name" error={getError("eventName")} required>
             <input
               type="text"
+              data-ambient-field="eventName"
               value={form.eventName}
               onChange={(e) => updateField("eventName", e.target.value)}
               onBlur={() => markBlur("eventName")}
@@ -706,6 +707,7 @@ export function StepEvent({
           <Field label="Your name" error={getError("name")} required>
             <input
               type="text"
+              data-ambient-field="name"
               value={form.name}
               onChange={(e) => updateField("name", e.target.value)}
               onBlur={() => markBlur("name")}
@@ -731,6 +733,7 @@ export function StepEvent({
           <Field label="Email" error={getError("email")} required>
             <input
               type="email"
+              data-ambient-field="email"
               value={form.email}
               onChange={(e) => updateField("email", e.target.value)}
               onBlur={() => markBlur("email")}
