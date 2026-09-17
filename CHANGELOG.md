@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-09-17 02:53:24 CDT
+Last updated: 2026-09-17 03:12:06 CDT
 
 All notable project changes are documented in this file.
 
@@ -21,8 +21,8 @@ All notable project changes are documented in this file.
   derivable, partial, or not yet observable; proposed targets remain pending
   owner acceptance and no new runtime telemetry or outcome claim is implied.
 - Repair the connected Firebase authentication and tenant-isolation browser
-  acceptance suite to use the current **New quote** work-area control,
-  **Workspace & tools** identity surface, and routed Quote/Conversation
+  acceptance suite to use the unambiguous header **New quote** control, the
+  quote-builder **Account** identity surface, and the routed Quote/Conversation
   workspaces after the Calm Four shell migration.
 - Extend the exact-tenant `ragnakok-realistic-v1` population operation with a
   revision-fenced, idempotent margin-cost seed. It copies only complete,
