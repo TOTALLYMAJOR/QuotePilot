@@ -1,10 +1,10 @@
 // @vitest-environment jsdom
-import React, { act } from "react";
+import React, { act, useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import ProposalComposer from "../ProposalComposer";
-import { StepReview } from "../WizardSteps";
+import ProposalComposer, { QuoteEditorModeSurface } from "../ProposalComposer";
+import { StepMenu, StepReview, StepServices } from "../WizardSteps";
 import { buildAmbientLivingOpportunityPresentation } from "../ambientLivingOpportunityPresentation";
 import {
   resolveQuoteWizardCompletionDestination,
@@ -78,6 +78,31 @@ const readiness = {
   status: { id: "ready", label: "Ready to send" }
 };
 
+const catalog = {
+  packages: [
+    { id: "standard", name: "Standard", ppp: 40, active: true },
+    { id: "premium", name: "Premium", ppp: 55, active: true }
+  ],
+  addons: [],
+  rentals: [],
+  settings
+};
+
+const composerMenuDestination = Object.freeze({
+  surfaceId: "proposal-composer",
+  step: 3,
+  selector: '[data-testid="pc-edit-menu"]',
+  focusSelector: "#pc-menu-search",
+  activate: true
+});
+
+const composerExperienceDestination = Object.freeze({
+  surfaceId: "proposal-composer",
+  step: 2,
+  selector: '[data-testid="pc-edit-experience"]',
+  activate: true
+});
+
 function composerProps(overrides = {}) {
   return {
     form,
@@ -100,6 +125,70 @@ function composerProps(overrides = {}) {
     onGuidedMode: vi.fn(),
     ...overrides
   };
+}
+
+function ActualConditionalEditorSurface({ mode, destination }) {
+  const [step, setStep] = useState(4);
+  const [editorForm, setEditorForm] = useState(form);
+  const editorRoot = useRef(null);
+
+  useEffect(() => {
+    scheduleQuoteCompletionDestinationFocus(destination, {
+      editorMode: mode,
+      root: editorRoot,
+      setStep
+    });
+  }, [destination, mode]);
+
+  return (
+    <main ref={editorRoot} data-testid={`${mode}-editor-surface`}>
+      <QuoteEditorModeSurface
+        composerActive={mode === "composer"}
+        composerSurface={<ProposalComposer {...composerProps({ form: editorForm })} />}
+      >
+        {step === 2 ? (
+          <StepMenu
+            form={editorForm}
+            setForm={setEditorForm}
+            menuSections={settings.menuSections}
+            catalog={catalog}
+            pricingSettings={settings}
+            totals={totals}
+            eventTypeLabel="Wedding"
+            onSelectionTouched={vi.fn()}
+          />
+        ) : step === 3 ? (
+          <StepServices
+            form={editorForm}
+            setForm={setEditorForm}
+            catalog={catalog}
+            recommendations={[]}
+            guidedSellingEnabled={false}
+            aiAssistEnabled={false}
+            onSelectionTouched={vi.fn()}
+            totals={totals}
+            pricingSettings={settings}
+          />
+        ) : (
+          <StepReview form={editorForm} totals={totals} settings={settings} readiness={readiness} />
+        )}
+      </QuoteEditorModeSurface>
+    </main>
+  );
+}
+
+function installFrameQueue() {
+  const frames = [];
+  window.requestAnimationFrame = (callback) => {
+    frames.push(callback);
+    return frames.length;
+  };
+  return frames;
+}
+
+async function flushNextFrame(frames) {
+  const pending = frames.splice(0);
+  await act(async () => pending.forEach((callback) => callback(performance.now())));
 }
 
 let container;
@@ -280,55 +369,59 @@ describe("quote completion surface integrations", () => {
     expect(enabled).toContain("Compatibility details");
   });
 
-  test("review-step handoff opens and focuses the exact destination field", async () => {
-    const setStep = vi.fn();
-    const onQuoteCompletionAction = vi.fn((action) => {
-      scheduleQuoteCompletionDestinationFocus(
-        resolveQuoteWizardCompletionDestination(action.destination), {
-          root: document,
-          setStep
-        }
-      );
-      return { state: "success", message: "Opened exact field." };
+  test("guided editor receives the menu destination at its actual step and focuses its search", async () => {
+    const frames = installFrameQueue();
+    expect(resolveQuoteWizardCompletionDestination(composerMenuDestination)).toMatchObject({
+      surfaceId: "quote-wizard",
+      step: 2,
+      selector: '[data-ambient-field="menuItems"]'
     });
+
     await act(async () => root.render(
-      <>
-        <StepReview
-          form={form}
-          totals={totals}
-          settings={settings}
-          readiness={readiness}
-          quoteCompletionCommandPathEnabled
-          quoteCompletionSaveBlockers={[{
-            id: "client-name",
-            message: "Add the client name.",
-            destination: {
-              surfaceId: "proposal-composer",
-              step: 1,
-              selector: '[data-ambient-action-id="pc-edit-client-name"]',
-              activate: true
-            }
-          }]}
-          onQuoteCompletionAction={onQuoteCompletionAction}
-        />
-        <input data-ambient-field="name" aria-label="Exact client name" />
-      </>
+      <ActualConditionalEditorSurface mode="guided" destination={composerMenuDestination} />
     ));
+    await flushNextFrame(frames);
+    await flushNextFrame(frames);
 
-    await act(async () => {
-      container.querySelector('[data-capability-id="quote-completion-command-path"] button').click();
-      await new Promise((resolve) => window.setTimeout(resolve, 10));
+    const menuSearch = container.querySelector('[data-ambient-field="menuItems"] input[type="search"]');
+    expect(menuSearch).not.toBeNull();
+    expect(container.querySelector('[data-ambient-field="pkg"]')).toBeNull();
+    expect(document.activeElement).toBe(menuSearch);
+  });
+
+  test("guided editor receives the package destination at its actual services step", async () => {
+    const frames = installFrameQueue();
+    expect(resolveQuoteWizardCompletionDestination(composerExperienceDestination)).toMatchObject({
+      surfaceId: "quote-wizard",
+      step: 3,
+      selector: '[data-ambient-field="pkg"]'
     });
 
-    expect(onQuoteCompletionAction).toHaveBeenCalledWith(expect.objectContaining({
-      destination: expect.objectContaining({
-        surfaceId: "proposal-composer",
-        step: 1,
-        selector: '[data-ambient-action-id="pc-edit-client-name"]'
-      })
-    }));
-    expect(setStep).toHaveBeenCalledWith(1);
-    expect(document.activeElement).toBe(container.querySelector('[data-ambient-field="name"]'));
+    await act(async () => root.render(
+      <ActualConditionalEditorSurface mode="guided" destination={composerExperienceDestination} />
+    ));
+    await flushNextFrame(frames);
+    await flushNextFrame(frames);
+
+    const packageSelect = container.querySelector('[data-ambient-field="pkg"]');
+    expect(packageSelect).not.toBeNull();
+    expect(container.querySelector('[data-ambient-field="menuItems"]')).toBeNull();
+    expect(document.activeElement).toBe(packageSelect);
+  });
+
+  test("Composer editor preserves and focuses its own destination without wizard translation", async () => {
+    const frames = installFrameQueue();
+    await act(async () => root.render(
+      <ActualConditionalEditorSurface mode="composer" destination={composerMenuDestination} />
+    ));
+    await flushNextFrame(frames);
+    await flushNextFrame(frames);
+
+    const composerSearch = container.querySelector("#pc-menu-search");
+    expect(container.querySelector('[data-testid="pc-edit-menu"]')).not.toBeNull();
+    expect(container.querySelector('[data-ambient-field="menuItems"]')).toBeNull();
+    expect(composerSearch).not.toBeNull();
+    expect(document.activeElement).toBe(composerSearch);
   });
 
   test("Ambient presentation composes configured actions only behind the gate", () => {

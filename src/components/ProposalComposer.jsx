@@ -43,6 +43,11 @@ const PILOT_MARGINS_ENABLED = ["1", "true", "yes", "on"].includes(
 );
 
 const FLASH_CLEAR_MS = 620;
+
+export function QuoteEditorModeSurface({ composerActive = false, composerSurface = null, children }) {
+  return composerActive ? composerSurface : children;
+}
+
 const ACTIVITY_LOG_LIMIT = 30;
 
 const SAVE_BLOCKER_RECOVERY_TARGETS = Object.freeze({

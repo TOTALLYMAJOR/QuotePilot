@@ -13,7 +13,10 @@ import AuthGate from "./components/AuthGate";
 import CustomerPortalView from "quotepilot-active-customer-portal";
 import { RebookQuoteReviewBanner } from "./components/CustomerRebookDraftAction";
 import LiveBreakdown from "./components/LiveBreakdown";
-import ProposalComposer, { buildDraftSaveBlockers } from "./components/ProposalComposer";
+import ProposalComposer, {
+  buildDraftSaveBlockers,
+  QuoteEditorModeSurface
+} from "./components/ProposalComposer";
 import CatalogReadNotice from "./components/CatalogReadNotice";
 import ProductBrandLockup from "./components/ProductBrandLockup";
 import {
@@ -3306,13 +3309,6 @@ function LegacyAppCore({
     setAvailabilityBlock(null);
     setAvailabilityNotice("");
     setHistoryTarget({ quoteId: "", reason: "" });
-    const wizardQuoteCompletionDestination = resolveQuoteWizardCompletionDestination(
-      quoteCompletionDestination
-    );
-    const quoteCompletionStep = Number(wizardQuoteCompletionDestination?.step);
-    setStep(Number.isInteger(quoteCompletionStep) && quoteCompletionStep >= 1 && quoteCompletionStep <= 5
-      ? quoteCompletionStep
-      : 1);
     if (navigateToRoute) navigateWorkspace(buildQuoteEditPath(quote.id));
     beginWizardAnalyticsSession({
       organizationId: authSession.organizationId,
@@ -3327,9 +3323,12 @@ function LegacyAppCore({
         : `Editing ${quote.quoteNumber || quote.id}. Save will update this quote and keep a version snapshot.`
     });
     wizardRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-    scheduleQuoteCompletionDestinationFocus(wizardQuoteCompletionDestination, {
-      root: wizardRef
+    const quoteCompletionFocus = scheduleQuoteCompletionDestinationFocus(quoteCompletionDestination, {
+      editorMode: proposalComposerActive ? "composer" : "guided",
+      root: wizardRef,
+      setStep: proposalComposerActive ? null : setStep
     });
+    if (!proposalComposerActive && quoteCompletionFocus.step === null) setStep(1);
     window.requestAnimationFrame(() => wizardRef.current?.focus({ preventScroll: true }));
   };
 
@@ -4892,8 +4891,10 @@ function LegacyAppCore({
           />
         )}
         {catalogReadNotice}
-        {proposalComposerSurface}
-        {!proposalComposerActive && (
+        <QuoteEditorModeSurface
+          composerActive={proposalComposerActive}
+          composerSurface={proposalComposerSurface}
+        >
         <>
         <section className="panel wizard-panel">
           {draftReviewSurfaces}
@@ -5154,7 +5155,7 @@ function LegacyAppCore({
           guestBand={guestBand}
         />
         </>
-        )}
+        </QuoteEditorModeSurface>
       </main>
       )}
 

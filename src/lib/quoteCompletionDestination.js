@@ -31,11 +31,11 @@ const WIZARD_DESTINATIONS = Object.freeze({
     surfaceId: "quote-wizard", step: 1, selector: '[data-ambient-field="hours"]', activate: false
   }),
   '[data-testid="pc-edit-experience"]': Object.freeze({
-    surfaceId: "quote-wizard", step: 2, selector: '[data-ambient-field="pkg"]', activate: false
+    surfaceId: "quote-wizard", step: 3, selector: '[data-ambient-field="pkg"]', activate: false
   }),
   '[data-testid="pc-edit-menu"]': Object.freeze({
     surfaceId: "quote-wizard",
-    step: 3,
+    step: 2,
     selector: '[data-ambient-field="menuItems"]',
     focusSelector: '[data-ambient-field="menuItems"] input[type="search"]',
     activate: false
@@ -71,13 +71,20 @@ function frameScheduler(requestFrame) {
 }
 
 export function scheduleQuoteCompletionDestinationFocus(destination, {
+  editorMode = "",
   root = null,
   setStep = null,
   requestFrame = null
 } = {}) {
-  const selector = text(destination?.selector);
-  const focusSelector = text(destination?.focusSelector);
-  const step = Number(destination?.step);
+  const destinationSnapshot = destination && typeof destination === "object"
+    ? { ...destination }
+    : destination;
+  const resolvedDestination = editorMode === "guided"
+    ? resolveQuoteWizardCompletionDestination(destinationSnapshot)
+    : destinationSnapshot;
+  const selector = text(resolvedDestination?.selector);
+  const focusSelector = text(resolvedDestination?.focusSelector);
+  const step = editorMode === "composer" ? Number.NaN : Number(resolvedDestination?.step);
   const boundedStep = Number.isInteger(step) && step >= 1 && step <= 5 ? step : null;
   if (boundedStep !== null && typeof setStep === "function") setStep(boundedStep);
 
@@ -89,7 +96,7 @@ export function scheduleQuoteCompletionDestinationFocus(destination, {
   schedule(() => {
     const firstRoot = resolveRoot(root);
     const activationTarget = query(firstRoot, selector);
-    if (destination?.activate === true && activationTarget && !activationTarget.disabled) {
+    if (resolvedDestination?.activate === true && activationTarget && !activationTarget.disabled) {
       activationTarget.click?.();
     }
     schedule(() => {

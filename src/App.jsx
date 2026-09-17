@@ -3,7 +3,10 @@ import "./ambientSurfaceGrammar.css";
 import AuthGate from "./components/AuthGate";
 import { RebookQuoteReviewBanner } from "./components/CustomerRebookDraftAction";
 import LiveBreakdown from "./components/LiveBreakdown";
-import ProposalComposer, { buildDraftSaveBlockers } from "./components/ProposalComposer";
+import ProposalComposer, {
+  buildDraftSaveBlockers,
+  QuoteEditorModeSurface
+} from "./components/ProposalComposer";
 import CatalogReadNotice from "./components/CatalogReadNotice";
 import QuoteCatalogRevisionReviewPanel from "./components/QuoteCatalogRevisionReviewPanel";
 import { buildMarginPresentation } from "./components/marginPresentation";
@@ -5765,13 +5768,6 @@ export default function App({
     setAvailabilityBlock(null);
     setAvailabilityNotice("");
     setHistoryTarget({ quoteId: "", reason: "" });
-    const wizardQuoteCompletionDestination = resolveQuoteWizardCompletionDestination(
-      quoteCompletionDestination
-    );
-    const quoteCompletionStep = Number(wizardQuoteCompletionDestination?.step);
-    setStep(Number.isInteger(quoteCompletionStep) && quoteCompletionStep >= 1 && quoteCompletionStep <= 5
-      ? quoteCompletionStep
-      : 1);
     if (navigateToRoute) navigateWorkspace(buildQuoteEditPath(quote.id));
     beginWizardAnalyticsSession({
       organizationId: authSession.organizationId,
@@ -5791,9 +5787,12 @@ export default function App({
     });
     const ambientFocusField = draftRuntime.ambientDraftIntent?.focusField || "";
     wizardRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-    scheduleQuoteCompletionDestinationFocus(wizardQuoteCompletionDestination, {
-      root: wizardRef
+    const quoteCompletionFocus = scheduleQuoteCompletionDestinationFocus(quoteCompletionDestination, {
+      editorMode: proposalComposerActive ? "composer" : "guided",
+      root: wizardRef,
+      setStep: proposalComposerActive ? null : setStep
     });
+    if (!proposalComposerActive && quoteCompletionFocus.step === null) setStep(1);
     window.requestAnimationFrame(() => {
       const exactField = ambientFocusField
         ? wizardRef.current?.querySelector(`[data-ambient-field="${ambientFocusField}"]`)
@@ -7741,8 +7740,10 @@ export default function App({
           />
         )}
         {catalogReadNotice}
-        {proposalComposerSurface}
-        {!proposalComposerActive && (
+        <QuoteEditorModeSurface
+          composerActive={proposalComposerActive}
+          composerSurface={proposalComposerSurface}
+        >
         <>
         <section className="panel wizard-panel">
           {draftReviewSurfaces}
@@ -7996,7 +7997,7 @@ export default function App({
           guestBand={guestBand}
         />
         </>
-        )}
+        </QuoteEditorModeSurface>
       </main>
       )}
 
