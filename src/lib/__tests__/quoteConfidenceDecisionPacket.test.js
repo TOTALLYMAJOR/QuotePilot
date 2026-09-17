@@ -260,6 +260,44 @@ describe("decision packet projection", () => {
     expect(packet.internalHandoff.action).toBeNull();
   });
 
+  test.each(["declined", "changes_requested"])(
+    "treats a %s portal decision with an acceptance receipt as contradictory",
+    (decision) => {
+      const packet = buildDecisionPacketProjection({
+        quote: {
+          ...acceptedQuote,
+          portalDecision: { ...acceptedQuote.portalDecision, decision }
+        },
+        source: "firebase"
+      });
+
+      expect(packet.state).toBe("blocked");
+      expect(packet.acceptance).toMatchObject({
+        evidenceState: "contradictory",
+        acceptedRevisionId: null
+      });
+      expect(packet.internalHandoff.action).toBeNull();
+    }
+  );
+
+  test("withholds acceptance and handoff when the portal decision is absent", () => {
+    const packet = buildDecisionPacketProjection({
+      quote: {
+        ...acceptedQuote,
+        portalDecision: { requestId: "acceptance-17" }
+      },
+      source: "firebase"
+    });
+
+    expect(packet.state).toBe("blocked");
+    expect(packet.portalDecision.evidenceState).toBe("missing");
+    expect(packet.acceptance).toMatchObject({
+      evidenceState: "missing",
+      acceptedRevisionId: null
+    });
+    expect(packet.internalHandoff.action).toBeNull();
+  });
+
   test("fails closed when the acceptance receipt points at a different portal issuance", () => {
     const packet = buildDecisionPacketProjection({
       quote: {

@@ -14,6 +14,7 @@ import { sanitizeStripePaymentLink } from "../lib/paymentLink";
 import { buildQuoteEmailPayload } from "../lib/proposalPayload";
 import { buildDefaultEmailAppHandoff } from "../lib/defaultEmailApp";
 import { getApprovalRequestExecutionEligibility } from "../lib/quoteWorkflow";
+import { buildDecisionPacketProjection } from "../lib/quoteConfidenceDecisionPacket";
 import { getRebookDeliveryGate } from "../lib/rebookQuoteClient";
 import { portalConversationAvailable } from "../lib/portalConversationClient";
 import {
@@ -557,6 +558,58 @@ export function isExactQuoteAdministrationArrival({ arrivalContext, focusQuoteId
     && String(arrivalContext?.focus?.quoteId || "").trim() === exactQuoteId
     && arrivalContext?.intentId === expectedIntent
   );
+}
+
+export function resolveAcceptedRevisionAdministrationArrival({
+  arrivalContext,
+  quote,
+  source
+} = {}) {
+  const acceptedRevisionId = String(arrivalContext?.focus?.acceptedRevisionId || "").trim();
+  const acceptanceReceiptId = String(arrivalContext?.focus?.acceptanceReceiptId || "").trim();
+  const applies = Boolean(acceptedRevisionId || acceptanceReceiptId);
+  if (!applies) return { applies: false, status: "not_applicable" };
+  if (!acceptedRevisionId || !acceptanceReceiptId) {
+    return {
+      applies: true,
+      status: "recovery",
+      reason: "The accepted-revision destination is missing its exact revision or receipt identity."
+    };
+  }
+  if (!quote) return { applies: true, status: "pending" };
+
+  const currentRevisionId = String(
+    quote.activeVersionId || quote.versionMeta?.versionId || ""
+  ).trim();
+  if (currentRevisionId !== acceptedRevisionId) {
+    return {
+      applies: true,
+      status: "recovery",
+      reason: "The accepted revision changed before this destination could be opened."
+    };
+  }
+  const currentReceiptId = String(quote.acceptanceReceipt?.receiptId || "").trim();
+  if (currentReceiptId !== acceptanceReceiptId) {
+    return {
+      applies: true,
+      status: "recovery",
+      reason: "The acceptance receipt no longer matches this destination."
+    };
+  }
+
+  const packet = buildDecisionPacketProjection({ quote, source });
+  if (
+    packet.internalHandoff?.action !== "open_existing_accepted_revision"
+    || packet.internalHandoff.acceptedRevisionId !== acceptedRevisionId
+    || packet.internalHandoff.acceptanceReceiptId !== acceptanceReceiptId
+  ) {
+    return {
+      applies: true,
+      status: "recovery",
+      reason: "The accepted decision evidence is no longer exact for this destination."
+    };
+  }
+  return { applies: true, status: "ready" };
 }
 
 const fmtDate = formatQuoteHistoryDate;
@@ -1390,7 +1443,16 @@ export function QuoteHistoryView({
     const returnFocusOwnsEntry = ["restoring", "restored"].includes(returnStatus?.state)
       && returnStatus?.entryId === workspaceNavigation?.location?.historyEntry?.entryId;
     if (returnFocusOwnsEntry) return;
-    const focusKey = `${focusQuoteId}:${String(focusAction || "").trim()}:${String(focusDestinationAction || "").trim()}`;
+    const focusEvidenceQuote = state.quotes.find((quote) => quote.id === focusQuoteId);
+    const focusKey = [
+      focusQuoteId,
+      String(focusAction || "").trim(),
+      String(focusDestinationAction || "").trim(),
+      String(arrivalContext?.focus?.acceptedRevisionId || "").trim(),
+      String(arrivalContext?.focus?.acceptanceReceiptId || "").trim(),
+      String(focusEvidenceQuote?.activeVersionId || focusEvidenceQuote?.versionMeta?.versionId || "").trim(),
+      String(focusEvidenceQuote?.acceptanceReceipt?.receiptId || "").trim()
+    ].join(":");
     if (focusedHandoffIdRef.current === focusKey) return;
     const normalizedAction = String(focusAction || "").trim();
     const administrationArrival = normalizedAction === "administration"
@@ -1421,6 +1483,25 @@ export function QuoteHistoryView({
     }
     const targetQuote = state.quotes.find((quote) => quote.id === focusQuoteId);
     if (!targetQuote) return;
+    const acceptedRevisionArrival = resolveAcceptedRevisionAdministrationArrival({
+      arrivalContext,
+      quote: targetQuote,
+      source: state.source
+    });
+    if (
+      administrationArrival
+      && acceptedRevisionArrival.applies
+      && acceptedRevisionArrival.status !== "ready"
+    ) {
+      focusedHandoffIdRef.current = focusKey;
+      onArrivalResolution?.({
+        status: "recovery",
+        reason: acceptedRevisionArrival.reason,
+        consequence: "Generic quote administration was withheld and no record changed.",
+        nextResolution: "Return to the decision packet, refresh the accepted evidence, and reopen the exact handoff."
+      });
+      return;
+    }
     if (normalizedAction === "administration") {
       let destinationFrame = null;
       const frame = window.requestAnimationFrame(() => {
@@ -1496,6 +1577,7 @@ export function QuoteHistoryView({
     state.loading,
     state.readComplete,
     state.quotes,
+    state.source,
     conversationQuote,
     arrivalContext,
     onArrivalResolution,
@@ -1807,6 +1889,18 @@ export function QuoteHistoryView({
     source: state.source
   });
   const focusedQuote = quoteHistoryController.eventRoom.quote;
+  const acceptedRevisionArrival = resolveAcceptedRevisionAdministrationArrival({
+    arrivalContext,
+    quote: focusedQuote,
+    source: state.source
+  });
+  const acceptedRevisionArrivalRecovery = administrationFocusActive
+    && acceptedRevisionArrival.applies
+    && state.readComplete
+    && acceptedRevisionArrival.status !== "ready";
+  const acceptedRevisionArrivalPending = administrationFocusActive
+    && acceptedRevisionArrival.applies
+    && !state.readComplete;
   const focusedDecisionDebtSnapshot = state.source === "firebase"
     && focusedQuote
     && focusedDecisionDebtRead?.organizationId === String(organizationId || "").trim()
@@ -3362,6 +3456,30 @@ export function QuoteHistoryView({
             />
           </Suspense>
         )}
+        {acceptedRevisionArrivalRecovery ? (
+          <section
+            className="warning-note"
+            data-accepted-revision-arrival="recovery"
+            role="alert"
+          >
+            <h3>Accepted revision handoff needs refresh</h3>
+            <p>{acceptedRevisionArrival.reason
+              || "The exact accepted quote is not present in the completed Quote history read."}</p>
+            <p>Generic quote administration was withheld and no quote, proposal, or receipt changed.</p>
+            <button type="button" className="ghost" onClick={onBackToQuotes}>
+              Return to Quotes
+            </button>
+          </section>
+        ) : acceptedRevisionArrivalPending ? (
+          <section
+            className="source-note"
+            data-accepted-revision-arrival="pending"
+            role="status"
+            aria-live="polite"
+          >
+            Validating the exact accepted revision and receipt before opening quote administration.
+          </section>
+        ) : (
         <QuoteAdministrationBoundary
           ambient={AMBIENT_UI_ENABLED}
           initiallyOpen={administrationFocusActive}
@@ -4283,6 +4401,7 @@ export function QuoteHistoryView({
           </>
           )}
         </QuoteAdministrationBoundary>
+        )}
 
         {pendingDeleteQuote && (
           <div className="confirm-modal">

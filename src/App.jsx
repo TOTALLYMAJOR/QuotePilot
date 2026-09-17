@@ -875,10 +875,13 @@ function ambientOpportunityArrivalInput(target = {}) {
   };
 }
 
-function ambientQuoteAdministrationArrivalInput(quoteId, context = {}) {
+export function ambientQuoteAdministrationArrivalInput(quoteId, context = {}) {
   const normalizedQuoteId = String(quoteId || "").trim();
   const sourceObjectType = String(context?.object?.type || "").trim();
-  const proposal = sourceObjectType === "customer-decision-artifact";
+  const acceptedRevisionId = String(context?.acceptedRevisionId || "").trim();
+  const acceptanceReceiptId = String(context?.acceptanceReceiptId || "").trim();
+  const acceptedRevisionHandoff = Boolean(acceptedRevisionId || acceptanceReceiptId);
+  const proposal = sourceObjectType === "customer-decision-artifact" || acceptedRevisionHandoff;
   const payment = sourceObjectType === "commercial-evidence";
   return {
     destination: "administration",
@@ -890,7 +893,10 @@ function ambientQuoteAdministrationArrivalInput(quoteId, context = {}) {
           ? "payment-evidence"
           : "opportunity"
     },
-    focus: { quoteId: normalizedQuoteId },
+    focus: {
+      quoteId: normalizedQuoteId,
+      ...(acceptedRevisionHandoff ? { acceptedRevisionId, acceptanceReceiptId } : {})
+    },
     intentId: proposal
       ? "review_proposal_controls"
       : payment

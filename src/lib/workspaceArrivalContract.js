@@ -551,9 +551,29 @@ function normalizeFocus(value, destination, intent) {
     const input = exactRecord(value, ["customerId"]);
     return { customerId: opaqueId(input.customerId) };
   }
-  if (destination === "opportunity" || destination === "administration") {
+  if (destination === "opportunity") {
     const input = exactRecord(value, ["quoteId"]);
     return { quoteId: opaqueId(input.quoteId) };
+  }
+  if (destination === "administration") {
+    const input = exactRecord(value, [
+      "quoteId",
+      "acceptedRevisionId",
+      "acceptanceReceiptId"
+    ]);
+    const quoteId = opaqueId(input.quoteId);
+    const hasAcceptedRevision = Object.prototype.hasOwnProperty.call(input, "acceptedRevisionId");
+    const hasAcceptanceReceipt = Object.prototype.hasOwnProperty.call(input, "acceptanceReceiptId");
+    if (hasAcceptedRevision !== hasAcceptanceReceipt) fail("unsupported_combination");
+    if (!hasAcceptedRevision) return { quoteId };
+    if (intent !== INTENTS.administration.review_proposal_controls) {
+      fail("unsupported_combination");
+    }
+    return {
+      quoteId,
+      acceptedRevisionId: opaqueId(input.acceptedRevisionId),
+      acceptanceReceiptId: opaqueId(input.acceptanceReceiptId)
+    };
   }
   if (destination === "workflow" || destination === "approval") {
     return normalizeWorkflowFocus(value, destination, intent);

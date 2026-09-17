@@ -458,6 +458,23 @@ function acceptanceEvidence(quote) {
         : "Acceptance has not been recorded for this proposal."
     };
   }
+  const portalDecision = text(quote?.portalDecision?.decision).toLowerCase();
+  if (!portalDecision) {
+    return {
+      evidenceState: "missing",
+      receiptId: text(receipt.receiptId) || null,
+      acceptedRevisionId: null,
+      reason: "An acceptance receipt exists without its accepted portal decision."
+    };
+  }
+  if (portalDecision !== "accepted") {
+    return {
+      evidenceState: "contradictory",
+      receiptId: text(receipt.receiptId) || null,
+      acceptedRevisionId: null,
+      reason: "The portal decision conflicts with the recorded acceptance receipt."
+    };
+  }
   const receiptId = text(receipt.receiptId);
   const receiptRevisionId = text(receipt.quoteRevisionId);
   const expectedRevisionId = text(quote?.activeVersionId || quote?.versionMeta?.versionId);

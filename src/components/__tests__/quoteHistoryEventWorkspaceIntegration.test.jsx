@@ -3,6 +3,11 @@ import React from "react";
 import { createRoot } from "react-dom/client";
 import { act } from "react-dom/test-utils";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { ambientQuoteAdministrationArrivalInput } from "../../App";
+import {
+  createWorkspaceArrivalHandoff,
+  parseWorkspaceArrivalHandoff
+} from "../../lib/workspaceArrivalContract";
 
 const mocks = vi.hoisted(() => ({
   deleteQuote: vi.fn(),
@@ -46,6 +51,48 @@ const QUOTE = Object.freeze({
   createdAtISO: "2026-08-09T12:00:00.000Z",
   updatedAtISO: "2026-08-09T12:00:00.000Z"
 });
+
+const ACCEPTED_QUOTE = Object.freeze({
+  ...QUOTE,
+  status: "accepted",
+  activeVersionId: "v0017",
+  portalKey: "portal-key",
+  portalIssuedAtISO: "2026-09-17T10:00:00.000Z",
+  portalDecision: Object.freeze({
+    decision: "accepted",
+    requestId: "acceptance-17",
+    submittedAtISO: "2026-09-17T10:30:00.000Z"
+  }),
+  acceptanceReceipt: Object.freeze({
+    receiptId: "acceptance-17",
+    quoteRevisionId: "v0017",
+    portalIssuedAtISO: "2026-09-17T10:00:00.000Z",
+    acceptedAtISO: "2026-09-17T10:30:00.000Z"
+  }),
+  payment: Object.freeze({
+    depositStatus: "paid",
+    finalBalance: Object.freeze({ status: "unpaid" })
+  })
+});
+
+function acceptedRevisionArrival() {
+  const handoff = createWorkspaceArrivalHandoff(
+    ambientQuoteAdministrationArrivalInput(ACCEPTED_QUOTE.id, {
+      acceptedRevisionId: "v0017",
+      acceptanceReceiptId: "acceptance-17"
+    })
+  );
+  const url = new URL(handoff.navigation?.path || "/app/quotes", "https://quotepilot.local");
+  return {
+    handoff,
+    parsed: parseWorkspaceArrivalHandoff({
+      pathname: url.pathname,
+      search: url.search,
+      hash: "",
+      state: handoff.navigation?.state
+    })
+  };
+}
 
 let container;
 let root;
@@ -92,6 +139,75 @@ afterEach(() => {
 });
 
 describe("QuoteHistoryView event workspace integration", () => {
+  test("carries the decision packet pins through the actual App arrival and resolves the exact accepted quote", async () => {
+    const { handoff, parsed } = acceptedRevisionArrival();
+    expect(handoff).toMatchObject({
+      ok: true,
+      contract: {
+        object: { type: "customer-decision-artifact" },
+        focus: {
+          quoteId: ACCEPTED_QUOTE.id,
+          acceptedRevisionId: "v0017",
+          acceptanceReceiptId: "acceptance-17"
+        }
+      }
+    });
+    expect(parsed).toEqual(handoff);
+
+    mocks.getQuoteHistory.mockResolvedValue({ source: "firebase", quotes: [ACCEPTED_QUOTE] });
+    act(() => {
+      root.render(
+        <QuoteHistoryView
+          open
+          presentation="embedded"
+          focusQuoteId={ACCEPTED_QUOTE.id}
+          focusAction="administration"
+          currentUserRole="sales"
+          arrivalContext={parsed.contract}
+          onClose={() => {}}
+        />
+      );
+    });
+    await settle();
+    await act(async () => new Promise((resolve) => window.setTimeout(resolve, 50)));
+
+    expect(container.querySelector('[data-accepted-revision-arrival="recovery"]')).toBeNull();
+    expect(container.querySelector(`tr[data-quote-id="${ACCEPTED_QUOTE.id}"]`)).not.toBeNull();
+  });
+
+  test.each([
+    ["revision changed", { activeVersionId: "v0018" }, "accepted revision changed"],
+    ["receipt mismatched", {
+      acceptanceReceipt: { ...ACCEPTED_QUOTE.acceptanceReceipt, receiptId: "acceptance-18" }
+    }, "acceptance receipt no longer matches"]
+  ])("renders recovery instead of generic administration when the %s", async (_label, patch, reason) => {
+    const { handoff } = acceptedRevisionArrival();
+    expect(handoff.ok).toBe(true);
+    mocks.getQuoteHistory.mockResolvedValue({
+      source: "firebase",
+      quotes: [{ ...ACCEPTED_QUOTE, ...patch }]
+    });
+    act(() => {
+      root.render(
+        <QuoteHistoryView
+          open
+          presentation="embedded"
+          focusQuoteId={ACCEPTED_QUOTE.id}
+          focusAction="administration"
+          currentUserRole="sales"
+          arrivalContext={handoff.contract}
+          onClose={() => {}}
+        />
+      );
+    });
+    await settle();
+
+    const recovery = container.querySelector('[data-accepted-revision-arrival="recovery"]');
+    expect(recovery).not.toBeNull();
+    expect(recovery.textContent.toLowerCase()).toContain(reason);
+    expect(container.querySelector("table")).toBeNull();
+  });
+
   test("keeps failed permanent-delete confirmation open with the exact failure", async () => {
     mocks.deleteQuote.mockRejectedValueOnce(new Error("The approved delete could not be confirmed."));
     act(() => {

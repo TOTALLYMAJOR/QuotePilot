@@ -24,6 +24,13 @@ Implemented and locally validated the Release 2 decision presentation behind the
 - The decision-packet headline claims an exact handoff only when that handoff is actually available.
 - Repaired the two inherited Task 1 expectations narrowly: the ambient marker count now includes the three added customer/event fields, and the Step Event snapshot records only those corresponding markers.
 
+## Review fix round 2
+
+- Acceptance and the internal handoff now require an explicit `portalDecision.decision === "accepted"`. A declined or changes-requested decision alongside a receipt is contradictory; an absent decision is missing evidence. All three states are non-actionable.
+- Extended the existing same-app Proposal administration arrival contract with an optional all-or-nothing pair of `acceptedRevisionId` and `acceptanceReceiptId` pins. Generic quote and payment administration arrivals remain unchanged, and partial or non-Proposal pinning is rejected.
+- The actual App destination builder now recognizes a decision-packet handoff as Proposal administration and carries both pins through browser history state and arrival parsing.
+- Quote History revalidates those pins against the currently selected quote, its current acceptance receipt, and the complete current decision-packet chain. A changed revision, mismatched receipt, conflicting decision, stale issuance, or unavailable authority renders a recovery surface and withholds generic quote administration.
+
 ## Authority and domain review
 
 The catering-domain reconsideration result is **BOUND**. The presentation reduces re-entry and review effort, but it does not turn a template, previous event, scenario, acceptance receipt, or payment label into a new authority. Blank and template starts enter the ordinary quote draft; prior accepted events enter the existing exact-version rebook selection and staff review; the decision packet routes to existing quote administration only after matching the accepted revision and receipt. Supply remains a read projection and does not reserve stock, staffing remains recorded assignment versus projected requirement, and margin uses recorded costs only.
@@ -32,9 +39,9 @@ No customer decision, signature, acceptance, charge, booking, delivery, price, s
 
 ## Validation evidence
 
-- Review-fix projection/UI/integration suites: **PASS** — 6 files, 52 tests, including actual Guided/Composer click-through focus, gate-off compatibility, malformed-evidence fail-closed behavior, receipt/revision/issuance mismatch handling, exact Quote History destination identity, and both inherited expectation repairs.
-- Repository unit suite: **PASS** — 504 files passed, 3 skipped; 5,989 tests passed, 100 skipped.
-- `npm run build`: **PASS** — final Vite production build completed in 34.51s.
+- Review-fix round 2 suites: **PASS** — 5 files, 74 tests, including conflicting and absent portal decisions, pinned arrival round-tripping, the actual App destination builder, exact Quote History arrival, and rendered recovery in place of generic administration.
+- Repository unit suite: **PASS** — 504 files passed, 3 skipped; 5,997 tests passed, 100 skipped.
+- `npm run build`: **PASS** — final Vite production build completed in 45.34s.
 - `npm run check:project-state`: **PASS**.
 - `git diff --check`: **PASS**.
 - `npm run check:env`: **BLOCKED BY LOCAL ENVIRONMENT** — the isolated worktree has none of the six required `VITE_FIREBASE_*` values. No values were fabricated or committed.
@@ -63,6 +70,8 @@ Until Task 5 completes that reconciliation, release integration must not treat t
 - Complete: `2026-09-17T12:47:15.917Z`
 - Review fix round 1 start: `2026-09-17T12:51:41.509Z`
 - Review fix round 1 complete: `2026-09-17T13:10:42.293Z`
+- Review fix round 2 start: `2026-09-17T13:14:03.619Z`
+- Review fix round 2 complete: `2026-09-17T13:24:05.292Z`
 
 ## Residual concerns
 
