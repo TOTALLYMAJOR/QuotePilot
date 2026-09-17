@@ -92,6 +92,8 @@ describe("inventory-capture-draft-v1", () => {
       ...scope,
       draftId: "draft-a",
       now: now + 1000,
+      expectedDraftRevision: draft.draftRevision,
+      expectedLineRevision: draft.lines[0].lineRevision,
       line: captureLine({ countedQuantity: "13", note: "Second pass", requestId: `inventory_request_${"4".repeat(32)}` })
     }, { store });
 
@@ -249,14 +251,6 @@ describe("inventory-capture-draft-v1", () => {
     }, { store });
     expect(first.lines[0]).toMatchObject({ state: "uncertain", requestId: line.requestId, command: line.command, error: "gateway Connection ended" });
 
-    await updateInventoryCaptureDraft({
-      ...scope,
-      draftId: "uncertain",
-      now: now + 1500,
-      expectedDraftRevision: first.draftRevision,
-      line: { ...first.lines[0], inFlight: true }
-    }, { store });
-
     const reconcileLine = vi.fn().mockResolvedValue({ receipt: { receiptId: "receipt-reconciled" }, confirmation: { stockRevision: 5 } });
     const reconciled = await submitInventoryCaptureDraft({
       ...scope,
@@ -264,12 +258,12 @@ describe("inventory-capture-draft-v1", () => {
       now: now + 2000,
       online: true,
       reconcileUncertain: true,
-      currentInventory: [{ ingredientId: "chicken", locationId: "kitchen", baseUnitId: "lb", stockRevision: 4 }],
+      currentInventory: [{ ingredientId: "chicken", locationId: "kitchen", baseUnitId: "lb", stockRevision: 5 }],
       submitLine,
       reconcileLine
     }, { store });
     expect(reconcileLine).toHaveBeenCalledWith({ requestId: line.requestId, command: line.command });
-    expect(reconciled.lines[0]).toMatchObject({ state: "submitted", receiptId: "receipt-reconciled" });
+    expect(reconciled.lines[0]).toMatchObject({ state: "submitted", receiptId: "receipt-reconciled", stockRevision: 5 });
 
     await createInventoryCaptureDraft({ ...scope, draftId: "wrong-location", now, lines: [captureLine()] }, { store });
     const conflict = await submitInventoryCaptureDraft({
@@ -282,6 +276,121 @@ describe("inventory-capture-draft-v1", () => {
     }, { store });
     expect(conflict.lines[0]).toMatchObject({ state: "conflict" });
     expect(submitLine).toHaveBeenCalledTimes(1);
+  });
+
+  test("refuses ordinary replacement while the exact same line request is in flight", async () => {
+    const store = memoryStore();
+    const original = captureLine();
+    await createInventoryCaptureDraft({ ...scope, draftId: "pending-replacement", now, lines: [original] }, { store });
+    let resolveSubmission;
+    const submitLine = vi.fn(() => new Promise((resolve) => { resolveSubmission = resolve; }));
+    const submission = submitInventoryCaptureDraft({
+      ...scope,
+      draftId: "pending-replacement",
+      now: now + 1000,
+      online: true,
+      currentInventory: [{ ingredientId: "chicken", locationId: "kitchen", baseUnitId: "lb", stockRevision: 4 }],
+      submitLine
+    }, { store });
+    await vi.waitFor(() => expect(submitLine).toHaveBeenCalledTimes(1));
+    const [pending] = await listInventoryCaptureDrafts({ ...scope, now: now + 1500 }, { store });
+    const pendingLine = pending.lines[0];
+    expect(pendingLine).toMatchObject({ state: "uncertain", inFlight: true, requestId: original.requestId });
+
+    await expect(updateInventoryCaptureDraft({
+      ...scope,
+      draftId: pending.draftId,
+      now: now + 1600,
+      expectedDraftRevision: pending.draftRevision,
+      expectedLineRevision: pendingLine.lineRevision || 1,
+      line: captureLine({ countedQuantity: "13", requestId: `inventory_request_${"8".repeat(32)}` })
+    }, { store })).rejects.toMatchObject({ code: "conflict" });
+
+    resolveSubmission({ receipt: { receiptId: "receipt-original" }, confirmation: { stockRevision: 5 } });
+    const completed = await submission;
+    expect(completed.lines[0]).toMatchObject({
+      state: "submitted",
+      requestId: original.requestId,
+      receiptId: "receipt-original",
+      countedQuantity: original.countedQuantity
+    });
+  });
+
+  test("requires an explicit reset and preserves the predecessor receipt before a new count", async () => {
+    const store = memoryStore();
+    const submittedLine = captureLine({
+      state: "submitted",
+      receiptId: "receipt-first-count",
+      stockRevision: 5
+    });
+    const created = await createInventoryCaptureDraft({
+      ...scope,
+      draftId: "submitted-reset",
+      now,
+      lines: [submittedLine]
+    }, { store });
+    const replacement = captureLine({
+      countedQuantity: "14",
+      expectedStockRevision: 5,
+      occurredAtISO: "2026-09-17T15:00:00.000Z",
+      requestId: `inventory_request_${"9".repeat(32)}`
+    });
+    await expect(updateInventoryCaptureDraft({
+      ...scope,
+      draftId: created.draftId,
+      expectedDraftRevision: created.draftRevision,
+      expectedLineRevision: created.lines[0].lineRevision,
+      line: replacement
+    }, { store })).rejects.toMatchObject({ code: "conflict" });
+
+    const reset = await updateInventoryCaptureDraft({
+      ...scope,
+      draftId: created.draftId,
+      now: now + 1000,
+      expectedDraftRevision: created.draftRevision,
+      expectedLineRevision: created.lines[0].lineRevision,
+      resolution: "reset",
+      line: replacement
+    }, { store });
+    expect(reset.lines[0]).toMatchObject({
+      state: "draft",
+      requestId: replacement.requestId,
+      lineRevision: 2,
+      previousAttempts: [{
+        requestId: submittedLine.requestId,
+        state: "submitted",
+        command: submittedLine.command,
+        receiptId: "receipt-first-count",
+        stockRevision: 5,
+        resolvedAtISO: "2026-09-17T14:00:01.000Z"
+      }]
+    });
+  });
+
+  test("normalizes a pre-line-revision device draft before its next mutation", async () => {
+    const store = memoryStore();
+    const created = await createInventoryCaptureDraft({
+      ...scope,
+      draftId: "legacy-line",
+      now,
+      lines: [captureLine()]
+    }, { store });
+    const legacy = structuredClone(store.records.get(created.key));
+    delete legacy.lines[0].lineRevision;
+    delete legacy.lines[0].previousAttempts;
+    store.records.set(created.key, legacy);
+
+    const [listed] = await listInventoryCaptureDrafts({ ...scope, now: now + 500 }, { store });
+    expect(listed.lines[0]).toMatchObject({ lineRevision: 1, previousAttempts: [] });
+    const submitted = await submitInventoryCaptureDraft({
+      ...scope,
+      draftId: created.draftId,
+      now: now + 1000,
+      online: true,
+      currentInventory: [{ ingredientId: "chicken", locationId: "kitchen", baseUnitId: "lb", stockRevision: 4 }],
+      submitLine: vi.fn().mockResolvedValue({ receipt: { receiptId: "legacy-receipt" }, confirmation: { stockRevision: 5 } })
+    }, { store });
+    expect(submitted.lines[0]).toMatchObject({ lineRevision: 3, state: "submitted", receiptId: "legacy-receipt" });
   });
 
   test("revision-fences discard so a stale tab cannot delete newer lines", async () => {

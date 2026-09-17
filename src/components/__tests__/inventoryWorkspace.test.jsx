@@ -593,6 +593,108 @@ describe("Task 4 inventory action surfaces", () => {
     expect(container.textContent).not.toContain("Current revision 1");
   });
 
+  test("persists simultaneous same-scope saves for independent ingredients from one panel", async () => {
+    const firstCreate = deferred();
+    const secondCreate = deferred();
+    const created = {
+      draftId: "active-shelf-count",
+      draftRevision: 1,
+      status: "draft",
+      lines: []
+    };
+    let stored = created;
+    const draftService = {
+      create: vi.fn()
+        .mockImplementationOnce(() => firstCreate.promise)
+        .mockImplementationOnce(() => secondCreate.promise),
+      list: vi.fn()
+        .mockResolvedValueOnce([])
+        .mockImplementation(() => Promise.resolve([stored])),
+      update: vi.fn(async ({ line }) => {
+        stored = {
+          ...stored,
+          draftRevision: stored.draftRevision + 1,
+          lines: [...stored.lines.filter((entry) => entry.ingredientId !== line.ingredientId), line]
+        };
+        return structuredClone(stored);
+      }),
+      discard: vi.fn(),
+      submit: vi.fn()
+    };
+    const chicken = projectionModel().ingredients[0];
+    const rice = {
+      ...chicken,
+      ingredientId: "rice",
+      name: "Rice",
+      nameSortKey: "rice",
+      stock: { ...chicken.stock, revision: 2, onHandMicros: 18_000_000, quantity: "18" }
+    };
+    await act(async () => root.render(
+      <InventoryMobileCapturePanel enabled organizationId={ORGANIZATION_ID} userId="admin-user"
+        locations={[{ locationId: "main-kitchen", name: "Main kitchen" }]}
+        ingredients={[chicken, rice]} draftService={draftService} />
+    ));
+    const countInputs = [...container.querySelectorAll('.inventory-capture-row input[inputmode="decimal"]')];
+    const saveButtons = [...container.querySelectorAll(".inventory-capture-row button")];
+    await act(async () => {
+      setInput(countInputs[0], "24");
+      setInput(countInputs[1], "16");
+      saveButtons[0].click();
+      saveButtons[1].click();
+    });
+    await vi.waitFor(() => expect(draftService.create).toHaveBeenCalledTimes(2));
+    await act(async () => {
+      firstCreate.resolve(created);
+      secondCreate.reject(Object.assign(new Error("exists"), { code: "already-exists" }));
+      await Promise.allSettled([firstCreate.promise, secondCreate.promise]);
+    });
+    await vi.waitFor(() => expect(draftService.update).toHaveBeenCalledTimes(2));
+    expect(container.querySelector('[data-capture-line-state="draft"]').parentElement.textContent).toContain("Chicken");
+    expect(container.querySelector('[data-capture-line-state="draft"]').parentElement.textContent).toContain("Rice");
+  });
+
+  test("fences ordinary shelf edits while the same ingredient request is unresolved", async () => {
+    const line = {
+      lineId: "count-chicken",
+      lineRevision: 2,
+      ingredientId: "chicken",
+      ingredientName: "Chicken",
+      baseUnitId: "lb",
+      countedQuantity: "24",
+      note: "Shelf walk",
+      occurredAtISO: "2026-09-17T14:00:00.000Z",
+      expectedStockRevision: 1,
+      requestId: `inventory_request_${"6".repeat(32)}`,
+      command: {
+        kind: "record_stock_count",
+        ingredientId: "chicken",
+        locationId: "main-kitchen",
+        baseUnitId: "lb",
+        countedQuantity: "24",
+        occurredAtISO: "2026-09-17T14:00:00.000Z",
+        note: "Shelf walk",
+        expectedStockRevision: 1
+      },
+      state: "uncertain",
+      inFlight: false,
+      error: "The exact outcome is not verified."
+    };
+    const draftService = {
+      create: vi.fn(), update: vi.fn(), discard: vi.fn(), submit: vi.fn(),
+      list: vi.fn().mockResolvedValue([{ draftId: "shelf-1", draftRevision: 3, status: "partial", lines: [line] }])
+    };
+    await act(async () => root.render(
+      <InventoryMobileCapturePanel enabled organizationId={ORGANIZATION_ID} userId="admin-user"
+        locations={[{ locationId: "main-kitchen", name: "Main kitchen" }]}
+        ingredients={projectionModel().ingredients} draftService={draftService} />
+    ));
+    const row = container.querySelector(".inventory-capture-row");
+    expect(row.querySelector('input[inputmode="decimal"]').disabled).toBe(true);
+    expect(row.querySelector("button").disabled).toBe(true);
+    expect(row.textContent).toContain("Resolve the saved request before replacing this count");
+    expect(container.textContent).toContain("Check exact request");
+  });
+
   test("decodes barcode files through an ImageBitmap and closes it", async () => {
     const previousDetector = globalThis.BarcodeDetector;
     const previousBitmap = globalThis.createImageBitmap;
@@ -698,6 +800,7 @@ describe("Task 4 inventory action surfaces", () => {
     const requestId = `inventory_request_${"7".repeat(32)}`;
     const line = {
       lineId: "count-chicken",
+      lineRevision: 2,
       ingredientId: "chicken",
       ingredientName: "Chicken",
       baseUnitId: "lb",
@@ -739,6 +842,8 @@ describe("Task 4 inventory action surfaces", () => {
     expect(resetCommand).toHaveBeenCalledWith(expect.objectContaining({ organizationId: ORGANIZATION_ID, requestId }));
     expect(draftService.update).toHaveBeenCalledWith(expect.objectContaining({
       expectedDraftRevision: 2,
+      expectedLineRevision: 2,
+      resolution: "reset",
       line: expect.objectContaining({
         requestId: expect.not.stringMatching(requestId),
         state: "draft",

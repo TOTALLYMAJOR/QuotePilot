@@ -8,6 +8,7 @@ const IDENTIFIER = /^[^\s/?#\\\u0000]{1,180}$/u;
 const QUANTITY = /^(?:0|[1-9]\d*)(?:\.\d{1,6})?$/u;
 const REQUEST_ID = /^inventory_request_[a-f0-9]{32}$/u;
 const MAX_MUTATION_RETRIES = 8;
+const MAX_PREVIOUS_ATTEMPTS = 20;
 
 function draftError(code, message) {
   const error = new Error(message);
@@ -68,6 +69,52 @@ function retainedErrorMessage(error) {
   return message || "This line did not return an authoritative receipt.";
 }
 
+function normalizePreviousAttempts(value) {
+  if (!Array.isArray(value) || value.length > MAX_PREVIOUS_ATTEMPTS) {
+    throw draftError("invalid-argument", "Capture line previous attempts must be a bounded list.");
+  }
+  return value.map((attempt, index) => {
+    const label = `Capture line previous attempt ${index + 1}`;
+    const state = ["submitted", "conflict", "uncertain", "error"].includes(attempt?.state) ? attempt.state : "";
+    if (!state) throw draftError("invalid-argument", `${label} state is invalid.`);
+    const countedQuantity = String(attempt.countedQuantity ?? "").trim();
+    if (!QUANTITY.test(countedQuantity)) throw draftError("invalid-argument", `${label} count is invalid.`);
+    const command = attempt.command;
+    if (!command || typeof command !== "object" || Array.isArray(command) || command.kind !== "record_stock_count") {
+      throw draftError("invalid-argument", `${label} command is invalid.`);
+    }
+    const normalizedCommand = Object.freeze({
+      kind: "record_stock_count",
+      ingredientId: exactIdentifier(command.ingredientId, `${label} command ingredient`),
+      locationId: exactIdentifier(command.locationId, `${label} command location`),
+      countedQuantity: String(command.countedQuantity ?? "").trim(),
+      baseUnitId: exactIdentifier(command.baseUnitId, `${label} command unit`),
+      occurredAtISO: exactIso(command.occurredAtISO, `${label} command occurrence time`),
+      note: exactText(String(command.note ?? ""), `${label} command note`, 240, { allowEmpty: true }),
+      expectedStockRevision: exactRevision(command.expectedStockRevision, `${label} command expected revision`)
+    });
+    if (!QUANTITY.test(normalizedCommand.countedQuantity) || normalizedCommand.countedQuantity !== countedQuantity
+      || normalizedCommand.expectedStockRevision !== attempt.expectedStockRevision) {
+      throw draftError("invalid-argument", `${label} command differs from its saved attempt.`);
+    }
+    return Object.freeze({
+      requestId: exactRequestId(attempt.requestId),
+      state,
+      command: normalizedCommand,
+      countedQuantity,
+      expectedStockRevision: exactRevision(attempt.expectedStockRevision, `${label} expected revision`),
+      receiptId: attempt.receiptId ? exactText(String(attempt.receiptId), `${label} receipt`, 180) : "",
+      error: attempt.error ? exactText(String(attempt.error), `${label} error`, 240) : "",
+      stockRevision: attempt.stockRevision === null || attempt.stockRevision === undefined
+        ? null : exactRevision(attempt.stockRevision, `${label} confirmed revision`),
+      currentStockRevision: attempt.currentStockRevision === null || attempt.currentStockRevision === undefined
+        ? null : exactRevision(attempt.currentStockRevision, `${label} current revision`),
+      attemptedAtISO: attempt.attemptedAtISO ? exactIso(attempt.attemptedAtISO, `${label} attempt time`) : "",
+      resolvedAtISO: exactIso(attempt.resolvedAtISO, `${label} resolution time`)
+    });
+  });
+}
+
 function normalizeScope(input) {
   const organizationId = exactIdentifier(input?.organizationId, "organizationId");
   const userId = exactIdentifier(input?.userId, "userId");
@@ -96,6 +143,7 @@ function normalizeLine(value, index) {
   }
   const line = {
     lineId: exactIdentifier(value.lineId, `Capture line ${index + 1} identity`),
+    lineRevision: exactRevision(value.lineRevision ?? 1, `Capture line ${index + 1} revision`),
     ingredientId: exactIdentifier(value.ingredientId, `Capture line ${index + 1} ingredient`),
     ingredientName: exactText(value.ingredientName, `Capture line ${index + 1} ingredient name`, 100),
     baseUnitId: exactIdentifier(value.baseUnitId, `Capture line ${index + 1} unit`),
@@ -120,7 +168,8 @@ function normalizeLine(value, index) {
     inFlight: state === "uncertain" ? value.inFlight === true : false,
     attemptedAtISO: state === "uncertain" && value.attemptedAtISO
       ? exactIso(value.attemptedAtISO, `Capture line ${index + 1} attempt time`)
-      : ""
+      : "",
+    previousAttempts: normalizePreviousAttempts(value.previousAttempts || [])
   };
   const normalizedCommand = {
     kind: "record_stock_count",
@@ -142,6 +191,22 @@ function normalizeLine(value, index) {
   return Object.freeze(line);
 }
 
+function previousAttempt(line, timestamp) {
+  return {
+    requestId: line.requestId,
+    state: line.state,
+    command: line.command,
+    countedQuantity: line.countedQuantity,
+    expectedStockRevision: line.expectedStockRevision,
+    receiptId: line.receiptId || "",
+    error: line.error || "",
+    stockRevision: line.stockRevision ?? null,
+    currentStockRevision: line.currentStockRevision ?? null,
+    attemptedAtISO: line.attemptedAtISO || "",
+    resolvedAtISO: new Date(timestamp).toISOString()
+  };
+}
+
 function normalizeLines(lines) {
   if (!Array.isArray(lines) || lines.length > 200) throw draftError("invalid-argument", "Capture lines must be a bounded list.");
   const normalized = lines.map(normalizeLine);
@@ -158,6 +223,14 @@ function scopedLines(lines, scope) {
     throw draftError("invalid-argument", "Capture line command location differs from the exact draft scope.");
   }
   return normalized;
+}
+
+function normalizeStoredDraft(draft, scope) {
+  return {
+    ...draft,
+    draftRevision: exactRevision(draft.draftRevision, "draft revision"),
+    lines: scopedLines(draft.lines, scope)
+  };
 }
 
 function clone(value) {
@@ -264,9 +337,9 @@ async function exactDraft(input, options) {
   const scope = normalizeScope(input);
   const store = await resolveStore(options);
   const key = recordKey(scope, input.draftId);
-  const draft = await store.get(key);
-  if (!draft || draft.scopeKey !== scope.scopeKey) throw draftError("not-found", "The exact inventory capture draft is unavailable.");
-  return { scope, store, key, draft };
+  const stored = await store.get(key);
+  if (!stored || stored.scopeKey !== scope.scopeKey) throw draftError("not-found", "The exact inventory capture draft is unavailable.");
+  return { scope, store, key, draft: normalizeStoredDraft(stored, scope) };
 }
 
 function draftStatus(lines) {
@@ -292,8 +365,9 @@ async function mutateDraft(input, options, reducer, { strictRevision = false } =
   const key = recordKey(scope, input.draftId);
   const timestamp = exactNow(input.now);
   for (let attempt = 0; attempt < MAX_MUTATION_RETRIES; attempt += 1) {
-    const current = await store.get(key);
-    if (!current || current.scopeKey !== scope.scopeKey) throw draftError("not-found", "The exact inventory capture draft is unavailable.");
+    const stored = await store.get(key);
+    if (!stored || stored.scopeKey !== scope.scopeKey) throw draftError("not-found", "The exact inventory capture draft is unavailable.");
+    const current = normalizeStoredDraft(stored, scope);
     if (timestamp >= Date.parse(current.expiresAtISO)) {
       try { await store.compareAndSwap(key, current.draftRevision, null); } catch { /* another context already advanced it */ }
       throw draftError("expired", "This inventory capture draft expired after seven days.");
@@ -345,11 +419,44 @@ export async function createInventoryCaptureDraft(input = {}, options = {}) {
 export async function updateInventoryCaptureDraft(input = {}, options = {}) {
   const scope = normalizeScope(input);
   const incoming = scopedLines(input.line ? [input.line] : input.lines, scope);
+  const expectedDraftRevision = exactRevision(input.expectedDraftRevision, "expected draft revision");
+  const expectedLineRevision = input.expectedLineRevision === undefined
+    ? null : exactRevision(input.expectedLineRevision, "expected capture line revision");
+  const resolution = input.resolution === undefined ? "" : input.resolution;
+  if (resolution && resolution !== "reset") throw draftError("invalid-argument", "Capture line resolution is invalid.");
   return mutateDraft(input, options, (draft, timestamp) => {
-    const replacements = new Map(incoming.map((line) => [line.ingredientId, line]));
-    const lines = draft.lines.map((line) => replacements.get(line.ingredientId) || line);
-    const existing = new Set(draft.lines.map((line) => line.ingredientId));
-    incoming.forEach((line) => { if (!existing.has(line.ingredientId)) lines.push(line); });
+    if (draft.draftRevision < expectedDraftRevision) {
+      throw draftError("conflict", "The expected device draft revision is newer than the stored draft.");
+    }
+    const lines = [...draft.lines];
+    incoming.forEach((replacement) => {
+      const existingIndex = lines.findIndex((line) => line.ingredientId === replacement.ingredientId
+        && line.baseUnitId === replacement.baseUnitId && line.command.locationId === replacement.command.locationId);
+      if (existingIndex < 0) {
+        if (expectedLineRevision !== null) throw draftError("conflict", "The expected capture line is unavailable.");
+        lines.push({ ...replacement, lineRevision: 1, previousAttempts: replacement.previousAttempts || [] });
+        return;
+      }
+      const existing = lines[existingIndex];
+      if (expectedLineRevision === null || existing.lineRevision !== expectedLineRevision) {
+        throw draftError("conflict", "This capture line changed in another browser context.");
+      }
+      const protectedAttempt = existing.inFlight || ["uncertain", "submitted", "conflict", "error"].includes(existing.state);
+      if (protectedAttempt && resolution !== "reset") {
+        throw draftError("conflict", "Resolve the exact saved request before replacing this capture line.");
+      }
+      if (resolution === "reset" && (existing.inFlight || existing.state === "uncertain")) {
+        throw draftError("failed-precondition", "An uncertain capture line must reconcile its exact request before reset.");
+      }
+      const history = resolution === "reset"
+        ? [...existing.previousAttempts, previousAttempt(existing, timestamp)].slice(-MAX_PREVIOUS_ATTEMPTS)
+        : existing.previousAttempts;
+      lines[existingIndex] = {
+        ...replacement,
+        lineRevision: existing.lineRevision + 1,
+        previousAttempts: history
+      };
+    });
     return nextRecord(draft, lines, timestamp);
   });
 }
@@ -366,7 +473,7 @@ export async function listInventoryCaptureDrafts(input = {}, options = {}) {
       try { await store.compareAndSwap(record.key, record.draftRevision, null); } catch { /* keep a concurrently updated draft */ }
       continue;
     }
-    if (record.scopeKey === scope.scopeKey) visible.push(record);
+    if (record.scopeKey === scope.scopeKey) visible.push(normalizeStoredDraft(record, scope));
   }
   visible.sort((left, right) => right.updatedAtISO.localeCompare(left.updatedAtISO));
   return Object.freeze(clone(visible));
@@ -403,7 +510,7 @@ async function persistLine(input, options, lineId, transform) {
     const lines = draft.lines.map((line) => {
       if (line.lineId !== lineId) return line;
       found = true;
-      return normalizeLine(transform(line, draft), 0);
+      return normalizeLine({ ...transform(line, draft), lineRevision: line.lineRevision + 1 }, 0);
     });
     if (!found) throw draftError("conflict", "The capture line changed in another browser context.");
     return nextRecord(draft, lines, timestamp);
@@ -421,7 +528,12 @@ export async function submitInventoryCaptureDraft(input = {}, options = {}) {
     let claimedLine = null;
     await persistLine(input, options, lineId, (line) => {
       if (line.state === "submitted" || line.state === "conflict" || (line.state === "error" && line.definitive)) return line;
-      if (line.state === "uncertain" && !input.reconcileUncertain) return line;
+      if (line.state === "uncertain") {
+        if (!input.reconcileUncertain) return line;
+        action = "reconcile";
+        claimedLine = { ...line, state: "uncertain", error: "Checking the exact saved stock-count request.", inFlight: true, attemptedAtISO: new Date(exactNow(input.now)).toISOString(), definitive: false };
+        return claimedLine;
+      }
       const current = evidence.get(line.ingredientId);
       if (!current || current.locationId !== line.command.locationId || current.baseUnitId !== line.baseUnitId
         || line.command.locationId !== draft.locationId || line.command.baseUnitId !== line.baseUnitId
@@ -436,7 +548,7 @@ export async function submitInventoryCaptureDraft(input = {}, options = {}) {
           attemptedAtISO: ""
         };
       }
-      action = line.state === "uncertain" ? "reconcile" : "submit";
+      action = "submit";
       claimedLine = { ...line, state: "uncertain", error: "The exact stock-count outcome is not yet verified.", inFlight: true, attemptedAtISO: new Date(exactNow(input.now)).toISOString(), definitive: false };
       return claimedLine;
     });

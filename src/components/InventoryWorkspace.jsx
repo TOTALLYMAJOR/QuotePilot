@@ -1162,8 +1162,18 @@ export function InventoryMobileCapturePanel({
   const [state, setState] = useState({ kind: "loading", message: "Loading device drafts…" });
   const [scanBusy, setScanBusy] = useState(false);
   const fileRef = useRef(null);
-  const generation = useRef(0);
+  const scopeEpoch = useRef(0);
+  const scopeIdentity = useRef("");
+  const uiFreshness = useRef(0);
   const scopeReady = enabled && organizationId && userId && locationId;
+
+  const beginOperation = () => ({ scope: scopeEpoch.current, freshness: ++uiFreshness.current });
+  const scopeIsCurrent = (operation) => scopeEpoch.current === operation.scope;
+  const operationIsCurrent = (operation) => scopeIsCurrent(operation) && uiFreshness.current === operation.freshness;
+  const acceptDraft = (nextDraft, operation) => {
+    if (!scopeIsCurrent(operation)) return;
+    setDraft((current) => !current || (nextDraft?.draftRevision || 0) >= (current.draftRevision || 0) ? nextDraft : current);
+  };
 
   useEffect(() => {
     if (!locations.some((location) => location.locationId === locationId)) {
@@ -1172,19 +1182,22 @@ export function InventoryMobileCapturePanel({
   }, [locationId, locations]);
 
   useEffect(() => {
-    generation.current += 1;
-    setLocationId(locations[0]?.locationId || "");
+    const identity = `${enabled ? "1" : "0"}\u0000${organizationId || ""}\u0000${userId || ""}\u0000${locationId || ""}`;
+    if (scopeIdentity.current === identity) return;
+    scopeIdentity.current = identity;
+    scopeEpoch.current += 1;
+    uiFreshness.current += 1;
     setDraft(null);
     setQueryText("");
     setCounts({});
     setNotes({});
     setState({ kind: enabled ? "loading" : "empty", message: enabled ? "Loading device drafts…" : "Device capture is unavailable." });
     setScanBusy(false);
-  }, [enabled, organizationId, userId]);
+  }, [enabled, locationId, organizationId, userId]);
+  useEffect(() => () => { scopeEpoch.current += 1; uiFreshness.current += 1; }, []);
 
   const refresh = useCallback(async () => {
-    const current = generation.current + 1;
-    generation.current = current;
+    const operation = beginOperation();
     setDraft(null);
     if (!scopeReady) {
       setState({ kind: "empty", message: "Select an exact stock location." });
@@ -1193,11 +1206,11 @@ export function InventoryMobileCapturePanel({
     setState({ kind: "loading", message: "Loading device drafts…" });
     try {
       const drafts = await draftService.list({ organizationId, userId, locationId });
-      if (generation.current !== current) return;
-      setDraft(drafts[0] || null);
-      setState({ kind: drafts.length ? "draft" : "empty", message: drafts.length ? "Device draft loaded." : "No shelf-count draft at this location." });
+      if (!scopeIsCurrent(operation)) return;
+      acceptDraft(drafts[0] || null, operation);
+      if (operationIsCurrent(operation)) setState({ kind: drafts.length ? "draft" : "empty", message: drafts.length ? "Device draft loaded." : "No shelf-count draft at this location." });
     } catch (error) {
-      if (generation.current === current) setState({ kind: "error", message: safeMessage(error, "Durable device draft storage is unavailable.") });
+      if (operationIsCurrent(operation)) setState({ kind: "error", message: safeMessage(error, "Durable device draft storage is unavailable.") });
     }
   }, [draftService, locationId, organizationId, scopeReady, userId]);
 
@@ -1231,8 +1244,7 @@ export function InventoryMobileCapturePanel({
       setState({ kind: "error", message: "Enter a nonnegative count with no more than six decimal places." });
       return;
     }
-    const current = generation.current + 1;
-    generation.current = current;
+    const operation = beginOperation();
     try {
       let activeDraft = draft;
       if (!activeDraft) {
@@ -1245,9 +1257,11 @@ export function InventoryMobileCapturePanel({
           if (!activeDraft) throw error;
         }
       }
-      if (generation.current !== current) return;
+      if (!scopeIsCurrent(operation)) return;
       const occurredAtISO = new Date().toISOString();
       const requestId = buildInventoryRequestId();
+      const existingLine = activeDraft.lines.find((line) => line.ingredientId === ingredient.ingredientId
+        && line.baseUnitId === ingredient.baseUnitId && line.command?.locationId === locationId);
       const line = {
         lineId: `count-${ingredient.ingredientId}`,
         ingredientId: ingredient.ingredientId,
@@ -1270,19 +1284,26 @@ export function InventoryMobileCapturePanel({
         },
         state: "draft"
       };
-      activeDraft = await draftService.update({ organizationId, userId, locationId, draftId: activeDraft.draftId, expectedDraftRevision: activeDraft.draftRevision, line });
-      if (generation.current !== current) return;
-      setDraft(activeDraft);
-      setState({ kind: "draft", message: "Count saved on this device only." });
+      activeDraft = await draftService.update({
+        organizationId,
+        userId,
+        locationId,
+        draftId: activeDraft.draftId,
+        expectedDraftRevision: activeDraft.draftRevision,
+        expectedLineRevision: existingLine?.lineRevision,
+        line
+      });
+      if (!scopeIsCurrent(operation)) return;
+      acceptDraft(activeDraft, operation);
+      if (operationIsCurrent(operation)) setState({ kind: "draft", message: "Count saved on this device only." });
     } catch (error) {
-      if (generation.current === current) setState({ kind: "error", message: safeMessage(error, "The device draft could not be saved.") });
+      if (operationIsCurrent(operation)) setState({ kind: "error", message: safeMessage(error, "The device draft could not be saved.") });
     }
   };
 
   const submit = async ({ lineIds, reconcileUncertain = false } = {}) => {
     if (!draft) return;
-    const current = generation.current + 1;
-    generation.current = current;
+    const operation = beginOperation();
     setState({ kind: "submitting", message: "Comparing stock revisions and submitting clean lines…" });
     try {
       const nextDraft = await draftService.submit({
@@ -1317,11 +1338,11 @@ export function InventoryMobileCapturePanel({
           }
         }
       });
-      if (generation.current !== current) return;
-      setDraft(nextDraft);
-      setState({ kind: nextDraft.status === "submitted" ? "receipt" : "partial", message: nextDraft.status === "submitted" ? "Every line has an authoritative receipt." : "Clean lines were submitted independently; conflicts and uncertain outcomes remain in this device draft." });
+      if (!scopeIsCurrent(operation)) return;
+      acceptDraft(nextDraft, operation);
+      if (operationIsCurrent(operation)) setState({ kind: nextDraft.status === "submitted" ? "receipt" : "partial", message: nextDraft.status === "submitted" ? "Every line has an authoritative receipt." : "Clean lines were submitted independently; conflicts and uncertain outcomes remain in this device draft." });
     } catch (error) {
-      if (generation.current === current) setState({ kind: error?.code === "offline" ? "offline" : "error", message: safeMessage(error, "The device draft was retained for recovery.") });
+      if (operationIsCurrent(operation)) setState({ kind: error?.code === "offline" ? "offline" : "error", message: safeMessage(error, "The device draft was retained for recovery.") });
     }
   };
 
@@ -1329,11 +1350,11 @@ export function InventoryMobileCapturePanel({
     const ingredient = locationIngredients.find((entry) => entry.ingredientId === line.ingredientId
       && entry.baseUnitId === line.baseUnitId && entry.stock?.locationId === locationId);
     if (!ingredient || !draft) return;
-    const current = generation.current + 1;
-    generation.current = current;
+    const operation = beginOperation();
     try {
       if (line.state === "error" && line.definitive) {
         await resetCommand({ organizationId, role, browserEnabled, tenantEnabled, requestId: line.requestId });
+        if (!scopeIsCurrent(operation)) return;
       }
       const requestId = buildInventoryRequestId();
       const replacement = {
@@ -1356,33 +1377,40 @@ export function InventoryMobileCapturePanel({
         inFlight: false,
         attemptedAtISO: ""
       };
-      const nextDraft = await draftService.update({ organizationId, userId, locationId, draftId: draft.draftId, expectedDraftRevision: draft.draftRevision, line: replacement });
-      if (generation.current !== current) return;
-      setDraft(nextDraft);
-      setState({ kind: "draft", message: `${ingredient.name} was rebased to the current stock revision. Review before submitting.` });
+      const nextDraft = await draftService.update({
+        organizationId,
+        userId,
+        locationId,
+        draftId: draft.draftId,
+        expectedDraftRevision: draft.draftRevision,
+        expectedLineRevision: line.lineRevision,
+        resolution: "reset",
+        line: replacement
+      });
+      if (!scopeIsCurrent(operation)) return;
+      acceptDraft(nextDraft, operation);
+      if (operationIsCurrent(operation)) setState({ kind: "draft", message: `${ingredient.name} was reset against the current stock revision. Review before submitting.` });
     } catch (error) {
-      if (generation.current === current) setState({ kind: "error", message: safeMessage(error) });
+      if (operationIsCurrent(operation)) setState({ kind: "error", message: safeMessage(error) });
     }
   };
 
   const discard = async () => {
     if (!draft) return;
-    const current = generation.current + 1;
-    generation.current = current;
+    const operation = beginOperation();
     try {
       await draftService.discard({ organizationId, userId, locationId, draftId: draft.draftId, expectedDraftRevision: draft.draftRevision });
-      if (generation.current !== current) return;
+      if (!scopeIsCurrent(operation)) return;
       setDraft(null);
-      setState({ kind: "empty", message: "Device draft discarded." });
+      if (operationIsCurrent(operation)) setState({ kind: "empty", message: "Device draft discarded." });
     } catch (error) {
-      if (generation.current === current) setState({ kind: "error", message: safeMessage(error) });
+      if (operationIsCurrent(operation)) setState({ kind: "error", message: safeMessage(error) });
     }
   };
 
   const detectBarcode = async (file) => {
     if (!file || typeof globalThis.BarcodeDetector !== "function") return;
-    const current = generation.current + 1;
-    generation.current = current;
+    const operation = beginOperation();
     setScanBusy(true);
     let bitmap = null;
     try {
@@ -1390,14 +1418,14 @@ export function InventoryMobileCapturePanel({
       bitmap = await globalThis.createImageBitmap(file);
       const detector = new globalThis.BarcodeDetector();
       const codes = await detector.detect(bitmap);
-      if (generation.current !== current) return;
+      if (!scopeIsCurrent(operation)) return;
       setQueryText(String(codes?.[0]?.rawValue || ""));
-      setState({ kind: codes?.length ? "draft" : "empty", message: codes?.length ? "Barcode placed in search. Confirm the exact ingredient." : "No barcode was detected. Use manual search." });
+      if (operationIsCurrent(operation)) setState({ kind: codes?.length ? "draft" : "empty", message: codes?.length ? "Barcode placed in search. Confirm the exact ingredient." : "No barcode was detected. Use manual search." });
     } catch {
-      if (generation.current === current) setState({ kind: "error", message: "Barcode capture was unavailable. Use manual search." });
+      if (operationIsCurrent(operation)) setState({ kind: "error", message: "Barcode capture was unavailable. Use manual search." });
     } finally {
       bitmap?.close?.();
-      if (generation.current === current) setScanBusy(false);
+      if (scopeIsCurrent(operation)) setScanBusy(false);
     }
   };
 
@@ -1406,21 +1434,25 @@ export function InventoryMobileCapturePanel({
       <p className="eyebrow">Walk the shelf</p>
       <h2 id="inventory-capture-title">Device stock-count draft</h2>
       <p className="muted">Manual search is always available. Drafts stay on this device for up to seven days and do not claim server persistence.</p>
-      <label className="field">Stock location<select value={locationId} onChange={(event) => { generation.current += 1; setLocationId(event.target.value); setDraft(null); setQueryText(""); setCounts({}); setNotes({}); setState({ kind: "loading", message: "Loading device drafts…" }); }}><option value="">Select location</option>{locations.map((location) => <option key={location.locationId} value={location.locationId}>{location.name}</option>)}</select></label>
+      <label className="field">Stock location<select value={locationId} onChange={(event) => { const nextLocationId = event.target.value; scopeEpoch.current += 1; uiFreshness.current += 1; scopeIdentity.current = `${enabled ? "1" : "0"}\u0000${organizationId || ""}\u0000${userId || ""}\u0000${nextLocationId}`; setLocationId(nextLocationId); setDraft(null); setQueryText(""); setCounts({}); setNotes({}); setState({ kind: "loading", message: "Loading device drafts…" }); }}><option value="">Select location</option>{locations.map((location) => <option key={location.locationId} value={location.locationId}>{location.name}</option>)}</select></label>
       <div className={online ? "status-strip" : "warning-note"} role="status">{online ? state.message : "Offline: counts are local device truth only. Reconnect to compare stock revisions."}</div>
       <label className="field">Search first<input type="search" aria-label="Search shelf ingredients" value={queryText} onChange={(event) => setQueryText(event.target.value)} placeholder="Ingredient name or reference" /></label>
       {typeof globalThis.BarcodeDetector === "function" && <><input ref={fileRef} className="sr-only" type="file" accept="image/*" capture="environment" aria-label="Barcode image" onChange={(event) => detectBarcode(event.target.files?.[0])} /><button type="button" className="ghost" disabled={scanBusy} onClick={() => fileRef.current?.click()}>{scanBusy ? "Reading barcode…" : "Scan barcode"}</button></>}
       <div className="inventory-capture-results" aria-label="Shelf search results">
-        {results.map((ingredient) => (
-          <article key={ingredient.ingredientId} className="inventory-capture-row">
+        {results.map((ingredient) => {
+          const savedLine = draft?.lines?.find((line) => line.ingredientId === ingredient.ingredientId
+            && line.baseUnitId === ingredient.baseUnitId && line.command?.locationId === locationId);
+          const saveFenced = state.kind === "submitting" || (savedLine && (savedLine.inFlight || savedLine.state !== "draft"));
+          return <article key={ingredient.ingredientId} className="inventory-capture-row">
             <div><h3>{ingredient.name}</h3><p className="source-note">Current revision {ingredient.stock?.revision || "unavailable"} · {stockText(ingredient)}</p></div>
-            <label className="field">Count ({ingredient.baseUnitId})<input inputMode="decimal" value={counts[ingredient.ingredientId] || ""} onChange={(event) => setCounts((current) => ({ ...current, [ingredient.ingredientId]: event.target.value }))} /></label>
-            <label className="field">Note <span className="source-note">optional</span><input maxLength={240} value={notes[ingredient.ingredientId] || ""} onChange={(event) => setNotes((current) => ({ ...current, [ingredient.ingredientId]: event.target.value }))} /></label>
-            <button type="button" className="ghost" onClick={() => saveLine(ingredient)}>Save count to device</button>
-          </article>
-        ))}
+            <label className="field">Count ({ingredient.baseUnitId})<input inputMode="decimal" disabled={saveFenced} value={counts[ingredient.ingredientId] || ""} onChange={(event) => setCounts((current) => ({ ...current, [ingredient.ingredientId]: event.target.value }))} /></label>
+            <label className="field">Note <span className="source-note">optional</span><input maxLength={240} disabled={saveFenced} value={notes[ingredient.ingredientId] || ""} onChange={(event) => setNotes((current) => ({ ...current, [ingredient.ingredientId]: event.target.value }))} /></label>
+            <button type="button" className="ghost" disabled={saveFenced} onClick={() => saveLine(ingredient)}>Save count to device</button>
+            {saveFenced && savedLine && <p className="source-note inventory-capture-fence">Resolve the saved request before replacing this count.</p>}
+          </article>;
+        })}
       </div>
-      {draft?.lines?.length > 0 && <div className="inventory-capture-draft-lines"><h3>Draft lines</h3><ul className="plain-list">{draft.lines.map((line) => <li key={line.lineId} data-capture-line-state={line.state}><strong>{line.ingredientName}: {line.countedQuantity} {line.baseUnitId}</strong> · {line.state}{line.receiptId && ` · receipt ${line.receiptId}`}{line.error && <span> · {line.error}</span>}{line.state === "uncertain" && <button type="button" className="ghost" onClick={() => submit({ lineIds: [line.lineId], reconcileUncertain: true })}>Check exact request</button>}{["conflict", "error"].includes(line.state) && <button type="button" className="ghost" onClick={() => recoverLine(line)}>Review against current revision</button>}</li>)}</ul></div>}
+      {draft?.lines?.length > 0 && <div className="inventory-capture-draft-lines"><h3>Draft lines</h3><ul className="plain-list">{draft.lines.map((line) => <li key={line.lineId} data-capture-line-state={line.state}><strong>{line.ingredientName}: {line.countedQuantity} {line.baseUnitId}</strong> · {line.state}{line.receiptId && ` · receipt ${line.receiptId}`}{line.error && <span> · {line.error}</span>}{line.previousAttempts?.length > 0 && <span> · {line.previousAttempts.length} prior attempt retained</span>}{line.state === "uncertain" && <button type="button" className="ghost" onClick={() => submit({ lineIds: [line.lineId], reconcileUncertain: true })}>Check exact request</button>}{["conflict", "error"].includes(line.state) && <button type="button" className="ghost" onClick={() => recoverLine(line)}>Review against current revision</button>}{line.state === "submitted" && <button type="button" className="ghost" onClick={() => recoverLine(line)}>Start another count</button>}</li>)}</ul></div>}
       <div className="inventory-action-row"><button type="button" className="cta" disabled={!draft?.lines?.some((line) => line.state === "draft") || !online || state.kind === "submitting"} onClick={() => submit()}>Submit clean counts</button><button type="button" className="ghost" disabled={!draft || state.kind === "submitting"} onClick={discard}>Discard device draft</button></div>
       <p className="source-note">No cold offline launch is promised. Successful lines record independent stock-count receipts; failures and conflicts remain local until reviewed.</p>
     </section>

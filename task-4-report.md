@@ -1,6 +1,6 @@
 # Task 4 — Exception-first inventory and offline mobile capture
 
-Last updated: 2026-09-17 10:11 CDT
+Last updated: 2026-09-17 10:30 CDT
 
 ## Outcome
 
@@ -66,3 +66,24 @@ Red evidence captured the original defects: 5/7 draft-store tests failed, the sa
 The expected Task 5/environment residuals remain unchanged: `check:env` lacks the six local Firebase variables; documentation and Product Intelligence gates require the explicitly deferred canonical files; and the cumulative capability-surface gate reports prior Task 1–3 backend paths plus the local draft module until Task 5 reconciliation. No hosted, deployed, provider, production, or human-acceptance claim is made.
 
 Fix-round planner completion: `2026-09-17T15:16:31.677Z` (`ui`, medium risk), using the same exact final file set as the refreshed start record.
+
+## Fix round 2 — exact reconciliation and same-line fencing
+
+Planner start: `2026-09-17T15:27:10.270Z` for `task-4-fix-round-2-exact-reconciliation-and-line-concurrency` (`ui`, medium risk). This refreshed record uses the exact final implementation/report scope; the earlier initial-scope record was `2026-09-17T15:19:10.378Z`.
+
+- An uncertain line now invokes the existing exact-request reconciliation path before any current-stock comparison. A later stock revision therefore cannot turn a lost response into a new conflict or suppress readback of the original idempotent command. The resulting receipt or continued recovery state is persisted on that same request identity.
+- Capture lines now carry a monotonic `lineRevision`. Ordinary updates must supply the observed draft and line revisions, merge across unrelated ingredient changes, and cannot replace an in-flight, uncertain, submitted, conflicted, or definitively rejected request. Explicit reviewed reset preserves a bounded predecessor-attempt record, including the exact command and request identity, outcome, receipt/error, quantity/revision evidence, and resolution time. Pre-fix device records are normalized on read and mutation.
+- Capture scope epoch now changes only with enabled organization, user, or location identity. Per-operation freshness controls messages without cancelling same-scope persistence. Two simultaneous independent saves from the same panel can complete the shared create race and both reach the revision-checked upsert path.
+- The shelf row disables ordinary count/note/save controls while its exact request is unresolved or terminal. Uncertain lines expose only exact-request checking; conflicts/errors expose reviewed reset; submitted lines expose an explicit new-count reset while retaining the predecessor receipt.
+
+Red evidence reproduced all requested failures: advanced-revision reconciliation made zero reconciliation calls; an in-flight same-line replacement incorrectly committed a new request; two same-panel saves produced only one update; and unresolved-line inputs remained enabled. After implementation:
+
+- Focused component/draft/authority-client tests: 3 files passed, 97/97 tests.
+- Full unit: 507 files passed, 3 skipped; 6,048 tests passed, 100 skipped.
+- Responsive/accessibility/native IndexedDB Chromium: 4/4 tests passed at 1440×1000, 768×1024, and 390×844, including real IndexedDB reload, cross-tab merging, scope switching, receipt retention, and revision conflict.
+- Production build: passed with 369 modules transformed.
+- `npm run check:project-state` and `git diff --check`: passed.
+
+The Task 5 and local-environment residuals recorded above are unchanged. No canonical docs, Product Intelligence authority, hosted system, provider, deployment, production data, or human acceptance were changed or claimed.
+
+Fix-round-2 planner completion: `2026-09-17T15:34:01.435Z` (`ui`, medium risk), using the same exact final file set as the refreshed start record.
