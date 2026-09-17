@@ -1,6 +1,6 @@
 # QuotePilot Development Tasks
 
-Last updated: 2026-09-14 02:59:23 CDT
+Last updated: 2026-09-16 19:04:45 CDT
 
 This file contains open work only. Completed delivery belongs in
 [`CHANGELOG.md`](CHANGELOG.md), current evidence in
@@ -59,6 +59,11 @@ This file contains open work only. Completed delivery belongs in
 
 ## P1 — Operational coherence
 
+- [ ] Replace the phone-width Inventory evidence table with a legible
+  responsive record layout or clearly signposted contained scroll treatment.
+  Preserve ingredient, physical on-hand, committed, available-to-allocate,
+  cost-evidence, location, and purchase-pack axes without clipped headers or
+  collapsing distinct stock and cost evidence.
 - [ ] Run the Delivery Planning evidence baseline with at least five owner-
   operators and two recent staffed-buffet events each; freeze the reviewable-
   quote-plus-proposal milestone, 30% median-time target, and material-
@@ -92,6 +97,10 @@ This file contains open work only. Completed delivery belongs in
 
 ## P1 — Product and design acceptance
 
+Related execution map: [GitHub issue #149](https://github.com/TOTALLYMAJOR/quoteflow/issues/149)
+ties the external solution-design review takeaways to the existing tasks below;
+it does not create a parallel roadmap or product authority.
+
 - [ ] Run a route-by-route **9.5 quality program** without manufacturing a
   score from source inspection alone. Grade task clarity/decision compression,
   speed and interruption recovery, truthful state/provenance/recovery,
@@ -111,20 +120,37 @@ This file contains open work only. Completed delivery belongs in
   salespeople, kitchen leads, and staffing coordinators doing real quote and
   event-planning work; rank problems by frequency, consequence, workaround,
   and willingness to change; then connect, revise, or reject each proposed
-  workflow against that evidence. Keep interview preference, observed behavior,
-  product usage, and commercial outcome as separate proof classes.
+  workflow against that evidence. In the same sessions, test whether small
+  owner-operated caterers recognize QuotePilot's core promise as a faster path
+  from inquiry to a trustworthy proposal with a controlled operational handoff;
+  preserve their own language, current workaround, and willingness to change or
+  pay. Do not broaden into a generic service-business platform without evidence
+  that the shared need outweighs the catering-specific advantage. Keep interview
+  preference, observed behavior, product usage, and commercial outcome as
+  separate proof classes.
 - [ ] Create and execute a quote-acceleration plan. Measure the current path
-  from inquiry to usable priced draft and customer-ready quote, identify the
-  highest-cost waits, repeated entry, navigation, and correction loops, then
-  test the smallest improvements through reusable Offers/templates, staged
-  imports, contextual defaults, progressive disclosure, and faster pricing
-  feedback. Set the speed target only after the baseline is recorded, and prove
-  that improvement without weakening exact pricing, imported/defaulted
-  provenance, revision history, approval gates, responsive accessibility, or
-  customer-facing accuracy.
+  through two separate baselines: **cold-start activation** from realistic
+  spreadsheet, document, or inquiry material through reviewed setup and a first
+  customer-ready quote; and **repeat quoting** from a new inquiry in a configured
+  tenant to an authoritative sendable quote. When Delivery Planning applies,
+  measure quote-plus-reviewable-Delivery-Proposal time separately. Define the
+  start and end events and record corrections, recovery, and customer-facing
+  accuracy alongside elapsed time so speed cannot be bought by skipping gates.
+  Identify the highest-cost waits, repeated entry, navigation, and correction
+  loops, then test the smallest improvements through reusable Offers/templates,
+  staged imports, contextual defaults, progressive disclosure, and faster
+  pricing feedback. Set the speed target only after the baselines are recorded;
+  treat a three-minute quote as a hypothesis rather than an adopted claim. Prove
+  improvement without weakening exact pricing, imported/defaulted provenance,
+  revision history, approval gates, responsive accessibility, or customer-facing
+  accuracy.
 - [ ] Converge the caterer operating experience through the existing Now,
   Opportunity, Library, Workflow, and Operations surfaces rather than adding
-  more primary modules. Now must distinguish **Act now**, **Waiting on
+  more primary modules. Optimize for an owner-operator who may perform sales,
+  scheduling, Inventory, and coordination work in one day: organize the
+  experience around the current job, event context, and next action without
+  merging authorization roles or business authorities. Now must distinguish
+  **Act now**, **Waiting on
   someone**, and **Coming up**; group multiple downstream effects under their
   one underlying decision; preserve full Calendar/work-list access; ask for
   information only when its named transition needs it; support honest Unknown,
@@ -158,12 +184,14 @@ This file contains open work only. Completed delivery belongs in
   and human-comprehension behavior with representative short and long quotes.
 - [ ] Complete the first-quote activation continuation: when Library sends an
   administrator to Import Studio for Offers and menu, orient the route to menu
-  import, provide a downloadable canonical CSV template, preserve imported
-  provenance through staged review, and return the confirmed batch to the exact
-  Menu Builder and cost-gap review. Keep imported, saved, published, customer
-  price, recorded item cost, recipe/menu-cost evidence, and physical Inventory
-  readiness as distinct states; require focused tests plus 390/768/1440 and
-  human-comprehension acceptance.
+  import, provide a downloadable canonical CSV template, and measure activation
+  from the operator's real source material rather than an already configured
+  catalog. Preserve imported provenance, interruption-safe resume, and recovery
+  through staged review, then return the confirmed batch to the exact Menu
+  Builder and cost-gap review. Keep imported, saved, published, customer price,
+  recorded item cost, recipe/menu-cost evidence, and physical Inventory readiness
+  as distinct states; require focused tests plus 390/768/1440 and human-
+  comprehension acceptance.
 - [ ] Run the exact current candidate at 390, 768, and 1440 pixels for admin and
   sales roles, then record overflow, focus, reduced-motion, forced-colors,
   assistive-technology, and human comprehension evidence separately.
