@@ -9,6 +9,7 @@ import {
   resetDefinitiveInventoryCommand,
   subscribeToEventIngredientProjection
 } from "../lib/inventoryAuthorityClient";
+import { scheduleDeferredClientWork } from "../lib/deferredClientWork";
 
 function text(value) {
   return String(value ?? "").trim();
@@ -112,6 +113,12 @@ export function deriveEventIngredientReadState({
   };
 }
 
+/**
+ * Quote Edit consumes this hook as secondary commercial intelligence. The
+ * initial projection listener yields to the editor's first browser work when
+ * idle scheduling is available; explicit previews and inventory mutations stay
+ * immediate and continue to use the existing Inventory authority.
+ */
 export function useEventIngredientProjection({
   active = false,
   organizationId = "",
@@ -159,36 +166,41 @@ export function useEventIngredientProjection({
     }
     let listening = true;
     let unsubscribe = () => {};
-    setRead({ ...initialRead(text(quoteId)), state: "loading", sourceState: "loading" });
-    try {
-      unsubscribe = subscribeToEventIngredientProjection({
-        ...scope,
-        quoteId,
-        onData: (model) => {
-          if (!listening || lifecycleRef.current !== lifecycle) return;
-          setRead(deriveEventIngredientReadState({ model, savedQuoteRevisionId, draftDirty }));
-        },
-        onError: (error) => {
-          if (!listening || lifecycleRef.current !== lifecycle) return;
-          setRead((current) => ({
-            ...current,
-            state: draftDirty ? "draft_not_evaluated" : "unavailable",
-            sourceState: "unavailable",
-            retained: Boolean(current.projection),
-            error: text(error?.message) || "Event ingredient projection updates are unavailable."
-          }));
-        }
-      });
-    } catch (error) {
-      setRead({
-        ...initialRead(text(quoteId)),
-        state: draftDirty ? "draft_not_evaluated" : "unavailable",
-        sourceState: "unavailable",
-        error: text(error?.message) || "Event ingredient projection updates are unavailable."
-      });
-    }
+    const beginListening = () => {
+      if (!listening || lifecycleRef.current !== lifecycle) return;
+      setRead({ ...initialRead(text(quoteId)), state: "loading", sourceState: "loading" });
+      try {
+        unsubscribe = subscribeToEventIngredientProjection({
+          ...scope,
+          quoteId,
+          onData: (model) => {
+            if (!listening || lifecycleRef.current !== lifecycle) return;
+            setRead(deriveEventIngredientReadState({ model, savedQuoteRevisionId, draftDirty }));
+          },
+          onError: (error) => {
+            if (!listening || lifecycleRef.current !== lifecycle) return;
+            setRead((current) => ({
+              ...current,
+              state: draftDirty ? "draft_not_evaluated" : "unavailable",
+              sourceState: "unavailable",
+              retained: Boolean(current.projection),
+              error: text(error?.message) || "Event ingredient projection updates are unavailable."
+            }));
+          }
+        });
+      } catch (error) {
+        setRead({
+          ...initialRead(text(quoteId)),
+          state: draftDirty ? "draft_not_evaluated" : "unavailable",
+          sourceState: "unavailable",
+          error: text(error?.message) || "Event ingredient projection updates are unavailable."
+        });
+      }
+    };
+    const cancelDeferredStart = scheduleDeferredClientWork(beginListening);
     return () => {
       listening = false;
+      cancelDeferredStart();
       lifecycleRef.current += 1;
       unsubscribe();
     };
