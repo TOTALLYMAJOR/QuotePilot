@@ -2,6 +2,7 @@
 
 const inventory = require("./inventoryIngredientCore.cjs");
 const allocation = require("./inventoryIngredientAllocationCore.cjs");
+const inventoryAuthority = require("./inventoryAuthority.js");
 
 const SUPPLY_PLAN_SCHEMA_VERSION = 1;
 const SUPPLY_PLAN_AUTHORITY_VERSION = "event-supply-action-plan-v1";
@@ -47,8 +48,138 @@ function receiptIdFor(organizationId, requestId) {
   return `esaprc_${inventory.digest({ organizationId: inventory.opaqueId(organizationId), requestId: inventory.requestId(requestId) }, "supply plan receipt identity").slice(0, 48)}`;
 }
 
-function sourceFromAllocation(value, identity = {}) {
-  const plan = allocation.verifyPlan(value, identity);
+function allocationSummary(plan) {
+  return {
+    state: plan.state,
+    eventPlanId: plan.eventPlanId,
+    allocationRevision: plan.allocationRevision,
+    eventRequirementRevisionId: plan.eventRequirementRevisionId,
+    ingredientCount: plan.ingredientCount,
+    fullyAllocatedIngredientCount: plan.fullyAllocatedIngredientCount,
+    shortageIngredientCount: plan.shortageIngredientCount,
+    ingredients: plan.ingredients.map((row) => ({
+      ingredientId: row.ingredientId,
+      locationId: row.locationId,
+      baseUnitId: row.baseUnitId,
+      stockRevision: row.stockRevision,
+      fenceRevision: row.fenceRevision,
+      requiredQuantityMicros: row.requiredQuantityMicros,
+      allocatedQuantityMicros: row.allocatedQuantityMicros,
+      shortageQuantityMicros: row.shortageQuantityMicros
+    }))
+  };
+}
+
+function sourceFromEvidence(value, identity = {}) {
+  if (!isRecord(value)) fail("failed-precondition", "Current supply-plan supporting evidence is unavailable.");
+  const plan = allocation.verifyPlan(value.allocationPlan, identity);
+  const head = inventoryAuthority.verifyEventRequirementHead(value.requirementHead, {
+    organizationId: identity.organizationId, quoteId: identity.quoteId, documentId: identity.quoteId
+  });
+  const requirementRecord = inventoryAuthority.verifyEventRequirementRecord(value.requirementRecord, {
+    organizationId: identity.organizationId,
+    quoteId: identity.quoteId,
+    eventRequirementRevisionId: plan.eventRequirementRevisionId,
+    documentId: plan.eventRequirementRevisionId
+  });
+  const requirement = requirementRecord.requirement;
+  const projection = inventoryAuthority.verifyPersistedEventProjection(value.eventProjection, {
+    organizationId: identity.organizationId, quoteId: identity.quoteId, documentId: identity.quoteId
+  });
+  if (!isRecord(value.quote) || !isRecord(value.quoteVersion) || !isRecord(value.quoteVersion.snapshot)) {
+    fail("data-loss", "Current quote revision evidence is malformed.");
+  }
+  if (value.quote.organizationId !== identity.organizationId
+    || value.quoteVersion.organizationId !== identity.organizationId
+    || value.quoteVersion.quoteId !== identity.quoteId
+    || value.quoteVersion.versionId !== requirement.quoteRevisionId) {
+    fail("data-loss", "Pinned quote revision evidence crossed its tenant or quote boundary.");
+  }
+  const recipeHeads = Array.isArray(value.recipeHeads) ? value.recipeHeads : [];
+  const stockStates = Array.isArray(value.stockStates) ? value.stockStates : [];
+  const fences = Array.isArray(value.fences) ? value.fences : [];
+  if (recipeHeads.length !== requirement.selections.length
+    || stockStates.length !== plan.ingredients.length || fences.length !== plan.ingredients.length) {
+    fail("failed-precondition", "Current supply-plan supporting evidence is incomplete.");
+  }
+  const reasons = [];
+  const reason = (code) => { if (!reasons.includes(code)) reasons.push(code); };
+  if (!new Set(["reserved", "shortage"]).has(plan.state)) reason("allocation_not_live");
+  if (head.eventRequirementRevisionId !== plan.eventRequirementRevisionId
+    || head.revision !== plan.requirementRevision
+    || head.requirementDigest !== plan.requirementDigest
+    || head.quoteRevisionId !== requirement.quoteRevisionId
+    || requirementRecord.requirementDigest !== plan.requirementDigest) reason("requirement_changed");
+  const expectedAllocation = allocationSummary(plan);
+  if (projection.freshness !== "as_recorded" || projection.staleReason
+    || projection.freshnessState.demand.state !== "current"
+    || projection.freshnessState.cost.state !== "current"
+    || projection.freshnessState.availability.state !== "current"
+    || projection.freshnessState.allocation.state !== "current"
+    || projection.quoteRevisionId !== requirement.quoteRevisionId
+    || projection.eventRequirementRevisionId !== plan.eventRequirementRevisionId
+    || projection.requirementRevision !== plan.requirementRevision
+    || projection.requirementDigest !== plan.requirementDigest
+    || inventory.canonicalSerialize(projection.allocation) !== inventory.canonicalSerialize(expectedAllocation)) {
+    reason("event_projection_changed");
+  }
+  const activeQuoteRevisionId = value.quote.activeVersionId || value.quote.versionMeta?.versionId || "";
+  const snapshot = value.quoteVersion.snapshot;
+  const selectedMenuItemIds = Array.isArray(snapshot.selection?.menuItems)
+    ? [...snapshot.selection.menuItems].sort() : [];
+  const requirementMenuItemIds = requirement.selections.map(({ menuItemId }) => menuItemId).sort();
+  if (!new Set(["accepted", "booked"]).has(String(value.quote.status || "").trim().toLowerCase())) reason("quote_not_accepted");
+  if (activeQuoteRevisionId !== requirement.quoteRevisionId
+    || (snapshot.organizationId && snapshot.organizationId !== identity.organizationId)
+    || (snapshot.id && snapshot.id !== identity.quoteId)
+    || (snapshot.activeVersionId && snapshot.activeVersionId !== requirement.quoteRevisionId)
+    || inventory.canonicalSerialize(selectedMenuItemIds) !== inventory.canonicalSerialize(requirementMenuItemIds)) {
+    reason("quote_revision_changed");
+  }
+  const verifiedRecipeHeads = recipeHeads.map((candidate, index) => {
+    const selection = requirement.selections[index];
+    if (!candidate) {
+      reason("recipe_changed");
+      return { missingMenuItemId: selection.menuItemId };
+    }
+    const verified = inventoryAuthority.verifyRecipeHead(candidate, {
+      organizationId: identity.organizationId, menuItemId: selection.menuItemId, documentId: selection.menuItemId
+    });
+    if (selection.recipeRevisionId === null || verified.recipeRevisionId !== selection.recipeRevisionId
+      || verified.recipeDigest !== selection.recipeDigest) reason("recipe_changed");
+    return verified;
+  });
+  const verifiedStockStates = stockStates.map((candidate, index) => {
+    const row = plan.ingredients[index];
+    if (!candidate) {
+      reason("stock_changed");
+      return { missingStockStateId: inventory.stockStateId(row.ingredientId, row.locationId) };
+    }
+    const verified = inventory.verifyStockState(candidate, {
+      organizationId: identity.organizationId, ingredientId: row.ingredientId, locationId: row.locationId
+    });
+    if (verified.revision !== row.stockRevision || verified.baseUnitId !== row.baseUnitId) reason("stock_changed");
+    return verified;
+  });
+  const verifiedFences = fences.map((candidate, index) => {
+    const row = plan.ingredients[index];
+    if (!candidate) {
+      reason("allocation_fence_changed");
+      return { missingFenceId: row.fenceId };
+    }
+    const verified = allocation.verifyFence(candidate, {
+      organizationId: identity.organizationId,
+      ingredientId: row.ingredientId,
+      locationId: row.locationId,
+      documentId: row.fenceId
+    });
+    const active = verified.allocations.find(({ allocationId }) => allocationId === row.allocationId);
+    if (verified.revision !== row.fenceRevision || verified.baseUnitId !== row.baseUnitId
+      || (row.allocatedQuantityMicros > 0
+        ? !active || active.quantityMicros !== row.allocatedQuantityMicros
+        : Boolean(active))) reason("allocation_fence_changed");
+    return verified;
+  });
   const allocationEvidence = {
     eventPlanId: plan.eventPlanId,
     planRevisionId: plan.planRevisionId,
@@ -78,6 +209,21 @@ function sourceFromAllocation(value, identity = {}) {
     .sort((a, b) => `${a.ingredientId}\u0000${a.locationId}`.localeCompare(`${b.ingredientId}\u0000${b.locationId}`));
   const allocationFingerprint = inventory.digest(plan, "supply allocation source");
   const shortageFingerprint = inventory.digest(shortages, "supply shortage source");
+  const requirementFingerprint = inventory.digest({ head, requirementRecord }, "supply requirement source");
+  const eventProjectionFingerprint = inventory.digest(projection, "supply event projection source");
+  const quoteRevisionFingerprint = inventory.digest({ quote: value.quote, quoteVersion: value.quoteVersion }, "supply quote revision source");
+  const recipeFingerprint = inventory.digest(verifiedRecipeHeads, "supply recipe source");
+  const stockFingerprint = inventory.digest(verifiedStockStates, "supply stock source");
+  const fenceFingerprint = inventory.digest(verifiedFences, "supply allocation fence source");
+  const supportingEvidenceFingerprint = inventory.digest({
+    requirementFingerprint, eventProjectionFingerprint, quoteRevisionFingerprint,
+    recipeFingerprint, stockFingerprint, fenceFingerprint
+  }, "supply supporting evidence source");
+  const eligible = reasons.length === 0;
+  const sourceFingerprint = inventory.digest({
+    allocationFingerprint, shortageFingerprint, supportingEvidenceFingerprint, eligible,
+    ineligibilityReasons: reasons
+  }, "supply plan source");
   return Object.freeze({
     eventPlanId: plan.eventPlanId,
     planRevisionId: plan.planRevisionId,
@@ -85,7 +231,16 @@ function sourceFromAllocation(value, identity = {}) {
     eventRequirementRevisionId: plan.eventRequirementRevisionId,
     allocationFingerprint,
     shortageFingerprint,
-    sourceFingerprint: inventory.digest({ allocationFingerprint, shortageFingerprint }, "supply plan source"),
+    requirementFingerprint,
+    eventProjectionFingerprint,
+    quoteRevisionFingerprint,
+    recipeFingerprint,
+    stockFingerprint,
+    fenceFingerprint,
+    supportingEvidenceFingerprint,
+    eligible,
+    ineligibilityReasons: Object.freeze(reasons),
+    sourceFingerprint,
     shortages: Object.freeze(shortages)
   });
 }
@@ -158,6 +313,7 @@ function normalizeCommand(value, source = null) {
   ];
   exact(value, value.kind === "approve" ? [...common, "confirmation"] : [...common, "edits"], "Supply plan command");
   if (!source) fail("failed-precondition", "Current allocation evidence is required.");
+  if (!source.eligible) fail("aborted", "Supply-plan evidence is no longer current and eligible. Refresh upstream inventory evidence.");
   const normalized = {
     kind: value.kind,
     quoteId,
@@ -217,7 +373,7 @@ function buildRevision({ organizationId, command, current = null, source, actor,
   const planRevision = currentRevision + 1;
   const planId = planIdFor(orgId, command.quoteId);
   const revisionSource = command.kind === "cancel" ? current.source : source;
-  const resolution = revisionSource.shortages.length === 0 ? "resolved" : "unresolved";
+  const resolution = revisionSource.eligible && revisionSource.shortages.length === 0 ? "resolved" : "unresolved";
   const body = {
     authorityVersion: SUPPLY_PLAN_AUTHORITY_VERSION,
     schemaVersion: SUPPLY_PLAN_SCHEMA_VERSION,
@@ -249,16 +405,36 @@ function verifyRevision(value, identity = {}) {
   const { revisionDigest, ...body } = value;
   exact(value.source, [
     "eventPlanId", "planRevisionId", "allocationRevision", "eventRequirementRevisionId",
-    "allocationFingerprint", "shortageFingerprint", "sourceFingerprint", "shortages"
+    "allocationFingerprint", "shortageFingerprint", "requirementFingerprint",
+    "eventProjectionFingerprint", "quoteRevisionFingerprint", "recipeFingerprint",
+    "stockFingerprint", "fenceFingerprint", "supportingEvidenceFingerprint", "eligible",
+    "ineligibilityReasons", "sourceFingerprint", "shortages"
   ], "Supply plan source", "data-loss");
   if (!Array.isArray(value.source.shortages)) fail("data-loss", "Stored supply plan shortage evidence is invalid.");
   value.source.shortages.forEach((row) => exact(row, [
     "ingredientId", "locationId", "baseUnitId", "shortageQuantity", "shortageQuantityMicros"
   ], "Supply plan shortage", "data-loss"));
   const expectedShortageFingerprint = inventory.digest(value.source.shortages, "supply shortage source");
+  const supportingKeys = [
+    "requirementFingerprint", "eventProjectionFingerprint", "quoteRevisionFingerprint",
+    "recipeFingerprint", "stockFingerprint", "fenceFingerprint"
+  ];
+  if (supportingKeys.some((key) => !SHA256.test(value.source[key]))
+    || typeof value.source.eligible !== "boolean"
+    || !Array.isArray(value.source.ineligibilityReasons)
+    || value.source.ineligibilityReasons.some((entry) => typeof entry !== "string" || !entry)
+    || value.source.eligible !== (value.source.ineligibilityReasons.length === 0)) {
+    fail("data-loss", "Stored supply plan supporting evidence is invalid.");
+  }
+  const expectedSupportingEvidenceFingerprint = inventory.digest(Object.fromEntries(
+    supportingKeys.map((key) => [key, value.source[key]])
+  ), "supply supporting evidence source");
   const expectedSourceFingerprint = inventory.digest({
     allocationFingerprint: value.source.allocationFingerprint,
-    shortageFingerprint: value.source.shortageFingerprint
+    shortageFingerprint: value.source.shortageFingerprint,
+    supportingEvidenceFingerprint: value.source.supportingEvidenceFingerprint,
+    eligible: value.source.eligible,
+    ineligibilityReasons: value.source.ineligibilityReasons
   }, "supply plan source");
   if (value.authorityVersion !== SUPPLY_PLAN_AUTHORITY_VERSION || value.schemaVersion !== 1
     || value.organizationId !== identity.organizationId || value.quoteId !== identity.quoteId
@@ -268,8 +444,9 @@ function verifyRevision(value, identity = {}) {
     || !["unresolved", "resolved"].includes(value.resolution)
     || !SHA256.test(value.source.allocationFingerprint)
     || value.source.shortageFingerprint !== expectedShortageFingerprint
+    || value.source.supportingEvidenceFingerprint !== expectedSupportingEvidenceFingerprint
     || value.source.sourceFingerprint !== expectedSourceFingerprint
-    || value.resolution !== (value.source.shortages.length === 0 ? "resolved" : "unresolved")
+    || value.resolution !== (value.source.eligible && value.source.shortages.length === 0 ? "resolved" : "unresolved")
     || value.boundary !== SUPPLY_PLAN_BOUNDARY
     || revisionDigest !== inventory.digest(body, "supply plan revision")) {
     fail("data-loss", "Stored supply plan revision is inconsistent.");
@@ -317,6 +494,13 @@ function createEventSupplyActionPlanRuntime({
       settings: organization.collection("settings").doc("config"),
       role: (uid) => db.collection("userRoles").doc(uid),
       allocationPlan: quoteId ? organization.collection("eventIngredientPlans").doc(quoteId) : null,
+      requirementHead: quoteId ? organization.collection("eventIngredientRequirementHeads").doc(quoteId) : null,
+      requirements: quoteId ? organization.collection("eventIngredientRequirements").doc(quoteId) : null,
+      eventProjection: quoteId ? organization.collection("eventIngredientProjections").doc(quoteId) : null,
+      quote: quoteId ? organization.collection("quotes").doc(quoteId) : null,
+      recipeHeads: organization.collection("inventoryRecipeHeads"),
+      stockStates: organization.collection("inventoryStockStates"),
+      allocationFences: organization.collection("inventoryAllocationFences"),
       supplyPlan: quoteId ? organization.collection("eventSupplyActionPlans").doc(quoteId) : null,
       receipts: organization.collection("eventSupplyActionPlanReceipts")
     };
@@ -358,6 +542,50 @@ function createEventSupplyActionPlanRuntime({
     throw new HttpsError("internal", "Supply plan authority failed without a confirmed outcome. Retry the same request identity.");
   };
 
+  const loadCurrentSource = async (tx, refs, organizationId, quoteId) => {
+    const [allocationSnap, headSnap, projectionSnap, quoteSnap] = await tx.getAll(
+      refs.allocationPlan, refs.requirementHead, refs.eventProjection, refs.quote
+    );
+    if (!allocationSnap.exists || !headSnap.exists || !projectionSnap.exists || !quoteSnap.exists) {
+      fail("failed-precondition", "Current allocation, requirement, event projection, and quote evidence are required.");
+    }
+    const plan = allocation.verifyPlan(allocationSnap.data() || {}, {
+      organizationId, quoteId, documentId: allocationSnap.id
+    });
+    const head = inventoryAuthority.verifyEventRequirementHead(headSnap.data() || {}, {
+      organizationId, quoteId, documentId: headSnap.id
+    });
+    const requirementRef = refs.requirements.collection("revisions").doc(plan.eventRequirementRevisionId);
+    const requirementSnap = await tx.get(requirementRef);
+    if (!requirementSnap.exists) fail("failed-precondition", "Pinned requirement evidence is required.");
+    const requirementRecord = inventoryAuthority.verifyEventRequirementRecord(requirementSnap.data() || {}, {
+      organizationId, quoteId, eventRequirementRevisionId: plan.eventRequirementRevisionId, documentId: requirementSnap.id
+    });
+    const quoteVersionRef = refs.quote.collection("versions").doc(requirementRecord.requirement.quoteRevisionId);
+    const quoteVersionSnap = await tx.get(quoteVersionRef);
+    if (!quoteVersionSnap.exists) fail("failed-precondition", "Pinned quote revision evidence is required.");
+    const recipeHeadRefs = requirementRecord.requirement.selections.map(({ menuItemId }) => refs.recipeHeads.doc(menuItemId));
+    const stockRefs = plan.ingredients.map((row) => refs.stockStates.doc(inventory.stockStateId(row.ingredientId, row.locationId)));
+    const fenceRefs = plan.ingredients.map((row) => refs.allocationFences.doc(row.fenceId));
+    const evidenceSnaps = await tx.getAll(...recipeHeadRefs, ...stockRefs, ...fenceRefs);
+    const recipeHeads = evidenceSnaps.slice(0, recipeHeadRefs.length).map((snap) => snap.exists ? snap.data() || {} : null);
+    const stockStart = recipeHeadRefs.length;
+    const fenceStart = stockStart + stockRefs.length;
+    const stockStates = evidenceSnaps.slice(stockStart, fenceStart).map((snap) => snap.exists ? snap.data() || {} : null);
+    const fences = evidenceSnaps.slice(fenceStart).map((snap) => snap.exists ? snap.data() || {} : null);
+    return sourceFromEvidence({
+      allocationPlan: plan,
+      requirementHead: head,
+      requirementRecord,
+      eventProjection: projectionSnap.data() || {},
+      quote: quoteSnap.data() || {},
+      quoteVersion: quoteVersionSnap.data() || {},
+      recipeHeads,
+      stockStates,
+      fences
+    }, { organizationId, quoteId, documentId: allocationSnap.id });
+  };
+
   async function getEventSupplyActionPlan(data = {}, context = {}) {
     try {
       exact(data, ["schemaVersion", "organizationId", "quoteId"], "Supply plan read request");
@@ -369,11 +597,10 @@ function createEventSupplyActionPlanRuntime({
       const refs = refsFor(organizationId, quoteId);
       return await db.runTransaction(async (tx) => {
         await assertAuthority(tx, refs, principal, false);
-        const [allocationSnap, supplySnap] = await Promise.all([tx.get(refs.allocationPlan), tx.get(refs.supplyPlan)]);
-        if (!allocationSnap.exists) fail("failed-precondition", "Current event ingredient allocation evidence is unavailable.");
-        const source = sourceFromAllocation(allocationSnap.data() || {}, { organizationId, quoteId, documentId: allocationSnap.id });
+        const supplySnap = await tx.get(refs.supplyPlan);
+        const source = await loadCurrentSource(tx, refs, organizationId, quoteId);
         const plan = supplySnap.exists ? verifyRevision(supplySnap.data() || {}, { organizationId, quoteId }) : null;
-        const stale = Boolean(plan && plan.source.sourceFingerprint !== source.sourceFingerprint);
+        const stale = !source.eligible || Boolean(plan && plan.source.sourceFingerprint !== source.sourceFingerprint);
         return Object.freeze({
           ok: true,
           schemaVersion: 1,
@@ -421,9 +648,8 @@ function createEventSupplyActionPlanRuntime({
             receipt: receipt.publicReceipt
           });
         }
-        const [allocationSnap, currentSnap] = await Promise.all([tx.get(refs.allocationPlan), tx.get(refs.supplyPlan)]);
-        if (!allocationSnap.exists) fail("failed-precondition", "Current event ingredient allocation evidence is unavailable.");
-        const source = sourceFromAllocation(allocationSnap.data() || {}, { organizationId, quoteId, documentId: allocationSnap.id });
+        const currentSnap = await tx.get(refs.supplyPlan);
+        const source = await loadCurrentSource(tx, refs, organizationId, quoteId);
         const command = normalizeCommand(data.command, source);
         const current = currentSnap.exists ? verifyRevision(currentSnap.data() || {}, { organizationId, quoteId }) : null;
         const revision = buildRevision({ organizationId, command, current, source, actor, nowISO: now() });
@@ -466,6 +692,6 @@ module.exports = {
   planIdFor,
   receiptIdFor,
   revisionIdFor,
-  sourceFromAllocation,
+  sourceFromEvidence,
   verifyRevision
 };

@@ -1,6 +1,6 @@
 # Task 3 — Internal supply plan and authoritative stock count
 
-Last updated: 2026-09-17 08:51:30 CDT
+Last updated: 2026-09-17 09:09:59 CDT
 
 ## Outcome
 
@@ -18,6 +18,15 @@ Planner start: `2026-09-17T13:27:42.854Z` for `task-3-internal-supply-plan-autho
 - Server-derived exact allocation, shortage, and combined source fingerprints from verified `event-ingredient-plan-v1` evidence; bounded edits must exactly cover the shortage set and retain policy/offer fingerprints.
 - Human approval binds the authenticated actor and server time. Rebase clears obsolete approval evidence. Cancellation preserves the last reviewed source. Resolution is derived only from a refreshed, verified allocation source with no shortages.
 - `record_stock_count` accepts only the exact active ingredient, location, and base unit; requires non-negative counted quantity, occurrence time, actor, and expected stock revision; calculates the delta on the server; advances stock revision; and creates an immutable, backward-verifiable movement and command receipt.
+
+## Important-finding remediation
+
+Fix round 1 planner start: `2026-09-17T13:56:23.100Z` for `task-3-fix-round-1-source-freshness-and-count-canonicalization` (`core`, high risk).
+
+- Every supply-plan read and non-replay command now transactionally verifies the current allocation, current requirement head, pinned immutable requirement, current event projection, current quote plus pinned quote revision, every pinned recipe head, every relevant stock state, and every relevant allocation fence before returning or mutating authority.
+- Full-document requirement, event-projection, quote-revision, recipe, stock, and fence fingerprints roll into an exact supporting-evidence fingerprint and the combined source fingerprint. Semantic drift additionally produces explicit ineligibility reasons. Exact receipt replay remains idempotent even if later source evidence changes.
+- Only live `shortage` or `reserved` allocations with current supporting evidence are eligible. `released` and `settled` allocations are stale/ineligible and cannot be rebased into a resolved plan. Resolution still requires an eligible refreshed allocation with zero shortages.
+- The client canonicalizes counted quantities before the callable payload, pending-attempt record, receipt comparison, and projection reconciliation. Both `37.500` to `37.5` and `0.000` to `0` succeed without weakening exact micros checks.
 
 ## Changed implementation and tests
 
@@ -38,6 +47,7 @@ Planner start: `2026-09-17T13:27:42.854Z` for `task-3-internal-supply-plan-autho
 - `node --check` for changed server modules: passed.
 - `npm run check:project-state`: passed (12 capabilities, 10 blockers, 1 proof event, 5 commercial evidence records).
 - `git diff --check`: passed.
+- Fix round 1 began with 7 expected red regressions. After implementation, focused Task 3 coverage passed 155/155; full unit passed 6018 with 100 skipped across 506 passing and 3 skipped files; Firestore rules passed 96/96; and the production build passed.
 
 ## Bounded residuals and Task 5 obligations
 
@@ -47,3 +57,5 @@ Planner start: `2026-09-17T13:27:42.854Z` for `task-3-internal-supply-plan-autho
 - No hosted Firebase execution, deployment, production verification, provider proof, or human acceptance was performed.
 
 Planner completion: `2026-09-17T13:51:59.804Z` (`auth_rules`, high risk). The completion file set includes the approved refinement to the live ingredient core and its focused tests.
+
+Fix round 1 planner completion: `2026-09-17T14:06:52.454Z` (`core`, high risk).

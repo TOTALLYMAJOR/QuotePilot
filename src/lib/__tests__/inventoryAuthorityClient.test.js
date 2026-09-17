@@ -580,6 +580,7 @@ function responseFor(payload, resultOverrides = {}) {
   } else if (payload.command.kind === "opening_balance") {
     result = { schemaVersion: 2, ingredientId: payload.command.ingredientId, locationId: payload.command.locationId, movementId: `imv_${"c".repeat(48)}`, stockRevision: payload.command.expectedStockRevision + 1, onHandMicros: 40_000_000, onHandQuantity: payload.command.quantity };
   } else if (payload.command.kind === "record_stock_count") {
+    const countedQuantityMicros = Math.round(Number(payload.command.countedQuantity) * 1_000_000);
     result = {
       schemaVersion: 2,
       ingredientId: payload.command.ingredientId,
@@ -587,8 +588,8 @@ function responseFor(payload, resultOverrides = {}) {
       movementId: `imv_${"9".repeat(48)}`,
       stockRevision: payload.command.expectedStockRevision + 1,
       countedQuantity: payload.command.countedQuantity,
-      countedQuantityMicros: 37_500_000,
-      signedDeltaMicros: -2_500_000,
+      countedQuantityMicros,
+      signedDeltaMicros: countedQuantityMicros - 40_000_000,
       onHandQuantity: payload.command.countedQuantity
     };
   } else {
@@ -910,12 +911,17 @@ describe("inventory schema-v2 command authority", () => {
     })).rejects.toThrow(/unsupported fields/i);
   });
 
-  test("submits only an exact nonnegative stock count and validates its authoritative receipt", async () => {
+  test.each([
+    ["37.500", "37.5", 37_500_000, -2_500_000],
+    ["0.000", "0", 0, -40_000_000]
+  ])("canonicalizes a %s stock count before submit and validates its authoritative receipt", async (
+    inputQuantity, canonicalQuantity, countedQuantityMicros, signedDeltaMicros
+  ) => {
     const command = {
       kind: "record_stock_count",
       ingredientId: "chicken",
       locationId: "main-kitchen",
-      countedQuantity: "37.5",
+      countedQuantity: inputQuantity,
       baseUnitId: "lb",
       occurredAtISO: NOW,
       note: "Human-confirmed shelf count",
@@ -930,11 +936,12 @@ describe("inventory schema-v2 command authority", () => {
       commandKind: "record_stock_count",
       confirmation: {
         stockRevision: 2,
-        countedQuantity: "37.5",
-        signedDeltaMicros: -2_500_000
+        countedQuantity: canonicalQuantity,
+        countedQuantityMicros,
+        signedDeltaMicros
       }
     });
-    expect(mocks.callable.mock.calls.at(-1)[0].command).toEqual(command);
+    expect(mocks.callable.mock.calls.at(-1)[0].command).toEqual({ ...command, countedQuantity: canonicalQuantity });
     await expect(applyInventoryCommand({
       ...ADMIN_SCOPE,
       organizationId: "org-stock-count-negative",
@@ -1028,6 +1035,32 @@ describe("inventory schema-v2 command authority", () => {
     ]);
     mocks.callable.mockImplementationOnce(async (payload) => ({ data: { ...responseFor(payload), idempotent: true } }));
     await expect(reconcileInventoryCommand({ ...scope, requestId: REQUEST_ID })).resolves.toMatchObject({ mutationMode: "reconciliation", idempotent: true });
+    expect(mocks.callable.mock.calls[1][0]).toEqual(mocks.callable.mock.calls[0][0]);
+  });
+
+  test("retains the canonical stock-count quantity through uncertain reconciliation", async () => {
+    const scope = { ...ADMIN_SCOPE, organizationId: "org-uncertain-stock-count" };
+    const requestId = `inventory_request_${"7".repeat(32)}`;
+    const command = {
+      kind: "record_stock_count",
+      ingredientId: "chicken",
+      locationId: "main-kitchen",
+      countedQuantity: "37.500",
+      baseUnitId: "lb",
+      occurredAtISO: NOW,
+      note: "Human-confirmed recount",
+      expectedStockRevision: 1
+    };
+    mocks.callable.mockRejectedValueOnce(Object.assign(new Error("connection ended"), { code: "functions/unavailable" }));
+    await expect(applyInventoryCommand({ ...scope, requestId, command })).rejects.toThrow(/connection ended/i);
+    expect(readPendingInventoryCommands(scope)[0]).toMatchObject({
+      command: { countedQuantity: "37.5" }, state: "uncertain", definitive: false
+    });
+    mocks.callable.mockImplementationOnce(async (payload) => ({ data: { ...responseFor(payload), idempotent: true } }));
+    await expect(reconcileInventoryCommand({ ...scope, requestId })).resolves.toMatchObject({
+      commandKind: "record_stock_count", mutationMode: "reconciliation", idempotent: true,
+      confirmation: { countedQuantity: "37.5", countedQuantityMicros: 37_500_000 }
+    });
     expect(mocks.callable.mock.calls[1][0]).toEqual(mocks.callable.mock.calls[0][0]);
   });
 

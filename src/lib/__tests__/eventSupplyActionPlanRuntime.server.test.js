@@ -3,6 +3,7 @@ import { describe, expect, test, vi } from "vitest";
 
 const require = createRequire(import.meta.url);
 const inventory = require("../../../functions/inventoryIngredientCore.cjs");
+const recipe = require("../../../functions/inventoryRecipeCore.cjs");
 const allocation = require("../../../functions/inventoryIngredientAllocationCore.cjs");
 const supply = require("../../../functions/eventSupplyActionPlanCore.cjs");
 
@@ -50,49 +51,195 @@ function fakeDb(entries) {
 }
 class HttpsError extends Error { constructor(code, message) { super(message); this.code = code; } }
 
-function allocationPlan({ required = 50_000_000, onHand = 40_000_000, currentPlan = null } = {}) {
-  const requirement = {
+function evidenceFixture({ required = 50_000_000, onHand = 40_000_000, terminalState = "" } = {}) {
+  const recipeRevisionId = recipe.recipeRevisionIdFor(ORG, "menu-chicken", 1);
+  const recipeDigest = "e".repeat(64);
+  const selection = {
+    selectionId: "menu-chicken",
+    menuItemId: "menu-chicken",
+    recipeRevisionId,
+    recipeDigest,
+    requiredOutputQuantity: "1",
+    outputUnitId: "portion",
+    portionBasis: { kind: "explicit_output_quantity", evidenceId: "menu-chicken" },
+    commercialProvenance: { kind: "direct", sourceId: "menu-chicken" }
+  };
+  const requirementIdentity = {
+    authorityVersion: inventory.INVENTORY_AUTHORITY_VERSION,
+    schemaVersion: 1,
+    requirementVersion: "ingredient-event-requirement-v1",
     organizationId: ORG,
     quoteId: QUOTE,
-    eventRequirementRevisionId: `eir_${"a".repeat(48)}`,
-    demandState: "complete",
+    quoteRevisionId: "quote-version-1",
     requiredByISO: "2026-09-20T18:00:00.000Z",
-    requirementDigest: "f".repeat(64),
-    ingredients: [{ ingredientId: "chicken", baseUnitId: "lb", requiredQuantityMicros: required }]
+    demandState: "complete",
+    costState: "unavailable",
+    selections: [selection],
+    ingredients: [{ ingredientId: "chicken", baseUnitId: "lb", requiredQuantityMicros: required }],
+    coverage: { selectionCount: 1 },
+    issues: []
+  };
+  const eventRequirementRevisionId = `eir_${inventory.digest(requirementIdentity, "event ingredient requirement identity").slice(0, 48)}`;
+  const requirementWithId = { ...requirementIdentity, eventRequirementRevisionId };
+  const requirement = { ...requirementWithId, requirementDigest: inventory.digest(requirementWithId, "event ingredient requirement") };
+  const head = {
+    authorityVersion: inventory.INVENTORY_AUTHORITY_VERSION,
+    schemaVersion: inventory.INVENTORY_SCHEMA_VERSION,
+    model: "event-ingredient-requirement-head-v1",
+    organizationId: ORG,
+    quoteId: QUOTE,
+    quoteRevisionId: requirement.quoteRevisionId,
+    revision: 1,
+    eventRequirementRevisionId,
+    requirementDigest: requirement.requirementDigest,
+    updatedAtISO: NOW
   };
   const stockState = inventory.createEmptyStockState({ organizationId: ORG, ingredientId: "chicken", locationId: "kitchen", baseUnitId: "lb" });
   const opened = { ...stockState, revision: 1, onHandMicros: onHand, lastMovementId: `imv_${"b".repeat(48)}`, updatedAtISO: NOW };
-  return allocation.planEventAllocation({
+  const allocated = allocation.planEventAllocation({
     request: {
       kind: "allocate_event_ingredients",
       quoteId: QUOTE,
-      eventRequirementRevisionId: requirement.eventRequirementRevisionId,
+      eventRequirementRevisionId,
       locationId: "kitchen",
       expectedRequirementRevision: 1,
-      expectedAllocationRevision: currentPlan?.allocationRevision || 0
+      expectedAllocationRevision: 0
     },
     organizationId: ORG,
-    requirementHead: {
-      organizationId: ORG,
-      quoteId: QUOTE,
-      revision: 1,
-      eventRequirementRevisionId: requirement.eventRequirementRevisionId,
-      requirementDigest: requirement.requirementDigest
-    },
+    requirementHead: head,
     requirement,
-    currentPlan,
+    currentPlan: null,
     stockStates: [opened],
     fences: [],
     nowISO: NOW
-  }).plan;
+  });
+  let plan = allocated.plan;
+  let fences = allocated.fences;
+  if (terminalState === "released") {
+    const released = allocation.planEventRelease({
+      request: { kind: "release_event_ingredients", quoteId: QUOTE, expectedAllocationRevision: plan.allocationRevision, reason: "Released by operator" },
+      organizationId: ORG, currentPlan: plan, fences, nowISO: NOW
+    });
+    plan = released.plan;
+    fences = released.fences;
+  } else if (terminalState === "settled") {
+    const settled = allocation.planEventSettlement({
+      organizationId: ORG,
+      currentPlan: plan,
+      fences,
+      expectedAllocationRevision: plan.allocationRevision,
+      settlementExecutionRevisionId: `eiex_${"a".repeat(48)}`,
+      nowISO: NOW
+    });
+    plan = settled.plan;
+    fences = settled.fences;
+  }
+  const projectionCoreBody = {
+    authorityVersion: inventory.INVENTORY_AUTHORITY_VERSION,
+    schemaVersion: 1,
+    projectionVersion: "ingredient-event-projection-v1",
+    organizationId: ORG,
+    quoteId: QUOTE,
+    quoteRevisionId: requirement.quoteRevisionId,
+    eventRequirementRevisionId,
+    requirementDigest: requirement.requirementDigest,
+    requiredByISO: requirement.requiredByISO,
+    demandState: "complete",
+    costState: "unavailable",
+    availabilityState: plan.shortageIngredientCount ? "shortage" : "available",
+    selections: [selection],
+    ingredients: [{ ingredientId: "chicken", baseUnitId: "lb", requiredQuantityMicros: required }],
+    coverage: { selectionCount: 1 },
+    sourceRevisions: {},
+    issues: []
+  };
+  const projectionCore = { ...projectionCoreBody, projectionDigest: inventory.digest(projectionCoreBody, "event ingredient projection") };
+  const allocationSummary = {
+    state: plan.state,
+    eventPlanId: plan.eventPlanId,
+    allocationRevision: plan.allocationRevision,
+    eventRequirementRevisionId: plan.eventRequirementRevisionId,
+    ingredientCount: plan.ingredientCount,
+    fullyAllocatedIngredientCount: plan.fullyAllocatedIngredientCount,
+    shortageIngredientCount: plan.shortageIngredientCount,
+    ingredients: plan.ingredients.map(({ ingredientId, locationId, baseUnitId, stockRevision, fenceRevision, requiredQuantityMicros, allocatedQuantityMicros, shortageQuantityMicros }) => ({
+      ingredientId, locationId, baseUnitId, stockRevision, fenceRevision,
+      requiredQuantityMicros, allocatedQuantityMicros, shortageQuantityMicros
+    }))
+  };
+  const projection = {
+    ...projectionCore,
+    model: "event-ingredient-projection-v1",
+    requirementRevision: 1,
+    ingredientLabels: [{ ingredientId: "chicken", name: "Chicken" }],
+    freshness: "as_recorded",
+    staleReason: "",
+    freshnessState: {
+      demand: { state: "current", reason: "" },
+      cost: { state: "current", reason: "" },
+      availability: { state: "current", reason: "" },
+      allocation: { state: ["released", "settled"].includes(plan.state) ? plan.state : "current", reason: "" }
+    },
+    allocation: allocationSummary,
+    updatedAtISO: NOW
+  };
+  const menuIdentityBody = {
+    menuItemId: "menu-chicken", eventTypeId: "event-type", categoryId: "entree", name: "Chicken",
+    priceMinor: 1000, costMinor: null, pricingType: "flat", type: "food", active: true
+  };
+  const recipeHead = {
+    authorityVersion: inventory.INVENTORY_AUTHORITY_VERSION,
+    schemaVersion: inventory.INVENTORY_SCHEMA_VERSION,
+    model: "ingredient-recipe-head-v2",
+    organizationId: ORG,
+    menuItemId: "menu-chicken",
+    revision: 1,
+    recipeRevisionId,
+    recipeDigest,
+    catalogRevision: 1,
+    menuIdentity: { ...menuIdentityBody, identityDigest: inventory.digest(menuIdentityBody, "menu item recipe identity") },
+    ingredientIds: ["chicken"],
+    packConversionRevisionIds: [],
+    updatedAtISO: NOW
+  };
+  const quoteSnapshot = {
+    id: QUOTE,
+    organizationId: ORG,
+    activeVersionId: requirement.quoteRevisionId,
+    selection: { packageId: "", packageInclusions: { menuItems: [] }, menuItems: ["menu-chicken"], menuItemsSnapshot: [{ id: "menu-chicken", name: "Chicken" }] }
+  };
+  return { plan, head, requirement, projection, recipeHead, stockState: opened, fences, quote: {
+    id: QUOTE, organizationId: ORG, status: "accepted", activeVersionId: requirement.quoteRevisionId,
+    versionMeta: { versionId: requirement.quoteRevisionId }
+  }, quoteVersion: { versionId: requirement.quoteRevisionId, quoteId: QUOTE, organizationId: ORG, snapshot: quoteSnapshot } };
 }
 
-function harness({ plan = allocationPlan(), role = "admin", contextRole = role, enabled = true } = {}) {
+function harness({ fixture = evidenceFixture(), role = "admin", contextRole = role, enabled = true } = {}) {
+  const { plan, head, requirement, projection, recipeHead, stockState, fences, quote, quoteVersion } = fixture;
   const db = fakeDb([
     [`organizations/${ORG}`, { active: true }],
     [`organizations/${ORG}/settings/config`, { inventoryAuthorityEnabled: enabled }],
     [`userRoles/${UID}`, { organizationId: ORG, role, email: "admin@example.test" }],
-    [`organizations/${ORG}/eventIngredientPlans/${QUOTE}`, plan]
+    [`organizations/${ORG}/eventIngredientPlans/${QUOTE}`, plan],
+    [`organizations/${ORG}/eventIngredientRequirementHeads/${QUOTE}`, head],
+    [`organizations/${ORG}/eventIngredientRequirements/${QUOTE}/revisions/${requirement.eventRequirementRevisionId}`, {
+      authorityVersion: inventory.INVENTORY_AUTHORITY_VERSION,
+      schemaVersion: inventory.INVENTORY_SCHEMA_VERSION,
+      model: "event-ingredient-requirement-record-v1",
+      organizationId: ORG,
+      quoteId: QUOTE,
+      eventRequirementRevisionId: requirement.eventRequirementRevisionId,
+      requirementDigest: requirement.requirementDigest,
+      requirement,
+      recordedAtISO: NOW,
+      recordedBy: ACTOR
+    }],
+    [`organizations/${ORG}/eventIngredientProjections/${QUOTE}`, projection],
+    [`organizations/${ORG}/quotes/${QUOTE}`, quote],
+    [`organizations/${ORG}/quotes/${QUOTE}/versions/${quoteVersion.versionId}`, quoteVersion],
+    [`organizations/${ORG}/inventoryRecipeHeads/menu-chicken`, recipeHead],
+    [`organizations/${ORG}/inventoryStockStates/${stockState.stockStateId}`, stockState],
+    ...fences.map((fence) => [`organizations/${ORG}/inventoryAllocationFences/${fence.fenceId}`, fence])
   ]);
   const assertStaff = vi.fn(async (context, { expectedOrganizationId }) => {
     if (context?.staff?.organizationId !== expectedOrganizationId) throw new HttpsError("permission-denied", "staff required");
@@ -113,6 +260,31 @@ function harness({ plan = allocationPlan(), role = "admin", contextRole = role, 
       now: () => NOW
     })
   };
+}
+
+function installFixture(h, fixture) {
+  h.db.store.set(`organizations/${ORG}/eventIngredientPlans/${QUOTE}`, clone(fixture.plan));
+  h.db.store.set(`organizations/${ORG}/eventIngredientRequirementHeads/${QUOTE}`, clone(fixture.head));
+  h.db.store.set(`organizations/${ORG}/eventIngredientRequirements/${QUOTE}/revisions/${fixture.requirement.eventRequirementRevisionId}`, {
+    authorityVersion: inventory.INVENTORY_AUTHORITY_VERSION,
+    schemaVersion: inventory.INVENTORY_SCHEMA_VERSION,
+    model: "event-ingredient-requirement-record-v1",
+    organizationId: ORG,
+    quoteId: QUOTE,
+    eventRequirementRevisionId: fixture.requirement.eventRequirementRevisionId,
+    requirementDigest: fixture.requirement.requirementDigest,
+    requirement: clone(fixture.requirement),
+    recordedAtISO: NOW,
+    recordedBy: ACTOR
+  });
+  h.db.store.set(`organizations/${ORG}/eventIngredientProjections/${QUOTE}`, clone(fixture.projection));
+  h.db.store.set(`organizations/${ORG}/quotes/${QUOTE}`, clone(fixture.quote));
+  h.db.store.set(`organizations/${ORG}/quotes/${QUOTE}/versions/${fixture.quoteVersion.versionId}`, clone(fixture.quoteVersion));
+  h.db.store.set(`organizations/${ORG}/inventoryRecipeHeads/menu-chicken`, clone(fixture.recipeHead));
+  h.db.store.set(`organizations/${ORG}/inventoryStockStates/${fixture.stockState.stockStateId}`, clone(fixture.stockState));
+  fixture.fences.forEach((fence) => h.db.store.set(
+    `organizations/${ORG}/inventoryAllocationFences/${fence.fenceId}`, clone(fence)
+  ));
 }
 
 function edit(source, overrides = {}) {
@@ -213,8 +385,8 @@ describe("event supply action plan authority", () => {
     await h.runtime.applyEventSupplyActionPlanCommand(request(
       fenced("save_draft", initial.source, 0, { edits: [edit(initial.source)] }), "supply-resolve-draft-0001"
     ), h.context);
-    const refreshed = allocationPlan({ required: 40_000_000, onHand: 40_000_000 });
-    h.db.store.set(`organizations/${ORG}/eventIngredientPlans/${QUOTE}`, refreshed);
+    const refreshed = evidenceFixture({ required: 40_000_000, onHand: 40_000_000 });
+    installFixture(h, refreshed);
     const stale = await h.runtime.getEventSupplyActionPlan({ schemaVersion: 1, organizationId: ORG, quoteId: QUOTE }, h.context);
     expect(stale).toMatchObject({ stale: true, resolution: "stale" });
     expect(stale.source.shortages).toEqual([]);
@@ -235,8 +407,8 @@ describe("event supply action plan authority", () => {
     await h.runtime.applyEventSupplyActionPlanCommand(request(
       fenced("approve", initial.source, 1, { confirmation: "approve_internal_supply_plan" }), "supply-rebase-approve-0002"
     ), h.context);
-    const changed = allocationPlan({ required: 55_000_000, onHand: 40_000_000 });
-    h.db.store.set(`organizations/${ORG}/eventIngredientPlans/${QUOTE}`, changed);
+    const changed = evidenceFixture({ required: 55_000_000, onHand: 40_000_000 });
+    installFixture(h, changed);
     const stale = await h.runtime.getEventSupplyActionPlan({ schemaVersion: 1, organizationId: ORG, quoteId: QUOTE }, h.context);
     const rebased = await h.runtime.applyEventSupplyActionPlanCommand(request(
       fenced("rebase", stale.source, 2, { edits: [edit(stale.source, { shortageQuantity: "15", purchaseQuantity: "15" })] }),
@@ -246,12 +418,83 @@ describe("event supply action plan authority", () => {
     expect(h.db.store.get(`organizations/${ORG}/eventSupplyActionPlans/${QUOTE}`).approvalEvidence).toBeNull();
 
     const latestSource = h.db.store.get(`organizations/${ORG}/eventSupplyActionPlans/${QUOTE}`).source;
-    h.db.store.set(`organizations/${ORG}/eventIngredientPlans/${QUOTE}`, allocationPlan({ required: 40_000_000, onHand: 40_000_000 }));
+    installFixture(h, evidenceFixture({ required: 40_000_000, onHand: 40_000_000 }));
     await h.runtime.applyEventSupplyActionPlanCommand(request({
       kind: "cancel", quoteId: QUOTE, expectedPlanRevision: 3, reason: "Operator stopped planning"
     }, "supply-cancel-stale-0004"), h.context);
     const cancelled = h.db.store.get(`organizations/${ORG}/eventSupplyActionPlans/${QUOTE}`);
     expect(cancelled).toMatchObject({ status: "cancelled", resolution: "unresolved", source: { sourceFingerprint: latestSource.sourceFingerprint } });
     expect(() => supply.verifyRevision(cancelled, { organizationId: ORG, quoteId: QUOTE })).not.toThrow();
+  });
+
+  test.each([
+    ["quote revision", (h) => {
+      const path = `organizations/${ORG}/quotes/${QUOTE}`;
+      h.db.store.set(path, { ...h.db.store.get(path), activeVersionId: "quote-version-2", versionMeta: { versionId: "quote-version-2" } });
+    }],
+    ["recipe revision", (h) => {
+      const path = `organizations/${ORG}/inventoryRecipeHeads/menu-chicken`;
+      h.db.store.set(path, { ...h.db.store.get(path), recipeDigest: "9".repeat(64) });
+    }],
+    ["stock after allocation", (h) => {
+      const fixture = evidenceFixture();
+      const path = `organizations/${ORG}/inventoryStockStates/${fixture.stockState.stockStateId}`;
+      h.db.store.set(path, {
+        ...h.db.store.get(path), revision: 2, onHandMicros: 35_000_000,
+        lastMovementId: `imv_${"8".repeat(48)}`, updatedAtISO: "2026-09-17T13:05:00.000Z"
+      });
+    }],
+    ["allocation fence", (h) => {
+      const fixture = evidenceFixture();
+      const fence = fixture.fences[0];
+      const path = `organizations/${ORG}/inventoryAllocationFences/${fence.fenceId}`;
+      h.db.store.set(path, { ...h.db.store.get(path), revision: fence.revision + 1, updatedAtISO: "2026-09-17T13:05:00.000Z" });
+    }]
+  ])("marks %s changes stale and refuses approval against old evidence", async (_label, mutate) => {
+    const h = harness();
+    const initial = await h.runtime.getEventSupplyActionPlan({ schemaVersion: 1, organizationId: ORG, quoteId: QUOTE }, h.context);
+    expect(initial.source).toMatchObject({ eligible: true, ineligibilityReasons: [] });
+    await h.runtime.applyEventSupplyActionPlanCommand(request(
+      fenced("save_draft", initial.source, 0, { edits: [edit(initial.source)] }), "supply-source-draft-0001"
+    ), h.context);
+    mutate(h);
+    const stale = await h.runtime.getEventSupplyActionPlan({ schemaVersion: 1, organizationId: ORG, quoteId: QUOTE }, h.context);
+    expect(stale).toMatchObject({ stale: true, resolution: "stale", source: { eligible: false } });
+    await expect(h.runtime.applyEventSupplyActionPlanCommand(request(
+      fenced("approve", initial.source, 1, { confirmation: "approve_internal_supply_plan" }), "supply-source-approve-0002"
+    ), h.context)).rejects.toMatchObject({ code: "aborted" });
+  });
+
+  test.each([
+    ["requirement head", `organizations/${ORG}/eventIngredientRequirementHeads/${QUOTE}`],
+    ["event projection", `organizations/${ORG}/eventIngredientProjections/${QUOTE}`]
+  ])("binds the full %s document into freshness even when semantic eligibility remains current", async (_label, path) => {
+    const h = harness();
+    const initial = await h.runtime.getEventSupplyActionPlan({ schemaVersion: 1, organizationId: ORG, quoteId: QUOTE }, h.context);
+    await h.runtime.applyEventSupplyActionPlanCommand(request(
+      fenced("save_draft", initial.source, 0, { edits: [edit(initial.source)] }), "supply-fingerprint-draft-0001"
+    ), h.context);
+    h.db.store.set(path, { ...h.db.store.get(path), updatedAtISO: "2026-09-17T13:05:00.000Z" });
+    const changed = await h.runtime.getEventSupplyActionPlan({ schemaVersion: 1, organizationId: ORG, quoteId: QUOTE }, h.context);
+    expect(changed).toMatchObject({ stale: true, resolution: "stale", source: { eligible: true } });
+    expect(changed.source.sourceFingerprint).not.toBe(initial.source.sourceFingerprint);
+    await expect(h.runtime.applyEventSupplyActionPlanCommand(request(
+      fenced("approve", initial.source, 1, { confirmation: "approve_internal_supply_plan" }), "supply-fingerprint-approve-0002"
+    ), h.context)).rejects.toMatchObject({ code: "aborted" });
+  });
+
+  test.each(["released", "settled"])("refuses %s allocation evidence and never derives resolved", async (terminalState) => {
+    const h = harness();
+    const initial = await h.runtime.getEventSupplyActionPlan({ schemaVersion: 1, organizationId: ORG, quoteId: QUOTE }, h.context);
+    await h.runtime.applyEventSupplyActionPlanCommand(request(
+      fenced("save_draft", initial.source, 0, { edits: [edit(initial.source)] }), `supply-${terminalState}-draft-0001`
+    ), h.context);
+    installFixture(h, evidenceFixture({ required: 40_000_000, onHand: 40_000_000, terminalState }));
+    const stale = await h.runtime.getEventSupplyActionPlan({ schemaVersion: 1, organizationId: ORG, quoteId: QUOTE }, h.context);
+    expect(stale).toMatchObject({ stale: true, resolution: "stale", source: { eligible: false, shortages: [] } });
+    await expect(h.runtime.applyEventSupplyActionPlanCommand(request(
+      fenced("rebase", stale.source, 1, { edits: [] }), `supply-${terminalState}-rebase-0002`
+    ), h.context)).rejects.toMatchObject({ code: "aborted" });
+    expect(h.db.store.get(`organizations/${ORG}/eventSupplyActionPlans/${QUOTE}`).resolution).toBe("unresolved");
   });
 });

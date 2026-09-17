@@ -120,8 +120,19 @@ function normalizeCommand(value, quoteId) {
 }
 
 function normalizeSource(value, organizationId, quoteId) {
-  exact(value, ["eventPlanId", "planRevisionId", "allocationRevision", "eventRequirementRevisionId", "allocationFingerprint", "shortageFingerprint", "sourceFingerprint", "shortages"], "Supply plan source", "data-loss");
-  if (!Array.isArray(value.shortages)) throw error("data-loss", "Supply plan shortages are invalid.");
+  exact(value, [
+    "eventPlanId", "planRevisionId", "allocationRevision", "eventRequirementRevisionId",
+    "allocationFingerprint", "shortageFingerprint", "requirementFingerprint",
+    "eventProjectionFingerprint", "quoteRevisionFingerprint", "recipeFingerprint",
+    "stockFingerprint", "fenceFingerprint", "supportingEvidenceFingerprint", "eligible",
+    "ineligibilityReasons", "sourceFingerprint", "shortages"
+  ], "Supply plan source", "data-loss");
+  if (!Array.isArray(value.shortages) || !Array.isArray(value.ineligibilityReasons)
+    || value.ineligibilityReasons.some((entry) => typeof entry !== "string" || !entry)
+    || typeof value.eligible !== "boolean"
+    || value.eligible !== (value.ineligibilityReasons.length === 0)) {
+    throw error("data-loss", "Supply plan source eligibility evidence is invalid.");
+  }
   return Object.freeze({
     ...value,
     eventPlanId: id(value.eventPlanId, "eventPlanId", "data-loss"),
@@ -130,6 +141,13 @@ function normalizeSource(value, organizationId, quoteId) {
     eventRequirementRevisionId: id(value.eventRequirementRevisionId, "eventRequirementRevisionId", "data-loss"),
     allocationFingerprint: sha(value.allocationFingerprint, "allocationFingerprint", "data-loss"),
     shortageFingerprint: sha(value.shortageFingerprint, "shortageFingerprint", "data-loss"),
+    requirementFingerprint: sha(value.requirementFingerprint, "requirementFingerprint", "data-loss"),
+    eventProjectionFingerprint: sha(value.eventProjectionFingerprint, "eventProjectionFingerprint", "data-loss"),
+    quoteRevisionFingerprint: sha(value.quoteRevisionFingerprint, "quoteRevisionFingerprint", "data-loss"),
+    recipeFingerprint: sha(value.recipeFingerprint, "recipeFingerprint", "data-loss"),
+    stockFingerprint: sha(value.stockFingerprint, "stockFingerprint", "data-loss"),
+    fenceFingerprint: sha(value.fenceFingerprint, "fenceFingerprint", "data-loss"),
+    supportingEvidenceFingerprint: sha(value.supportingEvidenceFingerprint, "supportingEvidenceFingerprint", "data-loss"),
     sourceFingerprint: sha(value.sourceFingerprint, "sourceFingerprint", "data-loss"),
     shortages: value.shortages.map((row) => {
       exact(row, ["ingredientId", "locationId", "baseUnitId", "shortageQuantity", "shortageQuantityMicros"], "Supply shortage", "data-loss");

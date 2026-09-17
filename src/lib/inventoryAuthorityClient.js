@@ -464,12 +464,12 @@ function normalizeStockCountCommand(value) {
     "occurredAtISO", "note", "expectedStockRevision"
   ], "Ingredient stock count command");
   if (value.kind !== "record_stock_count") throw clientError("invalid-argument", "Ingredient stock count command is invalid.");
-  parseQuantityMicros(value.countedQuantity, "counted quantity", { allowZero: true });
+  const countedQuantityMicros = parseQuantityMicros(value.countedQuantity, "counted quantity", { allowZero: true });
   return {
     kind: value.kind,
     ingredientId: identifier(value.ingredientId, "ingredientId"),
     locationId: identifier(value.locationId, "locationId"),
-    countedQuantity: value.countedQuantity,
+    countedQuantity: formatQuantityMicros(countedQuantityMicros, "counted quantity", "invalid-argument"),
     baseUnitId: baseUnit(value.baseUnitId),
     occurredAtISO: exactIso(value.occurredAtISO, "stock count occurrence time", "invalid-argument"),
     note: exactText(value.note, "stock count note", 240, { allowEmpty: true }),

@@ -26,6 +26,15 @@ const source = {
   eventRequirementRevisionId: `eir_${"3".repeat(48)}`,
   allocationFingerprint: "4".repeat(64),
   shortageFingerprint: "5".repeat(64),
+  requirementFingerprint: "a".repeat(64),
+  eventProjectionFingerprint: "b".repeat(64),
+  quoteRevisionFingerprint: "c".repeat(64),
+  recipeFingerprint: "d".repeat(64),
+  stockFingerprint: "e".repeat(64),
+  fenceFingerprint: "f".repeat(64),
+  supportingEvidenceFingerprint: "0".repeat(64),
+  eligible: true,
+  ineligibilityReasons: [],
   sourceFingerprint: "6".repeat(64),
   shortages: [{ ingredientId: "chicken", locationId: "kitchen", baseUnitId: "lb", shortageQuantity: "5", shortageQuantityMicros: 5_000_000 }]
 };
