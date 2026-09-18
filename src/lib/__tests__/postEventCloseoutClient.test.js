@@ -17,12 +17,16 @@ vi.mock("../firebase", () => ({
 
 import {
   beginPostEventCloseoutAttempt,
+  beginPostEventActualAttendanceAttempt,
   clearPendingPostEventCloseoutAttempt,
   isDefinitivePostEventCloseoutError,
   readPendingPostEventCloseoutAttempt,
+  readPendingPostEventActualAttendanceAttempt,
   readPendingPostEventCloseoutConfigurationAttempt,
+  recordPostEventActualAttendance,
   recordPostEventCloseoutReview,
   refreshPostEventCloseoutConfiguration,
+  resetDefinitivePostEventActualAttendanceAttempt,
   resetDefinitivePostEventCloseoutConfigurationAttempt
 } from "../postEventCloseoutClient";
 
@@ -54,6 +58,54 @@ function response(request = input(), overrides = {}) {
       action: request.action,
       applied: true,
       recordedAtISO: "2026-08-13T15:00:00.000Z"
+    },
+    ...overrides
+  };
+}
+
+function attendanceInput(overrides = {}) {
+  return {
+    organizationId: "org-one",
+    quoteId: "quote-one",
+    closeoutId: `closeout_${"a".repeat(48)}`,
+    action: "record",
+    requestId: `attendance_${"d".repeat(32)}`,
+    expectedRevision: 0,
+    count: 118,
+    sourceType: "staff_observed",
+    note: "Lead server confirmed the final served headcount.",
+    ...overrides
+  };
+}
+
+function attendanceResponse(request = attendanceInput(), overrides = {}) {
+  const actualAttendance = {
+    schemaVersion: 1,
+    revision: request.expectedRevision + 1,
+    count: request.count,
+    sourceType: request.sourceType,
+    note: request.note,
+    sourceReferenceId: `closeout_attendance_${"e".repeat(48)}`,
+    recordedAtISO: "2026-08-15T15:30:00.000Z",
+    recordedBy: { email: "owner@example.test", role: "admin" },
+    lastReceiptId: `closeout_attendance_${"e".repeat(48)}`
+  };
+  return {
+    ok: true,
+    storage: "firebase",
+    organizationId: request.organizationId,
+    quoteId: request.quoteId,
+    closeoutId: request.closeoutId,
+    postEventCloseout: { actualAttendance },
+    receipt: {
+      receiptId: actualAttendance.lastReceiptId,
+      requestId: request.requestId,
+      action: request.action,
+      priorRevision: request.expectedRevision,
+      resultRevision: request.expectedRevision + 1,
+      count: request.count,
+      sourceType: request.sourceType,
+      recordedAtISO: actualAttendance.recordedAtISO
     },
     ...overrides
   };
@@ -153,5 +205,90 @@ describe("post-event closeout client", () => {
     });
     expect(readPendingPostEventCloseoutConfigurationAttempt(request)).toBeNull();
     expect(resetDefinitivePostEventCloseoutConfigurationAttempt(request)).toBe(false);
+  });
+
+  test("records actual attendance through the exact closeout callable and verifies the receipt projection", async () => {
+    const request = attendanceInput();
+    mockState.callable.mockResolvedValue({ data: attendanceResponse(request) });
+
+    await expect(recordPostEventActualAttendance(request)).resolves.toMatchObject({
+      mutationMode: "submitting",
+      receipt: {
+        requestId: request.requestId,
+        count: request.count,
+        resultRevision: 1
+      },
+      postEventCloseout: {
+        actualAttendance: {
+          count: request.count,
+          sourceType: request.sourceType,
+          revision: 1
+        }
+      }
+    });
+    expect(mockState.httpsCallable).toHaveBeenCalledWith(
+      mockState.cloudFunctions,
+      "recordPostEventActualAttendance"
+    );
+    expect(mockState.callable).toHaveBeenCalledWith(request);
+    expect(readPendingPostEventActualAttendanceAttempt(request)).toBeNull();
+  });
+
+  test("retains an uncertain attendance command and reconciles only the unchanged request", async () => {
+    const request = attendanceInput({
+      quoteId: "quote-uncertain",
+      closeoutId: `closeout_${"f".repeat(48)}`
+    });
+    mockState.callable
+      .mockRejectedValueOnce(Object.assign(new Error("network unavailable"), {
+        code: "functions/unavailable"
+      }))
+      .mockResolvedValueOnce({ data: attendanceResponse(request) });
+
+    await expect(recordPostEventActualAttendance(request))
+      .rejects.toThrow("network unavailable");
+    expect(readPendingPostEventActualAttendanceAttempt(request)).toMatchObject({
+      requestId: request.requestId,
+      definitive: false
+    });
+    expect(() => beginPostEventActualAttendanceAttempt({
+      ...request,
+      count: request.count + 1
+    })).toThrow(/reconciled unchanged/i);
+    await expect(recordPostEventActualAttendance(request)).resolves.toMatchObject({
+      mutationMode: "reconciliation"
+    });
+  });
+
+  test("rejects a mismatched attendance response and requires reset after a definitive rejection", async () => {
+    const request = attendanceInput({
+      quoteId: "quote-rejected",
+      closeoutId: `closeout_${"9".repeat(48)}`
+    });
+    mockState.callable.mockResolvedValueOnce({
+      data: attendanceResponse(request, {
+        postEventCloseout: {
+          actualAttendance: {
+            ...attendanceResponse(request).postEventCloseout.actualAttendance,
+            count: 119
+          }
+        }
+      })
+    });
+    await expect(recordPostEventActualAttendance(request))
+      .rejects.toThrow(/exact server receipt/i);
+    expect(readPendingPostEventActualAttendanceAttempt(request)?.definitive).toBe(false);
+    mockState.callable.mockResolvedValueOnce({ data: attendanceResponse(request) });
+    await recordPostEventActualAttendance(request);
+
+    const rejected = { ...request, requestId: `attendance_${"8".repeat(32)}` };
+    mockState.callable.mockRejectedValueOnce(Object.assign(new Error("stale revision"), {
+      code: "functions/aborted"
+    }));
+    await expect(recordPostEventActualAttendance(rejected))
+      .rejects.toThrow("stale revision");
+    expect(readPendingPostEventActualAttendanceAttempt(rejected)?.definitive).toBe(true);
+    expect(resetDefinitivePostEventActualAttendanceAttempt(rejected)).toBe(true);
+    expect(readPendingPostEventActualAttendanceAttempt(rejected)).toBeNull();
   });
 });

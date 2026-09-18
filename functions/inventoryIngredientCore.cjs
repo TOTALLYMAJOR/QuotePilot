@@ -5,6 +5,7 @@ const { createHash } = require("node:crypto");
 const INVENTORY_AUTHORITY_VERSION = "inventory-ingredient-authority-v2";
 const INVENTORY_SCHEMA_VERSION = 2;
 const INVENTORY_MOVEMENT_VERSION = "ingredient-stock-movement-v2";
+const INVENTORY_STOCK_COUNT_MOVEMENT_VERSION = "ingredient-stock-count-movement-v1";
 const INVENTORY_COST_VERSION = "ingredient-cost-evidence-v1";
 const INVENTORY_RECEIVING_COST_VERSION = "ingredient-receiving-cost-observation-v1";
 const QUANTITY_SCALE = 1_000_000;
@@ -372,6 +373,91 @@ function normalizeReceivingRequest(value) {
   return normalized;
 }
 
+function normalizeStockCountRequest(value) {
+  exact(value, [
+    "kind", "ingredientId", "locationId", "countedQuantity", "baseUnitId",
+    "occurredAtISO", "note", "expectedStockRevision"
+  ], "ingredient stock count command");
+  if (value.kind !== "record_stock_count") fail("invalid-argument", "Ingredient stock count command is invalid.");
+  return {
+    kind: value.kind,
+    ingredientId: opaqueId(value.ingredientId, "ingredientId"),
+    locationId: opaqueId(value.locationId, "locationId"),
+    countedQuantity: formatQuantityMicros(parseQuantityMicros(value.countedQuantity, "countedQuantity", { allowZero: true })),
+    countedQuantityMicros: parseQuantityMicros(value.countedQuantity, "countedQuantity", { allowZero: true }),
+    baseUnitId: baseUnitId(value.baseUnitId),
+    occurredAtISO: exactISO(value.occurredAtISO, "occurredAtISO"),
+    note: cleanText(value.note, "stock count note", 240, { allowEmpty: true }),
+    expectedStockRevision: revision(value.expectedStockRevision, "expectedStockRevision", { allowZero: false })
+  };
+}
+
+function planStockCount({ organizationId, requestId: retryId, request, ingredient, location, stockState, actor, nowISO }) {
+  const orgId = opaqueId(organizationId, "organizationId");
+  const normalized = normalizeStockCountRequest(request);
+  const normalizedActor = normalizeActor(actor, orgId);
+  const recordedAtISO = exactISO(nowISO, "nowISO");
+  if (!ingredient || ingredient.organizationId !== orgId || ingredient.ingredientId !== normalized.ingredientId
+    || ingredient.itemKind !== "ingredient" || !ingredient.active || ingredient.baseUnitId !== normalized.baseUnitId) {
+    fail("failed-precondition", "Stock count requires the active exact same-tenant ingredient and base unit.");
+  }
+  if (!location || location.organizationId !== orgId || location.locationId !== normalized.locationId || !location.active) {
+    fail("failed-precondition", "Stock count requires the active exact same-tenant location.");
+  }
+  verifyStockState(stockState, {
+    organizationId: orgId,
+    ingredientId: normalized.ingredientId,
+    locationId: normalized.locationId
+  });
+  if (stockState.revision !== normalized.expectedStockRevision || stockState.baseUnitId !== normalized.baseUnitId) {
+    fail("aborted", "Ingredient stock changed before the count was recorded.");
+  }
+  const signedDeltaMicros = normalized.countedQuantityMicros - stockState.onHandMicros;
+  const direction = signedDeltaMicros > 0 ? "increase" : signedDeltaMicros < 0 ? "decrease" : "unchanged";
+  const quantityMicros = Math.abs(signedDeltaMicros);
+  const id = movementIdFor(orgId, retryId);
+  const nextStockState = Object.freeze({
+    ...stockState,
+    revision: stockState.revision + 1,
+    onHandMicros: normalized.countedQuantityMicros,
+    lastMovementId: id,
+    updatedAtISO: recordedAtISO
+  });
+  const body = {
+    authorityVersion: INVENTORY_AUTHORITY_VERSION,
+    schemaVersion: INVENTORY_SCHEMA_VERSION,
+    movementVersion: INVENTORY_STOCK_COUNT_MOVEMENT_VERSION,
+    organizationId: orgId,
+    movementId: id,
+    requestId: requestId(retryId),
+    requestDigest: digest(normalized, "stock count request"),
+    kind: "record_stock_count",
+    ingredientId: normalized.ingredientId,
+    locationId: normalized.locationId,
+    baseUnitId: normalized.baseUnitId,
+    quantity: formatQuantityMicros(quantityMicros),
+    quantityMicros,
+    countedQuantity: normalized.countedQuantity,
+    countedQuantityMicros: normalized.countedQuantityMicros,
+    signedDeltaMicros,
+    direction,
+    priorStockRevision: stockState.revision,
+    resultStockRevision: nextStockState.revision,
+    priorOnHandMicros: stockState.onHandMicros,
+    resultOnHandMicros: nextStockState.onHandMicros,
+    occurredAtISO: normalized.occurredAtISO,
+    recordedAtISO,
+    note: normalized.note,
+    actor: normalizedActor
+  };
+  return Object.freeze({
+    request: normalized,
+    movement: Object.freeze({ ...body, movementDigest: digest(body, "ingredient movement") }),
+    nextStockState,
+    signedDeltaMicros
+  });
+}
+
 function planReceiving({
   organizationId,
   requestId: retryId,
@@ -635,14 +721,19 @@ function verifyMovement(value) {
     "eventExecutionRevisionId", "executionRevision", "priorDepletedQuantityMicros",
     "resultDepletedQuantityMicros", "consumedQuantityMicros", "wasteQuantityMicros"
   ];
+  const countKeys = ["countedQuantity", "countedQuantityMicros", "signedDeltaMicros", "direction"];
   exact(value, value?.kind === "receive_stock"
     ? [...commonKeys, "sourceLabel", "costEvidenceId"]
+    : value?.kind === "record_stock_count"
+      ? [...commonKeys, ...countKeys]
     : ["event_depletion", "event_depletion_correction"].includes(value?.kind)
       ? [...commonKeys, ...eventKeys]
       : commonKeys, "ingredient movement", "data-loss");
   if (value.authorityVersion !== INVENTORY_AUTHORITY_VERSION || value.schemaVersion !== INVENTORY_SCHEMA_VERSION
-    || value.movementVersion !== INVENTORY_MOVEMENT_VERSION
-    || !["opening_balance", "receive_stock", "event_depletion", "event_depletion_correction"].includes(value.kind)) {
+    || (value.kind === "record_stock_count"
+      ? value.movementVersion !== INVENTORY_STOCK_COUNT_MOVEMENT_VERSION
+      : value.movementVersion !== INVENTORY_MOVEMENT_VERSION)
+    || !["opening_balance", "receive_stock", "record_stock_count", "event_depletion", "event_depletion_correction"].includes(value.kind)) {
     fail("data-loss", "Ingredient movement uses an unsupported schema.");
   }
   const { movementDigest, ...body } = value;
@@ -654,12 +745,13 @@ function verifyMovement(value) {
   formatQuantityMicros(value.priorOnHandMicros, "movement priorOnHandMicros");
   formatQuantityMicros(value.resultOnHandMicros, "movement resultOnHandMicros");
   const eventMovement = ["event_depletion", "event_depletion_correction"].includes(value.kind);
+  const countMovement = value.kind === "record_stock_count";
   const commonValid = value.movementId === (eventMovement
     ? eventMovementIdFor(orgId, retryId, value.ingredientId, value.locationId)
     : movementIdFor(orgId, retryId))
-    && parseQuantityMicros(value.quantity) === value.quantityMicros
+    && parseQuantityMicros(value.quantity, "movement quantity", { allowZero: countMovement }) === value.quantityMicros
     && value.resultStockRevision === value.priorStockRevision + 1
-    && (eventMovement || value.resultOnHandMicros === value.priorOnHandMicros + value.quantityMicros);
+    && (eventMovement || countMovement || value.resultOnHandMicros === value.priorOnHandMicros + value.quantityMicros);
   if (!commonValid) {
     fail("data-loss", "Ingredient stock movement is internally inconsistent.");
   }
@@ -695,6 +787,28 @@ function verifyMovement(value) {
       costEvidenceId: value.costEvidenceId
     }, "receiving movement request"))) {
     fail("data-loss", "Ingredient receiving movement is internally inconsistent.");
+  } else if (countMovement) {
+    const normalized = normalizeStockCountRequest({
+      kind: value.kind,
+      ingredientId: value.ingredientId,
+      locationId: value.locationId,
+      countedQuantity: value.countedQuantity,
+      baseUnitId: value.baseUnitId,
+      occurredAtISO: value.occurredAtISO,
+      note: value.note,
+      expectedStockRevision: value.priorStockRevision
+    });
+    const signedDeltaMicros = normalized.countedQuantityMicros - value.priorOnHandMicros;
+    const direction = signedDeltaMicros > 0 ? "increase" : signedDeltaMicros < 0 ? "decrease" : "unchanged";
+    if (value.requestDigest !== digest(normalized, "stock count request")
+      || value.priorStockRevision < 1
+      || value.countedQuantityMicros !== normalized.countedQuantityMicros
+      || value.signedDeltaMicros !== signedDeltaMicros
+      || value.direction !== direction
+      || value.quantityMicros !== Math.abs(signedDeltaMicros)
+      || value.resultOnHandMicros !== normalized.countedQuantityMicros) {
+      fail("data-loss", "Ingredient stock count movement is internally inconsistent.");
+    }
   } else if (eventMovement) {
     const quantities = [
       value.priorDepletedQuantityMicros,
@@ -1045,6 +1159,7 @@ module.exports = {
   INVENTORY_AUTHORITY_VERSION,
   INVENTORY_COST_VERSION,
   INVENTORY_MOVEMENT_VERSION,
+  INVENTORY_STOCK_COUNT_MOVEMENT_VERSION,
   INVENTORY_RECEIVING_COST_VERSION,
   INVENTORY_SCHEMA_VERSION,
   InventoryIngredientError,
@@ -1067,6 +1182,7 @@ module.exports = {
   normalizeLocationRequest,
   normalizeOpeningBalanceRequest,
   normalizeReceivingRequest,
+  normalizeStockCountRequest,
   opaqueId,
   parseQuantityMicros,
   planIngredient,
@@ -1074,6 +1190,7 @@ module.exports = {
   planLocation,
   planOpeningBalance,
   planReceiving,
+  planStockCount,
   replayMovements,
   requestId,
   revision,

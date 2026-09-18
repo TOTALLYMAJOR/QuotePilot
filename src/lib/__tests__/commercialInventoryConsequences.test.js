@@ -51,6 +51,7 @@ function input(before = projection(), proposedAfter = projection(), overrides = 
     organizationId: "org-1",
     quoteId: "quote-1",
     savedQuoteRevisionId: "version-4",
+    proposedQuoteRevisionId: "version-5",
     scenarioFingerprint: '{"guests":100}',
     savedRead: { state: "recorded", sourceState: "current", projection: before },
     scenarioPreview: {
@@ -58,7 +59,7 @@ function input(before = projection(), proposedAfter = projection(), overrides = 
       scenarioFingerprint: '{"guests":100}',
       projection: (() => {
         const { requirementRevision: _requirementRevision, ...previewProjection } = proposedAfter;
-        return { ...previewProjection, freshness: "preview" };
+        return { ...previewProjection, quoteRevisionId: "version-5", freshness: "preview" };
       })()
     },
     ...overrides
@@ -103,7 +104,7 @@ describe("buildCommercialInventoryConsequences", () => {
       availability: { state: "changed", beforeState: "available", proposedAfterState: "shortage" },
       provenance: {
         before: { quoteRevisionId: "version-4", requirementRevision: 2, requirementDigest: DIGEST_A },
-        proposedAfter: { scenarioFingerprint: '{"guests":100}' }
+        proposedAfter: { quoteRevisionId: "version-5", scenarioFingerprint: '{"guests":100}' }
       }
     });
     expect(result.availability.ingredients).toEqual([

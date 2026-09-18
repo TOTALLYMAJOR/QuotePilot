@@ -1,6 +1,72 @@
 # User Manual
 
-Last updated: 2026-09-11 00:36:51 CDT
+Last updated: 2026-09-17 11:51:38 CDT
+
+## Quote-to-Confidence workflows
+
+These source-candidate workflows are disabled by default. Administrators must
+explicitly enable both a reviewed build flag and its tenant `featureFlags`
+entry; this document does not authorize activation.
+
+| Tenant flag | Build gate |
+|---|---|
+| `quoteCompletionCommandPath` | `VITE_QUOTE_COMPLETION_COMMAND_PATH_ENABLED` |
+| `decisionPacket` | `VITE_DECISION_PACKET_ENABLED` |
+| `inventoryExceptionWorkspace` | `VITE_INVENTORY_EXCEPTION_WORKSPACE_ENABLED` |
+| `eventSupplyActionPlan` | `VITE_EVENT_SUPPLY_ACTION_PLAN_ENABLED` |
+| `inventoryMobileCapture` | `VITE_INVENTORY_MOBILE_CAPTURE_ENABLED` |
+| `postEventLearning` | `VITE_POST_EVENT_LEARNING_ENABLED` |
+
+Inventory also retains its existing build/tenant/admin gates. Supply callables
+retain their separate server enablement and App Check configuration; a browser
+gate never grants server permission.
+Learning is available through the existing customer-centered Client overview and
+authoritative closeout follow-up. Its Inventory comparisons additionally require
+the existing Inventory read gates; financial evidence retains its own authority.
+
+1. **Complete a quote.** Follow the one outcome-named action in Composer,
+   Guided review, or Living Opportunity. It opens the existing missing field,
+   review, exact revision save, or governed proposal control. Dirty revisions
+   cannot borrow sent state; accepted history remains immutable.
+2. **Review a decision.** Compare Guests, Menu, Price, Margin, Staffing and
+   Supply independently. Blank, current Library template and accepted-event
+   rebook starts preserve provenance and require ordinary staff review. The
+   decision packet retains the accepted revision and receipt through handoff;
+   conflicting or stale evidence exposes recovery, never acceptance/payment.
+3. **Resolve an Inventory exception.** Open Inventory, inspect the prioritized
+   shortage/count/cost/conversion/contention cards, and expand the seven-axis
+   ledger when needed. An internal supply plan is an operator-edited draft.
+   Save before approving the exact saved revision; rebase after source drift.
+   An uncertain command exposes **Check exact supply request**. Do not create
+   a new action until the original receipt or definitive rejection is known.
+   Keep this review open while reconciling: supply request context is tab-memory,
+   unlike durable shelf-count drafts. Reload is not a reconciliation action.
+   Approval does not contact a supplier, order goods, authorize spend, or
+   change stock. Refreshed allocation evidence alone can resolve a shortage.
+4. **Count the shelf.** In an already-loaded Inventory workspace, select the
+   exact location and search for an ingredient. Barcode scanning is optional;
+   manual search always works. **Save count to device** stores a seven-day
+   IndexedDB draft for this organization, signed-in user and location. Offline
+   saves are not server-confirmed. Reconnect and submit clean lines; retain
+   conflicts and partial receipts, reconcile unknown requests, and explicitly
+   reset rejected/conflicted lines before recording a revised observation.
+5. **Learn after the event.** In Client overview, open the due or completed
+   event follow-up, then expand **Review policy, recorded costs and event learning**.
+   Learning reads begin only when that detail is opened. **Learn from this event** compares the immutable accepted
+   source. **Refresh learning evidence** also reloads the owning Client quote,
+   accepted revision and closeout, not just subordinate reads. Malformed evidence
+   remains `schema_drift`, contradictory sources remain `contradictory`, and
+   unavailable reads remain unavailable; none becomes a zero actual.
+   The comparison uses the accepted
+   priced count with attendance, and saved requirements with consumption and
+   waste, per base unit. Financial capture stays separate and provisional until
+   declared complete; saved planning-basis cost is not actual COGS. Review a
+   recommendation in Library or Inventory. The source context follows in tab
+   memory and disappears on reload. Existing editors own changes and approval.
+   Only a matching recipe/pack publication receipt followed by your explicit
+   confirmation records an applied observation. Template/workflow adoption
+   tracking and event-bound receiving remain unavailable. No suggestion sets
+   price, margin, rates, thresholds, yield, pack contents or supplier policy.
 
 ## Purpose
 This guide explains day-to-day usage of QuotePilot for staff users and admins.
@@ -68,11 +134,16 @@ progressively disclosed Administration, account settings, and sign-out.
 ### Five-minute first setup
 
 1. Sign in and open **Library**.
-2. Scan **Offers**, **Components**, **Templates**, and **Pricing & Rules** to
-   understand the current commercial inventory.
-3. If setup needs attention, use the one action in **Before the next quote**.
-   Other unresolved areas remain readable and completed setup is collapsed.
-4. Treat each readiness measure independently. Missing optional starting
+2. Use **Your path to the first quote** as the activation sequence:
+   **Business basics → Offers and menu → Selling price → Cost visibility**.
+   The first unfinished milestone owns the visible action. Completed milestones
+   remain visible without competing for attention.
+3. At **Offers and menu**, choose **Build offers and menu** for manual entry or
+   **Import an existing menu** to open Import Studio. An import is reviewed and
+   staged into the existing catalog setup draft; it does not create a second
+   catalog or become active pricing by itself.
+4. Treat each readiness measure independently. **Cost visibility** is optional
+   for the first quote. Missing optional starting
    points, additional users, provider connections, or cost evidence does not by
    itself block ordinary quote creation. Missing cost evidence does make margin
    unavailable for the affected scope.
@@ -98,6 +169,19 @@ make and publish catalog changes.
    click, is delivery evidence.
 7. Return to **Opportunities** to track the next recorded action.
 
+### Publish and operate a guided inquiry page
+
+1. As an administrator, open **Library → Inquiry page**. The Inquiry Showcase is a public-presentation layer over the existing Library, not another catalog or price book.
+2. Choose active customer-safe Offers, services, rentals, menu items, or Event Templates. Write the public title, short description, optional HTTPS image, featured label, and display order. The Showcase cannot store or override price, cost, margin, inclusions, rules, staffing, inventory, or availability.
+3. Choose a lowercase slug, enable the tenant publication gate, and select **Save draft**. Saving does not change an active published version.
+4. Review **Preview customer-safe projection**, then select **Publish immutable version**. The receipt identifies the exact publication and catalog evidence. A changed slug deactivates the previous slug; QuotePilot does not redirect it.
+5. Use `/inquire/{slug}` as a share-only, `noindex` page. The customer provides contact details, event type/date, estimated guests, location, optional notes, and curated preferences, then reviews the exact request before sending it. The on-screen receipt means only that the inquiry was recorded.
+6. Open **Opportunities**. A new inquiry starts as **Received**. Select **Acknowledge and assign to me** before conversion. The in-app record is authoritative; an optional staff-email failure is shown but never removes or rolls back the inquiry.
+7. Select **Review conversion**. Resolve every missing, inactive, changed, or incompatible reference and explicitly choose whether a same-tenant email claim should use the existing customer identity or create a new identity.
+8. Review the exact authoritative quote prefill, choose any required current Offer/Menu values, then select **Create authoritative quote draft**. QuotePilot re-prices through the existing server path and commits the quote, customer binding, portal record, first version, Converted state, and conversion receipt together.
+
+Customer selections remain unconfirmed preferences on the resulting quote. Inquiry submission never creates a customer, quote, portal, Calendar event, or payment request and never confirms price, availability, allergen safety, reservation, proposal, acceptance, or booking. Unconverted inquiry content is retained for 90 days, then scheduled for deletion with only a content-free receipt retained. Service-response consent does not subscribe the customer to marketing. Customer email confirmation, attachments, multilingual pages, custom domains, campaign pages, public availability search, instant quoting, and marketing automation are not available in v1.
+
 ### Commercial Workbench (v0.18 source contract)
 
 When Proposal Composer is enabled, use **Quote plan** to move among Event,
@@ -111,6 +195,67 @@ mode edits the same draft and uses the same save authority. Quote plan remains a
 sticky left rail at desktop and compact-desktop widths, including 1008px. At
 tablet and phone widths it becomes a horizontal navigator above the same
 proposal document so domain context is adapted, never omitted.
+
+### Configure Delivery Planning in Library
+
+Administrators use **Library → Delivery** to prepare the first staffed-buffet
+activation. This is deliberate policy entry, not an automatic setup preset.
+
+1. Open **Reviewed source** and enter the reviewed `delivery-blueprint-v1`,
+   `quantity-policy-v1`, and purchasing-pack arrays. Keep unfinished sources in
+   `draft`; do not label them `published` until the named operator, declaration
+   time, provenance, guest bounds, work blocks, capability requirements, and
+   quantities have been reviewed.
+2. Use exact `{ id, revision }` references from each Blueprint component to its
+   quantity policy and from each ingredient requirement to its purchasing pack.
+   Ambiguous ID-only or stale references cannot activate the feature.
+3. Choose an active Offer and select **Bind Blueprint to Offer**. A Blueprint
+   is never chosen by a similar name.
+4. When the panel says **Ready to enable**, select **Enable Delivery Planning
+   after save**.
+5. Save the Library draft and complete the existing pricing review. The saved
+   catalog revision—not the checkbox click—is the persistence boundary.
+
+The panel supplies no default portions, work times, staffing ratios, ingredient
+usage, stock, or supplier commitment. If those declarations are unavailable,
+leave Delivery Planning off and continue the ordinary quote workflow.
+
+### Delivery Proposal (safe-off Phase 1 source contract)
+
+When an administrator has enabled Delivery Planning and the selected Offer
+references a published, service-compatible **Delivery Blueprint**, the Proposal
+Composer assembles a **Delivery Proposal** above the quote document.
+
+- Read **Required work** as proposed blocks and capability needs, not staff
+  assignments or completed tasks.
+- Read **Production** as tenant-policy-generated output. **Billing quantity**
+  remains the commercial guest basis; it is not interchangeable with the
+  generated production quantity.
+- Read **Purchasing** as ingredient demand. Before an exact saved-revision
+  Inventory projection returns, shortage, purchase packs, and expected
+  remainder say **Unchecked**. QuotePilot does not treat missing stock evidence
+  as zero stock.
+- Use **Adjust quantity** only for a deliberate session override and enter a
+  reason. After guests, menu, or service changes, the override stays visible.
+  If its prior generated basis changed, choose **Keep override** or **Use
+  generated**.
+- Use **Remove optional** to omit an optional Blueprint component from this
+  session proposal; use **Restore** to return it. A missing required component
+  appears under **Needs operator review**.
+- Treat Production, Staffing, Inventory, and Purchasing evidence separately.
+  **Proposed work assembled** is not event readiness.
+
+**Review staffing**, **Review production**, and **Review purchasing** prepare
+prefill-only handoff contracts only after a saved quote revision exists. Their
+target routes remain unavailable until each owning workflow can reread current
+authority, reject stale input, and issue its own receipt. These controls never
+save or send the quote, assign a person, allocate stock, place an order, publish
+configuration, change price, or generate a BEO.
+
+No tenant Blueprint or quantity policy is enabled by default. If the Delivery
+Proposal is absent, continue the ordinary quote workflow and ask an
+administrator to review the tenant's Delivery Planning configuration rather
+than assuming a default buffet ratio.
 
 ### Calendar-first Operations (current source contract)
 
@@ -138,6 +283,88 @@ accepted/booked Event Schedule as the canonical operational lens.
 **Open in Calendar** keeps the exact Opportunity identity; **Open
 opportunity** returns to that exact record. `/app/schedule` remains a
 compatibility path to the same Calendar.
+
+### Google Calendar event copies (source/local candidate)
+
+Google Calendar is an optional one-way copy, not QuotePilot's event record.
+When the deployment and tenant gates are enabled, an administrator opens
+**Integrations Ops → Google Calendar** and chooses **Connect Google Calendar**.
+Authorization opens in Google's own page. Connecting does not add an event.
+Firebase Google sign-in does not grant Calendar access.
+If Google's token exchange itself is uncertain, QuotePilot does not call the
+connection successful; review the app's access in the Google account before
+starting a new authorization, then choose **I reviewed Google access — retry
+connection**. That acknowledgement allows a new attempt; it does not claim that
+the earlier exchange failed or revoke anything by itself. If QuotePilot
+receives a grant but Google does not confirm verification or revocation, the
+encrypted grant stays available to the explicit disconnect recovery rather
+than being discarded.
+If the authorization window expires, choose **Recover expired Google
+authorization**. QuotePilot replaces only an unused pending attempt. An
+interrupted exchange becomes explicit unknown outcome; a retained grant is
+activated only when owned-calendar verification already passed, otherwise it
+must be revoked before reconnecting.
+If the authorization window expires while Google's bounded exchange is already
+running, QuotePilot waits for that active exchange lease before offering
+recovery. Refreshing cannot invalidate the in-flight provider request.
+
+For an accepted or booked event, open the focused event in **Operations**. The
+Google Calendar panel offers only the action that fits the recorded state:
+
+- **Add to Google Calendar** publishes the exact current accepted revision.
+- **Update Google Calendar** appears after QuotePilot's active revision changes;
+  the prior Google copy is retained until the administrator chooses to update.
+- **Check original Calendar action** reconciles the exact request after an
+  uncertain provider result or checks a drifted copy. Do not repeat the
+  publish/update request.
+- **Remove Google Calendar copy** removes only QuotePilot's external copy. It
+  does not cancel the event, quote, booking, staffing, checklist, or BEO.
+- **Review Google copy** means Google content or its ETag changed outside
+  QuotePilot. QuotePilot does not overwrite it automatically.
+
+Sales staff can read the state but cannot mutate the provider copy in this
+first slice. Integrations Ops lists retained copies even if their source quote
+is no longer shown in the accepted/booked calendar. Remove or reconcile every
+listed copy before disconnecting; QuotePilot blocks revocation while cleanup is
+still needed. If Google does not confirm revocation, the panel says the result
+is uncertain and offers the exact disconnect request again. It does not claim
+success or discard the encrypted token. If the browser receipt is unavailable,
+the server fences a new retry against the recorded uncertain state. When more
+than 50 copies remain, clear the visible group and refresh for the rest.
+
+If Google rejects stored credentials, Integrations Ops offers **Disconnect
+rejected Google access**. Revoke that unusable authorization before deliberately
+connecting again; QuotePilot does not accumulate a replacement grant beside
+unresolved stored access. If prior event copies remain, the receipt names them
+explicitly and keeps them listed for cleanup after a valid reconnection.
+
+If a newly issued grant fails owned-calendar verification, it is retained only
+for revocation and cannot be used to clean up older event copies. In that narrow
+case, **Retry disconnect** revokes the unactivated grant first even while older
+copies remain. QuotePilot then explicitly reports that those copies remain;
+clean them up after a valid reconnection or through a separately verified manual
+provider action.
+
+If Calendar publishing is later disabled while an encrypted grant still
+exists, Integrations Ops keeps **Revoke stored Google access** available when
+provider cleanup is still configured. It revokes the grant without publishing
+or changing any event. Existing Google copies remain explicitly listed as
+external records; disabling the integration does not imply that they vanished.
+
+The copy contains only the event title (or quote reference), start/end, tenant
+time zone, venue, and private ownership fingerprints. It contains no attendees,
+customer/staff contact details, guest count, menu, dietary/allergy information,
+pricing, payment, operational notes, Kitchen BEO, checklist, Inventory, or
+Staffing evidence. A Google `synced` state proves only that the exact external
+copy was verified. QuotePilot remains the authority for every business record.
+Event title and venue are free text and can themselves identify a customer. The
+copy uses the primary calendar's default visibility and therefore follows that
+calendar's sharing settings.
+
+This workflow remains default-off in source. Until the web OAuth client,
+consent screen, exact callback, Secret Manager bindings/IAM, tenant setting,
+hosted callback, and live provider round trip are accepted, the panel correctly
+reports Calendar as unavailable. See [Google Calendar integration authority](GOOGLE_CALENDAR_INTEGRATION.md).
 
 Desktop **Operations** and the mobile Operations group contain
 **Operations**, **Clear the Deck**, and **Staff**, plus administrator-only
@@ -663,6 +890,12 @@ code.
 - Select **Review client** to open
   `/app/customers/<customerId>`. A missing or other-tenant ID does not reveal a
   customer and offers a safe return to the directory.
+- The client identity and bounded linked opportunities become available first.
+  While retained proposal history and private customer controls are still
+  loading, the relationship overview remains usable and **More client history
+  and controls** names the unfinished read. If that supplemental read fails,
+  the exact client and current opportunities remain visible; use **Retry client
+  details** to request a fresh complete profile read without changing records.
 - `Customer directory read context` and `Customer 360 read context` name the
   exact tenant, source, bounded contract, device-time last complete read, and
   loading/current/partial/retained-stale/error outcome. A fresh staff read does
@@ -718,6 +951,16 @@ code.
   a revised request. These controls record internal staff review only. They do
   not send email, prove provider delivery or opening, record a customer reply,
   or establish a lead, booking, payment, or revenue result.
+- When that exact closeout reaches its tenant-local due date, use **Attendance
+  after service** to record the whole attended count, select who supplied the
+  count, and enter a concise source note. If a retained count is wrong, use
+  **Correct attendance record**; the correction advances the evidence revision
+  and preserves the prior fact in its immutable receipt. Wait for the exact
+  server receipt. If the outcome is uncertain, reconcile the unchanged request;
+  after a definitive rejection, reset it before starting a revised command.
+  Priced guests and actual guests remain separate. This action does not change
+  the accepted quote, reprice, invoice, refund, settle, change staffing or BEO,
+  mark the event complete, or send a customer message.
 - `Quotes, bookings, and payments` on `Overview` reports quoted, exact-state accepted and
   booked amounts, source-bounded deposit and final-balance measures, and a
   recorded repeat-event signal. Deposit or final-balance value is labeled
@@ -808,6 +1051,15 @@ unchanged.
   canonical message records or expose a body preview. Select one
   event to load its canonical history through the existing conversation
   callable; direct browser access to conversation records remains denied.
+  Concurrent requests for that exact access identity share one body load, and
+  a recently opened thread may reuse its normalized result for up to 30 seconds
+  from bounded application memory. Manual refresh, automatic signal refresh,
+  and the first revisit after a successful send still call the authoritative
+  loader. Nothing is written to browser storage.
+  The first load returns the latest 50 messages. When earlier history exists,
+  use **Load older messages** to retrieve the next chronological page through
+  the same authorization-checked callable. A failed older-page request keeps
+  the visible messages and offers the same action again.
 - A thread opens only when the quote has a current unexpired portal whose exact
   revision was provider-accepted and activated. Draft, expired, deleted, or
   mismatched delivery state is labeled unavailable; use `View event` to repair
@@ -815,9 +1067,12 @@ unchanged.
 - For an open staff thread, QuotePilot watches only that exact organization
   quote document. The customer decision center watches only the exact current
   portal document. When a higher-count or distinct non-older body-free signal
-  arrives, QuotePilot calls the existing loader again so the server revalidates tenant, token,
-  issuance, lifecycle, expiry, and delivery activation before returning
-  canonical message bodies. A send remains callable-owned and is recorded only
+  arrives, QuotePilot requests only bodies after the newest loaded message. A
+  burst continues through bounded 50-message pages; every page makes the server
+  revalidate tenant, token, issuance, lifecycle, expiry, and delivery activation
+  before returning canonical message bodies. Existing loaded history remains
+  visible, and an incomplete catch-up is labeled stale with manual refresh
+  recovery. A send remains callable-owned and is recorded only
   after its exact receipt; idempotent reconciliation and existing message/rate
   limits are unchanged.
 - Read the synchronization labels narrowly: `Catching up` means the listener is
@@ -1331,6 +1586,18 @@ approvals, and workflow/event ledgers. Use these records to exercise Library,
 Opportunities, Operations, Staff, Workflow, approvals, pricing, and margin
 presentation as one connected system.
 
+An approved `populate:inventory:ragnakok` apply also copies only complete,
+current `ragnakok-realistic-v1` recipe-cost projections onto otherwise
+uncosted fixture-owned menu rows. The operation never derives cost from selling
+price, never changes a selling price, and never touches unclassified or
+operator-owned menu records. It advances the catalog revision once, binds a
+fresh pricing confirmation to the resolved verified tenant administrator, and
+fails closed if the catalog revision or projection evidence changes between
+planning and commit. The copied values remain explicitly synthetic planning
+evidence and must be replaced before they are relied on as operating cost
+truth. Menu rows without complete recipe-cost projections remain uncosted, so
+staff margin presentation stays unavailable when one of those rows is selected.
+
 The production `ragnakok-operations` deployment profile is also the only
 profile allowed to expose the coupled Commercial Change and Event Spine server
 authorities. Those runtime gates do not bypass the exact tenant settings,
@@ -1392,10 +1659,14 @@ QuotePilot does not copy the guest count or the billing quantity into this
 field. On an unchanged saved quote, the disclosure retains **Preview ingredient
 impact** so the existing read-only evaluation remains reachable. Once a working
 guest-count scenario exists, that standalone action hides and the nearby
-Commercial Scenario Workbench requests the same read-only ingredient scenario
-after the input settles. The request remains separate from the authoritative
-Commercial Change simulation and is accepted only for the active scenario ID,
-generation, input digest, and saved base revision. Physical demand, projected
+Commercial Scenario Workbench includes the read-only ingredient evaluation in
+the same reviewed Commercial Change request after the input settles. The server
+builds the prospective immutable quote revision privately, rechecks the saved
+base revision, and lets Inventory evaluate that proposed revision without a
+second browser race. The returned observation stays separate from commercial
+pricing and authorization and is accepted only when its commercial receipt,
+prospective revision, Inventory input digest, and projection revision agree.
+Physical demand, projected
 ingredient cost, and stock availability remain separate results. A valid
 projected cost remains visible during a shortage; a valid shortage remains
 visible when cost evidence is incomplete.
@@ -1566,8 +1837,9 @@ reporting remain unavailable until their own bounded evidence authorities exist.
   the active scenario, dominant action, evidence state, or recovery.
 - The workbench itself owns no network, provider, persistence, pricing,
   staffing, inventory, BEO, or apply authority. Its host requests the existing
-  read-only preview providers for the exact active scenario. Commercial pricing
-  and dependency evidence remain server-authoritative. Inventory joins only
+  read-only evidence for the exact active scenario. Commercial pricing
+  and dependency evidence remain server-authoritative. Inventory joins the same
+  server simulation round trip only
   for a guest-count-only scenario when its independently gated explicit
   recipe-output quantities and portion basis are complete. Mixed and non-guest
   edits are explicitly outside this inventory slice; they are not labeled as
@@ -1603,7 +1875,15 @@ reporting remain unavailable until their own bounded evidence authorities exist.
   by resolving a constraint. It may say that current assignments cover the
   proposed staffing requirement only when People evidence is current and
   complete and its exact assignment gap is zero. Otherwise the staffing
-  conclusion remains unavailable or names the exact gap. Kitchen BEO review is
+  conclusion remains unavailable or names the exact gap. If the proposed event
+  date, start time, or duration changes, Current coverage stays visible but the
+  Working need becomes **Not verified** until availability and conflicts are
+  reviewed for that proposed window; saved-window assignments are never carried
+  forward as if they covered the new time. The reviewed comparison comes from
+  the same server simulation as the commercial change and is bound to its real
+  prospective quote revision; it exposes aggregate role counts, not staff
+  names, private details, assignments, or an automatic team decision. Kitchen
+  BEO review is
   required only when the exact projected BEO effect requires it.
 - A supplier resolution can appear only from a current, exact-scope,
   revision-bound `inventory-sourcing-preview-v1` carrying a unique match under
@@ -2122,6 +2402,35 @@ reporting remain unavailable until their own bounded evidence authorities exist.
   does not prove kitchen review, inventory, handwritten sign-off, publication,
   customer acceptance, booking, payment, provider delivery, or operational
   completion. Use the proposal/token portal for customer commercial review.
+
+### Event operational notes and downstream review
+
+- Open **Kitchen BEO and event notes** from the exact Opportunity. Event notes
+  stay inside that familiar production-artifact workspace instead of becoming a
+  separate module. Choose one purpose—Kitchen, Venue, Service, or Staffing—and
+  whether the instruction is **Internal team only** or **Include in the BEO**.
+- Each note accepts up to 800 plain-text characters and shows the remaining
+  count. A confirmed add or correction returns an immutable receipt. Correction
+  requires a reason and retains the prior/result evidence; this first slice does
+  not offer deletion. A failed or uncertain save keeps the entered text and
+  directs you to refresh or reconcile the exact request.
+- Notes are bound to the quote's exact active revision. After a quote revision
+  changes, use **Review notes for this quote revision** to review the retained
+  journal together. Until that explicit receipt exists, additions and
+  corrections are blocked and the trusted BEO cannot consume those notes.
+- Only notes deliberately marked **Include in the BEO** enter the server PDF and
+  its versioned input fingerprint. Internal-only notes, staff identity, and
+  correction history stay out of the document. Generating the BEO rereads both
+  the quote and verified note journal in the same transaction; a concurrent
+  change aborts instead of producing mixed evidence.
+- If a note changed after **Event brief reviewed** was recorded, QuotePilot shows
+  one **Review event brief again** action. It opens the existing production
+  checklist and preserves the earlier completion. On Calendar, the same action
+  is available beside a completed Event brief to record a new review timestamp;
+  it does not claim readiness or modify any other checklist item.
+- Notes are internal operational instructions. They do not update the customer
+  proposal, price, guest count, Inventory evidence, Staffing assignments,
+  booking, payment, publication, customer message, or event completion.
 
 ## Admin Catalog Operations
 - Open **Library** or `/app/catalog`. Administrators retain edit, draft, check,
@@ -3010,13 +3319,21 @@ receipts for those actions and evidence.
   staff attendance, operational readiness, actual labor, or completion. The
   single next action continues to the exact Workflow, Schedule event, or quote
   record that owns the work.
+- After service, **Actuals** may show a closeout-recorded attendance count only
+  when its accepted version and acceptance receipt still match this event. It
+  stays beside, not in place of, the priced guest count. A mismatched source is
+  labeled for review and the count is withheld. The attendance receipt does not
+  establish live phase, staff attendance, labor or purchasing actuals, payment,
+  settlement, or complete Replay.
 - QP-UXR-005 **Event Preflight** appears inside selected Control Room and keeps
   **Ready / satisfied facts**, **Needs attention**, and **Unknown /
   unavailable** separate. It may confirm only narrow facts from the current
   commercial record, acceptance receipt, payment projection, final-count
   checklist, BEO, staffing, Workflow, and complete bounded Schedule evidence.
   It never calculates a readiness score. Missing or stale reads never pass;
-  inventory, actual attendance, live phase, and live issues remain unavailable.
+  inventory, actual attendance, live phase, and live issues remain unavailable
+  to the Preflight conclusion itself; separately governed actual attendance may
+  appear only in the adjacent post-event Actuals boundary.
   Its one **Next** follows the first supported attention or resolvable unknown
   into the exact existing authority; otherwise it opens the exact event in
   Schedule.
@@ -3273,9 +3590,11 @@ gates.
 
 On New quote, next to Structure it, a Model assist button can ask a
 configured AI provider (OpenAI or Anthropic) to read the same note. This
-lane ships off: until your administrator enables it and configures a
-provider key, the button reports that the lane is off and typed
-structuring keeps working exactly the same. When it is on, model
+lane ships off: until an administrator explicitly enables both its browser
+control and server/provider rail, the button is not shown and typed structuring
+keeps working exactly the same. If the control is visible but the provider
+later becomes unavailable, the lane reports that recoverable outcome without
+changing the note or deterministic result. When it is on, model
 suggestions appear in their own list and every one requires your explicit
 Confirm before it touches the draft — the model never fills the form,
 never prices, and never saves. Anything the model could not read is
@@ -3284,6 +3603,13 @@ or use an internal `auto` route that tries the configured cheaper-first
 provider:model order and may retry once when the first attempt is
 unreadable or unavailable; this routing detail never changes the review-
 only boundary.
+
+For the coordinated founder-tenant production profile, Model Assist is pinned
+to OpenAI `gpt-5-mini` and `mm05366-sandbox`; the general provider/auto controls
+above do not widen that release. The current provider probe reports
+`credit_balance_exhausted`, so this lane must be treated as unavailable until
+capacity is restored and reverified. The deterministic **Structure it** path
+remains available and is the safe recovery.
 
 After `Add details to the draft`, CREATE compresses the completed reading into
 an `Inquiry added` handoff so the proposal becomes the next visible task,
@@ -3351,14 +3677,16 @@ same save path as every other catalog field.
 
 ## Library readiness and Menu Builder
 
-Open **Library** to review the commercial inventory first. **Before the next
-quote** is contextual setup evidence, not the primary content. When something
-needs attention, the first unresolved area receives one administrator action
-and the remaining unresolved areas stay readable. Completed setup compresses
-under a disclosure. Costs, optional starting points, additional users, and
-provider connections do not block ordinary quote creation; missing cost
-evidence does keep margin unavailable for the affected scope. Standalone
-Library does not treat missing quote or proposal context as a setup failure.
+Open **Library** to review the commercial inventory first. **Your path to the
+first quote** turns setup into four ordered milestones: Business basics, Offers
+and menu, Selling price, and optional Cost visibility. The first incomplete
+milestone receives the administrator action. Offers and menu can continue into
+the existing editor or open Import Studio for an existing source. Other setup
+areas remain under a secondary disclosure, and completed setup stays quiet.
+Costs, optional starting points, additional users, and provider connections do
+not block ordinary quote creation; missing cost evidence does keep margin
+unavailable for the affected scope. Standalone Library does not treat missing
+quote or proposal context as a setup failure.
 
 Administrators can open the exact setup area. Sales staff receive the same
 business outcomes in read-only form and one statement that an administrator

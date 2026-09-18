@@ -168,6 +168,12 @@ test("connected Ambient conversation arrival stays pending until the exact threa
   );
   test.setTimeout(180_000);
   mkdirSync(OUTPUT_DIR, { recursive: true });
+  await page.addInitScript(() => {
+    globalThis.__quotePilotMessagingPerformance = [];
+    globalThis.addEventListener("quotepilot:messaging-performance", (event) => {
+      globalThis.__quotePilotMessagingPerformance.push(event.detail);
+    });
+  });
   await page.setViewportSize({ width: 390, height: 844 });
   await signInAsStaff(page);
   await page.goto(`/app/quotes/${CONVERSATION_QUOTE_ID}`);
@@ -220,6 +226,34 @@ test("connected Ambient conversation arrival stays pending until the exact threa
     await expect(arrival).toHaveAttribute("data-arrival-state", "resolved", { timeout: 45_000 });
     await expect(arrival).toContainText("Conversation ready");
     await expect(eventHeading).toBeFocused();
+
+    await expect.poll(async () => page.evaluate(() => (
+      globalThis.__quotePilotMessagingPerformance.some(
+        (entry) => entry.milestone === "thread_interactive"
+      )
+    )), { timeout: 45_000 }).toBe(true);
+    const observations = await page.evaluate(() => globalThis.__quotePilotMessagingPerformance);
+    const relevant = observations.filter(({ milestone }) => [
+      "route_usable",
+      "inbox_visible",
+      "thread_interactive"
+    ].includes(milestone));
+    expect(relevant.map(({ milestone }) => milestone)).toEqual(expect.arrayContaining([
+      "route_usable",
+      "inbox_visible",
+      "thread_interactive"
+    ]));
+    for (const observation of relevant) {
+      expect(Object.keys(observation).sort()).toEqual([
+        "durationMs",
+        "messageCount",
+        "milestone",
+        "schemaVersion",
+        "threadCount"
+      ]);
+      expect(observation.durationMs).toBeGreaterThanOrEqual(0);
+    }
+    console.log(`Connected local messaging performance: ${JSON.stringify(relevant)}`);
 
     await inspectConversationReflow(
       page,

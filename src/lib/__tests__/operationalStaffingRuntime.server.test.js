@@ -5,6 +5,7 @@ const require = createRequire(import.meta.url);
 const {
   OperationalStaffingRuntimeError,
   assertOperationalStaffingAuthorityEnabled,
+  buildProjectedOperationalStaffingObservation,
   buildOperationalStaffingSnapshotEnvelope,
   buildSnapshotScheduleFenceRefs,
   dedupeScheduleFenceAssignments,
@@ -274,5 +275,143 @@ describe("bounded fence and snapshot projections", () => {
       "staff_profiles_truncated",
       "schedule_fences_truncated"
     ]);
+  });
+});
+
+describe("prospective commercial revision Staffing observation", () => {
+  function plan({
+    quoteRevisionId = VERSION_ID,
+    eventWindow = canonical().canonicalEventWindow,
+    assignments = [
+      {
+        assignmentId: "assignment-server-one",
+        staffId: "staff-server-one",
+        displayName: "Server One",
+        role: "server",
+        staffRevision: 1,
+        state: "operator_confirmed"
+      }
+    ]
+  } = {}) {
+    return {
+      organizationId: ORGANIZATION_ID,
+      quoteId: QUOTE_ID,
+      quoteRevisionId,
+      revision: 2,
+      eventWindow,
+      requirements: {
+        byRole: { lead: 0, server: 2, chef: 1, bartender: 1 }
+      },
+      assignments,
+      state: assignments.length === 4 ? "coverage_confirmed" : "attention"
+    };
+  }
+
+  test("binds the real vNext identity and compares only aggregate counts for the same window", () => {
+    const projected = version({ servers: 3 });
+    projected.versionId = "v0015";
+    projected.snapshot.activeVersionId = "v0015";
+    const observation = buildProjectedOperationalStaffingObservation({
+      organizationId: ORGANIZATION_ID,
+      quoteId: QUOTE_ID,
+      expectedBaseQuoteRevisionId: VERSION_ID,
+      projectedVersion: projected,
+      currentPlan: plan(),
+      settings: { businessTimeZone: "America/Chicago" }
+    });
+
+    expect(observation.preview).toMatchObject({
+      proposed: {
+        quoteRevisionId: "v0015",
+        requirementsByRole: { lead: 0, server: 3, chef: 1, bartender: 1 },
+        totalRequired: 5
+      },
+      currentPlanState: "current",
+      comparison: {
+        windowState: "same",
+        coverage: {
+          state: "attention",
+          totalRequired: 5,
+          totalOperatorConfirmedCount: 1,
+          totalGap: 4
+        }
+      }
+    });
+    expect(observation.inputDigest).toMatch(/^[a-f0-9]{64}$/u);
+    expect(JSON.stringify(observation)).not.toContain("Server One");
+    expect(JSON.stringify(observation)).not.toContain("staff-server-one");
+  });
+
+  test("withholds proposed coverage when timing changes and when the plan revision is stale", () => {
+    const projected = version({ date: "2026-08-19" });
+    projected.versionId = "v0015";
+    projected.snapshot.activeVersionId = "v0015";
+    const changedWindow = buildProjectedOperationalStaffingObservation({
+      organizationId: ORGANIZATION_ID,
+      quoteId: QUOTE_ID,
+      expectedBaseQuoteRevisionId: VERSION_ID,
+      projectedVersion: projected,
+      currentPlan: plan(),
+      settings: { businessTimeZone: "America/Chicago" }
+    });
+    expect(changedWindow.preview.comparison).toMatchObject({
+      windowState: "changed",
+      coverage: {
+        state: "unverified",
+        totalOperatorConfirmedCount: null,
+        totalGap: null,
+        reasonCode: "schedule_revalidation_required"
+      }
+    });
+
+    const stalePlan = buildProjectedOperationalStaffingObservation({
+      organizationId: ORGANIZATION_ID,
+      quoteId: QUOTE_ID,
+      expectedBaseQuoteRevisionId: VERSION_ID,
+      projectedVersion: projected,
+      currentPlan: plan({ quoteRevisionId: "v0013" }),
+      settings: { businessTimeZone: "America/Chicago" }
+    });
+    expect(stalePlan.preview.currentPlanState).toBe("stale");
+    expect(stalePlan.preview.comparison.coverage).toMatchObject({
+      totalOperatorConfirmedCount: null,
+      totalGap: null,
+      reasonCode: "staffing_plan_quote_revision_stale"
+    });
+  });
+
+  test("an exact absent plan establishes zero confirmed assignments without inventing people", () => {
+    const projected = version({ date: "2026-08-19", servers: 3 });
+    projected.versionId = "v0015";
+    projected.snapshot.activeVersionId = "v0015";
+    const first = buildProjectedOperationalStaffingObservation({
+      organizationId: ORGANIZATION_ID,
+      quoteId: QUOTE_ID,
+      expectedBaseQuoteRevisionId: VERSION_ID,
+      projectedVersion: projected,
+      currentPlan: null,
+      settings: { businessTimeZone: "America/Chicago" }
+    });
+    const second = buildProjectedOperationalStaffingObservation({
+      organizationId: ORGANIZATION_ID,
+      quoteId: QUOTE_ID,
+      expectedBaseQuoteRevisionId: VERSION_ID,
+      projectedVersion: projected,
+      currentPlan: null,
+      settings: { businessTimeZone: "America/Chicago" }
+    });
+    expect(first.preview).toMatchObject({
+      currentPlanState: "absent",
+      comparison: {
+        windowState: "not_applicable",
+        coverage: {
+          totalRequired: 5,
+          totalOperatorConfirmedCount: 0,
+          totalGap: 5,
+          reasonCode: "staffing_plan_not_recorded"
+        }
+      }
+    });
+    expect(second.inputDigest).toBe(first.inputDigest);
   });
 });

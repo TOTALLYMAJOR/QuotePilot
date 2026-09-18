@@ -10,9 +10,14 @@ import {
   subscribeToConversationSignal
 } from "../lib/conversationSignalClient";
 import { auth } from "../lib/firebase";
+import {
+  messagingNow,
+  recordMessagingPerformanceMilestone
+} from "../lib/messagingPerformance";
 
 const pendingConversationAttempts = new Map();
 const MAX_PENDING_CONVERSATION_ATTEMPTS = 25;
+const MAX_CONVERSATION_CATCH_UP_PAGES = 10;
 let pendingConversationUnloadTarget = null;
 
 function protectPendingConversationAttempt(event) {
@@ -512,6 +517,30 @@ export function QuoteConversationMutationStatus({ presentation, showReady = fals
   );
 }
 
+export function ConversationHistoryAction({
+  hasOlder = false,
+  oldestCursor = null,
+  phase = "ready",
+  busy = false,
+  error = "",
+  onLoadOlder = null
+}) {
+  if (!hasOlder && phase !== "loading_older" && phase !== "older_error") return null;
+  return (
+    <div className="quote-conversation-history-action" data-capability-state={phase}>
+      <button
+        type="button"
+        className="ghost compact"
+        onClick={onLoadOlder}
+        disabled={busy || !oldestCursor}
+      >
+        {phase === "loading_older" ? "Loading older messages..." : "Load older messages"}
+      </button>
+      {phase === "older_error" && <p className="error-note" role="alert">{error}</p>}
+    </div>
+  );
+}
+
 function QuoteConversationPanelInstance({
   access,
   authenticatedUid = "",
@@ -541,6 +570,7 @@ function QuoteConversationPanelInstance({
     initiallyOpen ? "loading" : initialPendingAttempt ? "send_error" : "closed"
   );
   const [messages, setMessages] = useState([]);
+  const [page, setPage] = useState({ hasOlder: false, oldestCursor: null });
   const [loadedQuoteId, setLoadedQuoteId] = useState("");
   const [messageFocusOutcome, setMessageFocusOutcome] = useState(null);
   const [body, setBody] = useState(initialPendingAttempt?.body || "");
@@ -625,8 +655,10 @@ function QuoteConversationPanelInstance({
   const load = async ({
     refresh = false,
     pendingAttempt = null,
-    signalRefresh = false
+    signalRefresh = false,
+    older = false
   } = {}) => {
+    const performanceStartedAt = messagingNow();
     const request = beginRequestGeneration();
     loadInFlightRef.current = true;
     publishLoadResolution({ status: "pending" });
@@ -635,11 +667,49 @@ function QuoteConversationPanelInstance({
       unresolvedAttempt?.clientRequestId || pendingRequestId || ""
     ).trim();
     const reconcilingUnknownRequest = Boolean(unresolvedRequestId);
-    setPhase(refresh && messages.length ? "refreshing" : "loading");
+    setPhase(older ? "loading_older" : refresh && messages.length ? "refreshing" : "loading");
     setError("");
     setStatus("");
     try {
-      const result = await loadQuotePortalConversation(access);
+      const catchUpCursor = signalRefresh ? page.newestCursor : null;
+      let result = await loadQuotePortalConversation(access, {
+        cacheScope: identity,
+        forceRefresh: refresh
+          || signalRefresh
+          || Boolean(onLoadResolution)
+          || Boolean(normalizedFocusMessageId),
+        before: older ? page.oldestCursor : null,
+        after: catchUpCursor
+      });
+      if (signalRefresh && catchUpCursor) {
+        let catchUpMessages = result.messages;
+        let catchUpPages = 1;
+        while (result.page?.hasNewer && catchUpPages < MAX_CONVERSATION_CATCH_UP_PAGES) {
+          const nextCursor = result.page?.newestCursor;
+          if (!nextCursor) {
+            throw new Error("Conversation catch-up could not continue safely. Refresh the exact thread.");
+          }
+          const nextResult = await loadQuotePortalConversation(access, {
+            cacheScope: identity,
+            forceRefresh: true,
+            after: nextCursor
+          });
+          if (
+            String(nextResult?.organizationId || "").trim()
+              !== String(result?.organizationId || "").trim()
+            || String(nextResult?.quoteId || "").trim()
+              !== String(result?.quoteId || "").trim()
+          ) {
+            throw new Error("Conversation catch-up changed scope. Refresh the exact thread.");
+          }
+          catchUpMessages = mergeConversationMessages(catchUpMessages, nextResult.messages);
+          result = { ...nextResult, messages: catchUpMessages };
+          catchUpPages += 1;
+        }
+        if (result.page?.hasNewer) {
+          throw new Error("Conversation catch-up exceeded its safe bound. Refresh the exact thread.");
+        }
+      }
       if (!requestGenerationIsCurrent(request)) return;
       const expectedQuoteId = String(access?.quoteId || "").trim();
       const returnedQuoteId = String(result?.quoteId || "").trim();
@@ -658,8 +728,35 @@ function QuoteConversationPanelInstance({
         });
         return;
       }
-      latestLoadedSignalRef.current = buildConversationSignalBaseline(result.messages);
-      setMessages(result.messages);
+      const deltaCatchUp = Boolean(signalRefresh && catchUpCursor);
+      const nextMessages = older || deltaCatchUp
+        ? mergeConversationMessages(result.messages, messages)
+        : result.messages;
+      latestLoadedSignalRef.current = buildConversationSignalBaseline(nextMessages);
+      setMessages(nextMessages);
+      setPage(deltaCatchUp ? {
+        ...page,
+        hasNewer: false,
+        newestCursor: result.page?.newestCursor || page.newestCursor || null
+      } : older ? {
+        ...page,
+        hasOlder: result.page?.hasOlder === true,
+        oldestCursor: result.page?.oldestCursor || page.oldestCursor || null,
+        newestCursor: page.newestCursor || result.page?.newestCursor || null
+      } : result.page || { hasOlder: false, hasNewer: false, oldestCursor: null, newestCursor: null });
+      if (!refresh && !signalRefresh && !older) {
+        recordMessagingPerformanceMilestone({
+          milestone: "thread_interactive",
+          durationMs: messagingNow() - performanceStartedAt,
+          messageCount: result.messages.length
+        });
+      } else if (signalRefresh) {
+        recordMessagingPerformanceMilestone({
+          milestone: "thread_caught_up",
+          durationMs: messagingNow() - performanceStartedAt,
+          messageCount: result.messages.length
+        });
+      }
       setLoadedQuoteId(returnedQuoteId);
       setReadOnly(result.readOnly);
       setReadOnlyReason(result.readOnlyReason);
@@ -674,7 +771,9 @@ function QuoteConversationPanelInstance({
         );
       } else {
         setPhase("ready");
-        if (refresh) {
+        if (older) {
+          setStatus(result.page?.hasOlder ? "Older messages loaded." : "Complete conversation loaded.");
+        } else if (refresh) {
           setStatus(signalRefresh ? "Conversation updated." : "Conversation refreshed.");
         }
       }
@@ -684,6 +783,8 @@ function QuoteConversationPanelInstance({
       if (signalRefresh) setSyncState("stale");
       setPhase(reconcilingUnknownRequest
         ? "send_error"
+        : older && messages.length
+          ? "older_error"
         : refresh && messages.length
           ? "refresh_error"
           : "load_error");
@@ -896,6 +997,7 @@ function QuoteConversationPanelInstance({
     loadInFlightRef.current = false;
     setSignalVersion(0);
     setMessages([]);
+    setPage({ hasOlder: false, oldestCursor: null });
     setLoadedQuoteId("");
     setMessageFocusOutcome(null);
     focusResolutionSignatureRef.current = "";
@@ -1117,7 +1219,10 @@ function QuoteConversationPanelInstance({
     );
   }
 
-  const busy = phase === "loading" || phase === "refreshing" || phase === "sending";
+  const busy = phase === "loading"
+    || phase === "refreshing"
+    || phase === "loading_older"
+    || phase === "sending";
   const canSafelyReset = phase === "send_error"
     && Boolean(pendingRequestId)
     && sendMode === "safe_reset";
@@ -1205,6 +1310,14 @@ function QuoteConversationPanelInstance({
             aria-relevant="additions text"
             aria-atomic="false"
           >
+            <ConversationHistoryAction
+              hasOlder={page.hasOlder}
+              oldestCursor={page.oldestCursor}
+              phase={phase}
+              busy={busy}
+              error={error}
+              onLoadOlder={() => void load({ older: true })}
+            />
             {messages.length === 0 ? (
               <p className="source-note">No messages yet. Start with a question or update about this quote.</p>
             ) : messages.map((message) => (

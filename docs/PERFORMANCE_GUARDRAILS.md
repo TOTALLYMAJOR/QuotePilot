@@ -1,6 +1,6 @@
 # Performance Guardrails
 
-Last updated: 2026-09-05 13:22:00 CDT
+Last updated: 2026-09-17 14:01:00 CDT
 
 ## Objectives
 Keep delivery speed high while protecting end-user experience and predictable performance.
@@ -25,10 +25,10 @@ Threshold policy:
   rejects a requested-profile mismatch, and accepts an exception only when its
   active ID and pinned baseline date and metrics exactly match
   `bundle-budget.json`.
-- The current compatibility graph has a temporary 3,478,714-byte aggregate
+- The current compatibility graph has a temporary 3,657,606-byte aggregate
   and 399,665-byte largest-chunk ceiling. The production-equivalent Ambient
-  graph has a separate temporary 4,444,836-byte aggregate ceiling and
-  435,565-byte largest-chunk ceiling. The pre-authority local
+  graph has a separate temporary 4,963,155-byte aggregate ceiling and
+  446,541-byte largest-chunk ceiling. The pre-authority local
   measurements were 2,769,824 / 391,596 bytes for compatibility and 3,700,202
   / 391,596 bytes for Ambient. The deduplicated owner-provisioning recovery
   states add 2,651 Ambient aggregate bytes, for a reviewed 3,702,853-byte local
@@ -144,6 +144,34 @@ Threshold policy:
   ceilings, retaining only the already observed profile-specific runner
   differences: 3,478,714 / 399,665 for compatibility and 4,444,836 / 435,565
   for Ambient. This is not percentage or future-growth headroom.
+  The Guided Inquiry Showcase plus the explicit browser-gated model-assist
+  binding now measures the exact local CI matrices at 3,517,367 / 385,181
+  bytes for compatibility and 4,796,685 / 443,563 bytes for Ambient. The
+  exception aggregate ceilings are pinned to those literal graphs; the
+  existing 399,665-byte and 445,000-byte largest-chunk ceilings remain
+  unchanged. The increase is distributed across the new lazy public inquiry,
+  Library administration, Opportunities queue, recovery, and conversion
+  surfaces; it is reviewed feature cost, not future growth headroom. Exact-PR
+  CI must still confirm both graphs before release.
+  The v0.20.0 combined-open-work candidate adds Delivery Planning, Google
+  Calendar operations, event notes and attendance, server-bound commercial
+  Staffing and Inventory observations, progressive client loading, and the
+  Commercial Decision Surface. Exact local CI-matrix builds measure
+  3,652,845 / 385,181 bytes for compatibility and 4,947,989 / 445,422 bytes
+  for Ambient. The aggregate ceilings and Ambient largest-chunk ceiling are
+  pinned to those literal graphs; the compatibility largest-chunk ceiling
+  remains unchanged. This is reviewed combined-candidate cost with no future
+  growth allowance, and exact-PR CI remains required.
+  The Quote-to-Confidence candidate then removes about 153 KB of default-off
+  eager capability code through compile-time gates and lazy presentation
+  boundaries. Its remaining role-safe host integration measures
+  3,657,288 / 385,181 bytes in the config-free local matrix and
+  3,657,606 / 385,181 bytes with the exact compatibility CI environment.
+  Exact-PR CI run `35265592125` confirmed the latter compatibility graph. The
+  exact Ambient CI environment measures 4,963,155 / 446,541 bytes locally. The
+  profile ceilings are pinned to those literal production-matrix artifacts;
+  compatibility's largest-chunk ceiling remains unchanged. No
+  percentage or future-growth headroom is added.
   Searchable-PDF inspection additionally emits 1,667,684 raw runtime bytes in
   `dist/vendor/pdfjs-5.7.284`, with a 1,232,303-byte worker as its largest file.
   These assets are same-origin and load only after PDF inspection begins; they

@@ -15,10 +15,12 @@ import { useInventoryRecipeExtension } from "../hooks/useInventoryRecipeExtensio
 import { AdminCatalogView } from "./AdminCatalogModal";
 import BusinessSetupCenter from "./BusinessSetupCenter";
 import { InventoryMenuCostSummary } from "./InventoryRecipeEditor";
+import { WORKSPACE_PATHS } from "../lib/workspaceRoutes";
 import "./ambientLibraryRoute.css";
 
 const TenantWorkflowConfigurationStudio = import.meta.env.VITE_EVENT_OPERATING_SPINE_ENABLED === "true"
   ? lazy(() => import("./TenantWorkflowConfigurationStudio")) : null;
+const InquiryShowcaseAdmin = lazy(() => import("./InquiryShowcaseAdmin"));
 const CATALOG_SECTION_IDS = new Set(["starter", "workflow", ...AMBIENT_LIBRARY_SECTION_ORDER]);
 const EDITOR_SECTION_LABELS = Object.freeze({
   starter: "Library setup",
@@ -31,6 +33,7 @@ const EDITOR_SECTION_LABELS = Object.freeze({
   rules: "Rules",
   pricing: "Pricing"
 });
+const LIBRARY_OVERVIEW_RECORD_LIMIT = 8;
 
 function text(value) {
   return String(value ?? "").trim();
@@ -158,7 +161,7 @@ function summaryForSection(section) {
     return `${count} active ${count === 1 ? "rule" : "rules"}`;
   }
   const active = Number(summary.activeCount || 0);
-  if (section.id === "rentals") return `${active} ${active === 1 ? "collection" : "collections"}`;
+  if (section.id === "rentals") return `${active} active ${active === 1 ? "rental" : "rentals"}`;
   return `${active} active`;
 }
 
@@ -182,10 +185,86 @@ function displayActionForSection(section) {
   if (section.id === "menu") return "Open menus";
   if (section.id === "addons") return "Manage services";
   if (section.id === "rentals") return "Manage rentals";
-  if (section.id === "templates") return section.health === "attention" ? "Review templates" : "Manage templates";
-  if (section.id === "pricing") return section.health === "attention" ? "Review pricing" : "Configure pricing";
-  if (section.id === "rules") return section.health === "attention" ? "Review rules" : "Manage rules";
+  if (section.id === "templates") return "Manage templates";
+  if (section.id === "pricing") return "Open pricing";
+  if (section.id === "rules") return "Manage rules";
   return section.primaryAction.outcomeLabel;
+}
+
+function overviewRecordsForSection(section) {
+  if (section.id !== "pricing") return Array.isArray(section.records) ? section.records : [];
+  const revision = Number.isSafeInteger(section.summary?.catalogRevision)
+    ? `Catalog version ${section.summary.catalogRevision}`
+    : "Catalog version unavailable";
+  const pricingState = section.summary?.state === "confirmed"
+    ? "Confirmed for current catalog"
+    : section.summary?.state === "local_only"
+      ? "Browser-only confirmation"
+      : section.summary?.state === "recorded_confirmation_stale"
+        ? "Confirmation needs a current check"
+        : "Pricing needs review";
+  return [
+    { id: "catalog-revision", name: revision, stateLabel: section.summary?.authority === "server_recorded" ? "Organization record" : "Current view" },
+    {
+      id: "pricing-confirmation",
+      name: pricingState,
+      stateLabel: section.summary?.confirmedAt
+        ? `Recorded ${formatReviewDate(section.summary.confirmedAt)}`
+        : "No current confirmation date"
+    }
+  ];
+}
+
+function overviewStateForRecord(section, record) {
+  if (record.stateLabel) return record.stateLabel;
+  if (section.id === "templates") {
+    const readiness = record.dependencyState === "resolved"
+      ? "Linked items available"
+      : "Linked items need review";
+    return [record.style, readiness].filter(Boolean).join(" · ");
+  }
+  const state = record.active ? (section.id === "rules" ? "Enabled" : "Active") : (section.id === "rules" ? "Disabled" : "Inactive");
+  return [record.sectionName, state].filter(Boolean).join(" · ");
+}
+
+function emptyOverviewLabel(section) {
+  if (section.id === "menu" && section.summary?.availability === "unavailable") {
+    return section.summary.reason;
+  }
+  return `No recorded ${displayLabelForSection(section).toLowerCase()} are available in this completed view.`;
+}
+
+function LibrarySectionOverview({ section }) {
+  const records = overviewRecordsForSection(section);
+  const visibleRecords = records.slice(0, LIBRARY_OVERVIEW_RECORD_LIMIT);
+  const remainingCount = Math.max(0, records.length - visibleRecords.length);
+  return (
+    <div
+      className="ambient-library__overview"
+      data-library-overview-section={section.id}
+      data-library-overview-count={records.length}
+    >
+      {visibleRecords.length > 0 ? (
+        <ul aria-label={`${displayLabelForSection(section)} in this Library view`}>
+          {visibleRecords.map((record) => (
+            <li key={record.id} data-library-overview-record={record.id}>
+              <strong>{record.name}</strong>
+              <span>{overviewStateForRecord(section, record)}</span>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p data-library-overview-state={section.summary?.availability === "unavailable" ? "unavailable" : "empty"}>
+          {emptyOverviewLabel(section)}
+        </p>
+      )}
+      {remainingCount > 0 ? (
+        <p className="ambient-library__overview-remainder">
+          {remainingCount} more {remainingCount === 1 ? "record is" : "records are"} available in the full {displayLabelForSection(section)} editor.
+        </p>
+      ) : null}
+    </div>
+  );
 }
 
 function LibrarySectionIcon({ sectionId }) {
@@ -238,6 +317,7 @@ function LibrarySectionRow({ section, onAction, isNext = false, featured = false
             <span aria-hidden="true">→</span>
           </button>
         ) : null}
+        <LibrarySectionOverview section={section} />
       </article>
     </li>
   );
@@ -329,7 +409,8 @@ export default function AmbientLibraryRoute({
   onInteractionStateChange,
   contextualOrigin = null,
   inventoryRecipeExtension = null,
-  inventoryRecipeAccess = null
+  inventoryRecipeAccess = null,
+  inquiryShowcaseEnabled = false
 }) {
   const navigation = useOptionalWorkspaceNavigation();
   const headingRef = useWorkspaceRouteHeadingFocus(open);
@@ -636,6 +717,14 @@ export default function AmbientLibraryRoute({
         : "Ask an organization administrator to make this change.");
   };
 
+  const openImportStudio = () => {
+    if (!isAdmin || typeof navigation?.navigate !== "function") return;
+    navigation.navigate(WORKSPACE_PATHS.imports, {
+      preserveSearch: false,
+      preserveHash: false
+    });
+  };
+
   const handleEditorFocusResolution = (resolution) => {
     const recovered = resolution?.status === "recovery" || resolution?.result === "recovery";
     if (recovered) {
@@ -888,6 +977,14 @@ export default function AmbientLibraryRoute({
 
       {contextualBanner}
 
+      {isAdmin && inquiryShowcaseEnabled && <Suspense fallback={<p role="status">Loading Inquiry page settings…</p>}>
+        <InquiryShowcaseAdmin
+          organizationId={organizationId}
+          currentUserRole={currentUserRole}
+          enabled
+        />
+      </Suspense>}
+
       {resolvedInventoryRecipeExtension?.enabled === true && (
         <InventoryMenuCostSummary
           projections={resolvedInventoryRecipeExtension.menuCostProjections
@@ -1066,6 +1163,7 @@ export default function AmbientLibraryRoute({
             currentUserRole={currentUserRole}
             providerConnected={catalog?.providerConnectionReady === true}
             onOpenSection={openSetupSection}
+            onOpenImport={openImportStudio}
             onRefresh={() => refreshLibrary(model.actions["refresh-library"])}
           />
         </aside>

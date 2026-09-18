@@ -739,6 +739,7 @@ service cloud.firestore {
         "commercialChangeAuthorityEnabled",
         "operationalStaffingAuthorityEnabled",
         "inventoryAuthorityEnabled",
+        "googleCalendarIntegrationEnabled",
         "eventOperatingSpineEnabled",
         "orderId",
         "onboarding"
@@ -762,6 +763,7 @@ service cloud.firestore {
         "commercialChangeAuthorityEnabled",
         "operationalStaffingAuthorityEnabled",
         "inventoryAuthorityEnabled",
+        "googleCalendarIntegrationEnabled",
         "eventOperatingSpineEnabled",
         "orderId",
         "onboarding"
@@ -846,6 +848,12 @@ service cloud.firestore {
     }
 
     match /organizationRoleAuthorityReceipts/{requestId} {
+      allow read, create, update, delete: if false;
+    }
+
+    // Google OAuth state contains a short-lived encrypted verifier and exact
+    // actor/tenant bindings. Only trusted Functions may read or mutate it.
+    match /googleCalendarOAuthStates/{stateId} {
       allow read, create, update, delete: if false;
     }
 
@@ -966,6 +974,29 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // Inquiry Showcase drafts, immutable publications, customer submissions,
+    // lifecycle receipts, and conversion evidence are callable-owned. Even
+    // same-tenant staff use bounded role-checked projections.
+    match /organizations/{orgId}/inquiryShowcases/{showcaseId} {
+      allow read, write: if false;
+    }
+
+    match /organizations/{orgId}/inquiryShowcases/{showcaseId}/versions/{versionId} {
+      allow read, write: if false;
+    }
+
+    match /organizations/{orgId}/inquiryShowcases/{showcaseId}/receipts/{receiptId} {
+      allow read, write: if false;
+    }
+
+    match /organizations/{orgId}/customerInquiries/{inquiryId} {
+      allow read, write: if false;
+    }
+
+    match /organizations/{orgId}/customerInquiries/{inquiryId}/receipts/{receiptId} {
+      allow read, write: if false;
+    }
+
     match /organizations/{orgId}/importBatches/{batchId} {
       allow read: if isOrgAdmin(orgId);
       allow write: if false;
@@ -1006,6 +1037,26 @@ service cloud.firestore {
     // server-owned. Browser clients use owner-scoped callables instead of
     // reading or mutating these records directly.
     match /buyerAccessOrders/{orderId} {
+      allow read, write: if false;
+    }
+
+    match /inquirySlugs/{slug} {
+      allow read, write: if false;
+    }
+
+    match /publicInquiryRequests/{requestId} {
+      allow read, write: if false;
+    }
+
+    match /inquiryRateLimits/{rateId} {
+      allow read, write: if false;
+    }
+
+    match /inquiryDeletionReceipts/{receiptId} {
+      allow read, write: if false;
+    }
+
+    match /inquiryAnalytics/{aggregateId} {
       allow read, write: if false;
     }
 
@@ -1067,6 +1118,10 @@ service cloud.firestore {
     }
 
     match /organizations/{orgId}/postEventCloseouts/{closeoutId}/actionReceipts/{receiptId} {
+      allow read, write: if false;
+    }
+
+    match /organizations/{orgId}/postEventCloseouts/{closeoutId}/attendanceReceipts/{receiptId} {
       allow read, write: if false;
     }
 
@@ -1277,6 +1332,22 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // Internal supply action-plan heads, immutable revisions, and command
+    // receipts are callable-owned. They may contain supplier/cost planning
+    // notes but never vendor, purchase-order, reservation, or commercial
+    // authority, and browsers have no direct read or write path.
+    match /organizations/{orgId}/eventSupplyActionPlans/{quoteId} {
+      allow read, write: if false;
+    }
+
+    match /organizations/{orgId}/eventSupplyActionPlans/{quoteId}/revisions/{planRevisionId} {
+      allow read, write: if false;
+    }
+
+    match /organizations/{orgId}/eventSupplyActionPlanReceipts/{receiptId} {
+      allow read, write: if false;
+    }
+
     // Event ingredient execution heads and immutable revisions are physical-use
     // authority. Browsers consume only the bounded, exact-event projection
     // below; direct reads and every mutation stay server-owned.
@@ -1386,6 +1457,32 @@ service cloud.firestore {
     }
 
     match /organizations/{orgId}/kitchenBeoGenerationReceipts/{receiptId} {
+      allow read, write: if false;
+    }
+
+    // Operational note journals and correction receipts can contain private
+    // venue, kitchen, service, and staffing instructions. Staff access only
+    // bounded callable projections; customer and browser reads stay denied.
+    match /organizations/{orgId}/eventOperationalNotes/{quoteId} {
+      allow read, write: if false;
+    }
+
+    match /organizations/{orgId}/eventOperationalNotes/{quoteId}/receipts/{receiptId} {
+      allow read, write: if false;
+    }
+
+    // Calendar connections, external-copy links, and operation receipts can
+    // contain encrypted provider authorization or private reconciliation
+    // evidence. Browser roles use the bounded callable projections only.
+    match /organizations/{orgId}/googleCalendarConnections/{connectionId} {
+      allow read, write: if false;
+    }
+
+    match /organizations/{orgId}/googleCalendarEventLinks/{quoteId} {
+      allow read, write: if false;
+    }
+
+    match /organizations/{orgId}/googleCalendarOperations/{operationId} {
       allow read, write: if false;
     }
 

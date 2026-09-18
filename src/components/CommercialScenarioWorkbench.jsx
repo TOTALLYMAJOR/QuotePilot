@@ -1,8 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import useCommercialScenarioWorkbench from "../hooks/useCommercialScenarioWorkbench";
 import { commercialScenarioProjectionMatches } from "../lib/commercialScenarioWorkbench";
+import { buildCommercialConsequenceComparison } from "../lib/quoteConfidenceDecisionPacket";
 import FulfillmentIntelligence from "./FulfillmentIntelligence";
 import "./commercialScenarioWorkbench.css";
+
+const DECISION_PACKET_BUILD_ENABLED = import.meta.env.MODE === "test"
+  || import.meta.env.VITE_DECISION_PACKET_ENABLED === "true";
 
 const UNUSABLE_PROJECTION_STATES = new Set(["awaiting_preview", "loading", "stale"]);
 const HEALTHY_EVIDENCE_STATES = new Set(["available", "current", "not_applicable"]);
@@ -54,40 +58,30 @@ function signedMoney(value, currency = "USD", { minor = false } = {}) {
 }
 
 function formatCreatedAt(value) {
-  if (!value) return "Current revision";
+  if (!value) return "Current quote";
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "Session scenario";
+  if (Number.isNaN(date.getTime())) return "New option";
   return `Created ${new Intl.DateTimeFormat("en-US", {
     hour: "numeric",
     minute: "2-digit"
   }).format(date)}`;
 }
 
-function formatEventDate(value) {
-  const candidate = text(value);
-  if (!candidate) return "";
-  const date = new Date(`${candidate}T12:00:00`);
-  if (Number.isNaN(date.getTime())) return candidate;
-  return new Intl.DateTimeFormat("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric"
-  }).format(date);
-}
-
 function evidenceLabel(state) {
   return ({
-    missing: "Missing evidence",
-    not_yet_available: "Not yet available",
-    blocked_by_integration: "Integration blocked",
-    contradictory: "Contradictory evidence",
-    schema_drift: "Schema changed",
-    stale: "Stale evidence",
-    partial: "Partial evidence",
-    failed: "Evidence failed",
-    error: "Evidence failed",
-    unavailable: "Unavailable",
-    unknown: "Unknown"
+    available: "Current evidence",
+    not_applicable: "Not applicable",
+    missing: "Details unavailable",
+    not_yet_available: "Still checking",
+    blocked_by_integration: "Connection needs attention",
+    contradictory: "Details conflict",
+    schema_drift: "Update needed",
+    stale: "Refresh needed",
+    partial: "Some details unavailable",
+    failed: "Could not update",
+    error: "Could not update",
+    unavailable: "Not available",
+    unknown: "Needs review"
   })[text(state).toLowerCase()] || "Needs review";
 }
 
@@ -127,61 +121,206 @@ function projectionIsUsable(projection, scenario) {
       && projection?.consequences?.commercial?.evidenceState === "not_applicable");
 }
 
-function sourceRevision(value, preferredKeys = []) {
-  if (!value || typeof value !== "object") return text(value) || "Not supplied";
-  const sources = [value, value.proposedAfter, value.before]
-    .filter((entry) => entry && typeof entry === "object");
-  for (const source of sources) {
-    for (const key of preferredKeys) {
-      if (source[key] !== undefined && source[key] !== null && text(source[key])) {
-        return text(source[key]);
-      }
-    }
-  }
-  return "Not supplied";
+function scenarioEvidenceLabel(state) {
+  return ({
+    saved: "Current",
+    exact: "Ready",
+    retained: "Previous result",
+    updating: "Checking",
+    unavailable: "Not checked"
+  })[state] || "Not checked";
 }
 
-function CurrentWorkingComparison({ projection }) {
-  const commercial = projection?.consequences?.commercial || {};
-  const inventory = projection?.consequences?.inventory || {};
-  const currency = commercial.currency || inventory.cost?.currency || "USD";
-  const rows = [
-    {
-      label: "Quote total",
-      current: formatMoney(commercial.total?.before, currency),
-      working: formatMoney(commercial.total?.proposedAfter, currency),
-      difference: signedMoney(commercial.total?.delta, currency)
-    },
-    {
-      label: "Deposit",
-      current: formatMoney(commercial.depositRequirement?.before, currency),
-      working: formatMoney(commercial.depositRequirement?.proposedAfter, currency),
-      difference: signedMoney(commercial.depositRequirement?.delta, currency)
-    },
-    {
-      label: "Ingredient cost",
-      current: formatMoney(inventory.cost?.beforeMinor, inventory.cost?.currency, { minor: true }),
-      working: formatMoney(inventory.cost?.proposedAfterMinor, inventory.cost?.currency, { minor: true }),
-      difference: signedMoney(inventory.cost?.deltaMinor, inventory.cost?.currency, { minor: true })
+function workingScenarioProjection({
+  scenario,
+  activeScenario,
+  visibleProjection,
+  exactProjectionUsable,
+  showingRetainedProjection,
+  workbenchUpdating
+}) {
+  if (scenario.kind === "current") {
+    return {
+      state: "saved",
+      projection: scenario.scenarioId === activeScenario.scenarioId && exactProjectionUsable
+        ? visibleProjection
+        : null
+    };
+  }
+  if (scenario.scenarioId === activeScenario.scenarioId) {
+    if (exactProjectionUsable) return { state: "exact", projection: visibleProjection };
+    if (showingRetainedProjection) return { state: "retained", projection: visibleProjection };
+    return { state: workbenchUpdating ? "updating" : "unavailable", projection: null };
+  }
+  const envelope = scenario.cachedProjection;
+  if (
+    commercialScenarioProjectionMatches(scenario, envelope)
+    && projectionIsUsable(envelope?.projection, scenario)
+  ) {
+    return { state: "exact", projection: envelope.projection };
+  }
+  return { state: "unavailable", projection: null };
+}
+
+function comparisonMetricRows(columns, currentGuestCount) {
+  const referenceProjection = columns.find((column) => column.projection)?.projection || null;
+  const metric = (column, path, { minor = false } = {}) => {
+    const source = column.scenario.kind === "current" ? referenceProjection : column.projection;
+    const commercial = source?.consequences?.commercial || {};
+    const inventory = source?.consequences?.inventory || {};
+    const currency = commercial.currency || inventory.cost?.currency || "USD";
+    if (path === "total") {
+      return formatMoney(column.scenario.kind === "current"
+        ? commercial.total?.before
+        : commercial.total?.proposedAfter, currency);
     }
+    if (path === "deposit") {
+      return formatMoney(column.scenario.kind === "current"
+        ? commercial.depositRequirement?.before
+        : commercial.depositRequirement?.proposedAfter, currency);
+    }
+    return formatMoney(column.scenario.kind === "current"
+      ? inventory.cost?.beforeMinor
+      : inventory.cost?.proposedAfterMinor, inventory.cost?.currency, { minor });
+  };
+  const difference = (column, path, { minor = false } = {}) => {
+    if (column.scenario.kind === "current") return "No change";
+    if (!column.projection) return column.state === "updating" ? "Checking" : "Not checked";
+    const commercial = column.projection?.consequences?.commercial || {};
+    const inventory = column.projection?.consequences?.inventory || {};
+    const currency = commercial.currency || inventory.cost?.currency || "USD";
+    if (path === "total") return signedMoney(commercial.total?.delta, currency);
+    if (path === "deposit") return signedMoney(commercial.depositRequirement?.delta, currency);
+    return signedMoney(inventory.cost?.deltaMinor, inventory.cost?.currency, { minor });
+  };
+  return [
+    {
+      id: "guests",
+      label: "Guests",
+      value: (column) => guestLabel(column.scenario.guestCount),
+      difference: (column) => signedCount(column.scenario.guestCount - currentGuestCount)
+    },
+    { id: "quote-total", label: "Quote total", value: (column) => metric(column, "total"), difference: (column) => difference(column, "total") },
+    { id: "deposit", label: "Deposit", value: (column) => metric(column, "deposit"), difference: (column) => difference(column, "deposit") },
+    { id: "ingredient-cost", label: "Ingredient cost", value: (column) => metric(column, "ingredient", { minor: true }), difference: (column) => difference(column, "ingredient", { minor: true }) }
   ];
+}
+
+function ScenarioComparison({
+  scenarios,
+  activeScenario,
+  visibleProjection,
+  exactProjectionUsable,
+  showingRetainedProjection,
+  workbenchUpdating,
+  currentGuestCount
+}) {
+  const availableColumns = scenarios.map((scenario) => ({
+    scenario,
+    selected: scenario.scenarioId === activeScenario.scenarioId,
+    ...workingScenarioProjection({
+      scenario,
+      activeScenario,
+      visibleProjection,
+      exactProjectionUsable,
+      showingRetainedProjection,
+      workbenchUpdating
+    })
+  }));
+  const currentColumn = availableColumns[0];
+  const selectedColumn = availableColumns.find((column) => column.selected) || currentColumn;
+  const columns = selectedColumn.scenario.scenarioId === currentColumn.scenario.scenarioId
+    ? [currentColumn]
+    : [currentColumn, selectedColumn];
+  const rows = comparisonMetricRows(columns, currentGuestCount);
   return (
-    <table className="csw-comparison">
-      <caption className="visually-hidden">Current and working commercial comparison</caption>
-      <thead>
-        <tr><th scope="col">Measure</th><th scope="col">Current</th><th scope="col">Working</th><th scope="col">Difference</th></tr>
-      </thead>
-      <tbody>
-        {rows.map((row) => (
-          <tr key={row.label}>
-            <th scope="row">{row.label}</th>
-            <td data-column="Current">{row.current}</td>
-            <td data-column="Working">{row.working}</td>
-            <td data-column="Difference">{row.difference}</td>
+    <div className="csw-comparison-shell">
+      <table className="csw-comparison csw-comparison--wide" data-scenario-comparison="all">
+        <caption className="visually-hidden">Current quote compared with each option</caption>
+        <thead>
+          <tr>
+            <th scope="col">Measure</th>
+            {columns.map((column) => (
+              <th
+                key={column.scenario.scenarioId}
+                scope="col"
+                data-scenario-column={column.scenario.scenarioId}
+                data-selected={column.selected || undefined}
+                data-evidence-state={column.state}
+              >
+                <strong>{column.scenario.name}</strong>
+                <span>{scenarioEvidenceLabel(column.state)}</span>
+              </th>
+            ))}
           </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => (
+            <tr key={row.id}>
+              <th scope="row">{row.label}</th>
+              {columns.map((column) => (
+                <td
+                  key={column.scenario.scenarioId}
+                  data-scenario-column={column.scenario.scenarioId}
+                  data-selected={column.selected || undefined}
+                  data-evidence-state={column.state}
+                >
+                  <strong>{row.value(column)}</strong>
+                  {column.scenario.kind === "working" ? <small>{row.difference(column)}</small> : null}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+
+      <div className="csw-comparison-mobile" data-scenario-comparison="selected" aria-label={`Current compared with ${selectedColumn.scenario.name}`}>
+        <header>
+          <strong>Current → {selectedColumn.scenario.name}</strong>
+          <span data-evidence-state={selectedColumn.state}>{scenarioEvidenceLabel(selectedColumn.state)}</span>
+        </header>
+        {rows.map((row) => (
+          <dl key={row.id}>
+            <div><dt>{row.label} · Current</dt><dd>{row.value(currentColumn)}</dd></div>
+            <div><dt>{row.label} · {selectedColumn.scenario.name}</dt><dd>{row.value(selectedColumn)}</dd></div>
+            <div><dt>Difference</dt><dd>{row.difference(selectedColumn)}</dd></div>
+          </dl>
         ))}
-      </tbody>
-    </table>
+      </div>
+    </div>
+  );
+}
+
+function ConsequenceComparison({ visibleProjection, activeScenario }) {
+  const comparison = buildCommercialConsequenceComparison(visibleProjection || {});
+  return (
+    <div
+      className="csw-comparison-shell"
+      data-consequence-comparison="current-proposed-difference"
+      data-review-eligibility={comparison.canContinueToGovernedReview ? "eligible" : "blocked"}
+    >
+      <table className="csw-comparison csw-comparison--wide csw-comparison--decision">
+        <caption className="visually-hidden">
+          Current quote compared with {activeScenario.name}, including explicit evidence state
+        </caption>
+        <thead><tr><th scope="col">Measure</th><th scope="col">Current</th><th scope="col">Proposed</th><th scope="col">Difference</th></tr></thead>
+        <tbody>
+          {comparison.rows.map((row) => (
+            <tr key={row.id} data-comparison-domain={row.id} data-evidence-state={row.evidenceState}>
+              <th scope="row"><strong>{row.label}</strong><span>{evidenceLabel(row.evidenceState)}</span></th>
+              <td data-label="Current">{row.current}</td>
+              <td data-label="Proposed">{row.proposed}</td>
+              <td data-label="Difference">{row.difference}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {!comparison.canContinueToGovernedReview ? (
+        <p className="csw-comparison-blocker" role="status">
+          Review is blocked until {comparison.blockingEvidenceStates.map(evidenceLabel).join(", ").toLowerCase()} is resolved. No change can be applied or saved from this comparison.
+        </p>
+      ) : null}
+    </div>
   );
 }
 
@@ -199,18 +338,12 @@ function focusGovernedReview() {
 
 function CommercialScenarioWorkbenchReady({
   projection,
+  decisionPacketEnabled = false,
   resolvedScopeKey,
   resolvedBaseRevisionId,
   resolvedCurrentGuestCount,
   resolvedProposedGuestCount,
   eventName = "",
-  eventDate = "",
-  eventTime = "",
-  venue = "",
-  proposedEventName = "",
-  proposedEventDate = "",
-  proposedEventTime = "",
-  proposedVenue = "",
   onGuestCountChange,
   onRequestConsequences,
   onPreview,
@@ -389,29 +522,22 @@ function CommercialScenarioWorkbenchReady({
     ? visibleProjection.scenario.selectedMenuItemNames
     : [];
   const guestDelta = activeScenario.guestCount - snapshot.currentScenario.guestCount;
-  const currentIdentity = {
-    name: text(eventName),
-    date: text(eventDate),
-    time: text(eventTime),
-    venue: text(venue)
-  };
-  const workingIdentity = {
-    name: text(proposedEventName) || currentIdentity.name,
-    date: text(proposedEventDate) || currentIdentity.date,
-    time: text(proposedEventTime) || currentIdentity.time,
-    venue: text(proposedVenue) || currentIdentity.venue
-  };
-  const workingIdentityChanged = Object.keys(currentIdentity)
-    .some((key) => workingIdentity[key] !== currentIdentity[key]);
+  const currentEventName = text(eventName) || "Current event";
   const currentDraftChanged = isCurrent && projection?.scenario?.proposalChanged === true;
   const activeProposalChanged = activeScenario.guestCount !== snapshot.currentScenario.guestCount
     || (exactProjectionUsable && visibleProjection?.scenario?.proposalChanged === true);
+  const consequenceComparison = DECISION_PACKET_BUILD_ENABLED
+    ? buildCommercialConsequenceComparison(visibleProjection || {})
+    : null;
+  const consequenceEvidenceReady = !decisionPacketEnabled
+    || consequenceComparison?.canContinueToGovernedReview === true;
   const currentPreviewLoading = currentDraftChanged && projection?.state === "loading";
   const workbenchUpdating = !isCurrent
     && !retryAvailable
     && (recomputing || !exactProjectionUsable);
   const reviewReady = (currentDraftChanged || (!isCurrent && activeProposalChanged))
     && exactProjectionUsable
+    && consequenceEvidenceReady
     && !workbenchUpdating;
   const capabilityState = retryAvailable
     ? "recovery"
@@ -428,37 +554,41 @@ function CommercialScenarioWorkbenchReady({
   const primaryDisabled = isCurrent
     ? !currentDraftChanged
       || currentPreviewLoading
+      || (exactProjectionUsable && !consequenceEvidenceReady)
       || (retryAvailable
         ? !retryHandlerAvailable
         : exactProjectionUsable ? false : !previewHandlerAvailable)
     : retryAvailable
       ? !retryHandlerAvailable
-      : !activeProposalChanged || workbenchUpdating;
+      : !activeProposalChanged || workbenchUpdating || (exactProjectionUsable && !consequenceEvidenceReady);
   const primaryLabel = retryAvailable
-    ? "Retry exact evidence"
+    ? "Try again"
     : reviewReady
-      ? "Review for commitment"
+      ? "Review change"
+      : exactProjectionUsable && !consequenceEvidenceReady
+        ? "Resolve evidence before review"
       : currentDraftChanged
       ? currentPreviewLoading
-          ? "Updating exact evidence…"
-          : "Preview consequences"
+          ? "Checking change…"
+          : "Check change"
         : exactProjectionUsable && !activeProposalChanged
           ? "No change to review"
         : workbenchUpdating
-          ? "Updating exact evidence…"
+          ? "Checking change…"
           : "Create a scenario to review";
   const exceptionState = visibleProjection?.state === "ready"
     || visibleProjection?.state === "unchanged"
     ? "available"
     : visibleProjection?.state;
   const liveMessage = showingRetainedProjection
-    ? `Updating consequences for ${activeScenario.guestCount} guests. The last accepted ${visibleProjectionGuestCount}-guest result remains visible and is labeled retained.`
+    ? `Rechecking ${activeScenario.guestCount} guests. The previous ${visibleProjectionGuestCount}-guest result is shown until this update finishes.`
     : workbenchUpdating
-      ? `Updating consequences for ${activeScenario.guestCount} guests.`
+      ? `Checking this change for ${activeScenario.guestCount} guests.`
       : retryAvailable
-        ? projection?.provenance?.previewError || "Exact consequence evidence needs recovery."
-        : validation?.message || `${activeScenario.name} is current in this session view.`;
+        ? "This change could not be checked. Try again."
+        : validation?.message || `${activeScenario.name} is selected.`;
   const createdLabel = formatCreatedAt(activeScenario.createdAtISO);
+  const scenarioB = snapshot.scenarios.find((scenario) => scenario.slot === "B") || null;
 
   return (
     <section
@@ -472,116 +602,141 @@ function CommercialScenarioWorkbenchReady({
       aria-labelledby="csw-title"
     >
       <header className="csw-header">
-        <div>
-          <p className="csw-kicker">Living Commercial Twin · Scenario Workbench</p>
-          <h3 id="csw-title">Explore the commitment before you make it</h3>
+        <div className="csw-header__copy">
+          <p className="csw-kicker">Commercial review</p>
+          <div className="csw-header__title-row">
+            <h2 id="csw-title">{currentEventName}</h2>
+            {!isCurrent ? <span>{activeScenario.name} · {activeScenario.guestCount} guests</span> : null}
+          </div>
+          <p className="csw-header__lede">Current commitment · {snapshot.currentScenario.guestCount} guests</p>
+          <div className="csw-header__state">
+            <strong>{isCurrent ? "Current quote" : "Scenario only · not saved"}</strong>
+            <EvidenceException state={exceptionState} />
+          </div>
         </div>
-        <div className="csw-header__state">
-          <strong>Session only · not committed</strong>
-          <span>Current revision stays intact</span>
-          <EvidenceException state={exceptionState} />
+        <div className="csw-header__actions" aria-label="Scenario review actions">
+          <button
+            type="button"
+            className="csw-quiet-button"
+            disabled={isCurrent}
+            onClick={() => actions.selectScenario(snapshot.currentScenario.scenarioId)}
+          >Compare Current</button>
+          {scenarioB ? (
+            <button
+              type="button"
+              className="csw-quiet-button"
+              disabled={scenarioB.scenarioId === activeScenario.scenarioId}
+              onClick={() => actions.selectScenario(scenarioB.scenarioId)}
+            >Scenario B</button>
+          ) : null}
+          <button
+            type="button"
+            className="csw-review-button"
+            disabled={primaryDisabled}
+            onClick={handleReview}
+          >{primaryLabel}</button>
         </div>
       </header>
-
-      <div className="csw-tabs" role="tablist" aria-label="Commercial scenarios">
-        {snapshot.scenarios.map((scenario, index) => {
-          const selected = scenario.scenarioId === activeScenario.scenarioId;
-          return (
-            <button
-              key={scenario.scenarioId}
-              ref={(node) => { tabRefs.current[index] = node; }}
-              type="button"
-              role="tab"
-              id={`csw-tab-${scenario.scenarioId}`}
-              aria-selected={selected}
-              aria-controls="csw-active-scenario"
-              tabIndex={selected ? 0 : -1}
-              className="csw-tab"
-              onClick={() => actions.selectScenario(scenario.scenarioId)}
-              onKeyDown={(event) => handleTabKeyDown(event, index)}
-            >
-              <strong>{selected && scenario.kind === "working" ? <span className="csw-tab__dot" aria-hidden="true" /> : null}{scenario.name}</strong>
-              <small>{scenario.guestCount} guests{scenario.kind === "working" ? ` · g${scenario.generation}` : " · saved"}</small>
-            </button>
-          );
-        })}
-      </div>
 
       <div
         id="csw-active-scenario"
         role="tabpanel"
-        aria-labelledby={`csw-tab-${activeScenario.scenarioId}`}
+        aria-label={`${activeScenario.name} commercial review`}
         className="csw-grid"
       >
+        <FulfillmentIntelligence
+          projection={visibleProjection}
+          activeScenario={activeScenario}
+          updating={workbenchUpdating}
+          retained={showingRetainedProjection}
+          constraintOpen={constraintOpen}
+          onToggleConstraint={() => setConstraintOpen((current) => !current)}
+          onUseSafeThrough={(value) => actions.setGuestCount(value)}
+          onOpenStaffing={onOpenStaffing}
+          onOpenInventory={inventoryEvidenceAvailable ? onOpenInventory : undefined}
+          onRefreshStaffing={onRefreshStaffing}
+        />
+
         <section className="csw-commitment" aria-labelledby="csw-commitment-title">
-          <div className="csw-commitment__identity">
-            <p className="csw-kicker">Living commitment · Current saved</p>
-            <h4 id="csw-commitment-title">{currentIdentity.name || "Current event commitment"}</h4>
-            <p className="csw-event-meta">
-              {formatEventDate(currentIdentity.date) ? <span>{formatEventDate(currentIdentity.date)}</span> : null}
-              {currentIdentity.time ? <span>{currentIdentity.time}</span> : null}
-              {currentIdentity.venue ? <span>{currentIdentity.venue}</span> : null}
-            </p>
-          </div>
-
-          {workingIdentityChanged ? (
-            <div className="csw-working-identity" aria-label="Working event detail changes">
-              <span>Working event details</span>
-              <strong>{workingIdentity.name || "Unnamed event"}</strong>
-              <small>{[
-                formatEventDate(workingIdentity.date),
-                workingIdentity.time,
-                workingIdentity.venue
-              ].filter(Boolean).join(" · ") || "No event details supplied"}</small>
-            </div>
-          ) : null}
-
-          <div className="csw-guest-delta">
+          <header className="csw-commitment__heading">
             <div>
-              <span>Current</span>
-              <strong>{snapshot.currentScenario.guestCount}</strong>
-              <small>saved guests</small>
+              <p className="csw-kicker">Current vs {activeScenario.name}</p>
+              <h3 id="csw-commitment-title">What changes</h3>
             </div>
-            <span className="csw-guest-delta__arrow" aria-hidden="true">→</span>
-            <div className="csw-value-settle" key={`${activeScenario.scenarioId}-${activeScenario.generation}`}>
-              <span>Working</span>
-              <strong>{activeScenario.guestCount}</strong>
-              <small>{signedCount(guestDelta)}</small>
-            </div>
-          </div>
+            <span>{signedCount(guestDelta)}</span>
+          </header>
+
+          <ScenarioComparison
+            scenarios={snapshot.scenarios}
+            activeScenario={activeScenario}
+            visibleProjection={visibleProjection}
+            exactProjectionUsable={exactProjectionUsable}
+            showingRetainedProjection={showingRetainedProjection}
+            workbenchUpdating={workbenchUpdating}
+            currentGuestCount={snapshot.currentScenario.guestCount}
+          />
+
+          {DECISION_PACKET_BUILD_ENABLED && decisionPacketEnabled ? (
+            <ConsequenceComparison
+              activeScenario={activeScenario}
+              visibleProjection={visibleProjection}
+            />
+          ) : null}
 
           {showingRetainedProjection ? (
             <p className="csw-retained-note">
-              Retained exact result for {guestLabel(visibleProjectionGuestCount)}. New consequences are updating; this result is not labeled current.
+              Showing the previous result for {guestLabel(visibleProjectionGuestCount)} while this option updates.
             </p>
           ) : null}
 
-          <CurrentWorkingComparison projection={visibleProjection} />
-
-          <p className="csw-menu-basis">
-            <strong>Menu basis</strong><br />
-            {menuNames.length
-              ? menuNames.join(", ")
-              : "No saved menu selection is available for ingredient evaluation."}
-          </p>
-          <p className="csw-menu-basis">
-            Kitchen BEO · {commercial.evidenceState === "available"
-              ? visibleProjection?.consequences?.beo?.effect === "stale"
-                ? "freshness review required after commitment"
-                : "review dependency carried from the exact preview"
-              : "not yet evaluated for this scenario"}
-          </p>
+          <details className="csw-comparison-disclosure">
+            <summary>Menu and BEO details</summary>
+            <div className="csw-comparison-disclosure__body">
+              <p className="csw-menu-basis">
+                <strong>Menu used for this review</strong><br />
+                {menuNames.length ? menuNames.join(", ") : "Choose menu items to check ingredient needs."}
+              </p>
+              <p className="csw-menu-basis">
+                BEO · {commercial.evidenceState === "available"
+                  ? visibleProjection?.consequences?.beo?.effect === "stale"
+                    ? "review required after this change"
+                    : "review this document before moving forward"
+                  : "not checked for this option"}
+              </p>
+            </div>
+          </details>
         </section>
 
         <aside className="csw-controls" aria-labelledby="csw-controls-title">
           <div className="csw-controls__heading">
             <div>
               <p className="csw-kicker">Scenario controls</p>
-              <h4 id="csw-controls-title">{activeScenario.name}</h4>
+              <h3 id="csw-controls-title">{activeScenario.name}</h3>
             </div>
-            <span className="csw-scenario-meta">g{activeScenario.generation}</span>
           </div>
-          <p className="csw-scenario-meta">{createdLabel}<br />Based on {text(activeScenario.baseQuoteRevisionId) || "the current revision"}</p>
+          <div className="csw-tabs" role="tablist" aria-label="Commercial scenarios">
+            {snapshot.scenarios.map((scenario, index) => {
+              const selected = scenario.scenarioId === activeScenario.scenarioId;
+              return (
+                <button
+                  key={scenario.scenarioId}
+                  ref={(node) => { tabRefs.current[index] = node; }}
+                  type="button"
+                  role="tab"
+                  id={`csw-tab-${scenario.scenarioId}`}
+                  aria-selected={selected}
+                  aria-controls="csw-active-scenario"
+                  tabIndex={selected ? 0 : -1}
+                  className="csw-tab"
+                  onClick={() => actions.selectScenario(scenario.scenarioId)}
+                  onKeyDown={(event) => handleTabKeyDown(event, index)}
+                >
+                  <strong>{scenario.name}</strong>
+                </button>
+              );
+            })}
+          </div>
+          <p className="csw-scenario-meta">{createdLabel} · Started from Current</p>
 
           <div className="csw-guest-control">
             <label htmlFor="csw-guest-count">Working guest count</label>
@@ -621,7 +776,7 @@ function CommercialScenarioWorkbenchReady({
             {validation ? (
               <p id="csw-guest-validation" className="csw-validation">{validation.message}</p>
             ) : (
-              <p id="csw-guest-hint" className="csw-guest-control__hint">Whole guests, 1–400. Editing Current creates Scenario A.</p>
+              <p id="csw-guest-hint" className="csw-guest-control__hint">Use 1–400 guests. Changing Current starts Scenario A.</p>
             )}
           </div>
 
@@ -643,37 +798,25 @@ function CommercialScenarioWorkbenchReady({
               disabled={!canDuplicate}
               onClick={() => actions.duplicateScenario()}
             >Duplicate scenario</button>
-            <p className="csw-scenario-capacity">Current + up to two temporary alternatives. Nothing is persisted.</p>
+            <p className="csw-scenario-capacity">Compare Current with up to two options. Changes stay on this screen until reviewed.</p>
           </div>
         </aside>
 
-        <FulfillmentIntelligence
-          projection={visibleProjection}
-          activeScenario={activeScenario}
-          updating={workbenchUpdating}
-          retained={showingRetainedProjection}
-          constraintOpen={constraintOpen}
-          onToggleConstraint={() => setConstraintOpen((current) => !current)}
-          onUseSafeThrough={(value) => actions.setGuestCount(value)}
-          onOpenStaffing={onOpenStaffing}
-          onOpenInventory={inventoryEvidenceAvailable ? onOpenInventory : undefined}
-          onRefreshStaffing={onRefreshStaffing}
-        />
       </div>
 
       <p className="csw-live-status" role="status" aria-live="polite">{liveMessage}</p>
 
       {retryAvailable ? (
         <p className="csw-recovery" role="alert">
-          <strong>Exact consequence evidence needs recovery.</strong>{" "}
-          {projection?.provenance?.previewError || "Retry this scenario request before relying on its comparison."}
+          <strong>This change could not be checked.</strong>{" "}
+          Try again before relying on this comparison.
         </p>
       ) : null}
 
       <footer className="csw-footer">
         <div className="csw-footer__boundary">
-          <strong>Reversibility · Full · Not committed</strong>
-          <span>Nothing here has changed Commercial, Staffing, Inventory, or BEO authority.</span>
+          <strong>No changes saved</strong>
+          <span>Pricing, staffing, inventory, and the BEO are unchanged.</span>
         </div>
         <div className="csw-footer__actions">
           {!isCurrent ? (
@@ -683,25 +826,14 @@ function CommercialScenarioWorkbenchReady({
               onClick={() => actions.discardScenario(activeScenario.scenarioId)}
             >Discard scenario</button>
           ) : null}
-          <button
-            type="button"
-            className="csw-review-button"
-            disabled={primaryDisabled}
-            onClick={handleReview}
-          >{primaryLabel}</button>
         </div>
       </footer>
 
       <details className="csw-evidence-boundary">
-        <summary>Scenario identity, authority, and evidence boundary</summary>
+        <summary>About this comparison</summary>
         <div className="csw-evidence-boundary__body">
-          <p>{snapshot.boundary}</p>
-          <p>{visibleProjection?.boundary || "Commercial, Staffing, and Inventory remain separate authorities; Fulfillment is a rebuildable read model."}</p>
-          <dl>
-            <div><dt>Scenario</dt><dd>{activeScenario.scenarioId} · generation {activeScenario.generation}<br />{activeScenario.inputDigest}</dd></div>
-            <div><dt>People source</dt><dd>{sourceRevision(visibleProjection?.fulfillment?.sourceRevisions?.people, ["planRevision", "authorityVersion", "quoteRevisionId"])}</dd></div>
-            <div><dt>Supply source</dt><dd>{sourceRevision(visibleProjection?.fulfillment?.sourceRevisions?.supply, ["projectionDigest", "eventRequirementRevisionId", "requirementRevision", "sourceFingerprint"])}</dd></div>
-          </dl>
+          <p>This is a planning comparison. It does not change the quote or reserve staff or stock.</p>
+          <p>Pricing, staffing, inventory, and BEO updates still require their normal review steps.</p>
         </div>
       </details>
     </section>
@@ -737,18 +869,17 @@ export default function CommercialScenarioWorkbench({
         data-capability-state="unavailable"
         aria-labelledby="csw-unavailable-title"
       >
-        <p className="csw-kicker">Living Commercial Twin · Scenario Workbench</p>
-        <h3 id="csw-unavailable-title">A scenario cannot be created from incomplete authority</h3>
+        <p className="csw-kicker">Commercial review</p>
+        <h2 id="csw-unavailable-title">This comparison is not ready yet</h2>
         <p>
-          The current saved guest count, base quote revision, and quote scope are required.
-          No temporary scenario or consequence request was created.
+          Add a current guest count and save the quote, then try this comparison again.
         </p>
         {typeof props.onReviewForCommitment === "function" ? (
           <button
             type="button"
             className="csw-quiet-button"
             onClick={() => props.onReviewForCommitment({ reason: "incomplete_scenario_authority" })}
-          >Review current quote evidence</button>
+          >Review current quote</button>
         ) : null}
       </section>
     );

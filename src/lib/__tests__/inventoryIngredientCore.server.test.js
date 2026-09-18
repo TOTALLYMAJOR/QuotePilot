@@ -175,6 +175,104 @@ describe("ingredient stock evidence", () => {
     });
   });
 
+  test("records a human stock count as an immutable signed-delta movement and replays legacy evidence", () => {
+    const opened = inventory.planOpeningBalance({
+      organizationId: ORG,
+      requestId: "opening-counted-chicken",
+      request: openingRequest("chicken", "40"),
+      ingredient: ingredient(),
+      location: location(),
+      actor: ACTOR,
+      nowISO: NOW
+    });
+    const counted = inventory.planStockCount({
+      organizationId: ORG,
+      requestId: "count-chicken-20260909",
+      request: {
+        kind: "record_stock_count",
+        ingredientId: "chicken",
+        locationId: "main",
+        countedQuantity: "37.5",
+        baseUnitId: "lb",
+        occurredAtISO: "2026-09-09T03:55:00.000Z",
+        note: "Walk-the-shelf count",
+        expectedStockRevision: 1
+      },
+      ingredient: ingredient(),
+      location: location(),
+      stockState: opened.nextStockState,
+      actor: ACTOR,
+      nowISO: NOW
+    });
+
+    expect(counted.movement).toMatchObject({
+      kind: "record_stock_count",
+      countedQuantity: "37.5",
+      countedQuantityMicros: 37_500_000,
+      signedDeltaMicros: -2_500_000,
+      direction: "decrease",
+      priorStockRevision: 1,
+      resultStockRevision: 2
+    });
+    expect(inventory.verifyMovement(opened.movement)).toBe(opened.movement);
+    expect(inventory.verifyMovement(counted.movement)).toBe(counted.movement);
+    expect(inventory.replayMovements({
+      organizationId: ORG,
+      ingredientId: "chicken",
+      locationId: "main",
+      baseUnitId: "lb",
+      movements: [opened.movement, counted.movement]
+    })).toEqual(counted.nextStockState);
+  });
+
+  test("accepts a zero count but refuses stale, negative, cross-unit, and tampered counts", () => {
+    const opened = inventory.planOpeningBalance({
+      organizationId: ORG,
+      requestId: "opening-zero-count",
+      request: openingRequest("chicken", "2"),
+      ingredient: ingredient(),
+      location: location(),
+      actor: ACTOR,
+      nowISO: NOW
+    });
+    const request = {
+      kind: "record_stock_count",
+      ingredientId: "chicken",
+      locationId: "main",
+      countedQuantity: "0",
+      baseUnitId: "lb",
+      occurredAtISO: "2026-09-09T03:55:00.000Z",
+      note: "Shelf empty",
+      expectedStockRevision: 1
+    };
+    const counted = inventory.planStockCount({
+      organizationId: ORG, requestId: "count-zero-chicken", request,
+      ingredient: ingredient(), location: location(), stockState: opened.nextStockState,
+      actor: ACTOR, nowISO: NOW
+    });
+    expect(counted.nextStockState.onHandMicros).toBe(0);
+    expect(counted.movement.signedDeltaMicros).toBe(-2_000_000);
+    expect(() => inventory.planStockCount({
+      organizationId: ORG, requestId: "count-stale-chicken",
+      request: { ...request, expectedStockRevision: 2 },
+      ingredient: ingredient(), location: location(), stockState: opened.nextStockState,
+      actor: ACTOR, nowISO: NOW
+    })).toThrow(/changed before the count/i);
+    expect(() => inventory.normalizeStockCountRequest({ ...request, countedQuantity: "-1" })).toThrow(/canonical decimal/i);
+    expect(() => inventory.planStockCount({
+      organizationId: ORG, requestId: "count-wrong-unit",
+      request: { ...request, baseUnitId: "kg" },
+      ingredient: ingredient(), location: location(), stockState: opened.nextStockState,
+      actor: ACTOR, nowISO: NOW
+    })).toThrow(/base unit/i);
+    const { movementDigest: _digest, ...body } = counted.movement;
+    const tampered = { ...body, signedDeltaMicros: 0 };
+    expect(() => inventory.verifyMovement({
+      ...tampered,
+      movementDigest: inventory.digest(tampered, "ingredient movement")
+    })).toThrow(/internally inconsistent/i);
+  });
+
   test("rejects invalid or orphaned pack-conversion evidence state", () => {
     expect(() => inventory.planIngredient({
       organizationId: ORG,

@@ -1,3 +1,133 @@
+# Commercial Decision Surface image-to-code QA
+
+Final comparison: 2026-09-13 21:50:41 CDT
+
+## Comparison target
+
+- Selected visual direction: the user-attached 1536 x 1024 Commercial Decision
+  Surface screenshot in the implementation request.
+- Supporting file-backed reference:
+  `docs/design-references/quotepilot-commercial-decision-surface-desktop-v1.png`
+  at 1536 x 1024.
+- Written acceptance brief:
+  `/home/administrator/.codex/attachments/e0524194-3a73-4c1e-a916-2f70699d4008/pasted-text.txt`.
+- Implementation: the saved-quote editor's
+  `commercial-scenario-workbench` surface in
+  `src/components/CommercialScenarioWorkbench.jsx` and
+  `src/components/FulfillmentIntelligence.jsx`.
+- Browser state: local Firebase-free saved-quote editor, Current at 60 guests,
+  Scenario B at 80 guests, with the commercial, staffing, supply, and BEO checks
+  still in progress. This state is intentionally presented as `Not yet`; it is
+  not represented as a live Conditional decision.
+
+The file-backed 1536 x 1024 reference and the 1440 implementation surface were
+opened together at original resolution. The newer user-attached source remained
+visible in the same conversation context but was not exposed as a filesystem
+path, so no fabricated local source path or pixel-diff score is claimed.
+
+## Responsive evidence
+
+Each route capture uses Chromium at device scale factor 1. The component
+captures isolate the decision surface from the host's sticky navigation and
+mobile quote bar; the matching route captures retain those real host elements.
+
+| CSS viewport | Before surface | After surface | Honest route |
+| --- | --- | --- | --- |
+| 1440 x 1000 | `output/playwright/commercial-decision-before/surface-before-1440.png` | `output/playwright/commercial-scenario-current/surface-local-review-1440.png` | `output/playwright/commercial-scenario-current/route-local-review-1440.png` |
+| 1008 x 900 | `output/playwright/commercial-decision-before/surface-before-1008.png` | `output/playwright/commercial-scenario-current/surface-local-review-1008.png` | `output/playwright/commercial-scenario-current/route-local-review-1008.png` |
+| 768 x 900 | `output/playwright/commercial-decision-before/surface-before-768.png` | `output/playwright/commercial-scenario-current/surface-local-review-768.png` | `output/playwright/commercial-scenario-current/route-local-review-768.png` |
+| 390 x 844 | `output/playwright/commercial-decision-before/surface-before-390.png` | `output/playwright/commercial-scenario-current/surface-local-review-390.png` | `output/playwright/commercial-scenario-current/route-local-review-390.png` |
+
+The element captures are 1106 x 1345, 926 x 1368, 698 x 1860, and 332 x
+2309 pixels respectively. Full-surface inspection kept the decision card,
+four-domain consequence strip, active comparison, controls, and final action
+legible at native resolution; the decision card was also compared as the
+focused first region in the 1440 pair.
+
+## Findings
+
+No actionable P0, P1, or P2 mismatch remains.
+
+- Typography: the existing editorial/sans pairing reproduces the reference's
+  premium event-title and decisive status hierarchy without introducing a new
+  font system. Type scales down without clipped headings or orphaned labels.
+- Layout and spacing: commitment and proposed change lead, the support answer
+  follows, and Commercial, People, Supply, and Execution stay in that order.
+  The comparison and scenario controls remain secondary. Desktop uses a wide
+  decision strip and split lower region; tablet moves to a two-by-two domain
+  grid; mobile becomes one deliberate reading column.
+- Color and finish: warm paper, ink, quiet gold, green commercial value, fine
+  dividers, restrained borders, and existing radius tokens match the selected
+  visual language. No gradients, decorative dashboard chrome, or invented
+  surface styling were added.
+- Icons and imagery: existing `ProductIcons` provide the four domain marks. No
+  emoji, handcrafted SVG, placeholder photography, or duplicate icon language
+  was introduced.
+- Copy: visible operator language now says `Not yet`, `Checking`, `Still
+  checking staffing`, `Still checking supply`, and `BEO impact has not been
+  checked`. Internal terms such as projection, evidence, authority, revision,
+  digest, generation, boundary, read model, and unverifiable are absent from the
+  rendered workbench. Machine-readable attributes remain for testing and state
+  safety only.
+- Truthfulness: unavailable local inputs remain unavailable. No margin, BEO
+  regeneration, final-count reopening, named covered ingredient, or staffing
+  conclusion is invented. Exact totals, role deltas, and shortages appear only
+  when their existing records support them.
+- Interaction and accessibility: the existing scenario state, guest controls,
+  duplicate/discard actions, retry/review path, and domain handoffs remain
+  attached to their original handlers. Enabled controls meet the 44-pixel
+  target, horizontal overflow stays within one pixel, details are closed by
+  default, and the scoped axe run has no violations.
+
+P3: the selected screenshots show an illustrative full workspace shell and a
+fully available Conditional example. This implementation deliberately keeps the
+repository's existing host shell and captures the locally available `Not yet`
+state; those are content/state differences, not component-fidelity defects.
+
+## Iteration history
+
+1. The first pass exposed a P1 hierarchy defect: controls and implementation
+   terminology led the experience. The event/change context and support answer
+   were moved first, and visible source/revision/authority language was removed.
+2. The first 390-pixel capture exposed a P2 oversized flex basis that left a
+   large blank header region. The mobile header basis was corrected and the
+   action group was reflowed into two quiet controls plus one full-width action.
+3. The first lower region was too dense and compared every scenario at once.
+   It became a four-row Current-versus-active-scenario summary with compact
+   scenario controls and collapsed menu/BEO detail.
+4. The first unavailable Commercial cell inherited the source's large value
+   scale and wrapped aggressively. A state-specific type treatment restored the
+   four-domain rhythm at 1440 and 1008.
+5. Tablet and mobile locator screenshots initially stitched the host sticky bar
+   through the component. Final proof now records both an isolated component
+   capture and an unaltered route capture at every requested viewport.
+6. The final language pass replaced `Unverifiable` and `Updating` with `Not yet`
+   and `Checking`, then reran the browser matrix and visible-copy assertion.
+
+## Verification result
+
+- Focused component suite: 23/23 tests passed.
+- Saved-quote editor Playwright acceptance: 1/1 Chromium-admin test passed at
+  390, 768, 1008, and 1440 pixels.
+- Browser assertions: no scoped axe violations, horizontal overflow, undersized
+  enabled controls, open-by-default disclosures, or forbidden visible system
+  language.
+- Production build: passed. Vite emitted the pre-existing mixed dynamic/static
+  import advisory for `quoteCatalogRevisionReview.js`.
+- Repository gates: `check:env`, `check:docs:governance`,
+  `check:project-state`, and `check:capability-surfaces` passed.
+- Full unit suite: 5836 passed, 100 skipped, and 16 failed across 10 unrelated
+  existing margin-gate, quote-history, and workspace-route test files. None of
+  the failures names or imports this workbench; the focused 23-test ownership
+  set passes independently.
+
+Local visual score: **9.4/10 - GO**. This is local source/rendered proof, not
+hosted, production-data, assistive-technology, or human-acceptance proof.
+
+final result: passed
+
+---
+
 # QuotePilot v0.16 Calm Four design QA
 
 Last updated: 2026-09-05 00:28:05 CDT

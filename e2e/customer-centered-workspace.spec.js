@@ -50,7 +50,7 @@ async function gotoGovernedOpportunity(page, quoteId) {
 }
 
 async function fillRequiredQuoteFields(page) {
-  const eventType = page.getByLabel(/Event type/i);
+  const eventType = page.getByRole("combobox", { name: /^Event type\b/ });
   await expect(eventType).toBeVisible();
   await eventType.selectOption({ index: 1 });
   await page.getByLabel(/Event date/i).fill("2027-06-12");
@@ -435,6 +435,7 @@ test.describe("customer-centered workspace", () => {
   });
 
   test("Messages keeps event conversations segregated and stays usable at phone width", async ({ page }) => {
+    await page.clock.setFixedTime(new Date("2026-08-13T12:00:00.000Z"));
     await page.addInitScript(() => {
       const sharedCustomer = { name: "Jordan Customer", email: "jordan@example.test" };
       localStorage.setItem("quoteWizard.quotes", JSON.stringify([

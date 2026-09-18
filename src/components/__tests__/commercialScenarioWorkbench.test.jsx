@@ -41,7 +41,13 @@ function projection(guests, {
   proposalChanged = guests !== CURRENT_GUESTS,
   state = "partial",
   nextAction = null,
-  previewError = ""
+  previewError = "",
+  marginEvidence = {
+    evidenceState: "available",
+    before: 0.31,
+    proposedAfter: 0.27,
+    delta: -0.04
+  }
 } = {}) {
   const shortage = guests > 137;
   const total = 12_480 + ((guests - CURRENT_GUESTS) * 88.8);
@@ -82,6 +88,7 @@ function projection(guests, {
           delta: deposit - 3_120
         }
       },
+      margin: marginEvidence,
       inventory: {
         evidenceState: guests === CURRENT_GUESTS ? "not_applicable" : "available",
         cost: {
@@ -127,8 +134,18 @@ function projection(guests, {
       people: {
         evidenceState: "available",
         freshness: "current",
-        current: { totalAssigned: 6, totalRequired: 6, totalGap: 0 },
-        proposed: { totalAssigned: 6, totalRequired: guests >= 168 ? 7 : 6 },
+        current: {
+          coverageState: "coverage_confirmed",
+          totalAssigned: 6,
+          totalRequired: 6,
+          totalGap: 0
+        },
+        proposed: {
+          coverageState: guests >= 168 ? "attention" : "coverage_confirmed",
+          totalAssigned: 6,
+          totalRequired: guests >= 168 ? 7 : 6,
+          totalGap: guests >= 168 ? 1 : 0
+        },
         resilience: { evidenceState: "available", eligibleProfileCount: 2 },
         staffingHeadroom: {
           state: "missing",
@@ -143,12 +160,14 @@ function projection(guests, {
         current: {
           guestCount: CURRENT_GUESTS,
           coverageState: "covered",
+          shortageCount: 0,
           shortages: [],
           projectedCost: { state: "available", currency: "USD", amountMinor: 80_000 }
         },
         proposed: {
           guestCount: guests,
           coverageState: shortage ? "shortage" : "covered",
+          shortageCount: supplyShortages.length,
           shortages: supplyShortages,
           projectedCost: { state: "available", currency: "USD", amountMinor: ingredientCost }
         },
@@ -196,6 +215,7 @@ function projection(guests, {
     provenance: { previewError: previewError || null },
     boundary: "Presentation-only projection. Separate authorities remain unchanged."
   });
+
 }
 
 let container;
@@ -262,19 +282,110 @@ function LiveHarness({ onReview = vi.fn(), onRequest = vi.fn() }) {
 }
 
 describe("CommercialScenarioWorkbench", () => {
+  test("renders an accessible six-domain Current / Proposed / Difference decision panel", async () => {
+    const request = requestEnvelope({ guestCount: 175 });
+    act(() => root.render(
+      <CommercialScenarioWorkbench
+        projection={projection(175, { workbenchRequest: request, state: "ready" })}
+        scopeKey={SCOPE}
+        baseQuoteRevisionId={REVISION}
+        currentGuestCount={CURRENT_GUESTS}
+        proposedGuestCount={175}
+        decisionPacketEnabled
+        previewDebounceMs={0}
+        clock={() => "2026-09-09T16:00:00.000Z"}
+        idFactory={({ slot }) => `scenario-${slot.toLowerCase()}`}
+      />
+    ));
+
+    await act(async () => Promise.resolve());
+    const panel = container.querySelector('[data-consequence-comparison="current-proposed-difference"]');
+    expect(panel).not.toBeNull();
+    expect(panel.querySelectorAll("tbody tr")).toHaveLength(6);
+    expect(panel.textContent).toContain("Menu");
+    expect(panel.textContent).toContain("Price");
+    expect(panel.textContent).toContain("Margin");
+    expect(panel.textContent).toContain("Staffing");
+    expect(panel.textContent).toContain("Supply");
+    expect(panel.textContent).toContain("Difference");
+    expect(panel.textContent).toContain("Current evidence");
+  });
+
+  test("keeps the Task 1 workbench render and review eligibility unchanged while the gate is off", async () => {
+    const request = requestEnvelope({ guestCount: 175 });
+    act(() => root.render(
+      <CommercialScenarioWorkbench
+        projection={projection(175, {
+          workbenchRequest: request,
+          state: "ready",
+          marginEvidence: {
+            evidenceState: "available",
+            before: 0.31,
+            proposedAfter: 0.27
+          }
+        })}
+        scopeKey={SCOPE}
+        baseQuoteRevisionId={REVISION}
+        currentGuestCount={CURRENT_GUESTS}
+        proposedGuestCount={175}
+        onReviewForCommitment={vi.fn()}
+        previewDebounceMs={0}
+        clock={() => "2026-09-09T16:00:00.000Z"}
+        idFactory={({ slot }) => `scenario-${slot.toLowerCase()}`}
+      />
+    ));
+
+    await act(async () => Promise.resolve());
+    expect(container.querySelector('[data-consequence-comparison="current-proposed-difference"]'))
+      .toBeNull();
+    expect(button("Review change")?.disabled).toBe(false);
+  });
+
+  test("fails closed on malformed consequence evidence only when the gate is enabled", async () => {
+    const request = requestEnvelope({ guestCount: 175 });
+    act(() => root.render(
+      <CommercialScenarioWorkbench
+        projection={projection(175, {
+          workbenchRequest: request,
+          state: "ready",
+          marginEvidence: {
+            evidenceState: "available",
+            before: 0.31,
+            proposedAfter: 0.27
+          }
+        })}
+        scopeKey={SCOPE}
+        baseQuoteRevisionId={REVISION}
+        currentGuestCount={CURRENT_GUESTS}
+        proposedGuestCount={175}
+        onReviewForCommitment={vi.fn()}
+        decisionPacketEnabled
+        previewDebounceMs={0}
+        clock={() => "2026-09-09T16:00:00.000Z"}
+        idFactory={({ slot }) => `scenario-${slot.toLowerCase()}`}
+      />
+    ));
+
+    await act(async () => Promise.resolve());
+    expect(container.querySelector('[data-consequence-comparison="current-proposed-difference"]'))
+      .not.toBeNull();
+    expect(button("Resolve evidence before review")?.disabled).toBe(true);
+  });
+
   test("resolves and restores the exact inventory constraint by editing the active scenario", () => {
     vi.useFakeTimers();
     act(() => root.render(<LiveHarness />));
     const surface = container.querySelector('[data-capability-id="commercial-scenario-workbench"]');
     expect(surface).not.toBeNull();
     expect(surface.getAttribute("data-authority")).toBe("session-only-non-authoritative");
-    expect(surface.textContent).toContain("Current125 guests · saved");
-    expect(surface.textContent).toContain("Scenario A175 guests · g1");
-    expect(surface.textContent).toContain("Current125saved guests");
-    expect(surface.textContent).toContain("Working175+50 guests");
+    expect(surface.textContent).toContain("Commercial reviewHenderson DinnerScenario A · 175 guests");
+    expect(surface.textContent).toContain("Current commitment · 125 guests");
+    expect(surface.textContent).toContain("Current vs Scenario AWhat changes+50 guests");
+    expect(button("Compare Current")).not.toBeUndefined();
+    expect(button("Review change").disabled).toBe(false);
     expect(surface.textContent).toContain("$12,480.00$16,920.00+$4,440.00");
-    expect(surface.textContent).toContain("No exact boundary was supplied");
-    expect(surface.textContent).toContain("Missing or partial evidence is not a zero-capacity conclusion");
+    expect(surface.textContent).toContain("Guest limit is not available");
+    expect(surface.textContent).toContain("Unavailable details do not mean there is no capacity");
 
     const trigger = [...surface.querySelectorAll("button")]
       .find((entry) => entry.textContent.includes("Chicken breast is the first known constraint"));
@@ -282,20 +393,20 @@ describe("CommercialScenarioWorkbench", () => {
     act(() => trigger.click());
     expect(trigger.getAttribute("aria-expanded")).toBe("true");
     expect(surface.textContent).toContain("Why Chicken breast is limiting");
-    expect(surface.textContent).toContain("safe through 137 guests; the first failing boundary is 138");
+    expect(surface.textContent).toContain("covered through 137 guests; the first shortage appears at 138");
     expect(surface.textContent).toContain("does not reserve stock, choose a substitute, or create a purchase order");
 
     act(() => button("Try 137 guests").click());
     act(() => vi.runOnlyPendingTimers());
-    expect(surface.textContent).toContain("Working137+12 guests");
-    expect(surface.textContent).toContain("No exact working-scenario Supply constraint is declared");
+    expect(surface.textContent).toContain("Current vs Scenario AWhat changes+12 guests");
+    expect(surface.textContent).toContain("No supply issue is listed for this option");
 
     const input = container.querySelector("#csw-guest-count");
     act(() => {
       changeNumberInput(input, "175");
     });
     act(() => vi.runOnlyPendingTimers());
-    expect(surface.textContent).toContain("Working175+50 guests");
+    expect(surface.textContent).toContain("Current vs Scenario AWhat changes+50 guests");
     expect(surface.textContent).toContain("Chicken breast is the first known constraint");
   });
 
@@ -304,7 +415,15 @@ describe("CommercialScenarioWorkbench", () => {
     const onRequest = vi.fn();
     act(() => root.render(<LiveHarness onRequest={onRequest} />));
     act(() => button("Duplicate scenario").click());
-    expect(container.textContent).toContain("Scenario B175 guests · g0");
+    expect(container.textContent).toContain("Scenario B · 175 guests");
+    const allScenarioHeaders = [...container.querySelectorAll('[data-scenario-comparison="all"] th[scope="col"]')];
+    expect(allScenarioHeaders).toHaveLength(3);
+    expect(allScenarioHeaders.map((entry) => entry.textContent)).toEqual(expect.arrayContaining([
+      "Measure",
+      expect.stringContaining("CurrentCurrent"),
+      expect.stringContaining("Scenario BChecking")
+    ]));
+    expect(container.querySelector('[data-scenario-column="scenario-b"][data-selected="true"]')).not.toBeNull();
     act(() => vi.runOnlyPendingTimers());
     expect(onRequest).toHaveBeenCalledTimes(1);
     expect(onRequest).toHaveBeenLastCalledWith(expect.objectContaining({
@@ -319,26 +438,29 @@ describe("CommercialScenarioWorkbench", () => {
     });
     act(() => vi.runOnlyPendingTimers());
     expect(onRequest).toHaveBeenCalledTimes(2);
-    expect(container.textContent).toContain("Scenario B160 guests · g1");
-    expect(container.textContent).toContain("Working160+35 guests");
+    expect(container.textContent).toContain("Scenario B · 160 guests");
+    expect(container.textContent).toContain("Current vs Scenario BWhat changes+35 guests");
 
-    act(() => button("Scenario A175 guests · g1").click());
-    expect(container.textContent).toContain("Working175+50 guests");
+    act(() => button("Scenario A").click());
+    expect(container.textContent).toContain("Current vs Scenario AWhat changes+50 guests");
     expect(container.querySelector(".csw-consequence-rail").hasAttribute("aria-busy")).toBe(false);
-    expect(button("Review for commitment").disabled).toBe(false);
+    expect(button("Review change").disabled).toBe(false);
     act(() => vi.runOnlyPendingTimers());
     expect(onRequest).toHaveBeenCalledTimes(2);
     expect(container.querySelector('[role="tab"][aria-selected="true"]').textContent)
       .toContain("Scenario A");
 
-    const scenarioB = button("Scenario B160 guests · g1");
+    const scenarioB = [...container.querySelectorAll('[role="tab"]')]
+      .find((entry) => entry.textContent.trim() === "Scenario B");
     act(() => {
       scenarioB.focus();
       scenarioB.dispatchEvent(new KeyboardEvent("keydown", { key: "Home", bubbles: true }));
     });
     expect(container.querySelector('[role="tab"][aria-selected="true"]').textContent)
       .toContain("Current");
-    expect(container.textContent).toContain("Nothing here has changed Commercial, Staffing, Inventory, or BEO authority");
+    expect(container.querySelector('[data-scenario-comparison="selected"]').getAttribute("aria-label"))
+      .toBe("Current compared with Current");
+    expect(container.textContent).toContain("Pricing, staffing, inventory, and the BEO are unchanged");
     expect(container.textContent).not.toMatch(/best scenario/i);
   });
 
@@ -377,9 +499,9 @@ describe("CommercialScenarioWorkbench", () => {
     act(() => root.render(<DelayedHarness />));
     expect(container.textContent).toContain("$16,920.00");
     act(() => setGuestCount(160));
-    expect(container.textContent).toContain("Retained exact result for 175 guests");
+    expect(container.textContent).toContain("Showing the previous result for 175 guests");
     expect(container.querySelector(".csw-consequence-rail").getAttribute("aria-busy")).toBe("true");
-    expect(button("Updating exact evidence…").disabled).toBe(true);
+    expect(button("Checking change…").disabled).toBe(true);
 
     act(() => vi.advanceTimersByTime(80));
     expect(onRequest).toHaveBeenLastCalledWith(expect.objectContaining({
@@ -394,9 +516,9 @@ describe("CommercialScenarioWorkbench", () => {
       generation: 2,
       guestCount: 160
     })));
-    expect(container.textContent).not.toContain("Retained exact result for 175 guests");
-    expect(button("Review for commitment").disabled).toBe(false);
-    act(() => button("Review for commitment").click());
+    expect(container.textContent).not.toContain("Showing the previous result for 175 guests");
+    expect(button("Review change").disabled).toBe(false);
+    act(() => button("Review change").click());
     expect(onReview).toHaveBeenCalledOnce();
     expect(onReview).toHaveBeenCalledWith(expect.objectContaining({
       guestCount: 160,
@@ -455,7 +577,7 @@ describe("CommercialScenarioWorkbench", () => {
     expect(onRequest).toHaveBeenCalledTimes(requestsBeforeReturn);
     expect(container.querySelector('[role="tab"][aria-selected="true"]').textContent)
       .toContain("Current");
-    expect(container.textContent).toContain("Scenario A175 guests · g1");
+    expect(container.textContent).toContain("Scenario A");
   });
 
   test("keeps exact preview failures explicit and retries only through the recovery action", () => {
@@ -487,9 +609,9 @@ describe("CommercialScenarioWorkbench", () => {
     expect(onRequest).not.toHaveBeenCalled();
     expect(container.querySelector('[data-capability-state="recovery"]')).not.toBeNull();
     expect(container.querySelector('[role="alert"]').textContent)
-      .toContain("The exact simulation timed out");
-    expect(button("Retry exact evidence").disabled).toBe(false);
-    act(() => button("Retry exact evidence").click());
+      .toContain("This change could not be checked");
+    expect(button("Try again").disabled).toBe(false);
+    act(() => button("Try again").click());
     expect(onRetry).toHaveBeenCalledOnce();
     expect(onRetry).toHaveBeenCalledWith(exact);
   });
@@ -518,14 +640,14 @@ describe("CommercialScenarioWorkbench", () => {
     ));
 
     renderProjection(null);
-    expect(button("Preview consequences").disabled).toBe(false);
-    act(() => button("Preview consequences").click());
+    expect(button("Check change").disabled).toBe(false);
+    act(() => button("Check change").click());
     expect(onPreview).toHaveBeenCalledWith(currentRequest);
 
     renderProjection({ ...currentRequest, inputDigest: `${currentRequest.inputDigest}-wrong` });
-    expect(button("Preview consequences").disabled).toBe(false);
+    expect(button("Check change").disabled).toBe(false);
     renderProjection(currentRequest);
-    expect(button("Review for commitment").disabled).toBe(false);
+    expect(button("Review change").disabled).toBe(false);
   });
 
   test("hard-resets scenarios and caches when the non-guest scope changes", () => {
@@ -568,7 +690,7 @@ describe("CommercialScenarioWorkbench", () => {
     }));
   });
 
-  test("clears invalid guest input with Escape and exposes one semantic comparison and discard", () => {
+  test("clears invalid guest input with Escape and exposes all-scenario plus selected-scenario comparisons", () => {
     act(() => root.render(<LiveHarness />));
     const input = container.querySelector("#csw-guest-count");
     act(() => changeNumberInput(input, "401"));
@@ -576,7 +698,13 @@ describe("CommercialScenarioWorkbench", () => {
     act(() => input.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
     expect(input.value).toBe("175");
     expect(input.hasAttribute("aria-invalid")).toBe(false);
-    expect(container.querySelectorAll(".csw-comparison th[scope=\"col\"]")).toHaveLength(4);
+    expect(container.querySelectorAll('[data-scenario-comparison="all"] th[scope="col"]')).toHaveLength(3);
+    expect(container.querySelector('[data-scenario-comparison="all"] caption').textContent)
+      .toBe("Current quote compared with each option");
+    expect(container.querySelector('[data-scenario-comparison="selected"]').getAttribute("aria-label"))
+      .toBe("Current compared with Scenario A");
+    expect(container.querySelector('[data-scenario-comparison="selected"]').textContent)
+      .toContain("Quote total · Current$12,480.00Quote total · Scenario A$16,920.00Difference+$4,440.00");
     expect([...container.querySelectorAll("button")]
       .filter((entry) => entry.textContent.trim() === "Discard scenario")).toHaveLength(1);
   });
@@ -595,7 +723,7 @@ describe("CommercialScenarioWorkbench", () => {
     ));
     expect(container.querySelector('[data-capability-state="unavailable"]')).not.toBeNull();
     expect(onRequest).not.toHaveBeenCalled();
-    act(() => button("Review current quote evidence").click());
+    act(() => button("Review current quote").click());
     expect(onReview).toHaveBeenCalledWith({ reason: "incomplete_scenario_authority" });
   });
 });

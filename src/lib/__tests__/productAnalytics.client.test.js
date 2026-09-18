@@ -20,6 +20,9 @@ import {
   recordProductAnalyticsIssueResolved,
   recordProductAnalyticsIssueSurfaced,
   recordProductAnalyticsPricedDraftReceipt,
+  recordQuoteCompletionActionResolved,
+  recordQuoteCompletionActionShown,
+  recordQuoteCompletionSendableReached,
   resetProductAnalyticsIssueObservationState
 } from "../productAnalytics";
 
@@ -224,6 +227,62 @@ describe("product analytics client metric foundation", () => {
     expect(assessments[0]).not.toHaveProperty("quoteId");
     expect(assessments[0]).not.toHaveProperty("customerName");
     expect(assessments[0]).not.toHaveProperty("reason");
+  });
+
+  test("records aggregate-only quote completion events and strips object context", () => {
+    beginWizardAnalyticsSession({ organizationId: "org-one", mode: "edit" });
+
+    expect(recordQuoteCompletionActionShown({
+      completionState: "blocked",
+      actionKind: "resolve_field",
+      surface: "proposal_composer",
+      quoteId: "quote-private",
+      fieldName: "Private customer name"
+    })).toBe(true);
+    expect(recordQuoteCompletionActionResolved({
+      completionState: "review_required",
+      actionKind: "resolve_field",
+      surface: "proposal_composer",
+      result: "recovery",
+      quoteId: "quote-private"
+    })).toBe(true);
+    expect(recordQuoteCompletionSendableReached({
+      surface: "review",
+      quoteId: "quote-private"
+    })).toBe(true);
+    expect(recordQuoteCompletionActionShown({
+      completionState: "made_up",
+      actionKind: "resolve_field",
+      surface: "proposal_composer"
+    })).toBe(false);
+
+    const events = readQueue(localStorage).filter((entry) => (
+      entry.eventName.startsWith("quote_completion_")
+    ));
+    expect(events).toEqual([
+      expect.objectContaining({
+        eventName: "quote_completion_action_shown",
+        completionState: "blocked",
+        actionKind: "resolve_field",
+        surface: "proposal_composer"
+      }),
+      expect.objectContaining({
+        eventName: "quote_completion_action_resolved",
+        completionState: "review_required",
+        actionKind: "resolve_field",
+        surface: "proposal_composer",
+        result: "recovery"
+      }),
+      expect.objectContaining({
+        eventName: "quote_completion_sendable_reached",
+        completionState: "sendable",
+        surface: "review"
+      })
+    ]);
+    events.forEach((entry) => {
+      expect(entry).not.toHaveProperty("quoteId");
+      expect(entry).not.toHaveProperty("fieldName");
+    });
   });
 
   test("keeps the legacy event API compatible while dropping unsupported events and dimensions", async () => {

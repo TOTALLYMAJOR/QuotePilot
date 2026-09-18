@@ -13,7 +13,12 @@ import AuthGate from "./components/AuthGate";
 import CustomerPortalView from "quotepilot-active-customer-portal";
 import { RebookQuoteReviewBanner } from "./components/CustomerRebookDraftAction";
 import LiveBreakdown from "./components/LiveBreakdown";
-import ProposalComposer, { buildDraftSaveBlockers } from "./components/ProposalComposer";
+import { buildMarginPresentation } from "./components/marginPresentation";
+import { buildRecordedCostMarginComparison } from "./lib/decisionPacketMarginComparison";
+import ProposalComposer, {
+  buildDraftSaveBlockers,
+  QuoteEditorModeSurface
+} from "./components/ProposalComposer";
 import CatalogReadNotice from "./components/CatalogReadNotice";
 import ProductBrandLockup from "./components/ProductBrandLockup";
 import {
@@ -24,6 +29,12 @@ import {
 import { StepEvent, StepMenu, StepReview, StepServices } from "./components/WizardSteps";
 import CreateIntake from "./components/CreateIntake";
 import { parseIntentDraftWithModel } from "./lib/intentParseClient";
+import { resolveQuoteCompletionCommandPathGate } from "./lib/quoteCompletionGate";
+import { resolveDecisionPacketGate } from "./lib/decisionPacketGate";
+import {
+  resolveQuoteWizardCompletionDestination,
+  scheduleQuoteCompletionDestinationFocus
+} from "./lib/quoteCompletionDestination";
 import ChangeRequestPanel from "./components/ChangeRequestPanel";
 import PilotCommandBar from "./components/LegacyPilotCommandBar";
 import { applyProposalToForm, proposalTouchedFields } from "./components/changeRequestParse";
@@ -82,6 +93,7 @@ import {
   reconcileCatalogSelections
 } from "./lib/catalogSelectionReconciliation";
 import { buildProposalReadiness } from "./lib/quoteWorkflow";
+import { buildRoleSafeQuoteActionController } from "./lib/quoteHistoryController";
 import { recommendationWouldChangeForm } from "./lib/recommendationState";
 import { PRODUCT_NAME } from "./lib/productIdentity";
 import {
@@ -115,6 +127,7 @@ import {
   WORKSPACE_PATHS,
   WORKSPACE_ROUTE_IDS
 } from "./lib/workspaceRoutes";
+import { createWorkspaceArrivalHandoff } from "./lib/workspaceArrivalContract";
 import { recordDiagnosticError, setDiagnosticsUserContext } from "./lib/sessionDiagnostics";
 import { createRebookQuoteDraft } from "./lib/rebookQuoteClient";
 import { clearTenantContextCache } from "./lib/tenantDomainService";
@@ -243,6 +256,16 @@ const OPERATIONAL_STAFFING_UI_ENABLED = ["1", "true", "yes", "on"].includes(
   String(import.meta.env.VITE_OPERATIONAL_STAFFING_ENABLED || "").trim().toLowerCase()
 );
 const INVENTORY_AUTHORITY_UI_ENABLED = import.meta.env.VITE_INVENTORY_AUTHORITY_ENABLED === "true";
+const QUOTE_COMPLETION_BUILD_ENABLED = import.meta.env.MODE === "test"
+  || import.meta.env.VITE_QUOTE_COMPLETION_COMMAND_PATH_ENABLED === "true";
+const DECISION_PACKET_BUILD_ENABLED = import.meta.env.MODE === "test"
+  || import.meta.env.VITE_DECISION_PACKET_ENABLED === "true";
+const QUOTE_CONFIDENCE_BUILD_ENABLED = QUOTE_COMPLETION_BUILD_ENABLED
+  || DECISION_PACKET_BUILD_ENABLED
+  || import.meta.env.VITE_POST_EVENT_LEARNING_ENABLED === "true"
+  || import.meta.env.VITE_INVENTORY_EXCEPTION_WORKSPACE_ENABLED === "true"
+  || import.meta.env.VITE_EVENT_SUPPLY_ACTION_PLAN_ENABLED === "true"
+  || import.meta.env.VITE_INVENTORY_MOBILE_CAPTURE_ENABLED === "true";
 // The NOW surface is an additional default-off presentation gate. Absent or
 // unrecognized values keep it off; it never widens data access or authority.
 const PILOT_NOW_ENABLED = CUSTOMER_CENTERED_WORKSPACE_ENABLED
@@ -255,6 +278,9 @@ const PILOT_NOW_ENABLED = CUSTOMER_CENTERED_WORKSPACE_ENABLED
 const PILOT_CREATE_ENABLED = ["1", "true", "yes", "on"].includes(
   String(import.meta.env.VITE_PILOT_CREATE_ENABLED || "").trim().toLowerCase()
 );
+// Model assistance is a separate browser capability. CREATE's deterministic
+// intake remains available whenever its own gate is enabled.
+const PILOT_MODEL_ENABLED = import.meta.env.VITE_PILOT_MODEL_ENABLED === "true";
 const ActiveLegacyHome = createRecoverableLazy(
   () => import("quotepilot-active-legacy-home"),
   "ActiveLegacyHome"
@@ -343,7 +369,10 @@ const EMPTY_CHANGE_IMPACT_PREVIEW = Object.freeze({
   applyOutcome: null,
   catalogRevision: null,
   appliedQuote: null,
-  workbenchRequest: null
+  workbenchRequest: null,
+  inventoryObservation: null,
+  inventoryScenarioFingerprint: "",
+  staffingObservation: null
 });
 const EMPTY_EVENT_INGREDIENT_PREVIEW_INPUT = Object.freeze({ valid: false, selections: [] });
 
@@ -558,7 +587,15 @@ function normalizeFeatureFlags(input) {
     crmSync: source.crmSync !== false,
     guidedSelling: source.guidedSelling !== false,
     aiAssist,
-    aiAutopilot: aiAssist && source.aiAutopilot === true
+    aiAutopilot: aiAssist && source.aiAutopilot === true,
+    ...(QUOTE_CONFIDENCE_BUILD_ENABLED ? {
+      quoteCompletionCommandPath: source.quoteCompletionCommandPath === true,
+      decisionPacket: source.decisionPacket === true,
+      postEventLearning: source.postEventLearning === true,
+      inventoryExceptionWorkspace: source.inventoryExceptionWorkspace === true,
+      eventSupplyActionPlan: source.eventSupplyActionPlan === true,
+      inventoryMobileCapture: source.inventoryMobileCapture === true
+    } : {})
   };
 }
 
@@ -1407,6 +1444,53 @@ function LegacyAppCore({
     };
   }, [catalog.settings, effectiveMenuSections, organization?.name]);
   const featureFlags = effectiveSettings.featureFlags || DEFAULT_FEATURE_FLAGS;
+  const quoteCompletionCommandPathEnabled = QUOTE_COMPLETION_BUILD_ENABLED && resolveQuoteCompletionCommandPathGate({
+    buildValue: import.meta.env.VITE_QUOTE_COMPLETION_COMMAND_PATH_ENABLED,
+    tenantValue: featureFlags.quoteCompletionCommandPath
+  });
+  const decisionPacketEnabled = DECISION_PACKET_BUILD_ENABLED && resolveDecisionPacketGate({
+    buildValue: import.meta.env.VITE_DECISION_PACKET_ENABLED,
+    tenantValue: featureFlags.decisionPacket
+  });
+  const proposalComposerQuoteActionController = useMemo(() => (
+    QUOTE_COMPLETION_BUILD_ENABLED && editingQuote?.id
+      ? buildRoleSafeQuoteActionController({
+          quote: editingQuote,
+          currentUserRole: authSession.role,
+          source: ["firebase", "firebase-org"].includes(catalog.source) ? "firebase" : catalog.source
+        })
+      : null
+  ), [authSession.role, catalog.source, editingQuote]);
+  const navigateProposalQuoteCompletion = useMemo(() => QUOTE_COMPLETION_BUILD_ENABLED ? (action) => {
+    const quoteId = String(action?.objectContext?.quoteId || editingQuote?.id || "").trim();
+    if (!quoteId) return { status: "recovery", reason: "The exact quote could not be identified." };
+    const livingOpportunity = action?.destination?.surfaceId === "living-opportunity";
+    const destinationAction = String(action?.destination?.actionId || "").trim();
+    setHistoryTarget({
+      quoteId,
+      action: "administration",
+      destinationAction,
+      reason: action?.reason || "Review the exact quote completion destination."
+    });
+    const handoff = createWorkspaceArrivalHandoff(livingOpportunity
+      ? {
+          destination: "opportunity",
+          object: { id: quoteId, type: "opportunity" },
+          focus: { quoteId },
+          intentId: "review_proposal_gap"
+        }
+      : {
+          destination: "administration",
+          object: { id: quoteId, type: "customer-decision-artifact" },
+          focus: { quoteId },
+          intentId: "review_proposal_controls"
+        });
+    if (!handoff.ok) return { status: "recovery", ...handoff.recovery };
+    const result = navigateWorkspace(handoff.navigation.path, { state: handoff.navigation.state });
+    return ["blocked", "guarded"].includes(result?.status)
+      ? { status: "recovery", reason: "The exact quote destination is currently guarded." }
+      : { status: "pending", contract: handoff.contract };
+  } : undefined, [editingQuote?.id, navigateWorkspace]);
   const customerPortalEnabled = featureFlags.customerPortal !== false;
   const eventScheduleEnabled = featureFlags.eventSchedule !== false;
   const integrationsEnabled = featureFlags.integrationsOps !== false;
@@ -1493,6 +1577,20 @@ function LegacyAppCore({
     : "";
   const quoteEditReady = Boolean(quoteEditRouteId && editingQuote.id === quoteEditRouteId);
   const isEditingQuote = quoteEditReady;
+  const proposedMargin = useMemo(() => DECISION_PACKET_BUILD_ENABLED && decisionPacketEnabled
+    ? buildMarginPresentation({ form, totals, catalog, settings: effectiveSettings })
+    : null, [catalog, decisionPacketEnabled, effectiveSettings, form, totals]);
+  const livingTwinMarginComparison = useMemo(() => DECISION_PACKET_BUILD_ENABLED && decisionPacketEnabled
+    ? buildRecordedCostMarginComparison({ isEditingQuote, editingQuote, catalog, effectiveSettings, proposedMargin })
+    : null, [
+    catalog,
+    decisionPacketEnabled,
+    editingQuote.baseForm,
+    editingQuote.pricingCatalogAuthority?.catalogRevision,
+    effectiveSettings,
+    isEditingQuote,
+    proposedMargin
+  ]);
   const inventoryRecipeExtension = useInventoryRecipeExtension({
     active: catalogRouteOpen || catalogModalOpen || step === 2 || isEditingQuote,
     organizationId: authSession.organizationId,
@@ -1577,22 +1675,67 @@ function LegacyAppCore({
     form.chefs,
     form.servers
   ]);
+  const proposedStaffingEventWindowState = useMemo(() => (
+    ["date", "time", "hours"].every((field) => (
+      String(editingQuote.baseForm?.[field] ?? "") === String(form[field] ?? "")
+    )) ? "current" : "changed_unchecked"
+  ), [editingQuote.baseForm, form.date, form.hours, form.time]);
+  const authoritativeStaffingObservation = changeImpactPreview.formKey === currentChangeImpactFormKey
+    && changeImpactPreview.staffingObservation?.state === "available"
+    ? changeImpactPreview.staffingObservation
+    : null;
+  const effectiveProposedStaffingRequirements = authoritativeStaffingObservation
+    ?.preview?.proposed?.requirementsByRole || proposedStaffingRequirements;
+  const effectiveProposedStaffingEventWindowState = authoritativeStaffingObservation
+    ? authoritativeStaffingObservation.preview?.comparison?.windowState === "changed"
+      ? "changed_unchecked"
+      : "current"
+    : proposedStaffingEventWindowState;
+  const commercialInventoryScenarioPreview = useMemo(() => {
+    const observation = changeImpactPreview.inventoryObservation;
+    if (observation?.state === "available" && observation.preview?.projection) {
+      return {
+        state: "current",
+        projection: observation.preview.projection,
+        scenarioFingerprint: changeImpactPreview.inventoryScenarioFingerprint
+      };
+    }
+    if (observation?.state === "unavailable") {
+      return {
+        state: "unavailable",
+        projection: null,
+        scenarioFingerprint: changeImpactPreview.inventoryScenarioFingerprint
+      };
+    }
+    return {
+      state: "not_evaluated",
+      projection: null,
+      scenarioFingerprint: changeImpactPreview.inventoryScenarioFingerprint
+    };
+  }, [
+    changeImpactPreview.inventoryObservation,
+    changeImpactPreview.inventoryScenarioFingerprint
+  ]);
   const commercialInventoryConsequences = useMemo(() => buildCommercialInventoryConsequences({
     savedRead: getSavedInventoryComparisonRead(eventIngredientProjection.read),
-    scenarioPreview: eventIngredientProjection.preview,
+    scenarioPreview: commercialInventoryScenarioPreview,
     organizationId: authSession.organizationId,
     quoteId: editingQuote.id,
     savedQuoteRevisionId: String(
       editingQuote.activeVersionId || editingQuote.versionMeta?.versionId || ""
     ).trim(),
+    proposedQuoteRevisionId: String(
+      changeImpactPreview.inventoryObservation?.proposedQuoteRevisionId || ""
+    ).trim(),
     scenarioFingerprint: currentInventoryScenarioFingerprint
   }), [
     authSession.organizationId,
+    changeImpactPreview.inventoryObservation?.proposedQuoteRevisionId,
+    commercialInventoryScenarioPreview,
     currentInventoryScenarioFingerprint,
     editingQuote.activeVersionId,
     editingQuote.id,
     editingQuote.versionMeta?.versionId,
-    eventIngredientProjection.preview,
     eventIngredientProjection.read
   ]);
   const changeImpactPresentationError = changeImpactPreview.error || (
@@ -1634,6 +1777,7 @@ function LegacyAppCore({
     previewError: changeImpactPresentationError,
     previewScopeCurrent: !changeImpactPresentationError,
     commercialModel: changeImpactPreview.model,
+    marginComparison: livingTwinMarginComparison,
     authorityState: changeImpactPreview.authorityState,
     authorizationRequired: changeImpactPreview.authorizationRequired,
     authorizationReceiptId: changeImpactPreview.authorizationReceiptId,
@@ -1642,10 +1786,13 @@ function LegacyAppCore({
     inventoryPreviewAvailable: eventIngredientProjection.canPreview,
     inventoryInputReady: eventIngredientPreviewInput.valid,
     inventoryConsequences: commercialInventoryConsequences,
-    inventoryPreview: eventIngredientProjection.preview,
+    inventoryPreview: commercialInventoryScenarioPreview,
     staffingRead: fulfillmentStaffing.read,
-    proposedStaffingRequirements,
-    proposedStaffingRequirementsSource: "proposed_commercial_and_canonical_counts",
+    proposedStaffingRequirements: effectiveProposedStaffingRequirements,
+    proposedStaffingRequirementsSource: authoritativeStaffingObservation
+      ? "server_authoritative_commercial_preview"
+      : "proposed_commercial_and_canonical_counts",
+    proposedStaffingEventWindowState: effectiveProposedStaffingEventWindowState,
     appliedQuote: changeImpactPreview.appliedQuote,
     workbenchRequest: changeImpactPreview.workbenchRequest
   }), [
@@ -1669,12 +1816,17 @@ function LegacyAppCore({
     eventIngredientPreviewInput.valid,
     eventIngredientProjection.access.readEnabled,
     eventIngredientProjection.canPreview,
-    eventIngredientProjection.preview,
+    commercialInventoryScenarioPreview,
     eventIngredientSelections,
     form.guests,
     inventoryGuestScenarioEligible,
     livingTwinBaseQuoteRevisionId,
+    livingTwinMarginComparison,
+    authoritativeStaffingObservation,
+    effectiveProposedStaffingEventWindowState,
+    effectiveProposedStaffingRequirements,
     proposedStaffingRequirements,
+    proposedStaffingEventWindowState,
     fulfillmentStaffing.read,
     quoteDirty
   ]);
@@ -2278,23 +2430,15 @@ function LegacyAppCore({
       currentForm: editingQuote.baseForm,
       proposedForm: candidateForm
     });
-    if (
-      formKey === currentChangeImpactFormKey
+    const inventoryObservationRequested = formKey === currentChangeImpactFormKey
       && inventoryScenarioEligibleForRequest
       && eventIngredientProjection.access.readEnabled
       && eventIngredientProjection.canPreview
-      && eventIngredientPreviewInput.valid
-    ) {
-      void eventIngredientProjection.previewCurrent({
-        selections: eventIngredientPreviewInput.selections
-      }).catch((error) => {
-        recordDiagnosticError(error, {
-          surface: "quote-builder",
-          action: "preview-commercial-twin-inventory",
-          quoteId: editingQuote.id
-        });
-      });
-    }
+      && eventIngredientPreviewInput.valid;
+    const inventoryScenarioFingerprintForRequest = buildLivingCommercialTwinInventoryFingerprint({
+      commercialFormFingerprint: formKey,
+      selections: eventIngredientPreviewInput.selections
+    });
     const priorRequestId = recovery && changeImpactPreview.mutationState === "uncertain"
       ? changeImpactPreview.simulationRequestId
       : "";
@@ -2327,7 +2471,13 @@ function LegacyAppCore({
         quoteId: editingQuote.id,
         expectedActiveVersionId: editingQuote.activeVersionId,
         requestId: simulationRequestId,
-        form: candidateForm
+        form: candidateForm,
+        ...(inventoryObservationRequested ? {
+          eventIngredientOutputs: eventIngredientPreviewInput.selections.map((selection) => ({
+            menuItemId: selection.menuItemId,
+            requiredOutputQuantity: selection.requiredOutputQuantity
+          }))
+        } : {})
       });
       if (changeImpactPreviewGenerationRef.current !== generation) return;
       setChangeImpactPreview({
@@ -2353,7 +2503,10 @@ function LegacyAppCore({
         applyOutcome: null,
         catalogRevision: Number(catalog.settings?.catalogRevision),
         appliedQuote: null,
-        workbenchRequest: exactWorkbenchRequest
+        workbenchRequest: exactWorkbenchRequest,
+        inventoryObservation: result.inventoryObservation,
+        inventoryScenarioFingerprint: inventoryScenarioFingerprintForRequest,
+        staffingObservation: result.staffingObservation
       });
     } catch (error) {
       if (changeImpactPreviewGenerationRef.current !== generation) return;
@@ -3054,7 +3207,10 @@ function LegacyAppCore({
     }
   };
 
-  const handleEditQuote = async (quote, { navigateToRoute = true } = {}) => {
+  const handleEditQuote = async (quote, {
+    navigateToRoute = true,
+    quoteCompletionDestination = null
+  } = {}) => {
     if (!quote?.id) return;
     if (
       navigateToRoute
@@ -3169,6 +3325,9 @@ function LegacyAppCore({
       id: quote.id,
       quoteNumber: quote.quoteNumber || quote.id,
       activeVersionId: quote.activeVersionId || quote.versionMeta?.versionId || "",
+      status: quote.status,
+      portalExpiresAtISO: quote.portalExpiresAtISO || quote.expiresAtISO || "",
+      workflow: quote.workflow && typeof quote.workflow === "object" ? quote.workflow : {},
       customerId: quote.customerId || "",
       organizationId: quote.organizationId || authSession.organizationId || "",
       rebooking: quote.rebooking && typeof quote.rebooking === "object"
@@ -3190,7 +3349,6 @@ function LegacyAppCore({
     setAvailabilityBlock(null);
     setAvailabilityNotice("");
     setHistoryTarget({ quoteId: "", reason: "" });
-    setStep(1);
     if (navigateToRoute) navigateWorkspace(buildQuoteEditPath(quote.id));
     beginWizardAnalyticsSession({
       organizationId: authSession.organizationId,
@@ -3205,6 +3363,16 @@ function LegacyAppCore({
         : `Editing ${quote.quoteNumber || quote.id}. Save will update this quote and keep a version snapshot.`
     });
     wizardRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    if (QUOTE_COMPLETION_BUILD_ENABLED) {
+      const quoteCompletionFocus = scheduleQuoteCompletionDestinationFocus(quoteCompletionDestination, {
+        editorMode: proposalComposerActive ? "composer" : "guided",
+        root: wizardRef,
+        setStep: proposalComposerActive ? null : setStep
+      });
+      if (!proposalComposerActive && quoteCompletionFocus.step === null) setStep(1);
+    } else {
+      setStep(1);
+    }
     window.requestAnimationFrame(() => wizardRef.current?.focus({ preventScroll: true }));
   };
 
@@ -4066,6 +4234,11 @@ function LegacyAppCore({
         : ""}
       saveBlockers={proposalComposerSaveBlockers}
       saveMessage={submitState.message}
+      {...(QUOTE_COMPLETION_BUILD_ENABLED ? {
+        quoteCompletionCommandPathEnabled,
+        quoteCompletionConfiguredActions: proposalComposerQuoteActionController?.actionState || null,
+        onQuoteCompletionNavigate: navigateProposalQuoteCompletion
+      } : {})}
       compareEnabled={quoteCompareEnabled}
       catalogLoading={catalog.loading}
       onFieldChange={handleStep1FieldChange}
@@ -4073,13 +4246,17 @@ function LegacyAppCore({
       onPatchForm={handleComposerPatch}
       onTemplateChange={applyEventTemplate}
       onEventTypeChange={handleEventTypeChange}
-      onSaveQuote={() => void handleSubmitQuote()}
+      onSaveQuote={() => handleSubmitQuote()}
+      {...(QUOTE_COMPLETION_BUILD_ENABLED ? {
+        onQuoteCompletionSave: () => handleSubmitQuote({ propagateError: true })
+      } : {})}
       onOpenCompare={() => openWorkspaceTool(setCompareOpen)}
       onGuidedMode={() => setBuilderMode("guided")}
       reviewSurfaces={draftReviewSurfaces}
       statusNotes={builderStatusNotes}
       changeImpactSurface={changeImpactSurface}
       livingCommercialTwin={isEditingQuote ? {
+        ...(DECISION_PACKET_BUILD_ENABLED ? { decisionPacketEnabled } : {}),
         projection: livingCommercialTwinProjection,
         scopeKey: livingTwinScopeKey,
         baseQuoteRevisionId: livingTwinBaseQuoteRevisionId,
@@ -4496,9 +4673,14 @@ function LegacyAppCore({
         >
           <InventoryWorkspace
             organizationId={authSession.organizationId}
+            userId={currentUserUid}
             role={authSession.role}
             browserEnabled={INVENTORY_AUTHORITY_UI_ENABLED}
             tenantEnabled={inventoryTenantEnabled}
+            events={commercialSnapshot.quotes}
+            exceptionWorkspaceEnabled={import.meta.env.VITE_INVENTORY_EXCEPTION_WORKSPACE_ENABLED === "true" && featureFlags.inventoryExceptionWorkspace === true}
+            eventSupplyActionPlanEnabled={import.meta.env.VITE_EVENT_SUPPLY_ACTION_PLAN_ENABLED === "true" && featureFlags.eventSupplyActionPlan === true}
+            inventoryMobileCaptureEnabled={import.meta.env.VITE_INVENTORY_MOBILE_CAPTURE_ENABLED === "true" && featureFlags.inventoryMobileCapture === true}
           />
         </WorkspaceLazyRoute>
       )}
@@ -4569,9 +4751,13 @@ function LegacyAppCore({
             open={scheduleRouteOpen}
             onClose={() => navigateWorkspace(WORKSPACE_PATHS.home)}
             organizationId={authSession.organizationId}
+            role={authSession.role}
             staffLeads={scheduleStaffLeads}
             capacityLimit={scheduleCapacityLimit}
             currentUserEmail={authSession.user?.email || ""}
+            onOpenIntegrations={integrationsEnabled
+              ? () => navigateWorkspace(WORKSPACE_PATHS.integrations)
+              : undefined}
           />
         </WorkspaceLazyRoute>
       )}
@@ -4717,7 +4903,7 @@ function LegacyAppCore({
             styles={Object.keys(STAFF_RULES)}
             onApplyDraft={applyIntentDraft}
             organizationId={authSession.organizationId}
-            onModelParse={parseIntentDraftWithModel}
+            onModelParse={PILOT_MODEL_ENABLED ? parseIntentDraftWithModel : undefined}
           />
         )}
         {PILOT_CHANGE_REQUESTS_ENABLED
@@ -4759,8 +4945,10 @@ function LegacyAppCore({
           />
         )}
         {catalogReadNotice}
-        {proposalComposerSurface}
-        {!proposalComposerActive && (
+        <QuoteEditorModeSurface
+          composerActive={proposalComposerActive}
+          composerSurface={proposalComposerSurface}
+        >
         <>
         <section className="panel wizard-panel">
           {draftReviewSurfaces}
@@ -4916,6 +5104,22 @@ function LegacyAppCore({
                 totals={totals}
                 settings={effectiveSettings}
                 readiness={proposalReadiness}
+                {...(QUOTE_COMPLETION_BUILD_ENABLED ? {
+                quoteCompletionCommandPathEnabled,
+                quoteCompletionSaveBlockers: proposalComposerSaveBlockers,
+                onQuoteCompletionAction: (action) => {
+                  const focusResult = scheduleQuoteCompletionDestinationFocus(
+                    resolveQuoteWizardCompletionDestination(action?.destination), {
+                      root: wizardRef,
+                      setStep
+                    }
+                  );
+                  if (focusResult.step !== null || focusResult.scheduled) {
+                    return { state: "success", message: "Opened the exact quote destination." };
+                  }
+                  return { state: "recovery", message: action?.reason };
+                }
+                } : {})}
               />
             )}
             {!catalog.loading && step === 5 && (
@@ -5007,7 +5211,7 @@ function LegacyAppCore({
           guestBand={guestBand}
         />
         </>
-        )}
+        </QuoteEditorModeSurface>
       </main>
       )}
 
@@ -5103,6 +5307,7 @@ function LegacyAppCore({
             tenantTimeZone={tenantTimeZone}
             focusQuoteId={browserRoute.params?.quoteId || historyTarget.quoteId}
             focusAction={historyTarget.action}
+            focusDestinationAction={historyTarget.destinationAction}
             focusReason={historyTarget.reason}
             onEditQuote={(quote) => {
               requestWorkflowAttentionRefresh({ force: true });
@@ -5189,9 +5394,17 @@ function LegacyAppCore({
             onClose={() => closeWorkspaceToolRoute(WORKSPACE_ROUTE_IDS.SCHEDULE, setScheduleOpen)}
             returnFocusRef={workspaceToolReturnFocusRef}
             organizationId={authSession.organizationId}
+            role={authSession.role}
             staffLeads={scheduleStaffLeads}
             capacityLimit={scheduleCapacityLimit}
             currentUserEmail={authSession.user?.email || ""}
+            onOpenIntegrations={integrationsEnabled
+              ? () => openRoutedWorkspaceTool(
+                  WORKSPACE_PATHS.integrations,
+                  setIntegrationsOpen,
+                  { menuTriggerRef: operationsMenuTriggerRef }
+                )
+              : undefined}
           />
         </WorkspaceLazyTool>
       )}

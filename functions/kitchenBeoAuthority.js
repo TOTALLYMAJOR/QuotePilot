@@ -5,6 +5,7 @@ const { createHash } = require("node:crypto");
 const KITCHEN_BEO_ARTIFACT_NODE_ID = "artifact.kitchen_beo";
 const KITCHEN_BEO_ARTIFACT_TYPE = "kitchen_beo";
 const KITCHEN_BEO_INPUT_SCHEMA_VERSION = "kitchen-beo-input-v1";
+const KITCHEN_BEO_INPUT_SCHEMA_VERSION_WITH_OPERATIONAL_NOTES = "kitchen-beo-input-v2";
 const KITCHEN_BEO_CANONICAL_SCHEMA_VERSION = "qp-canonical-json-v1";
 const KITCHEN_BEO_GENERATION_REQUEST_SCHEMA_VERSION =
   "kitchen-beo-generation-request-v1";
@@ -112,6 +113,51 @@ function toList(input) {
   return Array.isArray(input)
     ? input.map((item) => String(item ?? "").trim()).filter(Boolean)
     : [];
+}
+
+function normalizeOperationalNotesProjection(projection, sourceRevisionId) {
+  if (projection == null) return null;
+  if (
+    !isRecord(projection)
+    || projection.schemaVersion !== "event-operational-notes-beo-v1"
+    || cleanText(projection.sourceRevisionId) !== sourceRevisionId
+    || !Number.isSafeInteger(projection.journalRevision)
+    || projection.journalRevision < 1
+    || !Array.isArray(projection.notes)
+    || projection.notes.length < 1
+    || projection.notes.length > 12
+  ) {
+    fail(
+      "failed-precondition",
+      "Operational notes are not bound to the active Kitchen BEO source revision."
+    );
+  }
+  const seen = new Set();
+  const notes = projection.notes.map((note) => {
+    if (!isRecord(note)) {
+      fail("failed-precondition", "Kitchen BEO operational note evidence is invalid.");
+    }
+    const noteId = exactOpaqueId(note.noteId, "operational note id", 160);
+    const type = cleanText(note.type).toLowerCase();
+    const text = cleanText(note.text);
+    if (
+      seen.has(noteId)
+      || !["kitchen", "venue", "service", "staffing"].includes(type)
+      || !text
+      || text.length > 800
+      || /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/u.test(text)
+    ) {
+      fail("failed-precondition", "Kitchen BEO operational note evidence is invalid.");
+    }
+    seen.add(noteId);
+    return { noteId, type, text };
+  });
+  return {
+    schemaVersion: "event-operational-notes-beo-v1",
+    sourceRevisionId,
+    journalRevision: projection.journalRevision,
+    notes
+  };
 }
 
 function exactOpaqueId(value, label, maximum = 256) {
@@ -369,14 +415,16 @@ function resolveKitchenBeoCommercialSourceRevision(quote = {}) {
   };
 }
 
-function buildCanonicalKitchenBeoPayload(quote) {
+function buildCanonicalKitchenBeoPayload(quote, operationalNotes = null) {
   if (!isRecord(quote)) {
     fail("invalid-argument", "Canonical quote data is required for Kitchen BEO generation.");
   }
-  return deepFreeze({
+  const sourceRevision = resolveKitchenBeoCommercialSourceRevision(quote);
+  const notes = normalizeOperationalNotesProjection(operationalNotes, sourceRevision.id);
+  const payload = {
     quoteNumber: cleanText(quote.quoteNumber),
     organizationName: cleanText(quote.quoteMeta?.organizationName),
-    version: resolveKitchenBeoCommercialSourceRevision(quote),
+    version: sourceRevision,
     contacts: {
       clientName: cleanText(quote.customer?.name),
       clientPhone: cleanText(quote.customer?.phone),
@@ -411,7 +459,9 @@ function buildCanonicalKitchenBeoPayload(quote) {
       kitchenCheckpointOverrides: quote.booking?.kitchenCheckpoints
     }),
     productionChecklist: buildProductionChecklistByPhase(quote)
-  });
+  };
+  if (notes) payload.operationalNotes = notes;
+  return deepFreeze(payload);
 }
 
 function normalizeKitchenBeoFingerprintInputs(payload) {
@@ -427,9 +477,12 @@ function normalizeKitchenBeoFingerprintInputs(payload) {
 
 function createKitchenBeoFingerprint(payload, graphCore) {
   const registry = assertKitchenBeoGraphContract(graphCore);
+  const fingerprintSchemaVersion = isRecord(payload?.operationalNotes)
+    ? KITCHEN_BEO_INPUT_SCHEMA_VERSION_WITH_OPERATIONAL_NOTES
+    : KITCHEN_BEO_INPUT_SCHEMA_VERSION;
   const document = {
     artifactType: KITCHEN_BEO_ARTIFACT_TYPE,
-    fingerprintSchemaVersion: KITCHEN_BEO_INPUT_SCHEMA_VERSION,
+    fingerprintSchemaVersion,
     declaredNodeIds: [...KITCHEN_BEO_DECLARED_INPUT_NODE_IDS],
     graphVersion: registry.graphVersion,
     inputs: normalizeKitchenBeoFingerprintInputs(payload)
@@ -440,7 +493,7 @@ function createKitchenBeoFingerprint(payload, graphCore) {
     artifactNodeId: KITCHEN_BEO_ARTIFACT_NODE_ID,
     declaredNodeIds: [...KITCHEN_BEO_DECLARED_INPUT_NODE_IDS],
     canonicalSchemaVersion: KITCHEN_BEO_CANONICAL_SCHEMA_VERSION,
-    fingerprintSchemaVersion: KITCHEN_BEO_INPUT_SCHEMA_VERSION,
+    fingerprintSchemaVersion,
     graphId: registry.graphId,
     graphVersion: registry.graphVersion,
     dependencyFingerprint: sha256Hex(Buffer.from(canonical, "utf8"))
@@ -481,6 +534,7 @@ function receiptIdentity({ organizationId, quoteId, requestId }, graphCore) {
 
 function buildKitchenBeoGenerationClaim({
   canonicalQuote,
+  operationalNotes = null,
   request = {},
   trustedContext
 }, graphCore) {
@@ -496,7 +550,7 @@ function buildKitchenBeoGenerationClaim({
       "A canonical active quote revision is required for a trusted Kitchen BEO receipt."
     );
   }
-  const payload = buildCanonicalKitchenBeoPayload(canonicalQuote);
+  const payload = buildCanonicalKitchenBeoPayload(canonicalQuote, operationalNotes);
   const fingerprint = createKitchenBeoFingerprint(payload, graphCore);
   const receiptId = receiptIdentity({ ...scope, requestId }, graphCore);
   return deepFreeze({
@@ -808,6 +862,7 @@ function statusResult({
 
 function deriveKitchenBeoArtifactStatus({
   canonicalQuote,
+  operationalNotes = null,
   trustedReceipt = null,
   invalidations = [],
   sourceState = "available",
@@ -830,7 +885,7 @@ function deriveKitchenBeoArtifactStatus({
   let normalizedInvalidations;
   try {
     scope = trustedScope({ canonicalQuote, trustedContext });
-    const payload = buildCanonicalKitchenBeoPayload(canonicalQuote);
+    const payload = buildCanonicalKitchenBeoPayload(canonicalQuote, operationalNotes);
     currentFingerprint = createKitchenBeoFingerprint(payload, graphCore);
     currentSource = resolveKitchenBeoCommercialSourceRevision(canonicalQuote);
     normalizedInvalidations = normalizeInvalidations(invalidations);
@@ -975,6 +1030,7 @@ module.exports = {
   KITCHEN_BEO_GENERATION_RECEIPT_SCHEMA_VERSION,
   KITCHEN_BEO_GENERATION_REQUEST_SCHEMA_VERSION,
   KITCHEN_BEO_INPUT_SCHEMA_VERSION,
+  KITCHEN_BEO_INPUT_SCHEMA_VERSION_WITH_OPERATIONAL_NOTES,
   KITCHEN_BEO_MAX_ARTIFACT_BYTES,
   KITCHEN_BEO_STATUS_SCHEMA_VERSION,
   KitchenBeoAuthorityError,

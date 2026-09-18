@@ -8,7 +8,10 @@ import {
   REALISTIC_LOCATIONS,
   RECIPE_TARGET
 } from "../../../scripts/realistic-catering-population-data.mjs";
-import { parsePopulationArgs } from "../../../scripts/populate-ragnakok-inventory.mjs";
+import {
+  parsePopulationArgs,
+  planRecipeBackedMenuCostSeed
+} from "../../../scripts/populate-ragnakok-inventory.mjs";
 
 const require = createRequire(import.meta.url);
 const { createRecipeRevision } = require("../../../functions/inventoryRecipeCore.cjs");
@@ -82,5 +85,66 @@ describe("realistic catering population fixture", () => {
     expect(chicken.supplier).toBe("Supplier B");
     expect(chickenLine.quantity).toBe("0.4");
     expect((175 * Number(chickenLine.quantity)) - Number(chicken.openingQuantity)).toBe(6);
+  });
+
+  it("seeds margin costs only from complete current recipe projections on fixture-owned menu rows", () => {
+    const result = planRecipeBackedMenuCostSeed({
+      organizationId: "mm05366-sandbox",
+      menuItems: [
+        { id: "eligible", source: "seed-script", active: true },
+        { id: "starter", source: "starter-catalog-pack", active: true, costMinor: null },
+        { id: "operator", source: "local-custom", active: true },
+        { id: "costed", source: "seed-script", active: true, costMinor: 0 },
+        { id: "inactive", source: "seed-script", active: false }
+      ],
+      projections: [
+        {
+          id: "eligible",
+          organizationId: "mm05366-sandbox",
+          menuItemId: "eligible",
+          status: "complete",
+          freshness: "current",
+          recipeRevisionId: "recipe-1",
+          sourceDigest: "source-1",
+          cost: {
+            status: "complete",
+            currency: "USD",
+            projectedCostMinor: 275,
+            resultDigest: "result-1"
+          }
+        },
+        {
+          id: "starter",
+          organizationId: "another-tenant",
+          menuItemId: "starter",
+          status: "complete",
+          freshness: "current",
+          cost: {
+            status: "complete",
+            currency: "USD",
+            projectedCostMinor: 325,
+            resultDigest: "result-2"
+          }
+        }
+      ]
+    });
+
+    expect(result).toMatchObject({
+      model: "ragnakok-recipe-cost-seed-v1",
+      eligibleCount: 1,
+      excluded: {
+        alreadyCosted: 1,
+        ineligibleSource: 1,
+        inactive: 1,
+        projectionUnavailable: 1
+      }
+    });
+    expect(result.updates).toEqual([{
+      menuItemId: "eligible",
+      costMinor: 275,
+      projectionResultDigest: "result-1",
+      recipeRevisionId: "recipe-1",
+      sourceDigest: "source-1"
+    }]);
   });
 });

@@ -1,46 +1,282 @@
 # Changelog
 
-Last updated: 2026-09-11 00:36:51 CDT
+Last updated: 2026-09-17 14:01:00 CDT
+
+## Unreleased — Quote-to-Confidence local candidate
+
+- Keep the six default-off Quote-to-Confidence capabilities out of disabled
+  bundles with compile-time gates and lazy presentation boundaries. Exact
+  config-free local matrix builds measure 3,657,288 / 385,181 bytes for
+  compatibility and 4,962,837 / 446,522 bytes for Ambient. The exact
+  production CI environments measure 3,657,606 / 385,181 and 4,963,155 /
+  446,541 bytes respectively; exact-PR CI run `35265592125` confirmed the
+  compatibility result. The temporary exception is pinned to those larger
+  literal production-matrix artifacts without percentage or future-growth
+  headroom.
+
+- Fence cancelled capture rollback to its exact persisted line-claim revision, leaving newer reconciliation claims and their replacement protection untouched.
+
+- Stop subsequent mobile count requests when the account, organization, location, role, or capture gates change; retain any already-started line outcome in its original device draft. Permit reviewed empty-shortage rebases and independent cancellation, with resolution read from the backend. Share exact recorded-cost comparison preparation across App and the enabled Legacy decision surface.
+
+- Require presentation-only capability contracts to own no callable exports; read and mutation authorities retain their complete lifecycle contracts, enforced by downgrade rejection tests.
+
+- Bind each new presentation surface to its own asserted state contract. Preserve malformed versus contradictory learning evidence, reload parent accepted sources on refresh, and report category aggregates with unavailable zero-denominator rates.
+
+- Add separately default-off quote completion, decision packet, exception-first Inventory, internal supply planning, mobile count capture, and post-event learning gates. The completion command points to one existing field or action; comparison and accepted handoff retain exact revision and receipt references.
+- Add server-owned internal supply-plan draft, approval, rebase and cancellation receipts, with transactionally current shortage/source evidence. Add authoritative revision-fenced physical stock counts; neither capability contacts suppliers, places orders, reserves expected supply, or changes commercial policy.
+- Add seven-day native IndexedDB shelf drafts for an already-loaded app, per-line exact-request reconciliation and retained conflicts. Offline is device persistence, not server persistence or cold-start support.
+- Add read-only accepted-event learning with separate attendance, ingredient, correction, saved-cost-basis and financial rows. Recommendations route to existing authorities. Only a matching recipe/pack publication receipt plus explicit operator confirmation creates an applied observation; template/workflow application tracking and event-bound receiving remain blocked by integration.
+- Reconcile capability/field-state contracts and Product Intelligence measurement obligations. Local source and automated evidence do not establish hosted, provider, production, human acceptance, adoption, or catering outcomes.
 
 All notable project changes are documented in this file.
 
 ## Unreleased — Event and Commercial activation receipt correction
 
-- Correct the `staging-event-operating-spine` candidate envelope so enabling
-  Commercial Change and Event Spine preserves Staffing and Inventory and binds
-  all workflow authority to the exact RagnaKoK organization instead of
-  deploying an unscoped partial operational profile.
+- Enforce the Product Intelligence System with a fail-closed structural and
+  change-impact validator in `lane:core`. Task plans now classify explicit
+  catering-value/product-intelligence work correctly, emit the required actor,
+  job, improvement, outcome/metric, guardrail, and evidence fields, and require
+  the index plus release/experiment ledger. The PR template exposes the same
+  declaration, while mechanical work requires an explicit not-applicable
+  rationale instead of an invented catering benefit.
+- Add the canonical QuotePilot Product Intelligence System: eight linked
+  catering-value artifacts covering outcomes, user capabilities, metric
+  definitions, privacy-bounded observation signals, baseline/target policy,
+  owner/customer journeys, quality guardrails, and a release/experiment ledger.
+  Existing analytics and authority records are mapped as implemented,
+  derivable, partial, or not yet observable; proposed targets remain pending
+  owner acceptance and no new runtime telemetry or outcome claim is implied.
+- Repair the connected Firebase authentication and tenant-isolation browser
+  acceptance suite to use the unambiguous header **New quote** control, the
+  quote-builder **Account** identity surface, and the routed Quote/Conversation
+  workspaces after the Calm Four shell migration.
+- Extend the exact-tenant `ragnakok-realistic-v1` population operation with a
+  revision-fenced, idempotent margin-cost seed. It copies only complete,
+  current Inventory recipe-cost projections onto otherwise uncosted
+  fixture-owned menu rows, preserves every selling price, excludes
+  operator/unclassified rows, records explicit synthetic provenance, advances
+  the catalog revision once, and binds pricing confirmation to the resolved
+  verified tenant administrator. Rows without recipe evidence remain uncosted
+  and margin continues to fail closed.
+- Make candidate preflight verify enabled Secret Manager metadata for every
+  Google Calendar and Model Assist binding before it can reserve an immutable
+  receipt or attempt a Firebase mutation. The preflight still never reads or
+  creates secret values, and the same names are rejected from Functions
+  dotenv and runtime plaintext evidence.
+- Reconcile the combined commercial test contract with the exact server-bound
+  Inventory and attendance preview payload, and keep advanced pricing-source
+  assertions stable when independent cost-evidence warnings are also present.
+- Keep the revision-bound Kitchen BEO handoff visible in both supported event
+  workspace presentations, including its explicit local no-receipt boundary,
+  and make arrival focus tolerant of environments without `scrollIntoView`.
+- Recalibrate the existing expiring graph-specific bundle exception to the
+  literal combined-candidate CI matrices: 3,652,845 / 385,181 bytes for
+  compatibility and 4,947,989 / 445,422 bytes for Ambient. The ceilings add no
+  future-growth allowance; exact-PR CI, Core Web Vitals, hosted timing, and
+  human acceptance remain separate gates.
 
-- Correct the protected `ragnakok-operations` runtime profile so the server
-  gates required by the already-enabled exact-tenant Commercial Change and
-  Event Spine settings are actually true. The production materializer couples
-  those gates, requires the `mm05366-sandbox` runtime fence, and requires both
-  Staffing and Inventory server authority; every other release profile remains
-  safe-off. This changes capability availability only and performs no quote or
-  event mutation.
+- Add **Library → Delivery** as the governed activation-authoring path for the
+  staffed-buffet pilot. Administrators can review versioned Blueprint,
+  quantity-policy, and purchasing-pack source, bind an exact Blueprint revision
+  to an active Offer, and enable Delivery Planning only after validation. The
+  save path rejects invalid published declarations, stale or ambiguous
+  references, missing menu components, malformed work blocks, invalid guest
+  bounds, and mismatched purchasing-pack units. The editor invents no ratios or
+  production policy, and a checked draft is not described as saved, hosted, or
+  human accepted.
+- Include the Library's separately loaded menu inventory when validating a
+  Delivery Planning draft. Valid component IDs now pass the same publication
+  checks whether menu records live in the catalog shell or the managed Menu
+  workspace; the validation snapshot is transient and does not duplicate or
+  persist menu authority.
+- Let actions launched from the Workspace & tools drawer continue through that
+  drawer's own browser-navigation guard. Workflow, Messages, Pilot, Operations,
+  Clear the Deck, Inventory, and Staff now reach their existing role-safe
+  routes while Back still dismisses the overlay without changing route.
+- Add the safe-off Delivery Planning Phase 1 source slice. Offers and Event
+  Templates can preserve exact Delivery Blueprint references; published
+  tenant-declared quantity policies compile staffed-buffet work blocks,
+  production output, ingredient demand, and exact-evidence-bound purchasing
+  quantities into a session-only Delivery Proposal inside quote creation.
+  Missing policy, policy bounds, required components, retained override
+  conflicts, and late domain results fail visibly. Optional removal and
+  deliberate overrides remain session-only and recoverable. The surface keeps
+  Commercial, Production, Staffing, Inventory, and Purchasing evidence
+  separate, never changes pricing or quote save eligibility, and performs no
+  assignment, allocation, ordering, publication, provider, BEO, or readiness
+  action. Focused compiler/component tests are local automated evidence;
+  tenant configuration, connected domain evidence, routed handoffs, rendered
+  responsive proof, CI, hosted use, human acceptance, and the 30% pilot outcome
+  remain open.
 
-- Bind the protected founder-tenant activation to the exact current
-  `ragnakok-operations` Firebase backend receipt and the exact safe-off Vercel
-  browser receipt. This supports the intentionally split production surfaces
-  without weakening the tenant, tag, workflow, profile, or provider-readback
-  checks and without treating an older all-surface deployment as current.
-- Protected production workflow `34551712371` verified those exact split
-  receipts and read back both Commercial Change and Event Spine tenant settings
-  as true for the sole approved founder-pilot organization
-  `mm05366-sandbox`. The values were already true, so the successful run changed
-  no tenant data and instead established the current evidence binding.
-- Deploy the isolated staging `staging-event-operating-spine` profile at exact
-  SHA `2f5d123d9ba06153823def6f44b3f5ff89183023` and CI `34420973414`. The
-  deploy process published Firebase Hosting version `31a0bcbf39d65ec2` but
-  recorded a partial receipt after its Functions-list readback failed.
-  Independent recovery readback verified that exact live Hosting version, the
-  release manifest, and all 128 active Functions with both runtime gates true;
-  a bounded transaction then changed only the two exact staging-tenant fields
-  from false to true and verified them at `2026-09-11T01:59:59.609Z`.
-- Keep outbound email, buyer access, Revenue Autopilot, Revenue Autopilot sends,
-  and automatic Event transitions unchanged. Gate activation alone is not an
-  amendment, event mutation, provider outcome, payment, or human-acceptance
-  receipt.
+- Make the populated client profile progressively available instead of
+  withholding the relationship overview behind retained proposal-history and
+  private email-control reads. The exact customer record and bounded linked
+  opportunities now load in parallel and render first; proposal-version reads
+  and the Revenue Autopilot control projection then settle concurrently behind
+  an explicit loading or recoverable partial state. Initial supplemental
+  failure keeps the exact client and current opportunities visible, while a
+  later refresh continues to preserve the last completed profile.
+
+- Reframe the existing session-only Commercial Scenario Workbench as a
+  production-grade Commercial Decision Surface. The responsive hierarchy now
+  moves from the Current commitment through the proposed scenario to one
+  support answer and four ordered consequence clauses:
+  Commercial, People, Supply, and Execution. Exact quote totals, staffing gaps,
+  and ingredient shortages remain bound to their existing records; margin is
+  labeled unavailable without an exact paired model, BEO remains a review
+  dependency rather than a regeneration claim, and final-count impact is
+  explicitly not checked. Current/Scenario comparison and the explanation for
+  the answer remain available without exposing internal source, revision, or
+  authority terminology. Compare Current, Scenario B, Review change, and
+  Discard reuse the existing temporary scenario actions and introduce no new
+  persistence or apply path. Focused unit and Playwright coverage exercise the
+  real saved-quote editor at 390, 768, 1008, and 1440 CSS-pixel viewports; this
+  is source/local candidate evidence only, not hosted, production-data, or
+  human-acceptance proof.
+
+- Add a revision-bound Google Calendar event-copy workflow to Integrations Ops
+  and the focused Operations event. An administrator connects an independently
+  consented primary calendar, then deliberately publishes, updates, checks, or
+  removes one narrow copy of an exact accepted/booked quote revision. Stable
+  provider IDs, accepted-snapshot verification, ETag fences, one-use OAuth
+  state, encrypted refresh tokens, one serialized connection-mutation lease,
+  connection-generation binding, replay-safe dispatch ownership, private
+  callable-owned records, cleanup-before-disconnect, and exact uncertain
+  revocation retry prevent duplicate, stranded, or silent overwrites. An
+  uncertain exchange requires explicit review of Google third-party access
+  before another authorization attempt. An unverified revocation-only grant can
+  be revoked without falsely claiming that older retained copies were cleaned.
+  Expired authorization recovery replaces only unused pending attempts,
+  converts interrupted exchanges to named uncertainty, activates only a
+  previously verified retained grant, and routes any unverified grant to
+  explicit revocation. Rejected credentials can also be revoked without
+  concealing prior copies that require cleanup after reconnection.
+  The callback extends a bounded exchange lease beyond its explicit runtime
+  ceiling before contacting Google, and a late uncertain grant can bind only to
+  its exact unreplaced recovery record, so an expired authorization window
+  cannot race active token work. Disabling
+  publishing keeps credential revocation available when provider cleanup is
+  configured and explicitly retains any external event copies.
+  Calendar
+  receives only event title or quote reference, time, tenant time zone, venue,
+  and private ownership fingerprints—never attendees, customer/staff contact,
+  menu, dietary, pricing, payment, notes, BEO, or checklist content; free-text
+  title/venue may still identify a customer and default visibility follows the
+  selected calendar's sharing policy. This is a
+  source/local candidate; provider consent, Secret Manager bindings, hosted
+  behavior, live Calendar mutation, and human acceptance remain unproven.
+- Add revision-bound Event operational notes inside the trusted Kitchen BEO
+  workspace. Same-tenant staff can record typed internal or BEO-visible
+  instructions, correct them with immutable prior/result receipts, explicitly
+  review the retained journal after a quote revision changes, and reach one
+  Event-brief review action when newer notes supersede the recorded checklist
+  time. Only the verified content-only visible projection enters the server PDF
+  and versioned BEO fingerprint; internal notes, actors, and history stay out.
+- Bind proposed Staffing change intelligence to the server's actual private
+  prospective quote revision and the exact Commercial Change receipt. The
+  response carries aggregate role evidence only: same-window comparisons may
+  reuse confirmed counts, changed timing and stale plans withhold coverage, and
+  an absent plan establishes zero assignments. It writes no Staffing plan,
+  assignment, invitation, schedule fence, pricing, authorization, or quote.
+- Keep saved-window staffing evidence from becoming a false proposed-coverage
+  claim. When an edited event changes date, start time, or duration, Fulfillment
+  preserves Current coverage and the proposed role requirement but marks the
+  Working need unverified until availability and conflicts are evaluated for
+  that window; no assignment, invitation, price, or quote state changes.
+- Coordinate eligible Quote Edit Inventory evidence with the authoritative
+  Commercial Change simulation. Inventory now evaluates the private
+  server-built prospective quote revision in a read-only transaction, accepts
+  only explicit kitchen output quantities, and returns a separately receipt-
+  bound observation. Missing or failed Inventory evidence stays visible and
+  cannot alter pricing, authorization, allocation, ordering, or quote state.
+- Turn stale Kitchen BEO and production-plan invalidations into exact recovery
+  actions. Operators can open the current quote's Kitchen BEO or event
+  production checklist directly from Commercial Change Intelligence; neither
+  handoff regenerates an artifact, changes checklist state, nor reconciles the
+  invalidation without a separate reviewed action.
+- Make blocked quote saves recoverable in place: each supported blocker now
+  opens and focuses its exact event, customer, or menu control instead of
+  leaving the operator to search the proposal. Tablet and mobile surfaces put
+  the real save-or-review action in the sticky bar and keep Quote details as a
+  secondary action; neither blocker review nor navigation changes quote,
+  pricing, revision, or publication authority.
+- Complete Attendance Slice F through the existing post-event closeout
+  authority. Same-tenant staff can record or correct one 1–400 actual count
+  after the tenant-local closeout date with a required source type/note,
+  compare-and-set revision, idempotent request identity, server actor/time, and
+  immutable prior/result receipt. The server revalidates the exact accepted
+  version and acceptance receipt transactionally; Firestore keeps the journal
+  and receipts callable-only.
+- Expose the bounded exact-source attendance projection in Customer 360, Event
+  Focus, and the Control Room Actuals boundary. Priced guests remain separate;
+  mismatched accepted-source evidence is labeled stale and withholds the count.
+  The record never reprices, invoices, refunds, settles, changes staffing/BEO,
+  advances event phase, completes closeout, sends a message, or establishes
+  Replay. This is source/local evidence only; deployment, hosted authenticated
+  use, production records, provider outcomes, and human acceptance remain open.
+- Make the Commercial Scenario Workbench comparison responsive and evidence-
+  explicit. Wide layouts compare Current with every session alternative;
+  stacked layouts compare Current with the selected scenario and its exact
+  difference. Exact, retained, updating, and unevaluated projections remain
+  distinct, and no new apply or persistence authority is introduced.
+- Turn the Library overview into a bounded read-only decision index by bringing
+  normalized Offer, Menu, Service, Rental, Template, Pricing, and Rule context
+  forward from the existing organization-scoped catalog projection. The full
+  editors remain the only mutation path, partial Menu evidence stays
+  unavailable, and the readiness rail remains the sole ranked setup action.
+- Replace full latest-page rereads after a server-confirmed conversation signal
+  with compound-cursor delta catch-up. The callable returns only bodies newer
+  than the last loaded `(createdAtMs, messageId)`, follows bounded continuation
+  pages during a burst, revalidates authority on every page, retains already
+  loaded history, and emits an aggregate-only catch-up duration observation.
+- Reduce first-open conversation work from as many as 500 returned bodies to
+  the latest 50, with a deterministic validated cursor and explicit **Load
+  older messages** recovery for additional history. Every page retains the
+  callable's initial and final authority checks. Aggregate browser performance
+  marks now expose route-usable, inbox-visible, and thread-interactive duration
+  without recording tenant, quote, customer, portal, message, or body identity.
+- Speed up repeated Messaging Station thread opens without creating a second
+  conversation authority. Concurrent exact-identity body loads now share one
+  callable request; up to 25 normalized results remain in application memory
+  for 30 seconds. Manual and live-signal refreshes bypass retained results, and
+  a confirmed send invalidates the thread cache before the next open.
+- Turn Library setup into an ordered first-quote activation path across
+  business basics, offers and menu, selling price, and optional cost visibility.
+  The first unfinished milestone owns the action, an existing-menu path opens
+  the established Import Studio, and detailed readiness remains available
+  without implying that imported data is published or that missing cost blocks
+  quoting.
+- Restore the Ambient Now review ledger's usable desktop, tablet, and mobile
+  width by removing a stale priority-number grid left after that numbered
+  presentation was retired. Priority identity, saved commercial context,
+  consequence, and its one continuation now stay together without overlap;
+  responsive browser coverage rejects collapsed review rows.
+## v0.19.0 coordinated Inquiry and Model Assist production release - 2026-09-13
+
+- Published protected PR `#145` as exact tagged `main` SHA
+  `bf9f48a00547e305fdf155c8d64bf3646198b705` (`v0.19.0`) after its nine PR
+  checks and exact-main CI run `34787753902` attempt 2 passed. Governed Firebase
+  workflow `34790618395` deployed Hosting, Firestore, and all 142 then-current
+  Functions; governed Vercel workflow `34791516818` promoted immutable
+  deployment `quoteflow-bgq2wztfk-mbmapps.vercel.app`.
+- Activated the protected `all-qualified-features` release profile for the
+  qualified staff workspace, Inquiry Showcase, and review-only Model Assist
+  presentation, bound to organization `mm05366-sandbox`. Buyer Access, owner
+  SMS, Revenue Autopilot sends, local/test bypasses, and hard App Check remained
+  closed. Model output remained low-confidence, confirm-before-apply, stateless,
+  and non-authoritative.
+- Provider readback proved both public origins, reviewed Inquiry and Turnstile
+  configuration, 142 active `us-central1` Functions, the hourly purge scheduler,
+  and `parseIntentDraft` using OpenAI `gpt-5-mini` with its managed secret. It
+  did not prove a published Inquiry slug, real customer submission,
+  model-authored operator outcome, notification delivery, retention deletion,
+  accessibility, human acceptance, or commercial outcomes.
+- Protected workflow `34551712371` also bound the founder-tenant activation to
+  exact current Firebase and safe-off Vercel receipts and read back Commercial
+  Change and Event Spine as enabled only for `mm05366-sandbox`; this established
+  evidence and did not mutate quote, event, provider, payment, or completion
+  state.
 
 ## v0.18.2 public release and operating-twin population - 2026-09-10
 

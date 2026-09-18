@@ -1,6 +1,6 @@
 # Event Messaging Station Architecture
 
-Last updated: 2026-09-10 15:09:08 CDT
+Last updated: 2026-09-12 08:03:00 CDT
 
 Status: working-branch architecture and implementation boundary. This document
 does not establish merge, deployment, hosted availability, production-data
@@ -118,6 +118,28 @@ minimum safe near-real-time signal path:
    station return action clears the quote focus, restores focus to the selected
    event row, and leaves refresh on the thread list. Inbox rows include quote
    number, event date/time, and venue so similar events remain distinguishable.
+10. Canonical body loads use a bounded client performance layer: concurrent
+    reads for the same complete staff/principal or portal access identity share
+    one callable promise, and up to 25 normalized results remain in application
+    memory for 30 seconds. Manual refresh and signal-driven refresh bypass the
+    retained result. An authoritative send receipt invalidates retained history
+    for that thread. This layer never uses browser storage, grants no read
+    authority, and does not let retained bodies resolve an exact-arrival check.
+11. The callable reads the latest 51 records in deterministic descending
+    `(createdAtMs, messageId)` order, returns at most 50 in chronological display
+    order, and exposes a validated cursor only when older history exists. **Load
+    older messages** requests the next page through the same twice-validated
+    callable and merges by message ID. Route, inbox, and first-thread timing is
+    emitted only as aggregate browser performance evidence with no tenant,
+    quote, customer, portal, message, or body identity.
+12. A server-confirmed newer-message signal uses the last loaded compound
+    `(createdAtMs, messageId)` cursor to read only subsequent bodies in
+    ascending order. A burst follows at most ten 50-message pages, matching the
+    conversation's 500-message lifetime bound. Every page repeats the callable's
+    initial and final authorization reads, existing history stays mounted, and
+    an incomplete or scope-changing catch-up becomes visibly stale rather than
+    claiming the thread is current. Aggregate `thread_caught_up` timing includes
+    duration and body count only.
 
 The projected summary contains only its schema version, message count, latest
 message ID, latest message time, latest actor type, and server update time. It
@@ -232,6 +254,9 @@ The first-release bounds are therefore intentional:
 - one inbox listener while the staff station is mounted;
 - at most 50 live inbox quote documents;
 - one exact selected-thread signal listener;
+- at most one in-flight canonical body load per complete access identity;
+- at most 25 short-lived normalized body results in application memory, each
+  expiring after 30 seconds and invalidated by an authoritative send receipt;
 - no listener per inbox row;
 - unsubscribe on thread, organization, portal, or surface change;
 - random message IDs and small body-free summary updates; and
@@ -245,16 +270,17 @@ read cost becomes material, introduce a small server-owned
 `conversationThreads/{quoteId}` projection and migrate the inbox listener only
 after rules, backfill, capability-surfacing, and parity tests exist.
 
-The current conversation callable can return up to the repository's 500-message
-thread limit. The next scaling improvement should be cursor-based APIs:
+The conversation keeps its 500-message lifetime limit, while the callable uses
+cursor-based pages:
 
-- initial latest 50;
+- initial latest 50 (implemented);
 - messages after the newest `(createdAtMs, messageId)` cursor for live catch-up;
-- older pages before the earliest cursor; and
-- a bounded `hasMore` response.
+- older pages after the earliest descending cursor (implemented); and
+- a bounded `hasOlder` response (implemented).
 
-That delta/pagination contract is future work, not part of this branch. Until it
-exists, every signal-triggered reload may reread the bounded thread.
+Signal-triggered reload now reads only messages after the newest loaded compound
+cursor. Manual refresh intentionally reloads the latest authoritative page, and
+older-history pagination remains independently descending.
 
 ## Offline behavior
 
@@ -361,7 +387,6 @@ evidence.
 
 ### Phase 2 — Scale and operational hardening
 
-- Cursor/delta conversation reads and older-history pagination.
 - A dedicated small thread projection only if measured need justifies it.
 - Per-staff explicit read position only if the product requires true unread
   counts; retain **Needs reply** as a separate operational fact.

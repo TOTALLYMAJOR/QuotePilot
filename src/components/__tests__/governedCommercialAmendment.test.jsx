@@ -88,16 +88,16 @@ describe("Governed Commercial Amendment Experience", () => {
     ];
     for (const [source, endMarker] of variants) {
       const handler = sourceSlice(source, "const handlePreviewChangeImpact", endMarker);
-      expect(occurrenceCount(handler, "eventIngredientProjection.previewCurrent({")).toBe(1);
+      expect(occurrenceCount(handler, "eventIngredientProjection.previewCurrent({")).toBe(0);
       expect(occurrenceCount(handler, "simulateCommercialQuoteChange({")).toBe(1);
       expect(handler).toContain("candidateForm = form");
       expect(handler).toContain("const formKey = JSON.stringify(candidateForm)");
       expect(handler).toContain("proposedForm: candidateForm");
       expect(handler).toContain("formKey === currentChangeImpactFormKey");
       expect(handler).toContain("form: candidateForm");
-      expect(handler).toContain("selections: eventIngredientPreviewInput.selections");
-      expect(handler).toContain("void eventIngredientProjection.previewCurrent({");
-      expect(handler).toContain("}).catch((error) => {");
+      expect(handler).toContain("eventIngredientOutputs: eventIngredientPreviewInput.selections.map");
+      expect(handler).toContain("inventoryObservation: result.inventoryObservation");
+      expect(handler).not.toContain("void eventIngredientProjection.previewCurrent({");
       expect(handler).toContain("const pending = pendingLivingTwinConsequenceRequest");
       expect(handler).toContain("pending.baseQuoteRevisionId !== livingTwinBaseQuoteRevisionId");
       expect(handler).toContain("pending.scopeKey !== livingTwinScopeKey");
@@ -215,15 +215,15 @@ describe("Governed Commercial Amendment Experience", () => {
     const twin = container.querySelector('[data-capability-id="commercial-scenario-workbench"]');
     expect(twin).not.toBeNull();
     expect(twin.getAttribute("data-authority")).toBe("session-only-non-authoritative");
-    expect(twin.textContent).toContain("Scenario Workbench");
-    expect(twin.textContent).toContain("Current125 guests · saved");
-    expect(twin.textContent).toContain("Working175+50 guests");
+    expect(twin.textContent).toContain("Commercial reviewHenderson DinnerScenario A · 175 guests");
+    expect(twin.textContent).toContain("Current commitment · 125 guests");
+    expect(twin.textContent).toContain("Current vs Scenario AWhat changes+50 guests");
     expect(twin.textContent).not.toContain("Chicken Alfredo");
     expect(twin.textContent).toContain("People");
     expect(twin.textContent).toContain("Supply");
-    expect(twin.textContent).toContain("Overall");
-    expect(twin.textContent).toContain("Not verified");
-    expect(twin.textContent).toMatch(/Nothing here has changed Commercial, Staffing, Inventory, or BEO authority/i);
+    expect(twin.textContent).toContain("Guest-count flexibility");
+    expect(twin.textContent).toContain("Unavailable");
+    expect(twin.textContent).toMatch(/Pricing, staffing, inventory, and the BEO are unchanged/i);
     expect(twin.textContent).not.toMatch(/staffing covered|schedule clear|BEO regenerated/i);
 
     act(() => vi.runAllTimers());

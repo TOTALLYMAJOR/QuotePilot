@@ -1,4 +1,9 @@
 import { describe, expect, test } from "vitest";
+import { readFileSync } from "node:fs";
+import { buildMarginPresentation } from "../../components/marginPresentation";
+import { buildRecordedCostMarginComparison } from "../decisionPacketMarginComparison";
+import { calculateQuote } from "../quoteCalculator";
+import { buildCommercialConsequenceComparison, resolveDecisionPacketGate } from "../quoteConfidenceDecisionPacket";
 import {
   buildLivingCommercialTwinInventoryFingerprint,
   buildLivingCommercialTwinProjection,
@@ -8,6 +13,59 @@ import {
 } from "../livingCommercialTwinProjection";
 
 const SCENARIO_ID = "scenario-175";
+
+// Evaluate the bounded production memo wiring with real evidence functions.
+// This covers the Legacy gate and helper-to-projection integration without mounting unrelated routes.
+function shellMarginEvidence(shell, context) {
+  const source = readFileSync(new URL(`../../${shell}.jsx`, import.meta.url), "utf8");
+  const start = source.indexOf(`  const ${shell === "LegacyApp" ? "proposedMargin" : "livingTwinMarginComparison"} = useMemo`);
+  const end = source.indexOf("  const inventoryRecipeExtension", start);
+  expect(start).toBeGreaterThan(0);
+  expect(end).toBeGreaterThan(start);
+  expect(source).toContain("marginComparison: livingTwinMarginComparison,");
+  const bindings = {
+    useMemo: (compute) => compute(),
+    buildMarginPresentation,
+    buildRecordedCostMarginComparison,
+    DECISION_PACKET_BUILD_ENABLED: true,
+    ...context
+  };
+  return new Function(...Object.keys(bindings), `${source.slice(start, end)}; return livingTwinMarginComparison;`)(...Object.values(bindings));
+}
+
+describe("Legacy decision comparison recorded-cost parity", () => {
+  const baseForm = { pkg: "classic", guests: 100, hours: 1, servers: 0, chefs: 0, bartenders: 0, addons: [], rentals: [], menuItems: [] };
+  const form = { ...baseForm, guests: 125 };
+  const effectiveSettings = { catalogRevision: 3, staffingLaborEnabled: false, menuSections: [] };
+  const catalog = { packages: [{ id: "classic", name: "Classic", ppp: 20, costPpp: 8 }], addons: [], rentals: [], settings: effectiveSettings };
+  const editingQuote = { baseForm, pricingCatalogAuthority: { catalogRevision: 3 } };
+
+  test.each(["complete", "missing cost", "stale catalog", "missing catalog"])("enabled Legacy evidence matches App for %s and feeds the comparison row", (condition) => {
+    const currentCatalog = condition === "missing cost" ? { ...catalog, packages: [{ id: "classic", ppp: 20 }] } : catalog;
+    const currentEditingQuote = condition === "stale catalog" ? { ...editingQuote, pricingCatalogAuthority: { catalogRevision: 2 } }
+      : condition === "missing catalog" ? { ...editingQuote, pricingCatalogAuthority: {} } : editingQuote;
+    const totals = calculateQuote(form, currentCatalog, effectiveSettings);
+    const context = { isEditingQuote: true, editingQuote: currentEditingQuote, catalog: currentCatalog, effectiveSettings, form, totals, decisionPacketEnabled: resolveDecisionPacketGate({ buildValue: "true", tenantValue: true }) };
+    const legacy = shellMarginEvidence("LegacyApp", context);
+    const app = shellMarginEvidence("App", { ...context, proposedMargin: buildMarginPresentation({ form, totals, catalog: currentCatalog, settings: effectiveSettings }) });
+    expect(legacy).toEqual(app);
+    const projection = buildLivingCommercialTwinProjection(readyInput({ marginComparison: legacy }));
+    const row = buildCommercialConsequenceComparison(projection).rows.find((entry) => entry.id === "margin");
+    expect(row.evidenceState).toBe(condition === "complete" ? "available" : condition === "stale catalog" ? "stale" : "missing");
+    if (condition === "complete") {
+      expect(legacy.before).toBeCloseTo(0.6);
+      expect(legacy.proposedAfter).toBeCloseTo(0.6);
+      expect(row.current).toContain("60");
+      expect(row.proposed).toContain("60");
+    }
+  });
+
+  test("keeps Legacy recorded-cost comparison inactive while either decision gate is disabled", () => {
+    for (const gates of [{ buildValue: "false", tenantValue: true }, { buildValue: "true", tenantValue: false }]) {
+      expect(shellMarginEvidence("LegacyApp", { isEditingQuote: true, editingQuote, catalog, effectiveSettings, form, totals: calculateQuote(form, catalog, effectiveSettings), decisionPacketEnabled: resolveDecisionPacketGate(gates) })).toBeNull();
+    }
+  });
+});
 const BEFORE_REQUIREMENT_DIGEST = "a".repeat(64);
 const BEFORE_PROJECTION_DIGEST = "b".repeat(64);
 const PROPOSED_REQUIREMENT_DIGEST = "c".repeat(64);
@@ -296,6 +354,36 @@ function readyInput(overrides = {}) {
 }
 
 describe("buildLivingCommercialTwinProjection", () => {
+  test("carries only explicit recorded-cost margin comparison evidence", () => {
+    const available = buildLivingCommercialTwinProjection(readyInput({
+      marginComparison: {
+        evidenceState: "available",
+        before: 0.31,
+        proposedAfter: 0.27
+      }
+    }));
+    expect(available.consequences.margin).toMatchObject({
+      evidenceState: "available",
+      before: 0.31,
+      proposedAfter: 0.27
+    });
+    expect(available.consequences.margin.delta).toBeCloseTo(-0.04, 8);
+
+    const stale = buildLivingCommercialTwinProjection(readyInput({
+      marginComparison: {
+        evidenceState: "stale",
+        before: 0.31,
+        proposedAfter: 0.27
+      }
+    }));
+    expect(stale.consequences.margin).toMatchObject({
+      evidenceState: "stale",
+      before: null,
+      proposedAfter: null,
+      delta: null
+    });
+  });
+
   test("keeps guest-only edits inside one scenario context and invalidates other draft inputs", () => {
     const base = {
       form: {
@@ -406,6 +494,28 @@ describe("buildLivingCommercialTwinProjection", () => {
           shortages: []
         }
       }
+    });
+  });
+
+  test("does not carry saved-window assignment coverage into changed proposed timing", () => {
+    const projection = buildLivingCommercialTwinProjection(readyInput({
+      ...coveredStaffingAt175(),
+      proposedStaffingEventWindowState: "changed_unchecked"
+    }));
+
+    expect(projection.fulfillment.people).toMatchObject({
+      evidenceState: "available",
+      completeness: "partial",
+      current: { coverageState: "coverage_confirmed", totalGap: 0 },
+      proposed: {
+        coverageState: "unknown",
+        totalGap: null,
+        assignmentBasis: "proposed_event_window_not_evaluated"
+      }
+    });
+    expect(projection.decisionAnswer).toMatchObject({
+      state: "unverifiable",
+      staffing: { effect: "unverified", assignmentGap: null }
     });
   });
 

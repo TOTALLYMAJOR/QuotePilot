@@ -1,6 +1,6 @@
 # QuotePilot Development Tasks
 
-Last updated: 2026-09-10 15:09:08 CDT
+Last updated: 2026-09-16 19:04:45 CDT
 
 This file contains open work only. Completed delivery belongs in
 [`CHANGELOG.md`](CHANGELOG.md), current evidence in
@@ -9,9 +9,6 @@ This file contains open work only. Completed delivery belongs in
 
 ## P0 — Reconcile the current release surface
 
-- [ ] Build, qualify, and separately authorize promotion of one exact frontend
-  candidate compatible with the deployed `v0.18.1` Firebase backend. Record the
-  source SHA, exact CI, immutable deployment, public route probes, and rollback.
 - [ ] Run an authenticated `mm05366-sandbox` administrator acceptance journey
   across Living Opportunity, Quote administration, Operations, Inventory,
   Library pricing review, and exact readback. Include sales/non-admin and
@@ -47,9 +44,45 @@ This file contains open work only. Completed delivery belongs in
   separate evidence.
 - [ ] Keep buyer access closed until restricted test credentials, webhook
   checks, Turnstile checks, and a bounded hosted acceptance plan pass.
+- [ ] Qualify Guided Inquiry without auto-publication: curate and preview one
+  customer-safe Showcase, publish one reviewed slug, then prove a fresh browser
+  challenge plus wrong-host/action and replay rejection, durable submission and
+  recovery, notification isolation, authenticated conversion, and one actual
+  scheduled retention deletion. Preserve source/local, CI, hosted, provider,
+  production-data, accessibility, human, and commercial-outcome receipts
+  separately.
+- [ ] Add emulator acceptance for anonymous direct-Firestore denial, tenant
+  isolation, exact-slug lookup, IP/tenant quotas, replay/recovery, stale
+  publication rejection, concurrent duplicate conversion, and atomic
+  quote/customer/portal/version/Converted-receipt creation before production
+  tenant activation.
 
 ## P1 — Operational coherence
 
+- [ ] Replace the phone-width Inventory evidence table with a legible
+  responsive record layout or clearly signposted contained scroll treatment.
+  Preserve ingredient, physical on-hand, committed, available-to-allocate,
+  cost-evidence, location, and purchase-pack axes without clipped headers or
+  collapsing distinct stock and cost evidence.
+- [ ] Run the Delivery Planning evidence baseline with at least five owner-
+  operators and two recent staffed-buffet events each; freeze the reviewable-
+  quote-plus-proposal milestone, 30% median-time target, and material-
+  correction definition before pilot acceptance.
+- [ ] Use **Library → Delivery** to enter and bind one real operator-reviewed
+  tenant `delivery-blueprint-v1`, bounded `quantity-policy-v1` set, and exact
+  purchasing-pack revisions; capture the connected catalog-save and pricing-
+  confirmation receipt, then connect exact saved-revision Staffing and
+  Inventory projections without inferring missing stock, role ratios, or
+  production quantities. The source/local activation editor is implemented;
+  no tenant declaration or connected activation receipt exists yet.
+- [ ] Connect `delivery-handoff-v1` to role-safe Staffing, Production, and
+  Purchasing workflows only after each target rereads current authority,
+  rejects stale inputs, obtains its own approval, issues its own receipt, and
+  returns current/stale/rejected/pending evidence without losing the quote's
+  session proposal.
+- [ ] Specify separate Staffing work-block authority, Inventory prepared-batch
+  semantics, purchasing-provider authority, and approved-Blueprint alternative
+  comparison before activating those later Delivery Planning phases.
 - [ ] Verify Commercial Change and Event Spine tenant activation only through
   their protected coupled workflow; Inventory or Staffing activation must not
   imply either mutation authority.
@@ -64,6 +97,101 @@ This file contains open work only. Completed delivery belongs in
 
 ## P1 — Product and design acceptance
 
+Related execution map: [GitHub issue #149](https://github.com/TOTALLYMAJOR/quoteflow/issues/149)
+ties the external solution-design review takeaways to the existing tasks below;
+it does not create a parallel roadmap or product authority.
+
+- [ ] Run a route-by-route **9.5 quality program** without manufacturing a
+  score from source inspection alone. Grade task clarity/decision compression,
+  speed and interruption recovery, truthful state/provenance/recovery,
+  responsive accessibility, QuotePilot-specific hierarchy and language,
+  performance/feedback, and rendered human evidence. Require at least 95/100,
+  no category below 9/10, no unresolved safety defect, and representative
+  admin/sales, 390/768/1440, keyboard, 200% zoom, forced-colors, and human-
+  comprehension evidence before calling a page 9.5. Improve in this audited
+  order: Quote creation/editing, first-run onboarding, Inventory, Import Studio,
+  People/event Staffing, then Events/Operations integration. Re-score Now,
+  Opportunities, Clients, Library, and Messaging only after their current
+  uncommitted work is reconciled; preserve the strongest existing surfaces
+  instead of restyling them for score theater.
+- [ ] Validate the proposed Living Event Plan, Inventory quick-entry, menu-
+  costing, and event Staffing direction against direct caterer evidence before
+  treating the concepts as solved pain. Observe representative owners,
+  salespeople, kitchen leads, and staffing coordinators doing real quote and
+  event-planning work; rank problems by frequency, consequence, workaround,
+  and willingness to change; then connect, revise, or reject each proposed
+  workflow against that evidence. In the same sessions, test whether small
+  owner-operated caterers recognize QuotePilot's core promise as a faster path
+  from inquiry to a trustworthy proposal with a controlled operational handoff;
+  preserve their own language, current workaround, and willingness to change or
+  pay. Do not broaden into a generic service-business platform without evidence
+  that the shared need outweighs the catering-specific advantage. Keep interview
+  preference, observed behavior, product usage, and commercial outcome as
+  separate proof classes.
+- [ ] Create and execute a quote-acceleration plan. Measure the current path
+  through two separate baselines: **cold-start activation** from realistic
+  spreadsheet, document, or inquiry material through reviewed setup and a first
+  customer-ready quote; and **repeat quoting** from a new inquiry in a configured
+  tenant to an authoritative sendable quote. When Delivery Planning applies,
+  measure quote-plus-reviewable-Delivery-Proposal time separately. Define the
+  start and end events and record corrections, recovery, and customer-facing
+  accuracy alongside elapsed time so speed cannot be bought by skipping gates.
+  Identify the highest-cost waits, repeated entry, navigation, and correction
+  loops, then test the smallest improvements through reusable Offers/templates,
+  staged imports, contextual defaults, progressive disclosure, and faster
+  pricing feedback. Set the speed target only after the baselines are recorded;
+  treat a three-minute quote as a hypothesis rather than an adopted claim. Prove
+  improvement without weakening exact pricing, imported/defaulted provenance,
+  revision history, approval gates, responsive accessibility, or customer-facing
+  accuracy.
+- [ ] Converge the caterer operating experience through the existing Now,
+  Opportunity, Library, Workflow, and Operations surfaces rather than adding
+  more primary modules. Optimize for an owner-operator who may perform sales,
+  scheduling, Inventory, and coordination work in one day: organize the
+  experience around the current job, event context, and next action without
+  merging authorization roles or business authorities. Now must distinguish
+  **Act now**, **Waiting on
+  someone**, and **Coming up**; group multiple downstream effects under their
+  one underlying decision; preserve full Calendar/work-list access; ask for
+  information only when its named transition needs it; support honest Unknown,
+  Not applicable, and Awaiting client states; offer guided and batch modes over
+  the same authority; use outcome-named actions and receipts; preserve mobile
+  drafts/synchronization/resume; and retain revision-labeled printable outputs.
+  The first real event should create selective reusable setup without turning
+  one-off details into tenant defaults. Validate each slice against observed
+  caterer work and its stated measure before promoting the next hypothesis.
+- [ ] Add contextual Notes as typed, audience-safe event evidence instead of
+  one unscoped text field. Distinguish internal working notes, customer-visible
+  proposal language, venue/load-out facts, and published staff instructions;
+  bind each persisted note to actor, time, tenant, event and applicable
+  revision, preserve draft versus published state, and make changed
+  instructions recoverable and acknowledgeable without exposing private notes
+  in customer or staff artifacts.
+- [ ] After each menu selection or quantity change, show the exact current
+  **supportable portions remaining** only when the saved menu-output quantity,
+  recipe revision, ingredient conversions, physical stock, active allocations,
+  and projection freshness support that conclusion. Show the constraining
+  ingredient and first unsupported boundary separately; otherwise say why the
+  amount is unavailable or stale. This is planning evidence, not finished-menu
+  stock, automatic procurement, permission to overbook, or a commercial save.
+- [ ] Raise the customer proposal PDF to the same polished standard as the
+  customer decision experience: tenant brand and logo, stronger event/menu
+  narrative, clear pricing and deposit hierarchy, disciplined pagination,
+  readable typography, terms and next action, and quiet quote/revision/
+  generation provenance. Preserve exact saved proposal and pricing inputs,
+  exclude staff-only cost/margin/private notes, label draft or snapshot state,
+  and qualify print, download, portal-link, 390/768/1440 preview, accessibility,
+  and human-comprehension behavior with representative short and long quotes.
+- [ ] Complete the first-quote activation continuation: when Library sends an
+  administrator to Import Studio for Offers and menu, orient the route to menu
+  import, provide a downloadable canonical CSV template, and measure activation
+  from the operator's real source material rather than an already configured
+  catalog. Preserve imported provenance, interruption-safe resume, and recovery
+  through staged review, then return the confirmed batch to the exact Menu
+  Builder and cost-gap review. Keep imported, saved, published, customer price,
+  recorded item cost, recipe/menu-cost evidence, and physical Inventory readiness
+  as distinct states; require focused tests plus 390/768/1440 and human-
+  comprehension acceptance.
 - [ ] Run the exact current candidate at 390, 768, and 1440 pixels for admin and
   sales roles, then record overflow, focus, reduced-motion, forced-colors,
   assistive-technology, and human comprehension evidence separately.
@@ -88,8 +216,15 @@ This file contains open work only. Completed delivery belongs in
 - [ ] Run tenant-scoped dry runs for portal projection and legacy customer
   identity binding. Review exact conflicts and counts before any separately
   authorized apply.
-- [ ] Keep model-assisted intake dormant until provider choice, secret binding,
-  privacy review, hosted denial cases, and deterministic fallback are accepted.
+- [ ] Activate bounded model-assisted intake and workflow help after provider
+  choice, secret binding, privacy review, cost/timeout limits, hosted role and
+  denial cases, and deterministic fallback are accepted. Use AI inside existing
+  work to prepare drafts, summarize changes, identify unanswered questions,
+  suggest relevant prior events, and draft communications; require structured
+  per-fact review before adoption. Keep typed/manual operation available and
+  keep permissions, pricing, commitments, approvals, allocation, assignment,
+  and publication outside free-form model judgment, with an independently
+  reversible runtime kill switch.
 
 ## P1 — Release, performance, and recovery infrastructure
 

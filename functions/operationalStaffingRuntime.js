@@ -1,10 +1,13 @@
 "use strict";
 
+const { createHash } = require("node:crypto");
+
 const {
   MAX_ASSIGNMENTS,
   MAX_EXISTING_ASSIGNMENTS,
   MAX_SCHEDULE_FENCES,
   OPERATIONAL_STAFFING_AUTHORITY_VERSION,
+  OPERATIONAL_STAFFING_ROLES,
   buildOperationalStaffingScheduleFenceId,
   projectOperationalStaffProfile,
   projectOperationalStaffingSnapshot
@@ -282,6 +285,146 @@ function deriveCanonicalOperationalStaffingEvidence({
   });
 }
 
+function projectedCoverage(requirementsByRole, assignmentCountsByRole = null, reasonCode = "") {
+  const byRole = {};
+  let totalRequired = 0;
+  let totalOperatorConfirmedCount = assignmentCountsByRole ? 0 : null;
+  let totalGap = assignmentCountsByRole ? 0 : null;
+  OPERATIONAL_STAFFING_ROLES.forEach((role) => {
+    const requiredCount = boundedRoleCount(requirementsByRole[role], role);
+    const operatorConfirmedCount = assignmentCountsByRole
+      ? boundedRoleCount(assignmentCountsByRole[role], role)
+      : null;
+    const gap = operatorConfirmedCount === null
+      ? null
+      : Math.max(0, requiredCount - operatorConfirmedCount);
+    totalRequired += requiredCount;
+    if (operatorConfirmedCount !== null) {
+      totalOperatorConfirmedCount += operatorConfirmedCount;
+      totalGap += gap;
+    }
+    byRole[role] = Object.freeze({ requiredCount, operatorConfirmedCount, gap });
+  });
+  const state = totalGap === null
+    ? "unverified"
+    : totalRequired === 0
+      ? "not_required"
+      : totalGap === 0
+        ? "coverage_confirmed"
+        : "attention";
+  return Object.freeze({
+    state,
+    byRole: Object.freeze(byRole),
+    totalRequired,
+    totalOperatorConfirmedCount,
+    totalGap,
+    reasonCode: text(reasonCode) || (totalGap === null
+      ? "staffing_coverage_not_evaluated"
+      : "staffing_coverage_compared")
+  });
+}
+
+function buildProjectedOperationalStaffingObservation({
+  organizationId,
+  quoteId,
+  expectedBaseQuoteRevisionId,
+  projectedVersion,
+  currentPlan = null,
+  settings
+} = {}) {
+  const scopedOrganizationId = exactId(organizationId, "organizationId");
+  const scopedQuoteId = exactId(quoteId, "quoteId");
+  const baseQuoteRevisionId = exactId(
+    expectedBaseQuoteRevisionId,
+    "expectedBaseQuoteRevisionId"
+  );
+  const proposedQuoteRevisionId = exactId(
+    projectedVersion?.versionId,
+    "Projected quote versionId"
+  );
+  const proposed = deriveCanonicalOperationalStaffingEvidence({
+    organizationId: scopedOrganizationId,
+    quoteId: scopedQuoteId,
+    activeQuoteRevisionId: proposedQuoteRevisionId,
+    version: projectedVersion,
+    settings
+  });
+  const noAssignments = Object.fromEntries(
+    OPERATIONAL_STAFFING_ROLES.map((role) => [role, 0])
+  );
+  let currentPlanState = "absent";
+  let windowState = "not_applicable";
+  let coverage = projectedCoverage(
+    proposed.canonicalRequirements,
+    noAssignments,
+    "staffing_plan_not_recorded"
+  );
+
+  if (currentPlan !== null && typeof currentPlan !== "undefined") {
+    const snapshot = projectOperationalStaffingSnapshot(currentPlan);
+    if (
+      snapshot.organizationId !== scopedOrganizationId
+      || snapshot.quoteId !== scopedQuoteId
+    ) {
+      fail("permission-denied", "The staffing plan is outside the projected quote scope.");
+    }
+    currentPlanState = snapshot.quoteRevisionId === baseQuoteRevisionId ? "current" : "stale";
+    windowState = snapshot.eventWindow.startAtISO === proposed.canonicalEventWindow.startAtISO
+      && snapshot.eventWindow.endAtISO === proposed.canonicalEventWindow.endAtISO
+      ? "same"
+      : "changed";
+    if (currentPlanState === "stale") {
+      coverage = projectedCoverage(
+        proposed.canonicalRequirements,
+        null,
+        "staffing_plan_quote_revision_stale"
+      );
+    } else if (windowState === "changed") {
+      coverage = projectedCoverage(
+        proposed.canonicalRequirements,
+        null,
+        "schedule_revalidation_required"
+      );
+    } else {
+      const counts = Object.fromEntries(
+        OPERATIONAL_STAFFING_ROLES.map((role) => [role, 0])
+      );
+      snapshot.assignments.forEach((assignment) => {
+        counts[assignment.role] += 1;
+      });
+      coverage = projectedCoverage(
+        proposed.canonicalRequirements,
+        counts,
+        "current_assignments_compared_with_proposed_requirements"
+      );
+    }
+  }
+
+  const preview = Object.freeze({
+    proposed: Object.freeze({
+      quoteRevisionId: proposedQuoteRevisionId,
+      eventWindow: proposed.canonicalEventWindow,
+      requirementsByRole: proposed.canonicalRequirements,
+      totalRequired: Object.values(proposed.canonicalRequirements)
+        .reduce((sum, count) => sum + count, 0)
+    }),
+    currentPlanState,
+    comparison: Object.freeze({ windowState, coverage }),
+    boundary: "Read-only aggregate Staffing evidence only. No person, assignment, invitation, availability response, schedule fence, payroll, pricing, or quote state was written or disclosed."
+  });
+  const inputDigest = createHash("sha256").update(JSON.stringify({
+    schemaVersion: "commercial-change-staffing-observation-v1",
+    organizationId: scopedOrganizationId,
+    quoteId: scopedQuoteId,
+    baseQuoteRevisionId,
+    proposedQuoteRevisionId,
+    proposed: preview.proposed,
+    currentPlanState,
+    comparison: preview.comparison
+  })).digest("hex");
+  return Object.freeze({ inputDigest, preview });
+}
+
 function utcDatesForWindow(eventWindow = {}) {
   const startAtISO = exactISO(eventWindow.startAtISO, "eventWindow.startAtISO");
   const endAtISO = exactISO(eventWindow.endAtISO, "eventWindow.endAtISO");
@@ -503,6 +646,7 @@ module.exports = {
   assertOperationalStaffingAuthorityEnabled,
   authorityState,
   buildOperationalStaffingSnapshotEnvelope,
+  buildProjectedOperationalStaffingObservation,
   buildSnapshotScheduleFenceRefs,
   dedupeScheduleFenceAssignments,
   deriveCanonicalOperationalStaffingEvidence,
