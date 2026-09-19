@@ -1,6 +1,6 @@
 # Capability / Functional Map
 
-Last updated: 2026-09-16 23:25:23 CDT
+Last updated: 2026-09-18 18:28:42 CDT
 
 ## Purpose and evidence boundary
 
@@ -28,6 +28,28 @@ does not imply hosted, provider, production, human, adoption, or outcome proof.
 | `CAP-10` | Review customer history, current opportunities, conversations, evidence, and safe rebooking context. | Turn completed work into a stronger relationship without cloning obsolete commitments. | `OUT-06` | Customer 360, commercial timeline, search, and rebook foundations exist. | Missing: relationship reuse, rebook conversion, and retention outcomes are not centrally observed. |
 | `CAP-11` | See bounded commercial and interaction measures with denominators, freshness, source, and truncation. | Make management decisions without mistaking incomplete data for truth. | All | Reporting dashboard and product analytics summaries are implemented. | Implemented for the current bounded measures; broader outcome coverage is incomplete. |
 | `CAP-12` | Operate inside tenant, role, privacy, audit, release, and evidence boundaries. | Trust that business control is not gained by weakening security or provenance. | All | Strong source/CI governance and bounded production evidence exist. | Structural and release signals exist; usage and human trust outcomes remain mostly unknown. |
+
+## Functional requirement verification ledger
+
+The requirement box is checked when the current source capability and its
+authority are mapped above. Product acceptance remains open until the required
+journey, human, and outcome evidence exists; a source implementation cannot
+close those proof classes.
+
+| Requirement | Current source requirement | Product acceptance | Journey coverage | Next proof event |
+|---|---:|---:|---|---|
+| `FR-01` → `CAP-01` | [x] | [ ] | `JRN-01`, `JRN-03` | Qualify one real inquiry-to-opportunity journey with origin and recovery. |
+| `FR-02` → `CAP-02` | [x] | [ ] | `JRN-02`, `JRN-04` | Complete realistic setup, import, menu-costing, and publication acceptance. |
+| `FR-03` → `CAP-03` | [x] | [ ] | `JRN-03`, `JRN-04` | Prove first and repeat authoritative quote paths with exact readback. |
+| `FR-04` → `CAP-04` | [x] | [ ] | `JRN-05`, `JRN-06` | Separate issuance, delivery, view, decision, revision, and acceptance proof. |
+| `FR-05` → `CAP-05` | [x] | [ ] | `JRN-07` | Observe role owners completing exact-basis operational handoff. |
+| `FR-06` → `CAP-06` | [x] | [ ] | `JRN-06`–`JRN-09` | Exercise stale, contradictory, failed, and ambiguous recovery paths. |
+| `FR-07` → `CAP-07` | [x] | [ ] | `JRN-09` | Complete hosted deposit/final-balance and provider reconciliation acceptance. |
+| `FR-08` → `CAP-08` | [x] | [ ] | `JRN-09` | Run a production-shaped read-only reconciliation with operator review. |
+| `FR-09` → `CAP-09` | [x] | [ ] | `JRN-09` | Record and explicitly correct actual attendance in an accepted closeout. |
+| `FR-10` → `CAP-10` | [x] | [ ] | `JRN-10`, `JRN-11` | Prove safe relationship reuse and measure repeat engagement. |
+| `FR-11` → `CAP-11` | [x] | [ ] | All | Validate measure comprehension, freshness, denominators, and decision use. |
+| `FR-12` → `CAP-12` | [x] | [ ] | All | Complete role, tenant, privacy, accessibility, and human-trust acceptance. |
 
 ## Existing implementation cohorts
 

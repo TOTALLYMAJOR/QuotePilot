@@ -1,6 +1,6 @@
 # Release and Experiment Ledger
 
-Last updated: 2026-09-17 02:12:28 CDT
+Last updated: 2026-09-18 18:28:42 CDT
 
 ## Purpose
 
@@ -29,6 +29,7 @@ do not own.
 | `LED-003` | `v0.18.0` commercial platform and Inventory Phases 2–8; `v0.18.1` Inventory transport correction | Recorded costs, recipes, exact stock/cost evidence, and governed commercial configuration improve quote explainability and operational preparation. | `MET-08`, `MET-11`, `MET-12` | `GRD-01`–`GRD-03`, `GRD-06`, `GRD-07` | Source, CI, provider deployment, synthetic tenant population, and partial authenticated read evidence exist. Physical Inventory, real cost, human workflow, and outcome evidence remain absent. | `no_outcome_claim` |
 | `LED-004` | `v0.19.0` coordinated Inquiry/Model Assist and qualified production profile | Bounded inquiry capture can turn customer preferences into staff-reviewable opportunities without creating unsupported commitments. | Future inquiry-to-opportunity and correction measures; `MET-07` | `GRD-01`, `GRD-02`, `GRD-08`, `GRD-09` | Deployment/configuration evidence exists; no production slug, real inquiry conversion, notification outcome, human acceptance, or commercial outcome is recorded. | `no_outcome_claim` |
 | `LED-005` | Product-intelligence compliance gate and task-planner routing | Requiring a named catering actor, job, expected improvement, governed IDs, evidence need, and release record reduces product work that ships without a testable value hypothesis. | `MET-18` | `GRD-14`, `GRD-16` | Source contract and focused local tests exist. Fresh-agent evaluation at checkout `d1b1bd8c5caa67b16b23a2a9bd4e9faa7b195434` scored Dashboard `16/16` and Mechanical control `16/16`, with no rubric failures; human acceptance remains pending. CI execution, reviewer adherence, production behavior, and outcome evidence remain unproven. | `no_outcome_claim` |
+| `LED-007` | Journey and functional requirement verification ledgers | Requiring work to name affected journey stages, functional capabilities, and separate proof classes makes the next catering-value proof explicit without turning documentation completion into product success. | `MET-18` | `GRD-14`, `GRD-16` | Source mappings and evidence-qualified checklists exist. Structural validation, repeated task use, human acceptance, and outcome evidence are evaluated separately. | `no_outcome_claim` |
 | `EXP-001` | Proposed owner-operator baseline and governed workflow comparison | QuotePilot reduces time from intent to reviewable quote and operating plan by 30% without increasing material corrections. | `MET-03`, `MET-07`, `MET-12`, `MET-16` | `GRD-03`, `GRD-04`, `GRD-07`, `GRD-16` | Protocol exists in Delivery Planning; baseline collection has not occurred. | `planned` |
 | `EXP-002` | Proposed accepted-to-operational-handoff observation | Domain-specific currentness evidence exposes stale consumers early enough to reduce late operational discovery. | `MET-11`, `MET-12` | `GRD-06`, `GRD-07`, `GRD-15` | Required signal `SIG-011` is specified but not implemented. | `planned` |
 

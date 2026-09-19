@@ -1,6 +1,6 @@
 # QuotePilot Product Intelligence System
 
-Last updated: 2026-09-17 02:12:28 CDT
+Last updated: 2026-09-18 18:28:42 CDT
 
 ## Purpose
 
@@ -63,6 +63,20 @@ OUTCOME -> CAPABILITY -> METRIC -> SIGNAL -> TARGET -> JOURNEY STAGE
 
 Missing links remain `unknown` or `not_observable`; they are never silently
 treated as zero, success, or not applicable.
+
+The journey and functional requirement ledgers now make this rule operational:
+
+- [User Journey / Funnel Model](product-intelligence/USER_JOURNEY_FUNNELS.md)
+  owns `JRN-*` stage verification.
+- [Capability / Functional Map](product-intelligence/CAPABILITY_MAP.md) owns
+  `CAP-*` requirement verification.
+- `LED-007` records introduction of the ledgers without claiming that mapped
+  source, a passing structural gate, or checked documentation proves human or
+  outcome acceptance.
+
+New product work names the smallest affected `JRN-*` and `CAP-*` IDs. A box is
+checked only from evidence in its named class; reopening it is required when
+the authority or evidence becomes stale, contradictory, or invalidated.
 
 ## Enforcement
 
