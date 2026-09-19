@@ -1,6 +1,6 @@
 # Development Evidence Compiler
 
-Last updated: 2026-08-28 14:51:00 CDT
+Last updated: 2026-09-18 20:58:00 CDT
 
 ## Purpose
 The Development Evidence Compiler is the lightweight repository-local mechanism
@@ -63,6 +63,56 @@ Each record separates:
 No class implies another. A local build is not CI proof. CI is not production
 proof. Provider acceptance is not recipient acceptance. Human acceptance is not
 automated verification.
+
+
+## Visual Evidence Bundle
+
+Successful qualifying Playwright lanes retain a bounded visual-proof artifact
+instead of discarding every successful browser capture with the runner. The
+dedicated proof cohort uses synthetic repository fixtures only and currently
+covers Staff action-feedback state transitions at 390, 768, and 1440 pixels.
+Each viewport captures the state before save, the uncertain outcome, the exact
+return focus, and the resolved return state.
+
+Run the proof cohort locally with:
+
+```bash
+rm -rf output/playwright test-results .cache/playwright-evidence
+mkdir -p .cache/playwright-evidence
+PLAYWRIGHT_JSON_OUTPUT_NAME=.cache/playwright-evidence/results.json \
+VITE_CUSTOMER_CENTERED_WORKSPACE_ENABLED=true \
+VITE_AMBIENT_UI_ENABLED=true \
+VITE_PILOT_NOW_ENABLED=true \
+npm run test:e2e:visual-evidence -- --reporter=line,json
+```
+
+Compile retained captures with:
+
+```bash
+npm run evidence:visual -- \
+  --require-screenshots \
+  --playwright-json .cache/playwright-evidence/results.json
+```
+
+In `lane:playwright-smoke`, CI clears the proof directories, reruns the
+bounded proof cohort, writes a Playwright JSON report, and uploads
+`quotepilot-visual-evidence-<GITHUB_SHA>` for 90 days. The bundle contains
+the image bytes, the Playwright report, a manifest, and a SHA-256 digest of that
+manifest. Every image receives its own SHA-256 digest and source path.
+
+The compiler verifies that the requested evidence SHA matches the actual Git
+checkout SHA when both are available. Pull-request head/base SHAs are recorded
+separately from the executed checkout SHA so a merge-candidate run is not
+misrepresented as a head-only render.
+
+Filename/path markers classify captures as `before`, `after`, `current`,
+or generic `proof`. Classification does not invent a baseline: a bundle
+contains before/after evidence only when those bytes were actually captured in
+that run.
+
+A successful visual bundle is **CI evidence only**. Synthetic screenshots do
+not establish hosted behavior, provider acceptance, production data or writes,
+human visual acceptance, or product outcomes.
 
 ## Runtime Diagnostics Boundary
 Session diagnostics are the app-local runtime observability path. They record

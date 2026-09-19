@@ -285,6 +285,39 @@ jobs:
           VITE_PILOT_MARGINS_ENABLED: "true"
           VITE_PILOT_DECISION_ROOM_ENABLED: "true"
 
+      - name: Capture exact-SHA visual evidence cohort
+        run: |
+          rm -rf output/playwright test-results .cache/playwright-evidence
+          mkdir -p .cache/playwright-evidence
+          npm run test:e2e:visual-evidence -- --reporter=line,json
+        env:
+          PLAYWRIGHT_JSON_OUTPUT_NAME: .cache/playwright-evidence/results.json
+          VITE_CUSTOMER_CENTERED_WORKSPACE_ENABLED: "true"
+          VITE_AMBIENT_UI_ENABLED: "true"
+          VITE_PILOT_NOW_ENABLED: "true"
+
+      - name: Build exact-SHA visual evidence bundle
+        run: |
+          npm run evidence:visual -- \
+            --require-screenshots \
+            --playwright-json .cache/playwright-evidence/results.json \
+            --validation "Playwright smoke::npm run test:e2e::passed" \
+            --validation "Ambient release gate::npm run test:e2e:ambient-release-gate::passed" \
+            --validation "Production pilot matrix::customer-centered-workspace production pilot matrix::passed" \
+            --validation "Visual proof cohort::npm run test:e2e:visual-evidence::passed"
+        env:
+          VISUAL_EVIDENCE_SHA: ${{ github.sha }}
+          VISUAL_EVIDENCE_PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || '' }}
+          VISUAL_EVIDENCE_PR_BASE_SHA: ${{ github.event.pull_request.base.sha || '' }}
+
+      - name: Upload exact-SHA visual evidence bundle
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: quotepilot-visual-evidence-${{ github.sha }}
+          path: .cache/visual-evidence/
+          retention-days: 90
+          if-no-files-found: error
+
       - name: Upload Playwright report (failure)
         if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
