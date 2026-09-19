@@ -1,8 +1,18 @@
 # Changelog
 
-Last updated: 2026-09-17 14:01:00 CDT
+Last updated: 2026-09-18 20:58:00 CDT
 
 ## Unreleased — Quote-to-Confidence local candidate
+
+- Retain successful browser proof as an exact-checkout-SHA GitHub Actions
+  artifact instead of leaving it only in ignored runner directories. The new
+  bounded synthetic proof cohort captures Calm Four, Staff action-feedback
+  before/after states, and Steward responsive states; the compiler hashes every
+  image, retains Playwright JSON stats, records PR head/base separately from the
+  executed checkout SHA, hashes the manifest, and fails closed on an empty or
+  SHA-mismatched bundle. The artifact is retained for 90 days and remains CI
+  evidence only, not hosted, provider, production, human-acceptance, or outcome
+  proof.
 
 - Keep the six default-off Quote-to-Confidence capabilities out of disabled
   bundles with compile-time gates and lazy presentation boundaries. Exact
