@@ -287,7 +287,7 @@ jobs:
 
       - name: Capture exact-SHA visual evidence cohort
         run: |
-          rm -rf output/playwright .cache/playwright-evidence
+          rm -rf output/playwright test-results .cache/playwright-evidence
           mkdir -p .cache/playwright-evidence
           npm run test:e2e:visual-evidence -- --reporter=line,json
         env:
