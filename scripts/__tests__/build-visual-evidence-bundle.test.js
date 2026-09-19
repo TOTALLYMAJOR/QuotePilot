@@ -85,4 +85,17 @@ describe("visual evidence bundle", () => {
       env: { GITHUB_SHA: "abc123" }
     })).toThrow(/No screenshot evidence found/);
   });
+
+
+  test("rejects an evidence SHA that disagrees with the checked-out commit", () => {
+    const root = makeFixture();
+    initializeGit(root);
+    expect(() => buildVisualEvidenceBundle({
+      repositoryRoot: root,
+      env: {
+        GITHUB_ACTIONS: "true",
+        GITHUB_SHA: "0000000000000000000000000000000000000000"
+      }
+    })).toThrow(/does not match checkout SHA/);
+  });
 });
