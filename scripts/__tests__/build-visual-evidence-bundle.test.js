@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, test } from "vitest";
 import crypto from "node:crypto";
+import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -26,9 +27,20 @@ function write(root, relativePath, content) {
   return target;
 }
 
+function initializeGit(root) {
+  execFileSync("git", ["init"], { cwd: root, stdio: "ignore" });
+  execFileSync("git", ["config", "user.email", "visual-evidence@example.test"], { cwd: root });
+  execFileSync("git", ["config", "user.name", "Visual Evidence Test"], { cwd: root });
+  write(root, "README.md", "fixture\n");
+  execFileSync("git", ["add", "README.md"], { cwd: root });
+  execFileSync("git", ["commit", "-m", "fixture"], { cwd: root, stdio: "ignore" });
+  return execFileSync("git", ["rev-parse", "HEAD"], { cwd: root, encoding: "utf8" }).trim();
+}
+
 describe("visual evidence bundle", () => {
   test("retains screenshot bytes, hashes, stages, and Playwright stats", () => {
     const root = makeFixture();
+    const checkoutSha = initializeGit(root);
     const beforeBody = Buffer.from("before-image");
     const currentBody = Buffer.from("current-image");
     write(root, "output/playwright/action-feedback/390-before-save.png", beforeBody);
@@ -44,7 +56,7 @@ describe("visual evidence bundle", () => {
       validations: ["Visual proof cohort::npm run test:e2e:visual-evidence::passed"],
       env: {
         GITHUB_ACTIONS: "true",
-        GITHUB_SHA: "abc123",
+        GITHUB_SHA: checkoutSha,
         GITHUB_REPOSITORY: "TOTALLYMAJOR/QuotePilot",
         GITHUB_RUN_ID: "42",
         GITHUB_RUN_ATTEMPT: "1"
@@ -53,7 +65,8 @@ describe("visual evidence bundle", () => {
     });
 
     expect(result.manifest.evidenceClass).toBe("ci");
-    expect(result.manifest.evidenceSha).toBe("abc123");
+    expect(result.manifest.evidenceSha).toBe(checkoutSha);
+    expect(result.manifest.checkoutSha).toBe(checkoutSha);
     expect(result.manifest.screenshotCount).toBe(2);
     expect(result.manifest.playwright.stats.expected).toBe(7);
     expect(result.manifest.captures.map(({ stage }) => stage)).toEqual(["before", "current"]);
