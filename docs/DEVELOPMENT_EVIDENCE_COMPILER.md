@@ -76,12 +76,15 @@ and the Steward workbench.
 Run the proof cohort locally with:
 
 ```bash
+rm -rf output/playwright test-results .cache/playwright-evidence
+mkdir -p .cache/playwright-evidence
+PLAYWRIGHT_JSON_OUTPUT_NAME=.cache/playwright-evidence/results.json \
 VITE_CUSTOMER_CENTERED_WORKSPACE_ENABLED=true \
 VITE_AMBIENT_UI_ENABLED=true \
 VITE_PILOT_NOW_ENABLED=true \
 CAPTURE_V16_BROWSER_PROOF=true \
 CAPTURE_STEWARD_BROWSER_PROOF=true \
-npm run test:e2e:visual-evidence
+npm run test:e2e:visual-evidence -- --reporter=line,json
 ```
 
 Compile retained captures with:
