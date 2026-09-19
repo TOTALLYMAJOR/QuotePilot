@@ -56,7 +56,12 @@ function runCheck(root, { changedFiles = [], env = {}, staticOnly = true } = {})
   return spawnSync(process.execPath, args, {
     cwd: REPOSITORY_ROOT,
     encoding: "utf8",
-    env: { ...process.env, ...env }
+    env: {
+      ...process.env,
+      PRODUCT_INTELLIGENCE_PR_ENFORCE: "false",
+      PRODUCT_INTELLIGENCE_PR_BODY: "",
+      ...env
+    }
   });
 }
 
