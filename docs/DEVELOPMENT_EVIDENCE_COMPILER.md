@@ -70,8 +70,9 @@ automated verification.
 Successful qualifying Playwright lanes retain a bounded visual-proof artifact
 instead of discarding every successful browser capture with the runner. The
 dedicated proof cohort uses synthetic repository fixtures only and currently
-covers the Calm Four release contract, Staff action-feedback state transitions,
-and the Steward workbench.
+covers Staff action-feedback state transitions at 390, 768, and 1440 pixels.
+Each viewport captures the state before save, the uncertain outcome, the exact
+return focus, and the resolved return state.
 
 Run the proof cohort locally with:
 
@@ -82,8 +83,6 @@ PLAYWRIGHT_JSON_OUTPUT_NAME=.cache/playwright-evidence/results.json \
 VITE_CUSTOMER_CENTERED_WORKSPACE_ENABLED=true \
 VITE_AMBIENT_UI_ENABLED=true \
 VITE_PILOT_NOW_ENABLED=true \
-CAPTURE_V16_BROWSER_PROOF=true \
-CAPTURE_STEWARD_BROWSER_PROOF=true \
 npm run test:e2e:visual-evidence -- --reporter=line,json
 ```
 
