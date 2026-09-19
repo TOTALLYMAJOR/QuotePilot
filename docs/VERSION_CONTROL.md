@@ -1,6 +1,6 @@
 # Version Control Playbook
 
-Last updated: 2026-09-15 00:15:41 CDT
+Last updated: 2026-09-18 20:58:00 CDT
 
 ## Goals
 - Keep `main` stable and deployable.
@@ -130,6 +130,14 @@ explicit owner promotion after real-run review.
 - Use `npm run evidence:index` to inspect local task-record trends before
   adding new process or automation. Repeated friction may justify a script,
   planner rule, skill, or check; one-off friction should stay as evidence.
+- Successful qualifying `lane:playwright-smoke` runs retain a 90-day
+  `quotepilot-visual-evidence-<GITHUB_SHA>` artifact. The dedicated synthetic
+  proof cohort is rebuilt after the normal browser gates; its bundle records the
+  actual checkout SHA, optional PR head/base SHAs, Playwright result metadata,
+  per-image SHA-256 digests, and the manifest digest. CI fails the bundle step
+  when no screenshots are produced or when the requested SHA disagrees with the
+  checkout. This is CI evidence only and must not be promoted to hosted,
+  provider, production, human-acceptance, or outcome evidence.
 
 ## Release Workflow
 
