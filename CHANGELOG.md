@@ -13,6 +13,10 @@ Last updated: 2026-09-18 20:58:00 CDT
   SHA-mismatched bundle. The artifact is retained for 90 days and remains CI
   evidence only, not hosted, provider, production, human-acceptance, or outcome
   proof.
+- Isolate Product Intelligence governance fixtures from the ambient PR
+  declaration injected by `lane:core`; fixture checks now opt into PR
+  enforcement explicitly instead of inheriting the real PR disposition while
+  simulating unrelated changed-file sets.
 
 - Keep the six default-off Quote-to-Confidence capabilities out of disabled
   bundles with compile-time gates and lazy presentation boundaries. Exact
