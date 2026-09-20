@@ -176,6 +176,34 @@ export function useCatalogSetupDraft({
     };
   }, [enabled, organizationId]);
 
+  const adoptServerDraft = useCallback((result = {}) => {
+    const draft = result?.draft || {};
+    const serverChanges = Array.isArray(draft.changes) ? draft.changes : [];
+    const deviceChanges = pendingRef.current;
+    generationRef.current = Number(draft.generation || 0);
+    baseRevisionRef.current = Number(
+      draft.state === "open"
+        ? draft.baseCatalogRevision
+        : result?.currentCatalogRevision ?? baseCatalogRevision ?? 0
+    );
+    setState((previous) => ({
+      ...previous,
+      loading: false,
+      status: deviceChanges.length > 0
+        ? "saving"
+        : Number(draft.changedRecordCount || 0) > 0 ? "ready_review" : "saved",
+      generation: generationRef.current,
+      changedRecordCount: mergeChanges(serverChanges, deviceChanges).length,
+      serverChanges,
+      deviceChanges,
+      deviceOnly: deviceChanges.length > 0,
+      review: null,
+      receipt: null,
+      error: ""
+    }));
+    return draft;
+  }, [baseCatalogRevision]);
+
   const syncPending = useCallback(async () => {
     if (syncingRef.current || pendingRef.current.length === 0) return null;
     const patches = pendingRef.current;
@@ -354,6 +382,7 @@ export function useCatalogSetupDraft({
     label: catalogDraftStateLabel(state.status, state.changedRecordCount),
     baseCatalogRevision: baseRevisionRef.current,
     queueChanges,
+    adoptServerDraft,
     discardDeviceChanges,
     retry,
     review,

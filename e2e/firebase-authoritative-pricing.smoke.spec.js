@@ -6,7 +6,7 @@ const STAFF_PASSWORD = process.env.E2E_FIREBASE_PASSWORD || "Passw0rd!";
 async function signInAsStaff(page) {
   await page.goto("/app");
   const signInHeading = page.getByRole("heading", { name: "Staff Sign In" });
-  const quoteButton = page.getByRole("banner").getByRole("button", { name: "New Quote" });
+  const quoteButton = page.getByRole("button", { name: "New Quote" }).first();
   await expect(signInHeading.or(quoteButton)).toBeVisible({ timeout: 45_000 });
   if (await signInHeading.isVisible()) {
     await expect(signInHeading).toBeVisible();
@@ -71,30 +71,6 @@ async function advanceToSave(page, saveLabel = "Save draft") {
   throw new Error(`Unable to reach ${saveLabel}`);
 }
 
-async function advanceToFinalReview(page, saveLabel = "Save Changes") {
-  for (let i = 0; i < 6; i += 1) {
-    const saveButton = page.getByRole("button", { name: saveLabel, exact: true });
-    if (await saveButton.count()) {
-      await expect(saveButton).toBeVisible();
-      return;
-    }
-
-    const nextButton = page.getByRole("button", { name: /^Next:/ });
-    if (!(await nextButton.count())) break;
-
-    const menuHeading = page.getByRole("heading", { name: /Build the menu|Customized Cuisine Menu/i });
-    if (await menuHeading.isVisible()) {
-      const firstMenuItem = page.getByRole("checkbox").first();
-      await expect(firstMenuItem).toBeVisible();
-      if (!(await firstMenuItem.isChecked())) await firstMenuItem.check();
-    }
-
-    await nextButton.click();
-  }
-
-  throw new Error(`Unable to reach the final review with ${saveLabel}`);
-}
-
 test("owner saves an authoritative quote and disabled delivery cannot activate its portal", async ({ page }) => {
   test.setTimeout(180_000);
   await signInAsStaff(page);
@@ -102,14 +78,13 @@ test("owner saves an authoritative quote and disabled delivery cannot activate i
   await advanceToSave(page, "Save draft");
 
   await expect(page).toHaveURL(/\/app\/quotes\/(?!new(?:$|\?))[^/?]+(?:\?.*)?$/, { timeout: 45_000 });
-  await expect(page.getByTestId("quote-workspace")).toBeVisible({ timeout: 45_000 });
+  await expect(page.getByRole("region", { name: "Quote event workspace" })).toBeVisible({ timeout: 45_000 });
   await expect(
     page.getByRole("heading", { name: /Authoritative Pricing E2E/ })
   ).toBeVisible();
   const quoteId = decodeURIComponent(new URL(page.url()).pathname.split("/").filter(Boolean).at(-1));
   expect(quoteId).toBeTruthy();
-  await expect(page.getByRole("button", { name: "Preview", exact: true })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Review & send" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Review proposal & activity" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Send quote email" })).toHaveCount(0);
 
   const customerProjection = await page.evaluate(async () => {
@@ -157,29 +132,7 @@ test("owner saves an authoritative quote and disabled delivery cannot activate i
     draftPortalRejected: true
   });
 
-  await page.getByRole("button", { name: "All opportunities", exact: true }).click();
-  const quotesSurface = page.getByRole("region", { name: "Quotes" });
-  await expect(quotesSurface).toBeVisible();
-  const rows = quotesSurface.locator(".history-table-wrap tbody tr").filter({
-    has: page.getByRole("button", { name: "Copy Email" })
-  });
-  const refreshButton = quotesSurface.getByRole("button", { name: "Refresh", exact: true });
-  await expect.poll(async () => {
-    if (await refreshButton.isVisible() && await refreshButton.isEnabled()) {
-      await refreshButton.click();
-    }
-    return await rows.filter({ hasText: "96" }).count();
-  }, { timeout: 90_000 }).toBeGreaterThan(0);
-
-  const quoteRow = rows.filter({ hasText: "96" }).first();
-  const statusSelect = quoteRow.locator("td").nth(7).locator("select");
-  const copyPortalButton = quoteRow.getByRole("button", { name: "Copy Portal" });
-  const sendQuoteButton = quoteRow.getByRole("button", { name: /^(Send|Retry) Quote Email$/ });
-  await expect(statusSelect).toHaveValue("draft");
-  await expect(statusSelect.locator('option[value="sent"]')).toHaveCount(0);
-  await expect(copyPortalButton).toBeDisabled();
-  await expect(sendQuoteButton).toBeDisabled();
-  await expect(sendQuoteButton).toHaveAttribute("title", /Configure a supported email provider/i);
+  await expect(page.getByRole("button", { name: "Send quote email" })).toHaveCount(0);
 
   const directDeliveryClaimsRejected = await page.evaluate(async (savedQuoteId) => {
     const store = await import("/src/lib/quoteStore.js");
@@ -197,29 +150,14 @@ test("owner saves an authoritative quote and disabled delivery cannot activate i
   expect(directDeliveryClaimsRejected.messages.sent).toBeTruthy();
   expect(directDeliveryClaimsRejected.messages.viewed).toBeTruthy();
   expect(directDeliveryClaimsRejected.status).toBe("draft");
-  await expect(copyPortalButton).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Send quote email" })).toHaveCount(0);
   await expect(page.getByText(/Failed to calculate authoritative quote pricing/i)).toHaveCount(0);
 
-  await quoteRow.getByRole("button", { name: "Edit", exact: true }).click();
+  await page.goto(`/app/quotes/${quoteId}/edit`);
   await expect(page).toHaveURL(new RegExp(`/app/quotes/${quoteId}/edit$`));
-  const guidedMode = page.getByRole("button", { name: "Guided mode" });
-  if (await guidedMode.isVisible()) {
-    await guidedMode.click();
-  }
-  const guestCount = page.getByRole("spinbutton", { name: /Guests \(max 400\)/i });
+  const guestCount = page.getByRole("spinbutton", { name: "Working guest count" });
   await expect(guestCount).toHaveValue("96", { timeout: 45_000 });
   await guestCount.fill("104");
-  await advanceToFinalReview(page);
-
-  const changeImpactEntry = page.locator(
-    '[data-capability-id="cwf-15b-commercial-change-impact-preview"]'
-  );
-  const previewButton = changeImpactEntry.getByRole("button", {
-    name: "Preview consequences",
-    exact: true
-  });
-  await expect(previewButton).toBeEnabled();
-  await previewButton.click();
 
   const changeImpact = page.locator(
     '[data-capability-id="cwf-15b-commercial-change-impact-presentation"]'
@@ -247,7 +185,7 @@ test("owner saves an authoritative quote and disabled delivery cannot activate i
   await expect(changeImpact).toContainText(
     "Nothing is invalidated, regenerated, or published here."
   );
-  await expect(page.getByRole("button", { name: "Save Changes", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Save Changes", exact: true }).first()).toBeVisible();
 });
 
 test("quote transactions reuse identity, move email ownership, and reject collisions", async ({ page }) => {

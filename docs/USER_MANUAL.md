@@ -1,6 +1,6 @@
 # User Manual
 
-Last updated: 2026-09-15 00:15:41 CDT
+Last updated: 2026-09-20 06:00:58 CDT
 
 ## Purpose
 This guide explains day-to-day usage of QuotePilot for staff users and admins.
@@ -75,7 +75,9 @@ progressively disclosed Administration, account settings, and sign-out.
 3. At **Offers and menu**, choose **Build offers and menu** for manual entry or
    **Import an existing menu** to open Import Studio. An import is reviewed and
    staged into the existing catalog setup draft; it does not create a second
-   catalog or become active pricing by itself.
+   catalog or become active pricing by itself. Choosing a starter catalog opens
+   its exact staged items in the current Library editor for review; it also
+   remains inactive until the administrator checks and publishes the draft.
 4. Treat each readiness measure independently. **Cost visibility** is optional
    for the first quote. Missing optional starting
    points, additional users, provider connections, or cost evidence does not by

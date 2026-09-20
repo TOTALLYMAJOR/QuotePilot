@@ -1,11 +1,17 @@
 # Changelog
 
-Last updated: 2026-09-20 03:05:35 CDT
+Last updated: 2026-09-20 05:49:58 CDT
 
 All notable project changes are documented in this file.
 
 ## Unreleased — Event and Commercial activation receipt correction
 
+- Repair the administrator's starter-catalog journey so the open Library editor
+  adopts the exact server-staged draft before review, while keeping pricing
+  confirmation exclusively inside the publish authority. Firebase-emulator
+  acceptance now covers starter, bypass, import, and manual setup plus the
+  current opportunity-first authoritative quote path; this is local automated
+  evidence, not hosted, production, provider, human, or outcome proof.
 - Add dependency-ordered `QPI-*` delivery packets to the canonical backlog.
   Each packet names its catering actors, `JRN-*` journey stages, `CAP-*`
   requirements, acceptance criteria, and required evidence classes; the journey

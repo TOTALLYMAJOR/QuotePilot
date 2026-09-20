@@ -1,6 +1,6 @@
 # Capability / Functional Map
 
-Last updated: 2026-09-18 18:28:42 CDT
+Last updated: 2026-09-20 06:03:00 CDT
 
 ## Purpose and evidence boundary
 
@@ -17,7 +17,7 @@ does not imply hosted, provider, production, human, adoption, or outcome proof.
 | Capability ID | Actor can… | Catering value | Outcomes | Current source state | Observation state |
 |---|---|---|---|---|---|
 | `CAP-01` | Publish a bounded inquiry presentation and receive customer preferences. | Start discovery without prematurely promising price, availability, or scope. | `OUT-01` | Implemented and deployed with customer/staff journey proof still open. | Partial: authoritative inquiry receipts exist; end-to-end conversion outcome is not yet measured. |
-| `CAP-02` | Maintain offers, packages, menu items, add-ons, templates, rules, recipes, prices, and recorded costs under revision control. | Make sellable work understandable before estimators quote it. | `OUT-02`, `OUT-03` | Implemented across Library, catalog, pricing, and Inventory authorities. | Partial: catalog/cost state is observable; operator decision quality is not. |
+| `CAP-02` | Maintain offers, packages, menu items, add-ons, templates, rules, recipes, prices, and recorded costs under revision control. | Make sellable work understandable before estimators quote it. | `OUT-02`, `OUT-03` | Implemented across Library, catalog, pricing, and Inventory authorities; local Firebase actor journeys cover starter, bypass, import, manual setup, and publication. | Partial: catalog/cost state and local setup completion are observable; hosted recovery, human decision quality, and outcomes are not. |
 | `CAP-03` | Capture event facts, configure scope, obtain authoritative pricing, and save a versioned quote. | Reach a defensible priced draft faster with fewer missing facts. | `OUT-01`, `OUT-02` | Implemented; five-step builder and server pricing are established. | Implemented for funnel, completion, add-on behavior, and intent-to-priced-draft timing. |
 | `CAP-04` | Produce, issue, view, discuss, accept, reject, expire, or revise a customer decision artifact without rewriting history. | Preserve what the customer saw and agreed while allowing controlled change. | `OUT-02`, `OUT-04` | Implemented across proposal, portal, conversation, delivery, acceptance, and Commercial Change authorities. | Partial: authority receipts exist; lead time and downstream correction rates are not centrally summarized. |
 | `CAP-05` | Convert accepted/booked work into calendar, workflow, staffing, production, Inventory, BEO, and run-of-show preparation. | Prevent a valid sale from becoming an infeasible or stale event plan. | `OUT-03`, `OUT-04` | Implemented in bounded domain slices; no universal event-readiness authority exists. | Missing portfolio measurement for current handoff coverage and late discovery. |

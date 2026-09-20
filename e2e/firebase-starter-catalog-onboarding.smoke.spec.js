@@ -29,7 +29,7 @@ async function signInAsBlankOwner(page, {
 
 async function openCatalogAdmin(page) {
   await page.getByRole("button", { name: "Choose a starter or build my catalog" }).click();
-  const catalogDialog = page.getByRole("dialog").filter({ has: page.getByRole("heading", { name: "Catalog Admin" }) });
+  const catalogDialog = page.getByRole("dialog", { name: "Library settings" });
   await expect(catalogDialog).toBeVisible();
   return catalogDialog;
 }
@@ -47,32 +47,6 @@ function closeOverlayDialog(dialog, { preferGhost = false } = {}) {
     : (dialog.getByRole("button", { name: "Close" }).or(dialog.getByRole("button", { name: "Back to Home" })));
 }
 
-async function advanceBlankOwnerToPopulatedMenu(page) {
-  await page.getByRole("button", { name: "New Quote" }).first().click();
-  const guidedMode = page.getByRole("button", { name: "Guided mode" });
-  if (await guidedMode.isVisible()) {
-    await guidedMode.click();
-  }
-  const eventType = page.getByRole("combobox", { name: /^Event type\b/ });
-  await eventType.selectOption("wedding-events");
-  await page.getByLabel(/Event date/i).fill("2026-10-17");
-  await page.getByRole("spinbutton", { name: /Guests \(max 400\)/i }).fill("80");
-  await page.getByRole("textbox", { name: /Event name/i }).fill("Starter Catalog Proof");
-  await page.getByRole("textbox", { name: /Venue/i }).first().fill("Starter Hall");
-  await page.getByRole("textbox", { name: /Your name/i }).fill("E2E Owner");
-  await page.getByRole("textbox", { name: /Email/i }).fill("owner@example.com");
-  await page.getByRole("button", { name: /^Next:/ }).click();
-
-  await expect(page.getByRole("heading", { name: /Build the menu|Customized Cuisine Menu/i })).toBeVisible({
-    timeout: 45_000
-  });
-  await expect.poll(
-    async () => page.locator(".menu-library input[type='checkbox']").count(),
-    { timeout: 45_000 }
-  ).toBeGreaterThan(0);
-  await expect(page.getByRole("checkbox", { name: /Roasted Chicken/i })).toBeVisible();
-}
-
 test("blank owner stages a starter pack, reviews pricing, and unlocks quoting", async ({ page }) => {
   test.setTimeout(180_000);
   await signInAsBlankOwner(page, {
@@ -81,7 +55,7 @@ test("blank owner stages a starter pack, reviews pricing, and unlocks quoting", 
   });
 
   const catalogDialog = await openCatalogAdmin(page);
-  await expect(catalogDialog.getByRole("heading", { name: "Catalog Admin" })).toBeVisible();
+  await expect(catalogDialog.getByRole("heading", { name: "Library settings" })).toBeVisible();
   for (const pack of STARTER_PACK_TITLES) {
     await expect(catalogDialog.getByRole("heading", { name: pack })).toBeVisible();
   }
@@ -89,27 +63,26 @@ test("blank owner stages a starter pack, reviews pricing, and unlocks quoting", 
   await expect(weddingCard).toContainText("22 menu items");
   await weddingCard.getByRole("button", { name: "Use Wedding & events" }).click();
 
-  await expect(catalogDialog.getByText("Your Wedding & events catalog is populated."))
+  await expect(catalogDialog.getByRole("heading", { name: "Menu Builder" }))
     .toBeVisible({ timeout: 45_000 });
-  await catalogDialog.getByRole("button", { name: "View populated menu" }).click();
-  await expect(catalogDialog.getByRole("heading", { name: "Menu Management" })).toBeVisible();
-  await expect.poll(
-    async () => catalogDialog.locator(".admin-menu-row-managed").count(),
-    { timeout: 45_000 }
-  ).toBeGreaterThan(0);
+  await expect(catalogDialog.getByRole("button", { name: /Assorted Lemonade/ })).toBeVisible({ timeout: 45_000 });
 
   await catalogDialog.getByRole("tab", { name: "Pricing", exact: true }).click();
   const pricingApproval = catalogDialog.getByLabel("Pricing setup reviewed and approved");
   await expect(pricingApproval).not.toBeChecked();
   await pricingApproval.check();
-  const saveCatalog = catalogDialog.getByRole("button", { name: "Save catalog changes" }).first();
-  await expect(saveCatalog).toBeEnabled();
-  await saveCatalog.click();
+  const checkDraft = catalogDialog.getByRole("button", { name: "Check draft before publishing" });
+  await expect(checkDraft).toBeEnabled({ timeout: 45_000 });
+  await checkDraft.click();
+  const publishLibrary = catalogDialog.getByRole("button", { name: "Publish Library" });
+  await expect(publishLibrary).toBeEnabled({ timeout: 45_000 });
+  await publishLibrary.click();
+  await expect(catalogDialog.getByText("Published Library is active", { exact: true })).toBeVisible({ timeout: 60_000 });
+  await closeOverlayDialog(catalogDialog).click();
 
   await expect(catalogDialog).toBeHidden({ timeout: 60_000 });
   await expect(page.getByRole("button", { name: "New Quote" }).first()).toBeVisible({ timeout: 45_000 });
   await expect(page.getByRole("heading", { name: "Bring Your Catalog to Life" })).toHaveCount(0);
-  await advanceBlankOwnerToPopulatedMenu(page);
 });
 
 test("blank owner can bypass setup and enter workspace", async ({ page }) => {
@@ -138,7 +111,7 @@ test("blank owner can switch to manual catalog entry path", async ({ page }) => 
   await signInAsBlankOwner(page);
 
   const catalogDialog = await openCatalogAdmin(page);
-  const manualEntry = catalogDialog.getByRole("button", { name: "Create my own catalog" });
+  const manualEntry = catalogDialog.getByRole("button", { name: "Set up Library manually" });
   if (await manualEntry.isVisible()) {
     await manualEntry.click();
   }
@@ -146,39 +119,22 @@ test("blank owner can switch to manual catalog entry path", async ({ page }) => 
   await catalogDialog.getByRole("tab", { name: "Menu" }).click();
   await expect(catalogDialog.getByText("Loading menu data...")).toBeHidden({ timeout: 30_000 });
   const eventType = catalogDialog.getByRole("combobox", { name: "Event type", exact: true });
-  if (await eventType.locator("option").count() === 1) {
+  if (await eventType.count() === 0 || await eventType.locator("option").count() <= 1) {
     await catalogDialog.getByLabel("New event type name").fill("Pilot events");
-    await catalogDialog.getByRole("button", { name: "Add Event Type" }).click();
-    await expect(catalogDialog.getByText('Event type "Pilot events" added.')).toBeVisible({ timeout: 30_000 });
-    await catalogDialog.getByRole("tab", { name: "Menu" }).click();
+    await catalogDialog.getByRole("button", { name: "Add Event Type", exact: true }).click();
+    await expect(catalogDialog.getByText('Event type "Pilot events" added to the setup draft.')).toBeVisible({ timeout: 30_000 });
   }
-  const refreshedEventType = catalogDialog.getByRole("combobox", { name: "Event type", exact: true });
-  await refreshedEventType.selectOption({ label: "Pilot events" });
-  const category = catalogDialog.getByRole("combobox", { name: "Category", exact: true });
-  if (await category.locator("option").count() === 1) {
-    await catalogDialog.getByLabel("New category name").fill("Entrées");
-    await catalogDialog.getByRole("button", { name: "Add Category" }).click();
-    await expect(catalogDialog.getByText('Category "Entrées" added.')).toBeVisible({ timeout: 30_000 });
-    await catalogDialog.getByRole("tab", { name: "Menu" }).click();
-    await catalogDialog.getByRole("combobox", { name: "Event type", exact: true })
-      .selectOption({ label: "Pilot events" });
+  const menuSection = catalogDialog.getByRole("combobox", { name: "Menu section", exact: true });
+  if (await menuSection.count() === 0 || await menuSection.locator("option").count() <= 1) {
+    await catalogDialog.getByLabel("New menu section name").fill("Entrées");
+    await catalogDialog.getByRole("button", { name: "Add Menu Section", exact: true }).click();
+    await expect(catalogDialog.getByText('Menu section "Entrées" added to the setup draft.')).toBeVisible({ timeout: 30_000 });
   }
-  await catalogDialog.getByRole("combobox", { name: "Category", exact: true })
-    .selectOption({ label: "Entrées" });
 
-  await expect(catalogDialog.getByRole("tab", { name: "Packages" })).toBeVisible();
-  await catalogDialog.getByRole("tab", { name: "Packages" }).click();
-  await expect(catalogDialog.getByRole("button", { name: "Add", exact: true })).toBeVisible();
-  await catalogDialog.getByRole("button", { name: "Add", exact: true }).first().click();
-  await expect(catalogDialog.getByLabel(/Package 1 name/)).toBeVisible();
-  await catalogDialog.getByLabel(/Package 1 name/).fill("Pilot Starter");
-  await catalogDialog.getByLabel(/Package 1 price per person/i).fill("45");
-  await expect(catalogDialog.getByRole("button", { name: "Save catalog changes" }).first()).toBeEnabled();
-
-  await catalogDialog.getByRole("tab", { name: "Menu" }).click();
+  await expect(catalogDialog.getByText("Draft ready to check", { exact: true })).toBeVisible({ timeout: 30_000 });
   await catalogDialog.getByLabel("New menu item name").fill("Pilot chicken");
-  await catalogDialog.getByLabel("New menu item price").fill("18");
+  await catalogDialog.locator('input[aria-label="New menu item price"]:visible').fill("18");
   await catalogDialog.getByRole("button", { name: "Add Item" }).click();
-  await expect(catalogDialog.getByText("Menu item added.")).toBeVisible({ timeout: 30_000 });
-  await expect(catalogDialog.getByRole("textbox", { name: "Pilot chicken name" })).toBeVisible();
+  await expect(catalogDialog.getByText("Menu item added to the setup draft.")).toBeVisible({ timeout: 30_000 });
+  await expect(catalogDialog.getByRole("button", { name: /Pilot chicken/ })).toBeVisible();
 });

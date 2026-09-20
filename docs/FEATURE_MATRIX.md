@@ -1,6 +1,6 @@
 # Feature Matrix
 
-Last updated: 2026-09-14 02:59:23 CDT
+Last updated: 2026-09-20 06:00:58 CDT
 
 This matrix maps the master feature checklist to current implementation and source locations.
 It is an inventory and chronology index, not the canonical detailed history or
@@ -173,12 +173,15 @@ provider receipts.
   its compact item list opens one focused editor; and bulk operations appear
   only after selection. All edits retain the private catalog setup draft and
   stable-ID authority. Setup presets and `src/components/ImportStudioModal.jsx`
-  use that same staged authority.
+  use that same staged authority. A selected starter pack is adopted into the
+  already-open editor from the exact server-staged draft; generic draft patches
+  cannot carry pricing confirmation, which remains publication-only authority.
 - **Cost truth:** managed menu `costMinor` now round-trips through catalog reads,
   import preview, server publication, readiness coverage, authoritative pricing
   context, and the staff-only margin model. Customer proposal, export, and
   portal projections remain cost-free.
-- **Evidence boundary:** focused unit/component/server tests and a local build
+- **Evidence boundary:** focused unit/component/server tests, Firebase-emulator
+  starter/bypass/import/manual actor journeys, and a local build
   qualify source behavior. Local component and Playwright checks cover the
   context/item/editor hierarchy, focused item switching, progressive bulk
   actions, keyboard focus, axe, overflow containment at 390, 768, and 1440

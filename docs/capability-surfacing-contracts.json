@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "catalogVersion": 91,
+  "catalogVersion": 92,
   "contracts": [
     {
       "id": "bounded-security-operations-audit",
@@ -7594,7 +7594,7 @@
     },
     {
       "id": "catalog-draft-publish-authority",
-      "reviewRevision": 4,
+      "reviewRevision": 5,
       "status": "active",
       "deliveryType": "user_relevant",
       "capabilityKind": "mutation_surface",
@@ -7652,7 +7652,8 @@
         "src/lib/__tests__/catalogSetupDrafts.server.test.js",
         "src/lib/__tests__/businessReadiness.test.js",
         "src/rules/__tests__/firestore.rules.test.js",
-        "e2e/ambient-library.spec.js"
+        "e2e/ambient-library.spec.js",
+        "e2e/firebase-starter-catalog-onboarding.smoke.spec.js"
       ],
       "testLocators": [
         {
@@ -7670,6 +7671,10 @@
         {
           "path": "src/rules/__tests__/firestore.rules.test.js",
           "locator": "catalog setup drafts and revision-review receipts are private callable-owned records"
+        },
+        {
+          "path": "e2e/firebase-starter-catalog-onboarding.smoke.spec.js",
+          "locator": "blank owner stages a starter pack, reviews pricing, and unlocks quoting"
         }
       ],
       "documentationPaths": [
@@ -7691,7 +7696,7 @@
         }
       ],
       "surfaceReview": "changed",
-      "surfaceReviewNote": "Revision 3 preserves the role-safe Setup Center and private draft authority while reorganizing Menu Builder into a responsive context-and-item workbench. Structural maintenance is progressively disclosed, one compact list controls a focused item editor, and bulk actions appear only after selection. Sales can inspect readiness but cannot edit. Publication remains explicit and receipt-backed; autosave cannot confirm pricing or mutate active catalog records, and missing cost evidence never blocks ordinary quote creation.",
+      "surfaceReviewNote": "Revision 5 makes the open Library editor adopt the exact server-staged starter draft immediately and excludes pricing confirmation from generic draft patches. Sales can inspect readiness but cannot edit. Publication remains explicit and receipt-backed; only that authority confirms pricing or mutates active catalog records, and missing cost evidence never blocks ordinary quote creation. Firebase-emulator acceptance covers starter, bypass, import, and manual setup; hosted and human acceptance remain separate.",
       "stateEvidence": [
         {
           "state": "ready",

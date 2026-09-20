@@ -219,6 +219,8 @@ export function buildCatalogSetupChanges({
     };
   });
   const settingsPatch = buildSettingsPatch(catalog.settings || {}, baselineCatalog.settings || {});
+  delete settingsPatch.pricingSetupConfirmed;
+  delete settingsPatch.pricingConfirmation;
   const changes = [
     ...catalogChanges,
     ...(Object.keys(settingsPatch).length > 0

@@ -1943,6 +1943,30 @@ export function AdminCatalogView({
       pushToast(resultError, "error");
       return;
     }
+    catalogSetupDraft.adoptServerDraft?.(result);
+    const stagedCatalog = applyCatalogSetupDraftChanges({
+      ...draft,
+      eventTypes: menuEventTypes,
+      categories: menuCategories,
+      items: menuItems
+    }, result?.draft?.changes || []);
+    const stagedJsonDrafts = buildJsonDrafts(stagedCatalog);
+    const stagedEventTypes = Array.isArray(stagedCatalog.eventTypes) ? stagedCatalog.eventTypes : [];
+    const stagedEventTypeId = resolveManagedEventTypeId(stagedEventTypes, selectedEventTypeProp);
+    const stagedCategories = (Array.isArray(stagedCatalog.categories) ? stagedCatalog.categories : [])
+      .filter((item) => item.eventTypeId === stagedEventTypeId);
+    const stagedItems = (Array.isArray(stagedCatalog.items) ? stagedCatalog.items : [])
+      .filter((item) => item.eventTypeId === stagedEventTypeId);
+    setDraft(stagedCatalog);
+    setSavedCatalogSnapshot(cloneCatalogSnapshot(stagedCatalog));
+    setJsonDrafts(stagedJsonDrafts);
+    setSavedFingerprint(catalogDraftFingerprint(stagedCatalog, stagedJsonDrafts));
+    setMenuEventTypes(stagedEventTypes);
+    setManagedEventType(stagedEventTypeId);
+    setMenuCategories(stagedCategories);
+    setSelectedCategory(stagedCategories[0]?.id || "");
+    applyManagedMenuItems(stagedItems);
+    setManualSetupEnabled(true);
     setCatalogRefreshRequired(false);
     const message = `${pack.name} setup preset added to the shared draft. Review every suggested amount before publishing.`;
     setActiveTab("menu");
