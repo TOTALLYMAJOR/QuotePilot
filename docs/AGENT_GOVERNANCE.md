@@ -1,6 +1,6 @@
 # Agent Governance
 
-Last updated: 2026-09-17 02:53:24 CDT
+Last updated: 2026-09-19 19:05:53 CDT
 
 ## Scope
 This document defines governance for repository-managed agent and skill assets under `.codex/skills/`.
@@ -15,7 +15,26 @@ This document defines governance for repository-managed agent and skill assets u
 - Skill definitions: `.codex/skills/*/SKILL.md`
 - Agent interface metadata: `.codex/skills/*/agents/openai.yaml`
 - Skill references/scripts: `.codex/skills/*/references/`, `.codex/skills/*/scripts/`
+- Repository lifecycle hooks: `.codex/hooks.json`
+- Graph-retrieval enforcement: `.codex/hooks/codebase_memory_guard.py`
 - Index only: `docs/SKILLS.md`
+
+## Graph-First Retrieval Enforcement
+
+The repository hook requires each Codex session to complete the ordered
+Codebase Memory preflight—`list_projects`, `index_status` for `quoteflow`, then
+`check_index_coverage` for at least one material path or scope—before supported
+local tool routes may read repository source or apply edits. The hook resets on
+new or cleared sessions, preserves state across resume and compaction, and
+re-injects the `GRAPH_COVERAGE_BLOCKED` rule at session start.
+
+Before preflight completion, `apply_patch` and common direct source readers such
+as `rg`, `grep`, `find`, `sed`, `cat`, `head`, `tail`, and source-bearing Git
+inspection commands are denied for repository paths. Bootstrap reads of
+external skill instructions remain available. This is defense in depth around
+the canonical `AGENTS.md` protocol, not a completeness guarantee: Codex
+documents that some specialized or hosted tool paths can bypass normal hook
+routing, and modified hooks require explicit trust review before execution.
 
 ## External Engineering Skill Configuration
 
@@ -56,9 +75,11 @@ and is not a repository deployment.
   - `npm run status:product`
   - `npm run check:product-drift`
   - `npm run check:product-intelligence`
+  - `npm run eval:layered -- --dry-run`
   - `npm run check:docs:governance`
   - `npm run check:perf:bundle`
   - `npm run check:perf:cwv`
+  - `node --test scripts/__tests__/codebase-memory-hook.test.mjs`
 
 ## Ownership and Review
 - Repository owner (`@TOTALLYMAJOR`) approves skill behavior changes.
@@ -109,6 +130,13 @@ rationale. Applicable work requires the Product Intelligence index and
 release/experiment ledger to move together. The planner always emits
 `npm run check:product-intelligence`; the gate validates the canonical graph
 and change-impact mappings before `lane:core` may pass.
+
+The versioned Product Intelligence evaluation manifest is also a required
+canonical input. `npm run eval:layered` executes its automated dimensions and
+writes an ignored candidate-bound local receipt; `--dry-run` validates the
+manifest and governed IDs without executing checks. Results remain independent
+by dimension and evidence class. The runner emits no composite score and grants
+no promotion authority.
 
 For applicable work, the required reasoning order is: reconstruct the user
 objective, inspect repository authority and implementation, form a provisional

@@ -1,6 +1,6 @@
 # User Journey and Funnel Model
 
-Last updated: 2026-09-18 18:28:42 CDT
+Last updated: 2026-09-20 03:05:35 CDT
 
 Status: mixed evidence. Product touchpoints and authority boundaries are
 repository-grounded. Emotional states, switching triggers, and perceived value
@@ -78,19 +78,23 @@ touchpoints, authority boundaries, measures, and failure conditions. It does
 not mean the journey has passed local, hosted, human, or outcome acceptance.
 Those proof boxes close independently and only from evidence in that class.
 
-| Journey | Stage | Authority/source map | Local or CI proof | Human proof | Outcome proof | Next proof event |
-|---|---|---:|---:|---:|---:|---|
-| `JRN-01` | Discover and evaluate | [x] | [ ] | [ ] | [ ] | Observe owner-operators evaluating the current public promise and setup burden. |
-| `JRN-02` | Provision and configure | [x] | [ ] | [ ] | [ ] | Run first-setup and realistic import/menu-costing acceptance from operator source material. |
-| `JRN-03` | Capture intent | [x] | [ ] | [ ] | [ ] | Prove a governed inquiry or staff intake retains origin through opportunity conversion. |
-| `JRN-04` | Build and price | [x] | [ ] | [ ] | [ ] | Exercise first authoritative priced-draft creation with blockers, recovery, and exact readback. |
-| `JRN-05` | Present and decide | [x] | [ ] | [ ] | [ ] | Prove current issuance, provider result, portal view, and customer decision as separate receipts. |
-| `JRN-06` | Govern change | [x] | [ ] | [ ] | [ ] | Exercise one accepted-work amendment through consequence review and downstream invalidation. |
-| `JRN-07` | Plan delivery | [x] | [ ] | [ ] | [ ] | Observe Staffing, Inventory, production, and BEO owners working from the exact accepted basis. |
-| `JRN-08` | Execute and recover | [x] | [ ] | [ ] | [ ] | Run an event-day ambiguity and recovery scenario without losing event or revision context. |
-| `JRN-09` | Collect and close | [x] | [ ] | [ ] | [ ] | Reconcile payment, attendance, cost, payout, and missing evidence for one governed engagement. |
-| `JRN-10` | Retain and rebook | [x] | [ ] | [ ] | [ ] | Complete a provenance-preserving rebook that excludes obsolete authority. |
-| `JRN-11` | Advocate | [x] | [ ] | [ ] | [ ] | Collect repeat-use and referral evidence after multiple controlled events. |
+The canonical acceptance criteria and dependency order live in the `QPI-*`
+delivery packets in [`DEV_TASKS.md`](../../DEV_TASKS.md). The packet column is a
+journey-to-backlog binding, not evidence that a packet or journey is complete.
+
+| Journey | Stage | Active initiative packet | Authority/source map | Local or CI proof | Human proof | Outcome proof | Next proof event |
+|---|---|---|---:|---:|---:|---:|---|
+| `JRN-01` | Discover and evaluate | `QPI-03`, `QPI-08` | [x] | [ ] | [ ] | [ ] | Observe owner-operators evaluating the current public promise and setup burden. |
+| `JRN-02` | Provision and configure | `QPI-01`, `QPI-02` | [x] | [ ] | [ ] | [ ] | Run first-setup and realistic import/menu-costing acceptance from operator source material. |
+| `JRN-03` | Capture intent | `QPI-02`, `QPI-03`, `QPI-09` | [x] | [ ] | [ ] | [ ] | Prove a governed inquiry or staff intake retains origin through opportunity conversion. |
+| `JRN-04` | Build and price | `QPI-01`, `QPI-02`, `QPI-09` | [x] | [ ] | [ ] | [ ] | Exercise first authoritative priced-draft creation with blockers, recovery, and exact readback. |
+| `JRN-05` | Present and decide | `QPI-03`, `QPI-04` | [x] | [ ] | [ ] | [ ] | Prove current issuance, provider result, portal view, and customer decision as separate receipts. |
+| `JRN-06` | Govern change | `QPI-01`, `QPI-05`, `QPI-09` | [x] | [ ] | [ ] | [ ] | Exercise one accepted-work amendment through consequence review and downstream invalidation. |
+| `JRN-07` | Plan delivery | `QPI-01`, `QPI-05`, `QPI-06` | [x] | [ ] | [ ] | [ ] | Observe Staffing, Inventory, production, and BEO owners working from the exact accepted basis. |
+| `JRN-08` | Execute and recover | `QPI-01`, `QPI-07`, `QPI-09` | [x] | [ ] | [ ] | [ ] | Run an event-day ambiguity and recovery scenario without losing event or revision context. |
+| `JRN-09` | Collect and close | `QPI-04`, `QPI-07` | [x] | [ ] | [ ] | [ ] | Reconcile payment, attendance, cost, payout, and missing evidence for one governed engagement. |
+| `JRN-10` | Retain and rebook | `QPI-08` | [x] | [ ] | [ ] | [ ] | Complete a provenance-preserving rebook that excludes obsolete authority. |
+| `JRN-11` | Advocate | `QPI-08` | [x] | [ ] | [ ] | [ ] | Collect repeat-use and referral evidence after multiple controlled events. |
 
 Work should select the smallest affected `JRN-*` stage and its `CAP-*`
 requirements before implementation. Updating a checkbox requires a linkable

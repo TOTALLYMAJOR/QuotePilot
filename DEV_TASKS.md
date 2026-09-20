@@ -1,11 +1,179 @@
 # QuotePilot Development Tasks
 
-Last updated: 2026-09-16 19:04:45 CDT
+Last updated: 2026-09-20 03:05:35 CDT
 
 This file contains open work only. Completed delivery belongs in
 [`CHANGELOG.md`](CHANGELOG.md), current evidence in
 [`PROJECT_STATUS.md`](PROJECT_STATUS.md), and full capability inventory in
 [`docs/FEATURE_MATRIX.md`](docs/FEATURE_MATRIX.md).
+
+## Actor-journey initiative delivery packets
+
+These packets order the open work below around the actor journey in
+[`docs/product-intelligence/USER_JOURNEY_FUNNELS.md`](docs/product-intelligence/USER_JOURNEY_FUNNELS.md).
+They are a dependency and acceptance layer over the existing backlog, not a
+second roadmap. A packet closes only when every acceptance criterion has a
+linkable receipt in its named evidence class; source or local proof cannot stand
+in for hosted, provider, production, human, or outcome proof.
+
+The shared acceptance contract for every packet is: preserve tenant and role
+denial, exact commercial revisions, server-authoritative pricing, explicit
+missing/stale/ambiguous states, one safe recovery action, responsive keyboard
+and assistive-technology behavior, and separate evidence-class receipts.
+
+### `QPI-01` — Establish a trusted operator release
+
+- **Actor journey:** owner-operator, administrator, sales operator;
+  `JRN-02`, `JRN-04`, `JRN-06`–`JRN-08`; `CAP-06`, `CAP-12`.
+- **Job:** enter the exact hosted workspace and act on the correct tenant,
+  role, event, and revision without trusting stale or ambiguous state.
+- **Depends on:** none; this is the release-proof prerequisite for downstream
+  hosted packets.
+- **Acceptance criteria:** exact source SHA and deployment are bound to the
+  receipt; administrator and sales journeys pass with cross-tenant denial;
+  Inventory recovery records App Check, command, and projection outcomes
+  without an uncertain retry; 390/768/1440, keyboard, forced-colors,
+  assistive-technology, and actor-comprehension evidence are recorded.
+- **Evidence needed:** CI, hosted, production readback, security-denial, and
+  human receipts. Outcome proof is not required to unlock the next packet.
+
+### `QPI-02` — Reach the first trustworthy priced quote
+
+- **Actor journey:** owner-operator and sales/catalog administrator;
+  `JRN-02`–`JRN-04`; `CAP-02`, `CAP-03`, `CAP-06`.
+- **Job:** turn realistic source material into a reviewed catalog and first
+  server-priced, saved quote without losing provenance or work on interruption.
+- **Depends on:** `QPI-01`.
+- **Acceptance criteria:** a realistic spreadsheet/document import retains
+  origin through staged review and publication; customer price, recorded cost,
+  recipe/menu-cost, and physical Inventory readiness remain distinct; the first
+  and repeat quote paths produce exact pricing and saved-version receipts;
+  recovery resumes the same work; elapsed time, corrections, and blockers are
+  captured before adopting a speed target.
+- **Evidence needed:** local/CI, hosted role and recovery, human comprehension,
+  and baseline observation receipts for `MET-01`–`MET-05` and `MET-08`.
+
+### `QPI-03` — Convert governed intent into a customer decision
+
+- **Actor journey:** customer event contact and sales operator; `JRN-03`,
+  `JRN-05`; `CAP-01`, `CAP-04`, `CAP-12`.
+- **Job:** submit incomplete intent, receive one current decision artifact, and
+  make a decision without a draft or provider event being mistaken for consent.
+- **Depends on:** `QPI-01`, `QPI-02`.
+- **Acceptance criteria:** one curated Inquiry Showcase is published without
+  auto-publication; fresh challenge, wrong-host/action, replay, quota, recovery,
+  retention, and atomic conversion cases pass; proposal issuance, provider
+  acceptance, portal view, customer decision, expiry, and revision remain
+  separate receipts; customer and staff complete the journey accessibly.
+- **Evidence needed:** local/CI, hosted, provider, production-data, accessibility,
+  customer, and staff-human receipts. Conversion outcomes remain separate.
+
+### `QPI-04` — Reconcile ordinary payment and closeout
+
+- **Actor journey:** customer event contact, owner-operator, and finance
+  reviewer; `JRN-05`, `JRN-09`; `CAP-07`–`CAP-09`.
+- **Job:** request and reconcile the deposit/final balance and close the event
+  without duplicating a payment or collapsing planned and actual evidence.
+- **Depends on:** `QPI-01`, `QPI-03`.
+- **Acceptance criteria:** hosted deposit and final-balance paths bind the exact
+  commercial obligation; request, browser return, provider acceptance, webhook
+  settlement, refund/failure, and reconciliation remain distinct; ambiguous
+  outcomes recover by attempt identity before retry; actual attendance and its
+  correction do not rewrite the commercial basis; Truth Loop output remains
+  read-only and labels unavailable evidence honestly.
+- **Evidence needed:** local/CI, hosted, Stripe-provider, production readback,
+  finance-reviewer, and customer-human receipts. **Stripe Connect is excluded.**
+
+### `QPI-05` — Carry accepted change into current operations
+
+- **Actor journey:** sales operator, operations manager, kitchen lead, and
+  staffing administrator/event lead; `JRN-06`, `JRN-07`; `CAP-04`–`CAP-06`.
+- **Job:** change accepted work while preserving prior truth and identifying
+  each affected owner, artifact, consequence, and recovery action.
+- **Depends on:** `QPI-01`, `QPI-03`.
+- **Acceptance criteria:** one accepted-work amendment completes simulation,
+  grouped consequence review, authorization, atomic apply, exact readback, and
+  immutable receipt; Event Preflight, Staffing, Inventory, schedule, production,
+  and Kitchen BEO consumers show current/stale/unavailable independently; each
+  affected owner has one safe next action; stale or uncertain apply outcomes
+  reconcile before another mutation.
+- **Evidence needed:** local/CI, hosted authorized-role and denial, production
+  command/readback, and cross-role human receipts for `MET-07`, `MET-11`,
+  `MET-12`, and `MET-17`.
+
+### `QPI-06` — Pilot reviewable Delivery Planning
+
+- **Actor journey:** owner-operator, operations manager, kitchen lead, and
+  staffing administrator/event lead; `JRN-07`; `CAP-02`, `CAP-05`, `CAP-06`.
+- **Job:** turn an accepted staffed-buffet promise into reviewable work,
+  production, and purchasing proposals without inventing quantities or authority.
+- **Depends on:** `QPI-02`, `QPI-05`.
+- **Acceptance criteria:** five owner-operators review two recent comparable
+  events each and freeze the baseline definitions; one real tenant binds an
+  operator-reviewed Blueprint, quantity policy, and purchasing-pack revisions;
+  Staffing, Production, and Purchasing each reread authority, reject stale
+  input, obtain their own approval, and issue their own receipt; no inferred
+  stock, staffing ratio, production quantity, supplier action, or blended
+  readiness claim is introduced.
+- **Evidence needed:** source/local, hosted role, connected tenant, cross-role
+  human, baseline, and guarded pilot receipts for `MET-03`, `MET-11`, `MET-12`,
+  and `MET-16`.
+
+### `QPI-07` — Execute, recover, and close one controlled event
+
+- **Actor journey:** operations manager, event lead, kitchen lead, and finance
+  reviewer; `JRN-08`, `JRN-09`; `CAP-05`, `CAP-06`, `CAP-08`, `CAP-09`.
+- **Job:** run the current event, recover from one realistic ambiguity, and
+  explain closeout from current evidence.
+- **Depends on:** `QPI-04`, `QPI-06`.
+- **Acceptance criteria:** event-day surfaces preserve event and revision context;
+  one unavailable, stale, or contradictory case reaches safe recovery without
+  history loss or duplicate action; attendance, consumption, payment, cost,
+  payout availability, and contribution stay separate; a finance reviewer can
+  explain every finding and unresolved evidence state.
+- **Evidence needed:** hosted/production operational receipts, provider evidence
+  where applicable, cross-role human review, and outcome observation without
+  granting the reconciler write authority.
+
+### `QPI-08` — Prove safe reuse and commercial value
+
+- **Actor journey:** owner-operator, sales operator, finance reviewer, and
+  returning customer contact; `JRN-10`, `JRN-11`; `CAP-10`–`CAP-12`.
+- **Job:** use prior relationship knowledge to accelerate a new engagement
+  without cloning obsolete price, acceptance, payment, or provider authority.
+- **Depends on:** `QPI-07`.
+- **Acceptance criteria:** a provenance-preserving rebook carries only allowed
+  context into a new draft; current authority is re-established before pricing,
+  proposal, or payment; direct buyer validation, repeated production use,
+  retention, referral, and commercial measures have denominators, freshness,
+  exact cohorts, and owner decisions; `USED` and `COMMERCIALLY_PROVEN` remain
+  unclaimed until their receipts exist.
+- **Evidence needed:** hosted and human rebook acceptance plus usage, retention,
+  referral, revenue, and outcome evidence.
+
+### `QPI-09` — Evaluate bounded operator assistance
+
+- **Actor journey:** owner-operator and sales operator; `JRN-03`, `JRN-04`,
+  `JRN-06`, `JRN-08`; `CAP-03`, `CAP-04`, `CAP-06`, `CAP-12`.
+- **Job:** prepare a draft, summary, question list, or communication while the
+  operator retains every pricing, commitment, approval, assignment, and send.
+- **Depends on:** `QPI-02`, `QPI-03`, `QPI-05`.
+- **Acceptance criteria:** reviewed provider transport, private context,
+  consent, persistence, spend/timeout limits, deterministic fallback, and kill
+  switch are proven before exposure; typed/manual operation remains available;
+  model output is fact-by-fact reviewable and cannot mutate authority; at least
+  100 representative/adversarial packets receive human comparison before any
+  broader pilot decision.
+- **Evidence needed:** security/local, hosted role and denial, provider, privacy,
+  human-comparison, cost, latency, and correction receipts. No model-output or
+  outcome claim is implied by the current dormant source foundation.
+
+## Deferred — excluded from the active dependency graph
+
+- **Stripe Connect:** keep provider-disabled at its documented stopping point.
+  It is not a dependency of `QPI-01`–`QPI-09` or ordinary deposit/final-balance
+  acceptance. Re-entry requires a separate owner decision, reviewed isolated
+  staging plan, and a new dependency/acceptance review.
 
 ## P0 — Reconcile the current release surface
 
@@ -203,8 +371,6 @@ it does not create a parallel roadmap or product authority.
 
 ## P1 — Bounded future programs
 
-- [ ] Keep Stripe Connect provider-disabled until an exact isolated staging plan
-  is reviewed and separately authorized.
 - [ ] Keep Steward non-authoritative and private until transport, consent,
   persistence, and human-comparison protocols are approved.
 - [ ] Reconcile tenant operating-model and workflow-pack pilots against current

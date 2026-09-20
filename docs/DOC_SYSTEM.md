@@ -1,6 +1,6 @@
 # Documentation System
 
-Last updated: 2026-09-17 02:53:24 CDT
+Last updated: 2026-09-19 19:05:53 CDT
 
 ## Purpose
 This repository uses a layered canonical documentation model.
@@ -41,6 +41,17 @@ Each major topic has one source of truth. Other docs should link to that source 
   journey/funnel, guardrail, and release/experiment traceability. These files
   measure product value without replacing feature, runtime, release, or human
   evidence authorities.
+- `docs/product-intelligence/evaluation-manifest.json`: versioned independent
+  evaluation dimensions, governed-ID links, thresholds, evidence classes, and
+  owner-decision state. `npm run eval:layered` emits ignored immutable local
+  receipts; neither the manifest nor a receipt creates a blended score or
+  upgrades local evidence into CI, hosted, provider, production, human, or
+  outcome proof.
+- `.codex/hooks.json` and `.codex/hooks/codebase_memory_guard.py`: repository-
+  local lifecycle enforcement for the graph-first retrieval protocol. The hook
+  blocks supported local source-read and edit routes until the ordered
+  Codebase Memory project, index, and coverage preflight has completed; the
+  human-readable authority remains `AGENTS.md` and `docs/AGENT_GOVERNANCE.md`.
 
 ## Update Triggers
 - Code or behavior changes: update `CHANGELOG.md`.
@@ -91,7 +102,7 @@ diff validation use the same baseline semantics.
 |---|---|---|
 | code | `src/`, `functions/`, `e2e/`, `truthloop/`, `evidence/`, runtime behavior files | `CHANGELOG.md` |
 | backend capability | `functions/`, rules/indexes, data/provider clients, realtime authority hooks, mutation/backfill source | `docs/capability-surfacing-contracts.json`, `docs/FEATURE_MATRIX.md`, and `docs/USER_MANUAL.md`, or a narrowly classified tested headless contract |
-| process | `.github/`, `scripts/`, `.codex/skills/`, contributor/agent policy files | one of `README.md`, `CONTRIBUTING.md`, `docs/VERSION_CONTROL.md`, `docs/DOC_SYSTEM.md` |
+| process | `.github/`, `scripts/`, `.codex/hooks.json`, `.codex/hooks/`, `.codex/skills/`, contributor/agent policy files | one of `README.md`, `CONTRIBUTING.md`, `docs/VERSION_CONTROL.md`, `docs/DOC_SYSTEM.md` |
 | deploy | `Dockerfile`, `docker-compose.yml`, `docker/*`, deploy workflows/config | one of `README.md`, `docs/LAUNCH_RUNBOOK.md`, `docs/VERSION_CONTROL.md`, `docs/DOC_SYSTEM.md` |
 | backlog | roadmap/backlog/task artifacts | `DEV_TASKS.md` |
 | product intelligence | user-visible product source, capability authority, analytics implementation, or product-intelligence artifact | `docs/PRODUCT_INTELLIGENCE.md` plus the affected artifact and `docs/product-intelligence/RELEASE_EXPERIMENT_LEDGER.md` according to `npm run check:product-intelligence` |

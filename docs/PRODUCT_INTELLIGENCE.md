@@ -1,6 +1,6 @@
 # QuotePilot Product Intelligence System
 
-Last updated: 2026-09-18 18:28:42 CDT
+Last updated: 2026-09-20 03:05:35 CDT
 
 ## Purpose
 
@@ -33,6 +33,7 @@ separate so strength in one area cannot hide failure in another.
 | 6 | [User Journey / Funnel Model](product-intelligence/USER_JOURNEY_FUNNELS.md) | Where does value creation succeed or fail? | Furnished for owner-operator and customer-event-contact journeys. |
 | 7 | [Quality / Reliability Guardrails](product-intelligence/QUALITY_GUARDRAILS.md) | Could apparent growth hide a broken or unsafe product? | Furnished from existing authority and quality gates. |
 | 8 | [Release / Experiment Ledger](product-intelligence/RELEASE_EXPERIMENT_LEDGER.md) | What changed that might explain a result? | Furnished with historical seeds and a prospective decision protocol. |
+| 9 | [Layered Evaluation Manifest](product-intelligence/evaluation-manifest.json) | Which independent evaluation dimensions, thresholds, evidence classes, and owner decisions govern a candidate? | Versioned manifest and local receipt runner implemented; human, hosted, provider, production, and outcome evaluations remain unclaimed until separately recorded. |
 
 ## Catering-value declaration
 
@@ -51,6 +52,12 @@ Catering value
 
 An enabling task may name indirect value. Mechanical work may state
 `not_applicable` rather than inventing a catering benefit.
+
+The bounded staff-login refinement is recorded as `LED-006`. It links access
+recovery to `OUT-04` and `CAP-06`, with `MET-04` named only as the closest
+diagnostic measure: the AuthGate surface is not currently included in that
+instrumentation, so source, component, or browser evidence cannot establish an
+access-friction outcome.
 
 ## Traceability rule
 
@@ -77,6 +84,20 @@ The journey and functional requirement ledgers now make this rule operational:
 New product work names the smallest affected `JRN-*` and `CAP-*` IDs. A box is
 checked only from evidence in its named class; reopening it is required when
 the authority or evidence becomes stale, contradictory, or invalidated.
+
+The `QPI-*` initiative delivery packets in `DEV_TASKS.md` bind open work to the
+actor journey, dependencies, acceptance criteria, and required evidence. They
+order delivery without replacing `JRN-*`, `CAP-*`, domain authority, or release
+receipts. Stripe Connect is explicitly deferred and is not an active dependency
+of ordinary payment acceptance or any current `QPI-*` packet.
+
+`npm run eval:layered` executes the automated checks declared in the versioned
+evaluation manifest and writes an immutable local receipt under the ignored
+`.cache/layered-evaluations/` directory. `--dry-run` validates governed IDs and
+prints the planned receipt without running checks or writing a file. The runner
+keeps authority, AI grounding, journey continuity, recovery, telemetry, human
+accessibility, and operator outcomes separate; it never emits a composite
+quality score or promotes local evidence into another evidence class.
 
 ## Enforcement
 

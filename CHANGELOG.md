@@ -1,11 +1,34 @@
 # Changelog
 
-Last updated: 2026-09-17 03:12:06 CDT
+Last updated: 2026-09-20 03:05:35 CDT
 
 All notable project changes are documented in this file.
 
 ## Unreleased — Event and Commercial activation receipt correction
 
+- Add dependency-ordered `QPI-*` delivery packets to the canonical backlog.
+  Each packet names its catering actors, `JRN-*` journey stages, `CAP-*`
+  requirements, acceptance criteria, and required evidence classes; the journey
+  ledger links back to those packets. Stripe Connect is explicitly deferred and
+  excluded from the active dependency graph without changing its stopping-point
+  authority or ordinary payment acceptance.
+- Enforce the repository's Codebase Memory graph-first retrieval protocol with
+  a repository-local Codex hook. Supported source-read and edit routes now
+  remain blocked until the exact project, current index, and material coverage
+  checks run in order; session-start context preserves the same stop rule after
+  resume or compaction. Hook trust review and specialized-tool limitations
+  remain explicit rather than being described as universal enforcement.
+- Add a versioned layered evaluation manifest and dependency-free receipt
+  runner. Authority/integrity, AI grounding, journey continuity, recovery,
+  telemetry, operator outcomes, and human accessibility remain independent
+  dimensions; automated checks emit candidate-bound immutable local receipts,
+  while manual and higher evidence classes remain explicitly unproven.
+- Refine the staff login into one recovery-first access path: one dominant
+  sign-in action, explicit registration context, visible password guidance and
+  reveal control, and an inline email recovery state when password reset cannot
+  begin. Authentication, tenant, role, and email-verification authority remain
+  unchanged; focused component checks are local evidence only, while responsive
+  browser, hosted authentication, and human acceptance remain pending.
 - Enforce the Product Intelligence System with a fail-closed structural and
   change-impact validator in `lane:core`. Task plans now classify explicit
   catering-value/product-intelligence work correctly, emit the required actor,

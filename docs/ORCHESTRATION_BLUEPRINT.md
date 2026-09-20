@@ -1,6 +1,6 @@
 # Cloud + Local Orchestration Blueprint
 
-Last updated: 2026-09-17 02:01:13 CDT
+Last updated: 2026-09-19 13:09:29 CDT
 
 ## Goal
 Accelerate delivery while preserving production safety by using:
@@ -87,6 +87,13 @@ execution profile. Applicable work is fail-closed on the catering-value fields,
 the Product Intelligence index, the release/experiment ledger, and
 `npm run check:product-intelligence`. Mechanical work may be marked
 `not_applicable` only with a rationale; it may not invent a catering benefit.
+
+The layered evaluation manifest composes existing unit, browser, analytics,
+Truth Loop, and Steward checks without creating another test framework.
+`npm run eval:layered` records each authority, AI, journey, recovery, telemetry,
+operator, and accessibility dimension separately in an ignored immutable local
+receipt. A failed blocking dimension cannot be averaged away; manual and higher
+evidence classes stay `not_run` until their own proof is recorded.
 
 ## Token-Efficient Task Planning
 - Pass explicit paths in a dirty worktree so unrelated changes do not raise the

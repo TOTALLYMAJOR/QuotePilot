@@ -1,6 +1,6 @@
 # Orchestration Runbook
 
-Last updated: 2026-09-17 02:01:13 CDT
+Last updated: 2026-09-19 13:09:29 CDT
 
 ## Purpose
 Operational usage guide for orchestration lanes, CI behavior, and release evidence expectations.
@@ -41,6 +41,23 @@ Inspect `productIntelligence` in the same packet. When its disposition is
 outcome or metric IDs, guardrail IDs, evidence need, and release/experiment
 ledger entry before implementation. When it is `not_applicable_allowed`, use
 `not_applicable` only for genuinely mechanical work and record the rationale.
+
+Validate the layered evaluation plan without running its checks:
+```bash
+npm run eval:layered -- --dry-run
+```
+
+Run every automated dimension, or select the smallest affected dimensions:
+```bash
+npm run eval:layered
+npm run eval:layered -- --eval EVAL-001 --eval EVAL-002
+```
+
+Successful non-dry runs write create-only receipts under
+`.cache/layered-evaluations/`. A receipt proves only its declared evidence
+class for the exact candidate and environment. Manual operator, assistive-
+technology, hosted, provider, production, and outcome evidence must be recorded
+separately; no result authorizes deployment or owner adoption.
 
 For a UI-classified plan, confirm `dependencies.requiredSkills` contains
 `design-language` before editing. Load it completely, then read
