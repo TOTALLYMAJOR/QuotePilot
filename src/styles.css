@@ -993,6 +993,7 @@ button.workspace-brand:focus-visible {
 }
 
 .field > span,
+.field > label,
 h4 {
   margin: 0;
   font-size: 0.75rem;
@@ -2557,7 +2558,10 @@ hr {
   padding-inline: 0;
 }
 
-.auth-card,
+.auth-card {
+  width: min(560px, 100%);
+}
+
 .portal-card {
   width: min(680px, 100%);
 }
@@ -2602,16 +2606,89 @@ hr {
   color: #221f1b;
 }
 
+.auth-heading {
+  display: grid;
+  gap: 0.35rem;
+  margin-bottom: 1.2rem;
+}
+
+.auth-heading p {
+  max-width: 52ch;
+  margin: 0;
+  color: var(--tone-ink-3);
+  line-height: 1.55;
+}
+
 .portal-card h1 {
   margin: 0;
   font-family: var(--font-editorial);
   color: #221f1b;
 }
 
-.auth-mode-switch {
-  margin: 0.8rem 0;
+.auth-form {
+  display: grid;
+  gap: 1rem;
+}
+
+.auth-field-heading {
+  min-height: 44px;
   display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.auth-field-heading label {
+  color: var(--tone-ink-3);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.auth-password-control {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: 0.5rem;
+}
+
+.auth-password-control input {
+  min-width: 0;
+}
+
+.auth-password-toggle {
+  min-width: 4.75rem;
+  min-height: 44px;
+}
+
+.auth-text-action {
+  min-height: 44px;
+  padding: 0.45rem 0.2rem;
+  border: 0;
+  background: transparent;
+  color: #6f5613;
+  font: inherit;
+  font-weight: 750;
+  text-decoration: underline;
+  text-decoration-color: rgba(141, 97, 26, 0.42);
+  text-underline-offset: 0.2em;
+  cursor: pointer;
+}
+
+.auth-text-action:hover {
+  color: #513c0c;
+  text-decoration-color: currentColor;
+}
+
+.auth-text-action:focus-visible {
+  outline: 2px solid rgba(141, 97, 26, 0.62);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+.auth-text-action:disabled {
+  color: #6b6e74;
+  cursor: not-allowed;
 }
 
 .auth-actions,
@@ -2620,6 +2697,28 @@ hr {
   display: flex;
   gap: 0.6rem;
   flex-wrap: wrap;
+}
+
+.auth-actions {
+  margin-top: 0;
+}
+
+.auth-actions > button {
+  min-height: 44px;
+}
+
+.auth-mode-prompt {
+  margin: 0;
+  color: var(--tone-ink-3);
+  line-height: 1.5;
+}
+
+.auth-mode-prompt .auth-text-action {
+  margin-left: 0.15rem;
+}
+
+.auth-status {
+  margin-top: 1rem;
 }
 
 .button-link {
@@ -2640,7 +2739,18 @@ hr {
 }
 
 .auth-forgot {
-  margin-top: 0.5rem;
+  flex: 0 0 auto;
+}
+
+@media (max-width: 520px) {
+  .auth-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .auth-actions > button {
+    width: 100%;
+  }
 }
 
 .link-button {

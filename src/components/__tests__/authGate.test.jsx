@@ -44,7 +44,7 @@ afterEach(() => {
 describe("AuthGate friendlyError", () => {
   test("maps invalid credential errors", () => {
     expect(friendlyError(new Error("Firebase: Error (auth/invalid-credential)."))).toBe(
-      "Invalid email or password."
+      "Invalid email or password. Check your details or reset your password."
     );
   });
 
@@ -120,5 +120,100 @@ describe("AuthGate required-field validation", () => {
     expect(mocks.signInWithEmail).not.toHaveBeenCalled();
     expect(email.checkValidity()).toBe(true);
     expect(password.checkValidity()).toBe(false);
+  });
+});
+
+describe("AuthGate recovery-first experience", () => {
+  test("keeps one dominant sign-in action and updates the page context for registration", async () => {
+    await act(async () => {
+      root.render(<AuthGate />);
+    });
+
+    const initialSignInButtons = Array.from(container.querySelectorAll("button"))
+      .filter((button) => button.textContent.trim() === "Sign In");
+    const createAccount = Array.from(container.querySelectorAll("button"))
+      .find((button) => button.textContent.trim() === "Create a staff account");
+
+    expect(initialSignInButtons).toHaveLength(1);
+    expect(createAccount).toBeTruthy();
+
+    await act(async () => {
+      createAccount.click();
+    });
+
+    expect(container.querySelector("h1")?.textContent).toBe("Create Staff Account");
+    expect(container.querySelector('input[type="password"]')?.autocomplete).toBe("new-password");
+    expect(container.querySelector("#auth-password-help")?.textContent).toContain("8 characters");
+  });
+
+  test("focuses the email field and explains recovery when password reset lacks an email", async () => {
+    await act(async () => {
+      root.render(<AuthGate />);
+    });
+
+    const email = container.querySelector('input[type="email"]');
+    const reset = Array.from(container.querySelectorAll("button"))
+      .find((button) => button.textContent.trim() === "Forgot password?");
+
+    await act(async () => {
+      reset.click();
+    });
+
+    const error = container.querySelector("#auth-email-error");
+    expect(error?.textContent).toBe("Enter your email to reset your password.");
+    expect(email.getAttribute("aria-invalid")).toBe("true");
+    expect(email.getAttribute("aria-describedby")).toContain("auth-email-error");
+    expect(email.labels[0]?.textContent.trim()).toBe("Email");
+    expect(document.activeElement).toBe(email);
+    expect(mocks.requestPasswordReset).not.toHaveBeenCalled();
+  });
+
+  test("lets the operator reveal and conceal the password without changing its value", async () => {
+    await act(async () => {
+      root.render(<AuthGate />);
+    });
+
+    const password = container.querySelector('input[type="password"]');
+    await act(async () => {
+      enterValue(password, "kitchen-plan-42");
+    });
+    const reveal = Array.from(container.querySelectorAll("button"))
+      .find((button) => button.getAttribute("aria-label") === "Show password");
+
+    await act(async () => {
+      reveal.click();
+    });
+
+    const visiblePassword = container.querySelector('input[type="text"]');
+    expect(visiblePassword.value).toBe("kitchen-plan-42");
+    expect(reveal.getAttribute("aria-pressed")).toBe("true");
+    expect(reveal.getAttribute("aria-label")).toBe("Hide password");
+  });
+
+  test("announces a failed sign-in as an error with a recovery path", async () => {
+    mocks.signInWithEmail.mockRejectedValueOnce(
+      new Error("Firebase: Error (auth/invalid-credential).")
+    );
+    await act(async () => {
+      root.render(<AuthGate />);
+    });
+
+    await act(async () => {
+      enterValue(container.querySelector('input[type="email"]'), "operator@example.com");
+      enterValue(container.querySelector('input[type="password"]'), "incorrect-password");
+    });
+    const submit = Array.from(container.querySelectorAll("button"))
+      .find((button) => button.textContent.trim() === "Sign In" && button.type === "submit");
+
+    await act(async () => {
+      submit.click();
+    });
+
+    expect(container.querySelector('[role="alert"]')?.textContent).toContain(
+      "Invalid email or password."
+    );
+    expect(container.querySelector('[role="alert"]')?.textContent).toContain(
+      "Check your details or reset your password."
+    );
   });
 });
