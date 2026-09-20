@@ -3,6 +3,7 @@ import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { validateProductIntelligence } from "../../../scripts/check-product-intelligence.mjs";
 
 const REPOSITORY_ROOT = process.cwd();
 const CHECK_PATH = path.join(REPOSITORY_ROOT, "scripts", "check-product-intelligence.mjs");
@@ -15,7 +16,8 @@ const PRODUCT_FILES = [
   "docs/product-intelligence/BASELINES_AND_TARGETS.md",
   "docs/product-intelligence/USER_JOURNEY_FUNNELS.md",
   "docs/product-intelligence/QUALITY_GUARDRAILS.md",
-  "docs/product-intelligence/RELEASE_EXPERIMENT_LEDGER.md"
+  "docs/product-intelligence/RELEASE_EXPERIMENT_LEDGER.md",
+  "docs/product-intelligence/evaluation-manifest.json"
 ];
 
 const fixtures = [];
@@ -73,6 +75,17 @@ describe("product intelligence governance", () => {
 
     expect(result.status, result.stderr).toBe(0);
     expect(result.stdout).toMatch(/6 outcomes, 12 capabilities, 18 metrics, 16 signals/i);
+  });
+
+  test("rejects a missing layered evaluation manifest", () => {
+    const root = makeFixture();
+    fs.rmSync(path.join(root, "docs/product-intelligence/evaluation-manifest.json"));
+
+    const result = validateProductIntelligence({ root, staticOnly: true });
+
+    expect(result.errors).toContain(
+      "Required product-intelligence artifact is missing: docs/product-intelligence/evaluation-manifest.json"
+    );
   });
 
   test("rejects a signal that references an unknown metric", () => {

@@ -13,6 +13,7 @@
     "status:product": "node ./scripts/product-truth-observability.mjs --mode status",
     "check:product-drift": "node ./scripts/product-truth-observability.mjs --mode gate",
     "check:product-intelligence": "node ./scripts/check-product-intelligence.mjs",
+    "eval:layered": "node ./scripts/run-layered-evals.mjs",
     "classify:ci:lanes": "node ./scripts/ci-lane-classifier.mjs",
     "lane:quick": "bash ./scripts/orchestration-lanes.sh lane:quick",
     "lane:core": "bash ./scripts/orchestration-lanes.sh lane:core",

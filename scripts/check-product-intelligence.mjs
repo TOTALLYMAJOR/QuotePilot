@@ -12,7 +12,8 @@ const ARTIFACTS = Object.freeze({
   baselines: "docs/product-intelligence/BASELINES_AND_TARGETS.md",
   journey: "docs/product-intelligence/USER_JOURNEY_FUNNELS.md",
   guardrails: "docs/product-intelligence/QUALITY_GUARDRAILS.md",
-  ledger: "docs/product-intelligence/RELEASE_EXPERIMENT_LEDGER.md"
+  ledger: "docs/product-intelligence/RELEASE_EXPERIMENT_LEDGER.md",
+  evaluations: "docs/product-intelligence/evaluation-manifest.json"
 });
 
 const DEFINITION_SPECS = Object.freeze([
