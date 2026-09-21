@@ -1,0 +1,192 @@
+{
+  "apiVersion": "devctl.design-intelligence/v2",
+  "kind": "DevelopmentControlPlane",
+  "metadata": {
+    "name": "quoteflow",
+    "owner": "repository",
+    "phase": "0-5"
+  },
+  "spec": {
+    "authorities": [
+      {
+        "id": "agents",
+        "kind": "instructions",
+        "path": "AGENTS.md",
+        "trust": "repository-governance"
+      },
+      {
+        "id": "docs-adr-adr-0003-commercial-platform-vertical-pack",
+        "kind": "architecture",
+        "path": "docs/adr/ADR-0003-commercial-platform-vertical-pack.md",
+        "trust": "domain-authority"
+      },
+      {
+        "id": "changelog",
+        "kind": "change-log",
+        "path": "CHANGELOG.md",
+        "trust": "institutional-memory"
+      }
+    ],
+    "context": {
+      "maxBytes": 192000,
+      "maxFiles": 20,
+      "neverAutoLoad": [
+        ".env*",
+        "**/.env*",
+        "**/*credential*",
+        "**/*secret*",
+        ".git/**",
+        "node_modules/**"
+      ]
+    },
+    "design": {
+      "adoptionReport": "artifacts/design/adoptions/quotepilot-workspace-pilot-v4/adoption-report.json",
+      "baselineManifest": ".design/baselines/manifest.json",
+      "enabled": false,
+      "memoryRoot": ".design/memory",
+      "qualityThresholds": ".design/quality/thresholds.json",
+      "triggerPaths": [
+        "app/**",
+        "components/**",
+        "pages/**",
+        "src/**",
+        "styles/**",
+        "tests/fixtures/visual-surface/**"
+      ],
+      "visualScenario": "tests/design/scenarios/default.json"
+    },
+    "discovery": {
+      "existingDesignMemory": true,
+      "frontend": "React",
+      "repositoryMaturity": "ESTABLISHED"
+    },
+    "instructions": {
+      "adapters": [],
+      "root": "AGENTS.md"
+    },
+    "planes": {
+      "architecture": {
+        "adrGlobs": [],
+        "authorityPaths": [
+          "docs/adr/ADR-0003-commercial-platform-vertical-pack.md"
+        ],
+        "boundaryChecks": [],
+        "contractPaths": [
+          "package.json"
+        ],
+        "enabled": false,
+        "impactGraph": {
+          "codeowners": [
+            ".github/CODEOWNERS",
+            "CODEOWNERS"
+          ],
+          "enabled": true,
+          "exclude": [
+            ".env*",
+            "**/.env*",
+            "**/*credential*",
+            "**/*secret*",
+            ".git/**",
+            "node_modules/**",
+            ".venv/**",
+            "artifacts/**",
+            "**/__pycache__/**",
+            "**/*.pyc"
+          ],
+          "include": [
+            "app/**",
+            "components/**",
+            "pages/**",
+            "src/**",
+            "styles/**",
+            "tests/fixtures/visual-surface/**",
+            "design_intelligence/**",
+            "scripts/**",
+            "tests/**",
+            "*.json",
+            "*.toml",
+            "*.yaml"
+          ],
+          "journeyBindings": [],
+          "maxDepth": 4,
+          "maxImpactNodes": 300,
+          "maxNodes": 5000,
+          "maxSourceFiles": 2000,
+          "ownershipRules": [],
+          "securityRules": []
+        },
+        "maxReviewAgeDays": 90,
+        "standardsProfile": ".dev/standards-profile.json",
+        "technologyCurrency": {
+          "evidence": [],
+          "manifests": [
+            "package.json",
+            "package-lock.json"
+          ],
+          "policy": "contextual-not-latest",
+          "reviewAfter": "2026-09-21",
+          "reviewedAt": "2026-09-21"
+        }
+      },
+      "intelligence": {
+        "enabled": false,
+        "instructionPaths": [
+          "AGENTS.md"
+        ],
+        "rolePaths": [],
+        "routingPolicy": ".dev/model-routing.json",
+        "skillRoots": []
+      },
+      "intent": {
+        "backlog": {
+          "completionPolicy": "all-terminal",
+          "dependencies": {},
+          "draftingPolicy": {
+            "requireAcceptanceContract": true,
+            "requireAuthorityBoundaries": true,
+            "requireExplicitDependencies": true,
+            "requireVerification": true
+          },
+          "sources": [
+            {
+              "includeInCompletion": true,
+              "parser": "markdown-checkbox-lines",
+              "path": "DEV_TASKS.md",
+              "requireItems": true,
+              "role": "active"
+            }
+          ],
+          "terminalStatuses": [
+            "COMPLETED",
+            "CANCELLED",
+            "DEFERRED_WITH_AUTHORITY"
+          ]
+        },
+        "enabled": false,
+        "index": ".dev/intent-index.json",
+        "journeyRequiredPaths": [
+          "app/**",
+          "components/**",
+          "pages/**",
+          "src/**",
+          "styles/**",
+          "tests/fixtures/visual-surface/**"
+        ],
+        "maxReviewAgeDays": 180
+      }
+    },
+    "tasks": {
+      "root": ".dev/tasks"
+    },
+    "verification": {
+      "commands": {
+        "build": [
+          "npm",
+          "run",
+          "build"
+        ]
+      },
+      "rules": []
+    }
+  }
+}

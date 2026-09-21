@@ -1,6 +1,6 @@
 # QuotePilot Development Tasks
 
-Last updated: 2026-09-20 03:05:35 CDT
+Last updated: 2026-09-20 19:47:00 CDT
 
 This file contains open work only. Completed delivery belongs in
 [`CHANGELOG.md`](CHANGELOG.md), current evidence in
@@ -177,6 +177,11 @@ and assistive-technology behavior, and separate evidence-class receipts.
 
 ## P0 — Reconcile the current release surface
 
+- [ ] Review and ratify the Proofloom-generated intent index, standards
+  profile, and capability-routing policy before enabling those control-plane
+  planes. The installed manifest already binds `CHANGELOG.md` and the accepted
+  ADR history; this review must not create parallel product or backlog
+  authority.
 - [ ] Run an authenticated `mm05366-sandbox` administrator acceptance journey
   across Living Opportunity, Quote administration, Operations, Inventory,
   Library pricing review, and exact readback. Include sales/non-admin and

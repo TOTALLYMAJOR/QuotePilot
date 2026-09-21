@@ -1,11 +1,15 @@
 # Changelog
 
-Last updated: 2026-09-20 05:49:58 CDT
+Last updated: 2026-09-20 19:43:58 CDT
 
 All notable project changes are documented in this file.
 
 ## Unreleased — Event and Commercial activation receipt correction
 
+- Bind the existing repository changelog and accepted ADR history into the
+  Proofloom control-plane manifest. Proofloom now fails validation if either
+  record authority disappears; the binding does not create a parallel log or
+  imply release, deployment, or human acceptance.
 - Repair the administrator's starter-catalog journey so the open Library editor
   adopts the exact server-staged draft before review, while keeping pricing
   confirmation exclusively inside the publish authority. Firebase-emulator
