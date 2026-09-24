@@ -46,6 +46,24 @@ function renderImportMutationState(props) {
 }
 
 describe("Import Studio presentation", () => {
+  test("orients a Library first-quote arrival to menu intake without implying import or publication", () => {
+    const html = renderToStaticMarkup(
+      <ImportStudioView
+        {...importStudioProps}
+        initialImportType="menuItems"
+        arrivalSource="library-first-quote"
+      />
+    );
+
+    expect(html).toContain('data-import-arrival="library-first-quote"');
+    expect(html).toContain('data-import-type="menuItems"');
+    expect(html).toContain("Start with your real menu");
+    expect(html).toContain("quotepilot-menu-items-template.csv");
+    expect(html).toContain('download="quotepilot-menu-items-template.csv"');
+    expect(html).toContain("Downloading or filling this template does not import, save, or publish anything");
+    expect(html).not.toContain("Import completed");
+  });
+
   test("exposes an embedded route without changing the modal wrapper contract", () => {
     const embeddedHtml = renderToStaticMarkup(
       <ImportStudioView {...importStudioProps} />
@@ -54,15 +72,18 @@ describe("Import Studio presentation", () => {
       <ImportStudioModal {...importStudioProps} />
     );
 
-    expect(embeddedHtml).toContain("container workspace-route-main embedded-workspace-route");
-    expect(embeddedHtml).toContain('role="region"');
+    expect(embeddedHtml).toContain('<main class="container workspace-route-main embedded-workspace-route"');
     expect(embeddedHtml).toContain("workspace-route-card");
     expect(embeddedHtml).not.toContain('aria-modal="true"');
+    expect(embeddedHtml).toContain('<h1 id="import-studio-title">Import Studio</h1>');
+    expect(embeddedHtml).toContain('aria-label="Choose CSV or PDF source"');
+    expect(embeddedHtml).toContain('aria-label="Import Workbench progress" tabindex="0"');
     expect(embeddedHtml).toContain(">Back to Home</button>");
 
     expect(modalHtml).toContain("modal-overlay");
     expect(modalHtml).toContain('role="dialog"');
     expect(modalHtml).toContain('aria-modal="true"');
+    expect(modalHtml).toContain('<h2 id="import-studio-title">Import Studio</h2>');
     expect(modalHtml).toContain(">Close</button>");
   });
 

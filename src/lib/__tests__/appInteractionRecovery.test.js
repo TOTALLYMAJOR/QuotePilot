@@ -211,7 +211,7 @@ describe("workspace interaction recovery wiring", () => {
     expect(appSource).toContain("const beginWorkspaceTaskJourney = useCallback((handoff, actionId) => {");
     expect(appSource).toContain("principal: activeWorkspaceTaskPrincipal");
     expect(appSource).toContain("startedAtISO: new Date().toISOString(),");
-    expect(appSource).toContain("workspaceTaskJourneyBelongsToPrincipal(stored.journey, activeWorkspaceTaskPrincipal)");
+    expect(appSource).toContain("workspaceTaskJourneyIsRestorable(stored.journey, activeWorkspaceTaskPrincipal)");
     expect(appSource).toContain("clearWorkspaceTaskJourney(authSession.organizationId)");
     expect(appSource).toContain("const stored = writeWorkspaceTaskJourney(authSession.organizationId, journey)");
     expect(appSource).toContain("if (stored.ok) setWorkspaceTaskJourney(stored.journey)");

@@ -48,8 +48,18 @@ const BUSINESS_METADATA_KEYS = new Set([
   "createdAt",
   "createdAtISO",
   "updatedAt",
-  "updatedAtISO"
+  "updatedAtISO",
+  "importProvenance"
 ]);
+const IMPORT_COLLECTION_BY_TYPE = Object.freeze({
+  packages: "catalogPackages",
+  addons: "catalogAddons",
+  rentals: "catalogRentals",
+  eventTypes: "eventTypes",
+  menuCategories: "menuCategories",
+  menuItems: "menuItems"
+});
+const IMPORT_SOURCE_KINDS = new Set(["csv", "pdf"]);
 
 class CatalogSetupDraftError extends Error {
   constructor(code, message, details = undefined) {
@@ -62,6 +72,38 @@ class CatalogSetupDraftError extends Error {
 
 function text(value, maxLength = 500) {
   return String(value ?? "").trim().slice(0, maxLength);
+}
+
+function provenanceText(value, maxLength) {
+  return String(value ?? "")
+    .replace(/[\u0000-\u001f\u007f]|\p{Cf}/gu, "")
+    .trim()
+    .slice(0, maxLength);
+}
+
+function normalizeImportProvenance(value, collection) {
+  if (value === undefined || value === null) return null;
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new CatalogSetupDraftError("invalid-argument", "Catalog import provenance must be an object.");
+  }
+  const kind = provenanceText(value.kind, 40);
+  const importBatchId = provenanceText(value.importBatchId, 180).replace(/[^A-Za-z0-9_-]/g, "_");
+  const importType = provenanceText(value.importType, 40);
+  const sourceKind = provenanceText(value.sourceKind, 20).toLowerCase();
+  const sourceFileName = provenanceText(value.sourceFileName, 240);
+  const sourceRowNumber = Number(value.sourceRowNumber);
+  if (
+    kind !== "catalog_import"
+    || !importBatchId
+    || IMPORT_COLLECTION_BY_TYPE[importType] !== collection
+    || !IMPORT_SOURCE_KINDS.has(sourceKind)
+    || !sourceFileName
+    || !Number.isSafeInteger(sourceRowNumber)
+    || sourceRowNumber < 1
+  ) {
+    throw new CatalogSetupDraftError("invalid-argument", "Catalog import provenance is invalid.");
+  }
+  return { kind, importBatchId, importType, sourceKind, sourceFileName, sourceRowNumber };
 }
 
 function normalizeOrganizationId(value) {
@@ -321,6 +363,8 @@ function normalizeChange(input = {}) {
     intent,
     payload
   };
+  const provenance = normalizeImportProvenance(input.provenance, collection);
+  if (provenance) normalized.provenance = provenance;
   if (Buffer.byteLength(JSON.stringify(normalized), "utf8") > MAX_CHANGE_BYTES) {
     throw new CatalogSetupDraftError("resource-exhausted", `Catalog draft change ${normalized.id} is too large.`);
   }
@@ -518,6 +562,7 @@ function buildDraftMutationReceipt({
       || staged.recordId !== requested.recordId
       || !compatibleStagedIntent(requested.intent, staged.intent)
       || hashValue(staged.payload) !== hashValue(requested.payload)
+      || (requested.provenance && hashValue(staged.provenance) !== hashValue(requested.provenance))
     ) {
       throw draftMutationConflict("The accepted catalog draft no longer contains the exact requested patch set.");
     }
@@ -527,7 +572,9 @@ function buildDraftMutationReceipt({
       recordId: requested.recordId,
       requestedIntent: requested.intent,
       stagedIntent: staged.intent,
-      payload: requested.payload
+      payload: requested.payload,
+      ...(requested.provenance ? { requestedProvenance: requested.provenance } : {}),
+      ...(staged.provenance ? { provenance: staged.provenance } : {})
     };
   });
   const receipt = {
@@ -560,7 +607,8 @@ function requestedChangesFromReceipt(receipt = {}) {
     collection: change.collection,
     recordId: change.recordId,
     intent: change.requestedIntent,
-    payload: change.payload
+    payload: change.payload,
+    ...(change.requestedProvenance ? { provenance: change.requestedProvenance } : {})
   }));
 }
 
@@ -585,6 +633,8 @@ function assertDraftMutationReceiptBinding({
       && change.payload
       && typeof change.payload === "object"
       && !Array.isArray(change.payload)
+      && (!change.requestedProvenance || normalizeImportProvenance(change.requestedProvenance, change.collection))
+      && (!change.provenance || normalizeImportProvenance(change.provenance, change.collection))
     ));
   if (
     receipt?.schemaVersion !== CATALOG_SETUP_DRAFT_SCHEMA_VERSION
@@ -622,7 +672,8 @@ function draftContainsMutationReceipt(draft, receipt) {
       && current.collection === expected.collection
       && current.recordId === expected.recordId
       && current.intent === expected.stagedIntent
-      && hashValue(current.payload) === hashValue(expected.payload);
+      && hashValue(current.payload) === hashValue(expected.payload)
+      && hashValue(current.provenance || null) === hashValue(expected.provenance || null);
   });
 }
 
@@ -652,7 +703,8 @@ function publicationLineageContainsMutation(lineage, receipt) {
       && published.collection === expected.collection
       && published.recordId === expected.recordId
       && published.intent === expected.stagedIntent
-      && published.publishedHash === hashValue(expected.payload);
+      && published.publishedHash === hashValue(expected.payload)
+      && hashValue(published.provenance || null) === hashValue(expected.provenance || null);
   });
 }
 
@@ -676,7 +728,8 @@ function draftMutationReceiptProjection(receipt, status, lineage = null) {
       recordId: change.recordId,
       requestedIntent: change.requestedIntent,
       intent: change.stagedIntent,
-      payload: change.payload
+      payload: change.payload,
+      ...(change.provenance ? { provenance: change.provenance } : {})
     })),
     ...(status === "published" && lineage
       ? {
@@ -1058,7 +1111,10 @@ async function saveCatalogSetupDraft({
       existingById.set(change.id, {
         ...change,
         baselineHash: previous?.baselineHash || change.baselineHash,
-        intent: previous?.intent === "create" ? "create" : change.intent
+        intent: previous?.intent === "create" ? "create" : change.intent,
+        ...(change.provenance || previous?.provenance
+          ? { provenance: change.provenance || previous.provenance }
+          : {})
       });
     });
     const mergedChanges = [...existingById.values()].sort((left, right) => left.id.localeCompare(right.id));
@@ -1220,7 +1276,8 @@ async function publishCatalogSetupDraft({
       recordId: change.recordId,
       intent: change.intent,
       baselineHash: change.baselineHash,
-      publishedHash: hashValue(change.payload)
+      publishedHash: hashValue(change.payload),
+      ...(change.provenance ? { provenance: change.provenance } : {})
     }));
     const changedCounts = {};
     changes.forEach((change) => {
@@ -1245,6 +1302,7 @@ async function publishCatalogSetupDraft({
       if (change.collection === "settings") return;
       transaction.set(recordRef(refs.organizationRef, change), {
         ...change.payload,
+        ...(change.provenance ? { importProvenance: change.provenance } : {}),
         updatedAtISO: nowISO,
         ...(serverTimestamp ? { updatedAt: serverTimestamp() } : {}),
         ...(change.intent === "create"

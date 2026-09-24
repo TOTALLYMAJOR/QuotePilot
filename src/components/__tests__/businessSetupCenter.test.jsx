@@ -87,6 +87,48 @@ describe("BusinessSetupCenter", () => {
     expect(html).not.toContain("business-setup-center__attention");
   });
 
+  test("leads with quote readiness while keeping nonblocking setup secondary", () => {
+    const catalog = {
+      source: "firebase-org",
+      organizationName: "QuotePilot Catering",
+      packages: [{ id: "offer-1", name: "Dinner", ppp: 42, active: true }],
+      eventTypes: [{ id: "dinner", name: "Dinner", active: true }],
+      managedMenuItems: [{ id: "menu-1", name: "Chicken", cost: null, active: true }],
+      settings: {
+        organizationName: "QuotePilot Catering",
+        catalogRevision: 4,
+        pricingSetupConfirmed: true,
+        pricingConfirmation: {
+          actorUid: "admin-1",
+          actorEmail: "admin@example.test",
+          confirmedCatalogRevision: 4,
+          confirmedAtISO: "2026-09-04T20:00:00.000Z"
+        },
+        serviceFeePct: 0.2,
+        taxRate: 0.08,
+        depositPct: 0.3,
+        perMileRate: 1,
+        longDistancePerMileRate: 1,
+        serverRate: 40,
+        chefRate: 50,
+        bartenderRate: 45,
+        staffingLaborEnabled: false,
+        eventTemplates: []
+      }
+    };
+    const html = renderToStaticMarkup(<BusinessSetupCenter catalog={catalog} />);
+
+    expect(html).toContain('data-readiness-state="quote-ready"');
+    expect(html).toContain('data-quote-ready="true"');
+    expect(html).toContain("You can start a quote.");
+    expect(html).toContain("Remaining setup does not block quote creation");
+    expect(html).toContain("setup improvements available");
+    expect(html).toContain("Cost visibility · optional");
+    expect(html).toContain("Missing costs do not block quoting");
+    expect(html).toContain("Required for provider actions");
+    expect(html).not.toContain("setup areas need attention");
+  });
+
   test("states the publishing consequence without leading with infrastructure language", () => {
     const html = renderToStaticMarkup(<BusinessSetupCenter
       catalog={{ source: "local", packages: [], eventTypes: [], settings: { menuSections: [] } }}

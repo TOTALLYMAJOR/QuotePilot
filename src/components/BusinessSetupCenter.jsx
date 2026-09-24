@@ -58,8 +58,10 @@ const ROW_PRESENTATION = Object.freeze({
   }
 });
 
-function issueStatus(row) {
-  if (row.status === "Connection required") return "Required";
+function issueStatus(row, { quoteReady = false } = {}) {
+  if (row.status === "Connection required") {
+    return quoteReady ? "Required for provider actions" : "Required";
+  }
   return row.status === "Needs review" ? "Needs attention" : row.status;
 }
 
@@ -149,15 +151,22 @@ export default function BusinessSetupCenter({
   draftState,
   currentUserRole = "admin",
   providerConnected = false,
+  quoteCreationReady,
   onOpenSection,
   onOpenImport,
-  onRefresh
+  onRefresh,
+  onStartQuote
 }) {
   const model = buildBusinessReadiness({ catalog, draftState, currentUserRole, providerConnected });
   const presentation = buildReadinessPresentation(model);
   const count = presentation.unresolved.length;
-  const headline = presentation.complete
-    ? "Ready for quoting."
+  const quoteReady = typeof quoteCreationReady === "boolean"
+    ? quoteCreationReady
+    : model.projections.businessReadyToQuote.ready;
+  const canStartQuote = ["admin", "sales"].includes(String(currentUserRole || "").trim().toLowerCase())
+    && typeof onStartQuote === "function";
+  const headline = quoteReady
+    ? presentation.complete ? "Ready for quoting." : "You can start a quote."
     : `${count} setup ${count === 1 ? "area needs" : "areas need"} attention.`;
 
   const runPrimaryAction = (event) => {
@@ -177,22 +186,40 @@ export default function BusinessSetupCenter({
 
   return (
     <section
-      className={`business-setup-center${presentation.complete ? " is-complete" : " has-attention"}`}
+      className={`business-setup-center${presentation.complete ? " is-complete" : quoteReady ? " is-quote-ready has-follow-up" : " has-attention"}`}
       data-capability-id="business-setup-readiness"
-      data-readiness-state={presentation.complete ? "ready" : "attention"}
+      data-readiness-state={presentation.complete ? "ready" : quoteReady ? "quote-ready" : "attention"}
+      data-quote-ready={quoteReady ? "true" : "false"}
       aria-labelledby="business-setup-title"
     >
       <header className="business-setup-center__header">
         <p className="ambient-library__label">
-          {presentation.complete ? "Business setup" : "Your path to the first quote"}
+          {quoteReady ? "Business setup" : "Your path to the first quote"}
         </p>
         <h2 id="business-setup-title">{headline}</h2>
         <p>
           {presentation.complete
             ? "Offers, starting points, and selling policy are ready to use."
+            : quoteReady
+              ? "Remaining setup does not block quote creation. It may still be required for later work such as margin review or proposal delivery."
             : "Start with the first unresolved area; completed setup stays out of the way."}
         </p>
-        {model.isAdmin && presentation.primary?.actionKind === "refresh" && (
+        {quoteReady && canStartQuote && (
+          <div className="business-setup-center__activation-actions">
+            <button
+              type="button"
+              className="business-setup-center__primary"
+              data-library-start-quote="true"
+              onClick={onStartQuote}
+            >
+              Start a quote<span aria-hidden="true">→</span>
+            </button>
+            <small className="business-setup-center__activation-boundary">
+              Opens a new quote draft. Nothing is saved until you complete and save it.
+            </small>
+          </div>
+        )}
+        {!quoteReady && model.isAdmin && presentation.primary?.actionKind === "refresh" && (
           <button type="button" className="business-setup-center__primary" onClick={runPrimaryAction}>
             {presentation.primary.actionLabel}<span aria-hidden="true">→</span>
           </button>
@@ -242,7 +269,11 @@ export default function BusinessSetupCenter({
 
       {!presentation.complete && (
         <details className="business-setup-center__remaining">
-          <summary>{count} setup {count === 1 ? "area needs" : "areas need"} attention</summary>
+          <summary>
+            {quoteReady
+              ? `${count} setup ${count === 1 ? "improvement" : "improvements"} available`
+              : `${count} setup ${count === 1 ? "area needs" : "areas need"} attention`}
+          </summary>
           <ol className="business-setup-center__attention" aria-label="Setup areas needing attention">
             {presentation.unresolved.map((row) => (
               <li key={row.id} data-readiness-id={row.id} data-readiness-ready="false">
@@ -251,7 +282,9 @@ export default function BusinessSetupCenter({
                   <strong>{row.label}</strong>
                   <small>{row.detail}</small>
                 </div>
-                <span className="business-setup-center__attention-status">{issueStatus(row)}</span>
+                <span className="business-setup-center__attention-status">
+                  {issueStatus(row, { quoteReady })}
+                </span>
               </li>
             ))}
           </ol>

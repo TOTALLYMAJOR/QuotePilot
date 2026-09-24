@@ -9,7 +9,8 @@ const {
   normalizeChanges,
   publishCatalogSetupDraft,
   reviewCatalogSetupDraft,
-  saveCatalogSetupDraft
+  saveCatalogSetupDraft,
+  recordBusinessData
 } = require("../../../functions/catalogSetupDrafts.js");
 const { buildStarterCatalogPackDocuments } = require("../../../functions/starterCatalogPacks.js");
 
@@ -140,6 +141,108 @@ function actor() {
 }
 
 describe("catalog setup draft authority", () => {
+  test("normalizes optional catalog-import provenance while preserving legacy changes", () => {
+    const [imported] = normalizeChanges([{
+      collection: "menuItems",
+      recordId: "menu-imported",
+      intent: "create",
+      payload: {
+        name: "Imported entree",
+        eventTypeId: "event-a",
+        categoryId: "section-a",
+        priceMinor: 2400
+      },
+      provenance: {
+        kind: "catalog_import",
+        importBatchId: " menu_batch_001 ",
+        importType: "menuItems",
+        sourceKind: " CSV ",
+        sourceFileName: "  Fall\u0000\u202E Menu.csv  ",
+        sourceRowNumber: 17,
+        untrustedExtra: "drop-me"
+      }
+    }]);
+    expect(imported.provenance).toEqual({
+      kind: "catalog_import",
+      importBatchId: "menu_batch_001",
+      importType: "menuItems",
+      sourceKind: "csv",
+      sourceFileName: "Fall Menu.csv",
+      sourceRowNumber: 17
+    });
+    expect(normalizeChanges([{
+      collection: "eventTypes",
+      recordId: "legacy-event",
+      intent: "create",
+      payload: { name: "Legacy event" }
+    }])[0]).not.toHaveProperty("provenance");
+  });
+
+  test("retains import provenance through later draft merges and publication lineage", async () => {
+    const { db } = starterDb();
+    const provenance = {
+      kind: "catalog_import",
+      importBatchId: "menu_batch_001",
+      importType: "eventTypes",
+      sourceKind: "csv",
+      sourceFileName: "operator-events.csv",
+      sourceRowNumber: 4
+    };
+    const imported = await saveCatalogSetupDraft({
+      db,
+      organizationId: "acme",
+      requestId: "draft_import_provenance_0001",
+      expectedGeneration: 0,
+      baseCatalogRevision: 1,
+      patches: [{
+        collection: "eventTypes",
+        recordId: "imported-event",
+        intent: "create",
+        payload: { name: "Imported event", active: true },
+        provenance
+      }],
+      ...actor(),
+      nowISO: "2026-08-31T18:00:10.000Z"
+    });
+    expect(imported.draft.changes[0].provenance).toEqual(provenance);
+    expect(imported.mutationReceipt.changes[0].provenance).toEqual(provenance);
+
+    const updated = await saveCatalogSetupDraft({
+      db,
+      organizationId: "acme",
+      requestId: "draft_import_provenance_0002",
+      expectedGeneration: 1,
+      baseCatalogRevision: 1,
+      patches: [{
+        collection: "eventTypes",
+        recordId: "imported-event",
+        intent: "update",
+        payload: { name: "Imported event revised", active: true }
+      }],
+      ...actor(),
+      nowISO: "2026-08-31T18:00:20.000Z"
+    });
+    expect(updated.draft.changes[0].provenance).toEqual(provenance);
+    expect(updated.mutationReceipt.changes[0].provenance).toEqual(provenance);
+
+    await publishCatalogSetupDraft({
+      db,
+      organizationId: "acme",
+      requestId: "publish_import_provenance_0001",
+      expectedGeneration: 2,
+      baseCatalogRevision: 1,
+      ...actor(),
+      nowISO: "2026-08-31T18:00:30.000Z"
+    });
+    const active = db.store.get("organizations/acme/eventTypes/imported-event");
+    expect(active.importProvenance).toEqual(provenance);
+    const draftSessionId = updated.mutationReceipt.draftSessionId;
+    expect(db.store.get(`organizations/acme/catalogDraftPublicationLineages/${draftSessionId}`))
+      .toMatchObject({ changes: [expect.objectContaining({ provenance })] });
+    expect(db.store.get("organizations/acme/catalogPublicationReceipts/publish_import_provenance_0001"))
+      .toMatchObject({ changes: [expect.objectContaining({ provenance })] });
+    expect(recordBusinessData(active)).not.toHaveProperty("importProvenance");
+  });
   test("reconciles one exact save receipt as staged, then published after response loss and a later draft", async () => {
     const { db, plan } = starterDb();
     const packageRecord = plan.collections.catalogPackages[0];

@@ -409,6 +409,20 @@ export function workspaceTaskJourneyBelongsToPrincipal(journey, principal) {
   }
 }
 
+/** Returns false for malformed journeys, clocks, TTLs, and future start times. */
+export function isWorkspaceTaskJourneyFresh(journey, options) {
+  try {
+    const current = canonicalJourney(journey);
+    const input = exactRecord(options, ["nowISO", "ttlMs"], "invalid_input");
+    const nowISO = canonicalInstant(input.nowISO, "invalid_input");
+    if (!Number.isSafeInteger(input.ttlMs) || input.ttlMs < 0) return false;
+    const ageMs = Date.parse(nowISO) - Date.parse(current.startedAtISO);
+    return ageMs >= 0 && ageMs <= input.ttlMs;
+  } catch {
+    return false;
+  }
+}
+
 /** Matches the complete canonical destination, object, intent, and focus. */
 export function workspaceTaskJourneyMatchesArrival(journey, arrivalContext) {
   try {

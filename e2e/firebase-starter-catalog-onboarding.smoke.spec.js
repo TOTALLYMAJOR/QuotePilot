@@ -1,15 +1,24 @@
+import { mkdirSync } from "node:fs";
 import { expect, test } from "@playwright/test";
 
 const STAFF_EMAIL = process.env.E2E_FIREBASE_EMAIL || "e2e-admin@local.test";
 const STAFF_PASSWORD = process.env.E2E_FIREBASE_PASSWORD || "Passw0rd!";
 const STARTER_STAFF_EMAIL = process.env.E2E_FIREBASE_SECOND_EMAIL || "e2e-admin-blank@local.test";
 const STARTER_STAFF_PASSWORD = process.env.E2E_FIREBASE_SECOND_PASSWORD || "Passw0rd!";
+const STARTER_ORGANIZATION_ID = process.env.E2E_FIREBASE_SECOND_ORG_ID || "e2e-org-blank";
 const STARTER_PACK_TITLES = [
   "Wedding & events",
   "Corporate drop-off",
   "BBQ / Southern",
   "Church & community"
 ];
+const OUTPUT_DIR = "output/playwright/first-quote-library-continuation";
+const AMBIENT_LIBRARY_ENABLED = [
+  process.env.VITE_AMBIENT_UI_ENABLED,
+  process.env.VITE_CUSTOMER_CENTERED_WORKSPACE_ENABLED
+].every((value) => ["1", "true", "yes", "on"].includes(
+  String(value || "").trim().toLowerCase()
+));
 
 async function signInAsBlankOwner(page, {
   email = STAFF_EMAIL,
@@ -45,6 +54,17 @@ function closeOverlayDialog(dialog, { preferGhost = false } = {}) {
   return preferGhost
     ? dialog.getByRole("button", { name: "Close" })
     : (dialog.getByRole("button", { name: "Close" }).or(dialog.getByRole("button", { name: "Back to Home" })));
+}
+
+async function readAuthoritativeQuoteIds(page) {
+  return page.evaluate(async (organizationId) => {
+    const { getQuoteHistory } = await import("/src/lib/quoteStore.js");
+    const history = await getQuoteHistory({ organizationId, includeDeleted: true });
+    if (history.source !== "firebase") {
+      throw new Error("Expected authoritative Firebase quote history.");
+    }
+    return history.quotes.map((quote) => quote.id).sort();
+  }, STARTER_ORGANIZATION_ID);
 }
 
 test("blank owner stages a starter pack, reviews pricing, and unlocks quoting", async ({ page }) => {
@@ -83,6 +103,41 @@ test("blank owner stages a starter pack, reviews pricing, and unlocks quoting", 
   await expect(catalogDialog).toBeHidden({ timeout: 60_000 });
   await expect(page.getByRole("button", { name: "New Quote" }).first()).toBeVisible({ timeout: 45_000 });
   await expect(page.getByRole("heading", { name: "Bring Your Catalog to Life" })).toHaveCount(0);
+
+  if (AMBIENT_LIBRARY_ENABLED) {
+    mkdirSync(OUTPUT_DIR, { recursive: true });
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await page.goto("/app/catalog");
+    await expect(page.locator("#ambient-library-title")).toHaveText("The choices behind every quote.", {
+      timeout: 45_000
+    });
+    const action = page.locator('[data-library-start-quote="true"]');
+    await expect(action).toHaveAccessibleName("Start a quote");
+    await expect(page.getByText(
+      "Opens a new quote draft. Nothing is saved until you complete and save it.",
+      { exact: true }
+    )).toBeVisible();
+    await page.screenshot({
+      path: `${OUTPUT_DIR}/admin-desktop-library-ready.png`,
+      fullPage: true
+    });
+
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expect(action).toBeVisible();
+    await page.screenshot({
+      path: `${OUTPUT_DIR}/admin-mobile-library-ready.png`,
+      fullPage: true
+    });
+
+    const quoteIdsBeforeDraft = await readAuthoritativeQuoteIds(page);
+    expect(quoteIdsBeforeDraft).toEqual([]);
+    await action.click();
+    await expect(page).toHaveURL(/\/app\/quotes\/new$/u);
+    await expect(page.getByRole("heading", { name: "What are you planning?" })).toBeVisible();
+    await expect(page.getByText(/Nothing is saved or sent from here/u)).toBeVisible();
+    await expect(page.locator("body")).not.toContainText(/Quote (created|saved|completed)/u);
+    expect(await readAuthoritativeQuoteIds(page)).toEqual(quoteIdsBeforeDraft);
+  }
 });
 
 test("blank owner can bypass setup and enter workspace", async ({ page }) => {

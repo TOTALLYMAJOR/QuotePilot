@@ -3,6 +3,7 @@ import { describe, expect, test } from "vitest";
 import {
   clearWorkspaceTaskJourney,
   createWorkspaceTaskJourney,
+  isWorkspaceTaskJourneyFresh,
   readWorkspaceTaskJourney,
   transitionWorkspaceTaskContext,
   transitionWorkspaceTaskOutcome,
@@ -165,6 +166,70 @@ describe("workspace task journey presentation contract", () => {
     expect(result.journey).not.toHaveProperty("reason");
     expect(result.journey).not.toHaveProperty("consequence");
     expect(result.journey.object).not.toHaveProperty("label");
+  });
+
+  test("persists and restores only imported menu-item review identifiers", () => {
+    const storage = memoryStorage();
+    const focus = {
+      sectionId: "menu",
+      recordId: "menu-imported",
+      eventTypeId: "event-42",
+      categoryId: "category-7",
+      importBatchId: "batch-9",
+      sourceRowNumber: 3,
+      requestId: "catalog-import:batch-9:menu-imported:3"
+    };
+    const journey = createJourney({
+      taskId: "task-review-imported-menu-item",
+      destination: "library",
+      object: { id: "menu-imported", type: "menu-item" },
+      focus,
+      intentId: "review_imported_menu_item"
+    });
+
+    expect(writeWorkspaceTaskJourney("organization-42", journey, storage)).toEqual({
+      ok: true,
+      journey
+    });
+    expect(readWorkspaceTaskJourney("organization-42", storage)).toEqual({
+      ok: true,
+      journey
+    });
+    expect(journey.focus).toEqual(focus);
+    expect(JSON.stringify(journey)).not.toMatch(/receipt|changes|filename|price|cost|customer/i);
+  });
+
+  test("checks journey freshness at the inclusive TTL boundary and fails closed", () => {
+    const journey = createJourney();
+    const ttlMs = 60_000;
+
+    expect(isWorkspaceTaskJourneyFresh(journey, {
+      nowISO: "2026-09-03T03:11:00.000Z",
+      ttlMs
+    })).toBe(true);
+    expect(isWorkspaceTaskJourneyFresh(journey, {
+      nowISO: "2026-09-03T03:11:00.001Z",
+      ttlMs
+    })).toBe(false);
+    expect(isWorkspaceTaskJourneyFresh(journey, {
+      nowISO: "2026-09-03T03:09:59.999Z",
+      ttlMs
+    })).toBe(false);
+
+    for (const options of [
+      { nowISO: "not-a-time", ttlMs },
+      { nowISO: "2026-09-03T03:11:00Z", ttlMs },
+      { nowISO: "2026-09-03T03:11:00.000Z", ttlMs: -1 },
+      { nowISO: "2026-09-03T03:11:00.000Z", ttlMs: 1.5 },
+      { nowISO: "2026-09-03T03:11:00.000Z", ttlMs, extra: true },
+      null
+    ]) {
+      expect(isWorkspaceTaskJourneyFresh(journey, options)).toBe(false);
+    }
+    expect(isWorkspaceTaskJourneyFresh({ ...mutable(journey), startedAtISO: "invalid" }, {
+      nowISO: "2026-09-03T03:11:00.000Z",
+      ttlMs
+    })).toBe(false);
   });
 
   test("binds restoration to the exact signed-in principal and role", () => {

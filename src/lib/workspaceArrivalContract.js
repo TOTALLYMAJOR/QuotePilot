@@ -70,7 +70,8 @@ const OBJECT_TYPE_LABELS = /* @__PURE__ */ Object.freeze({
   "intelligent-object": "Intelligent object",
   "organization-library": "Organization Library",
   "library-section": "Library section",
-  "event-template": "Event template"
+  "event-template": "Event template",
+  "menu-item": "Menu item"
 });
 
 const DESTINATION_OBJECT_TYPES = /* @__PURE__ */ (() => Object.freeze({
@@ -115,7 +116,8 @@ const DESTINATION_OBJECT_TYPES = /* @__PURE__ */ (() => Object.freeze({
   library: Object.freeze([
     "organization-library",
     "library-section",
-    "event-template"
+    "event-template",
+    "menu-item"
   ])
 }))();
 
@@ -362,6 +364,16 @@ const INTENTS = /* @__PURE__ */ (() => Object.freeze({
       resolution: "Review the focused event template, then use its role-gated controls to make an intentional change.",
       objectTypes: Object.freeze(["event-template"]),
       requiresRecordId: true
+    }),
+    review_imported_menu_item: Object.freeze({
+      reasonId: "imported_menu_item_selected",
+      reason: "An imported menu item was selected for review.",
+      consequenceId: "imported_menu_item_remains_unchanged",
+      consequence: "Opening the imported menu item changes no catalog, quote, pricing, cost, or import evidence.",
+      resolutionId: "review_exact_imported_menu_item",
+      resolution: "Review the exact imported menu item and choose an available role-gated action.",
+      objectTypes: Object.freeze(["menu-item"]),
+      requiresRecordId: true
     })
   })
 }))();
@@ -520,6 +532,11 @@ function opaqueId(value) {
   return id;
 }
 
+function positiveRowNumber(value) {
+  if (!Number.isSafeInteger(value) || value < 1) fail("unsafe_identifier");
+  return value;
+}
+
 function normalizeObject(value, destination) {
   const input = exactRecord(value, ["id", "type"]);
   const type = requiredString(input.type);
@@ -574,6 +591,27 @@ function normalizeFocus(value, destination, intent) {
     return { quoteId: opaqueId(input.quoteId) };
   }
   if (destination === "library") {
+    if (intent === INTENTS.library.review_imported_menu_item) {
+      const input = exactRecord(value, [
+        "sectionId",
+        "recordId",
+        "eventTypeId",
+        "categoryId",
+        "importBatchId",
+        "sourceRowNumber",
+        "requestId"
+      ]);
+      if (input.sectionId !== "menu") fail("unsupported_combination");
+      return {
+        sectionId: "menu",
+        recordId: opaqueId(input.recordId),
+        eventTypeId: opaqueId(input.eventTypeId),
+        categoryId: opaqueId(input.categoryId),
+        importBatchId: opaqueId(input.importBatchId),
+        sourceRowNumber: positiveRowNumber(input.sourceRowNumber),
+        requestId: opaqueId(input.requestId)
+      };
+    }
     const input = exactRecord(value, ["sectionId", "recordId", "quoteId"]);
     const focus = { sectionId: opaqueId(input.sectionId) };
     const hasRecordId = Object.prototype.hasOwnProperty.call(input, "recordId");
@@ -663,7 +701,7 @@ function validateObjectFocusRelationship(destination, object, focus) {
   }
   if (
     destination === "library"
-    && object.type === "event-template"
+    && ["event-template", "menu-item"].includes(object.type)
     && object.id !== focus.recordId
   ) {
     fail("unsupported_combination");
