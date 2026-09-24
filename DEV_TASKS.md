@@ -1,6 +1,6 @@
 # QuotePilot Development Tasks
 
-Last updated: 2026-09-24 17:39:10 CDT
+Last updated: 2026-09-24 18:16:41 CDT
 
 This file contains open work only. Completed delivery belongs in
 [`CHANGELOG.md`](CHANGELOG.md), current evidence in
@@ -176,14 +176,12 @@ It classifies the current dirty checkout once, preserves unrelated work, and
 orders publication, exact-head CI, deployment, and `QPI-01` proof without
 turning GitHub issues or the plan into a competing roadmap.
 
-- [ ] `QPR-003` — Review and package the catalog-import and first-quote cohort.
-  Depends on completed `QPR-002` package commit `11391b7c`; content repair
-  requires a separately planned task.
 - [ ] `QPR-004` — Review and package the Ambient workspace and responsive
-  Inventory cohort. Depends on `QPR-003`; content repair requires a separately
-  planned task.
+  Inventory cohort. Depends on completed `QPR-003` package commit `1e7283ef`;
+  content repair requires a separately planned task.
 - [ ] `QPR-005` — Review and package the release-test and browser-harness cohort.
-  Depends on `QPR-003` and `QPR-004`; local emulator proof remains local.
+  Depends on completed `QPR-003` package commit `1e7283ef` and `QPR-004`; local
+  emulator proof remains local.
 - [ ] `QPR-006` — Synchronize state, capability, performance, and release docs
   to the exact packaged source. Depends on `QPR-002`–`QPR-005`.
 - [ ] `QPR-007` — Prove one clean exact-SHA release candidate. Depends on
