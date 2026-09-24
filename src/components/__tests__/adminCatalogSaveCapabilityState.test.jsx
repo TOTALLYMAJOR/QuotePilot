@@ -309,10 +309,12 @@ describe("AdminCatalogModal save capability state", () => {
       expect(container.querySelector('[data-menu-item-id="menu-imported-late"]')).not.toBeNull();
     });
     expect(vi.mocked(getMenuItems).mock.calls.length).toBeGreaterThan(publishedLoadCount);
-    expect(onFocusResolution).toHaveBeenCalledWith(expect.objectContaining({
-      requestId: focusRequest.requestId,
-      status: "focused"
-    }));
+    await vi.waitFor(() => {
+      expect(onFocusResolution).toHaveBeenCalledWith(expect.objectContaining({
+        requestId: focusRequest.requestId,
+        status: "focused"
+      }));
+    });
   });
 
   test("recovers without substituting the first menu item when the receipt target is absent", async () => {
