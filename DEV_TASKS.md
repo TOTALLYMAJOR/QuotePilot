@@ -1,6 +1,6 @@
 # QuotePilot Development Tasks
 
-Last updated: 2026-09-24 17:10:14 CDT
+Last updated: 2026-09-24 17:39:10 CDT
 
 This file contains open work only. Completed delivery belongs in
 [`CHANGELOG.md`](CHANGELOG.md), current evidence in
@@ -176,11 +176,9 @@ It classifies the current dirty checkout once, preserves unrelated work, and
 orders publication, exact-head CI, deployment, and `QPI-01` proof without
 turning GitHub issues or the plan into a competing roadmap.
 
-- [ ] `QPR-002` — Review and package the documentation/governance authority
-  cohort. Depends on the completed path classification in the plan. No product
-  source edit or shipped-state claim is in scope.
 - [ ] `QPR-003` — Review and package the catalog-import and first-quote cohort.
-  Depends on `QPR-002`; content repair requires a separately planned task.
+  Depends on completed `QPR-002` package commit `11391b7c`; content repair
+  requires a separately planned task.
 - [ ] `QPR-004` — Review and package the Ambient workspace and responsive
   Inventory cohort. Depends on `QPR-003`; content repair requires a separately
   planned task.
