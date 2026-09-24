@@ -1,15 +1,35 @@
 # Documentation System
 
-Last updated: 2026-09-19 19:05:53 CDT
+Last updated: 2026-09-24 04:14:50 CDT
 
 ## Purpose
 This repository uses a layered canonical documentation model.
 Each major topic has one source of truth. Other docs should link to that source instead of duplicating content.
 
 ## Canonical Documents
-- `README.md`: product overview, architecture snapshot, setup, testing commands, and deployment entry points.
+- `README.md`: repository entry point, concise product orientation, setup,
+  testing commands, and deployment entry points.
+- `docs/DOCUMENTATION_MAP.md`: index of the eight system-level product
+  authorities and the five independent meanings of finished.
+- `docs/PROJECT_CHARTER.md`: product problem, actors, outcomes, scope,
+  constraints, success policy, release boundary, and decision rights.
+- `docs/PRODUCT_REQUIREMENTS.md`: system-level workflows, functional and
+  non-functional requirements, priorities, edge cases, and core release boundary.
+- `docs/SYSTEM_ARCHITECTURE.md`: current system context, module responsibilities,
+  seams, data flows, dependencies, trust boundaries, deployment, and failure behavior.
+- `docs/ACCEPTANCE_STANDARD.md`: project-wide Definition of Done, evidence
+  classes, failure scenarios, and core product release gate.
+- `docs/adr/README.md`: canonical architecture-decision index and ADR lifecycle;
+  individual ADRs retain authority for their decisions.
+- `docs/DATA_INTERFACE_CONTRACTS.md`: contract and schema ownership index,
+  interface rules, state-machine ownership, errors, and versioning policy.
+- `docs/RISK_ASSUMPTION_REGISTER.md`: cross-cutting product, technical,
+  security, dependency, evidence, and execution risks and assumptions.
 - `PROJECT_STATUS.md`: current operational state only (health, active risks, next actions).
 - `DEV_TASKS.md`: prioritized backlog only (open work, grouped by priority).
+- `docs/agents/issue-tracker.md`: GitHub issue execution conventions. GitHub
+  issue mirrors remain subordinate to `DEV_TASKS.md` and must not become a
+  competing roadmap authority.
 - `CHANGELOG.md`: historical record of shipped/merged changes.
 - `PROJECT_STATE.md`: human-readable reconciliation entry point and the single
   next proof event; it links to, rather than replaces, the authorities above.
@@ -54,6 +74,20 @@ Each major topic has one source of truth. Other docs should link to that source 
   human-readable authority remains `AGENTS.md` and `docs/AGENT_GOVERNANCE.md`.
 
 ## Update Triggers
+- Product purpose, target user, outcome, scope, constraint, or release-boundary
+  changes: update `docs/PROJECT_CHARTER.md` and affected subordinate authorities.
+- System workflow, functional/non-functional requirement, priority, edge case,
+  or MVP changes: update `docs/PRODUCT_REQUIREMENTS.md`.
+- Module responsibility, data flow, external dependency, trust boundary,
+  deployment topology, or failure behavior changes: update
+  `docs/SYSTEM_ARCHITECTURE.md` and create or supersede an ADR when required.
+- Definition of Done, proof-class, release gate, security/privacy expectation,
+  or required failure scenario changes: update `docs/ACCEPTANCE_STANDARD.md`.
+- Schema, interface, event, state-machine, error, versioning, or data ownership
+  changes: update the owning executable contract and
+  `docs/DATA_INTERFACE_CONTRACTS.md` when routing or ownership changes.
+- Cross-cutting risk, high-impact assumption, mitigation, or validation-plan
+  changes: update `docs/RISK_ASSUMPTION_REGISTER.md`.
 - Code or behavior changes: update `CHANGELOG.md`.
 - Current-state/risk/near-term execution changes: update `PROJECT_STATUS.md`.
 - Roadmap priority changes: update `DEV_TASKS.md`.
@@ -161,6 +195,13 @@ for operator review.
 ## Data Ownership Matrix
 | Topic | Canonical Doc | Notes |
 |---|---|---|
+| Product purpose, target users, scope, constraints, and release boundary | `docs/PROJECT_CHARTER.md` | Product targets remain proposed until their explicit owner-acceptance record exists. |
+| System-level product requirements and MVP priorities | `docs/PRODUCT_REQUIREMENTS.md` | Feature PRDs extend but do not replace or weaken the system boundary. |
+| System architecture, seams, trust boundaries, topology, and failure behavior | `docs/SYSTEM_ARCHITECTURE.md` | Domain ADRs and executable contracts retain authority for their detailed invariants. |
+| Definition of Done and acceptance evidence classes | `docs/ACCEPTANCE_STANDARD.md` | Requirement acceptance and the standing quality bar are both required. |
+| Architecture decision discovery and lifecycle | `docs/adr/README.md` | Individual ADRs remain authoritative; `docs/project/DECISIONS.md` is index-only. |
+| Data/interface contract ownership and versioning | `docs/DATA_INTERFACE_CONTRACTS.md` | Schemas remain in their executable canonical files; this document routes ownership. |
+| Cross-cutting risks and assumptions | `docs/RISK_ASSUMPTION_REGISTER.md` | Operational truth remains in `PROJECT_STATUS.md`; work remains in `DEV_TASKS.md`. |
 | Runtime stack versions (React/Vite/Firebase) | `README.md` | Other docs must not restate versions unless they directly link back. |
 | Current delivery health and risk posture | `PROJECT_STATUS.md` | Includes what is working now and current blockers. |
 | Priority backlog and sequencing | `DEV_TASKS.md` | Open items only; no progress narrative. |

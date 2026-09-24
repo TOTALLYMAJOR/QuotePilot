@@ -1,6 +1,6 @@
 # QuotePilot Development Tasks
 
-Last updated: 2026-09-20 19:47:00 CDT
+Last updated: 2026-09-24 17:10:14 CDT
 
 This file contains open work only. Completed delivery belongs in
 [`CHANGELOG.md`](CHANGELOG.md), current evidence in
@@ -167,6 +167,40 @@ and assistive-technology behavior, and separate evidence-class receipts.
 - **Evidence needed:** security/local, hosted role and denial, provider, privacy,
   human-comparison, cost, latency, and correction receipts. No model-output or
   outcome claim is implied by the current dormant source foundation.
+
+## NOW — v0.20 release publication
+
+The bounded execution plan is
+[`docs/plans/v0.20.0-release-publication-plan.md`](docs/plans/v0.20.0-release-publication-plan.md).
+It classifies the current dirty checkout once, preserves unrelated work, and
+orders publication, exact-head CI, deployment, and `QPI-01` proof without
+turning GitHub issues or the plan into a competing roadmap.
+
+- [ ] `QPR-002` — Review and package the documentation/governance authority
+  cohort. Depends on the completed path classification in the plan. No product
+  source edit or shipped-state claim is in scope.
+- [ ] `QPR-003` — Review and package the catalog-import and first-quote cohort.
+  Depends on `QPR-002`; content repair requires a separately planned task.
+- [ ] `QPR-004` — Review and package the Ambient workspace and responsive
+  Inventory cohort. Depends on `QPR-003`; content repair requires a separately
+  planned task.
+- [ ] `QPR-005` — Review and package the release-test and browser-harness cohort.
+  Depends on `QPR-003` and `QPR-004`; local emulator proof remains local.
+- [ ] `QPR-006` — Synchronize state, capability, performance, and release docs
+  to the exact packaged source. Depends on `QPR-002`–`QPR-005`.
+- [ ] `QPR-007` — Prove one clean exact-SHA release candidate. Depends on
+  `QPR-006`; all required local lanes must pass from the clean candidate.
+- [ ] `QPR-008` — Publish the candidate and obtain exact-head CI receipts.
+  Depends on `QPR-007`; no provider deployment is implied.
+- [ ] `QPR-009` — Run protected provider deployment and rollback/readback proof.
+  Depends on `QPR-008`; Vercel, Firebase, and production-data receipts remain
+  separate.
+- [ ] `QPR-010` — Complete automated hosted `QPI-01` role, tenant-denial,
+  Inventory-recovery, App Check monitoring, and responsive evidence. Depends on
+  `QPR-009`; no human-acceptance claim is implied.
+- [ ] `QPR-011` — Record assistive-technology, operator-comprehension, and owner
+  acceptance receipts for `QPI-01`. Depends on `QPR-010`; this is explicitly
+  `ready_for_human`, not agent-completable work.
 
 ## Deferred — excluded from the active dependency graph
 
