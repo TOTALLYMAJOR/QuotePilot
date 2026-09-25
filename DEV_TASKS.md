@@ -1,6 +1,6 @@
 # QuotePilot Development Tasks
 
-Last updated: 2026-09-24 21:31:00 CDT
+Last updated: 2026-09-24 22:05:00 CDT
 
 This file contains open work only. Completed delivery belongs in
 [`CHANGELOG.md`](CHANGELOG.md), current evidence in
@@ -179,11 +179,12 @@ turning GitHub issues or the plan into a competing roadmap.
 - [x] `QPR-005` — Review and package the release-test and browser-harness cohort.
   Completed at source head `dc3cdb1a33c6f75c3cff993f4a4bd9db382bf6c6`;
   local emulator proof remains local.
-- [ ] `QPR-006` — Synchronize state, capability, performance, and release docs
-  to the exact packaged source. Ready against completed `QPR-002`–`QPR-005`,
-  with `QPR-005` at `dc3cdb1a33c6f75c3cff993f4a4bd9db382bf6c6`.
-- [ ] `QPR-007` — Prove one clean exact-SHA release candidate. Depends on
-  `QPR-006`; all required local lanes must pass from the clean candidate.
+- [x] `QPR-006` — Synchronize state, capability, performance, and release docs
+  to QPR-005 source `dc3cdb1a33c6f75c3cff993f4a4bd9db382bf6c6`.
+  Completed at package head `184a2d796638505db2528f4fdbd764bb650f9524`.
+- [ ] `QPR-007` — Prove one clean exact-SHA release candidate. Ready against
+  completed `QPR-006` head `184a2d796638505db2528f4fdbd764bb650f9524`;
+  all required local lanes must pass from the clean candidate.
 - [ ] `QPR-008` — Publish the candidate and obtain exact-head CI receipts.
   Depends on `QPR-007`; no provider deployment is implied.
 - [ ] `QPR-009` — Run protected provider deployment and rollback/readback proof.
