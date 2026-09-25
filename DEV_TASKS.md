@@ -1,6 +1,6 @@
 # QuotePilot Development Tasks
 
-Last updated: 2026-09-24 20:53:40 CDT
+Last updated: 2026-09-24 21:31:00 CDT
 
 This file contains open work only. Completed delivery belongs in
 [`CHANGELOG.md`](CHANGELOG.md), current evidence in
@@ -176,11 +176,12 @@ It classifies the current dirty checkout once, preserves unrelated work, and
 orders publication, exact-head CI, deployment, and `QPI-01` proof without
 turning GitHub issues or the plan into a competing roadmap.
 
-- [ ] `QPR-005` — Review and package the release-test and browser-harness cohort.
-  Depends on completed `QPR-004` source head `6242618b`; local emulator proof
-  remains local.
+- [x] `QPR-005` — Review and package the release-test and browser-harness cohort.
+  Completed at source head `dc3cdb1a33c6f75c3cff993f4a4bd9db382bf6c6`;
+  local emulator proof remains local.
 - [ ] `QPR-006` — Synchronize state, capability, performance, and release docs
-  to the exact packaged source. Depends on `QPR-002`–`QPR-005`.
+  to the exact packaged source. Ready against completed `QPR-002`–`QPR-005`,
+  with `QPR-005` at `dc3cdb1a33c6f75c3cff993f4a4bd9db382bf6c6`.
 - [ ] `QPR-007` — Prove one clean exact-SHA release candidate. Depends on
   `QPR-006`; all required local lanes must pass from the clean candidate.
 - [ ] `QPR-008` — Publish the candidate and obtain exact-head CI receipts.
