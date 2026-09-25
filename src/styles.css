@@ -5044,6 +5044,10 @@ hr {
   background: #fffdf8;
 }
 
+.admin-menu-item-list-row.is-import-focus {
+  box-shadow: inset 0 0 0 2px rgba(141, 97, 26, 0.28);
+}
+
 .admin-menu-item-list-row > input[type="checkbox"] {
   width: auto;
 }
@@ -5090,6 +5094,21 @@ hr {
   min-width: 0;
   padding: 1rem;
   background: #ffffff;
+}
+
+.admin-menu-import-focus-note {
+  display: grid;
+  gap: 0.24rem;
+  margin-bottom: 1rem;
+  padding: 0.75rem 0.85rem;
+  border-left: 3px solid var(--tone-gold-3, #8d611a);
+  background: #fff9ec;
+  color: #373125;
+  font-size: 0.82rem;
+}
+
+.admin-menu-import-focus-note span {
+  display: block;
 }
 
 .admin-menu-item-fields {
@@ -6674,6 +6693,39 @@ hr {
   max-width: 100%;
   min-width: 0;
   overflow: auto;
+}
+
+.inventory-table-instruction {
+  display: block;
+  max-width: 60ch;
+}
+
+.inventory-evidence-table-wrap {
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-inline: contain;
+  scrollbar-gutter: stable;
+  -webkit-overflow-scrolling: touch;
+}
+
+.inventory-evidence-table-wrap table {
+  min-width: 72rem;
+  table-layout: fixed;
+}
+
+.inventory-evidence-table-wrap:focus-visible {
+  outline: 3px solid var(--focus-ring, #6b4f12);
+  outline-offset: 3px;
+}
+
+@media (forced-colors: active) {
+  .inventory-evidence-table-wrap {
+    border: 1px solid CanvasText;
+  }
+
+  .inventory-evidence-table-wrap:focus-visible {
+    outline-color: CanvasText;
+  }
 }
 
 .history-card table {

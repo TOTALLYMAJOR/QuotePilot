@@ -273,7 +273,7 @@ function attendancePresentation(read) {
     tone = "coral";
   } else if (state.decisionDebt?.state === "due_or_overdue") {
     timingLabel = `Final count due ${attendanceDate(state.decisionDebt.lockDate) || "now"}`;
-    timingDetail = "This exact Decision Debt item is due or overdue and remains unresolved.";
+    timingDetail = "This final-count decision remains due or overdue.";
     tone = "coral";
   } else if (state.decisionDebt?.state === "scheduled") {
     timingLabel = `Final count due ${attendanceDate(state.decisionDebt.lockDate)}`;

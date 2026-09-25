@@ -2,7 +2,7 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
 import { act } from "react-dom/test-utils";
-import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   deleteQuote: vi.fn(),
@@ -21,12 +21,10 @@ vi.mock("../../lib/menuService", async () => ({
   getEventTypes: mocks.getEventTypes
 }));
 
-import {
-  isExactQuoteAdministrationArrival,
-  QuoteHistoryView
-} from "../QuoteHistoryModal";
-
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+
+let isExactQuoteAdministrationArrival;
+let QuoteHistoryView;
 
 const QUOTE = Object.freeze({
   id: "quote-event-route",
@@ -49,6 +47,11 @@ const QUOTE = Object.freeze({
 
 let container;
 let root;
+
+beforeAll(async () => {
+  vi.stubEnv("VITE_AMBIENT_UI_ENABLED", "false");
+  ({ isExactQuoteAdministrationArrival, QuoteHistoryView } = await import("../QuoteHistoryModal"));
+});
 
 async function settle() {
   await act(async () => {
@@ -73,6 +76,7 @@ function byText(label) {
 }
 
 beforeEach(() => {
+  vi.stubEnv("VITE_AMBIENT_UI_ENABLED", "false");
   Object.defineProperty(Element.prototype, "scrollIntoView", {
     configurable: true,
     value: vi.fn()
@@ -89,6 +93,7 @@ afterEach(() => {
   act(() => root.unmount());
   container.remove();
   delete Element.prototype.scrollIntoView;
+  vi.unstubAllEnvs();
 });
 
 describe("QuoteHistoryView event workspace integration", () => {

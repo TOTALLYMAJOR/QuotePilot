@@ -128,6 +128,7 @@ function RouteFeedbackProbe() {
 }
 
 beforeEach(() => {
+  vi.stubEnv("VITE_AMBIENT_UI_ENABLED", "false");
   window.history.replaceState({}, "", "/app/catalog");
   container = document.createElement("div");
   document.body.appendChild(container);

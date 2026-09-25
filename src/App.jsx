@@ -28,7 +28,6 @@ import {
   WorkspaceToolSurface
 } from "./components/WorkspaceSurfaceBoundary";
 import { StepEvent, StepMenu, StepReview, StepServices } from "./components/WizardSteps";
-import CreateIntake from "./components/CreateIntake";
 import ChangeRequestPanel from "./components/ChangeRequestPanel";
 import { parseIntentDraftWithModel } from "./lib/intentParseClient";
 import { applyProposalToForm, proposalTouchedFields } from "./components/changeRequestParse";
@@ -82,6 +81,7 @@ import { setActiveOrganizationId } from "./lib/organizationService";
 import { requestPasswordReset } from "./lib/authClient";
 import { firebaseReady } from "./lib/firebase";
 import { isCatalogPricingConfirmationCurrent } from "./lib/catalogPricingConfirmation";
+import { resolveImportStudioRouteIntent } from "./lib/importWorkbenchModel";
 import { calculateQuote, currency } from "./lib/quoteCalculator";
 import { buildUpsellRecommendations } from "./lib/recommendations";
 import {
@@ -139,6 +139,7 @@ import {
 import {
   clearWorkspaceTaskJourney,
   createWorkspaceTaskJourney,
+  isWorkspaceTaskJourneyFresh,
   readWorkspaceTaskJourney,
   transitionWorkspaceTaskContext,
   transitionWorkspaceTaskOutcome,
@@ -175,6 +176,10 @@ const AdminCatalogView = createRecoverableLazy(
 const CustomerPortalView = createRecoverableLazy(
   () => import("quotepilot-active-customer-portal"),
   "CustomerPortalView"
+);
+const CreateIntake = createRecoverableLazy(
+  () => import("./components/CreateIntake"),
+  "CreateIntake"
 );
 const CommandCenterHome = AMBIENT_UI_ENABLED
   ? null
@@ -894,6 +899,35 @@ function ambientClientArrivalInput(target = {}) {
   };
 }
 
+const IMPORTED_MENU_ITEM_REVIEW_TTL_MS = 30 * 60 * 1000;
+
+function importedMenuItemReviewArrivalInput(target = {}) {
+  const recordId = String(target?.recordId || "").trim();
+  return {
+    destination: "library",
+    object: { id: recordId, type: "menu-item" },
+    focus: {
+      sectionId: "menu",
+      recordId,
+      eventTypeId: String(target?.eventTypeId || "").trim(),
+      categoryId: String(target?.categoryId || "").trim(),
+      importBatchId: String(target?.importBatchId || "").trim(),
+      sourceRowNumber: Number(target?.sourceRowNumber),
+      requestId: String(target?.requestId || "").trim()
+    },
+    intentId: "review_imported_menu_item"
+  };
+}
+
+function workspaceTaskJourneyIsRestorable(journey, principal) {
+  if (!workspaceTaskJourneyBelongsToPrincipal(journey, principal)) return false;
+  if (journey?.intentId !== "review_imported_menu_item") return true;
+  return isWorkspaceTaskJourneyFresh(journey, {
+    nowISO: new Date().toISOString(),
+    ttlMs: IMPORTED_MENU_ITEM_REVIEW_TTL_MS
+  });
+}
+
 function ambientTaskActionId(target = {}, options = {}) {
   return String(
     target?.actionId
@@ -1173,7 +1207,7 @@ export default function App({
     if (!AMBIENT_UI_ENABLED) return null;
     const stored = readWorkspaceTaskJourney(authSession.organizationId);
     const principal = workspaceTaskPrincipal(authSession);
-    return stored.ok && workspaceTaskJourneyBelongsToPrincipal(stored.journey, principal)
+    return stored.ok && workspaceTaskJourneyIsRestorable(stored.journey, principal)
       ? stored.journey
       : null;
   });
@@ -1187,7 +1221,7 @@ export default function App({
   }, []);
   const activeWorkspaceTaskJourney = workspaceTaskJourney?.organizationId
     === String(authSession.organizationId || "").trim()
-    && workspaceTaskJourneyBelongsToPrincipal(workspaceTaskJourney, activeWorkspaceTaskPrincipal)
+    && workspaceTaskJourneyIsRestorable(workspaceTaskJourney, activeWorkspaceTaskPrincipal)
     ? workspaceTaskJourney
     : null;
   const [catalogRouteInteraction, setCatalogRouteInteraction] = useState(EMPTY_LIBRARY_INTERACTION);
@@ -1233,7 +1267,11 @@ export default function App({
         workspaceArrivalContext.focus?.reportScope,
         workspaceArrivalContext.focus?.reportSignal,
         workspaceArrivalContext.focus?.sectionId,
-        workspaceArrivalContext.focus?.recordId
+        workspaceArrivalContext.focus?.recordId,
+        workspaceArrivalContext.focus?.eventTypeId,
+        workspaceArrivalContext.focus?.categoryId,
+        workspaceArrivalContext.focus?.importBatchId,
+        workspaceArrivalContext.focus?.sourceRowNumber
       ]) : JSON.stringify([
         "recovery",
         browserLocation.pathname,
@@ -1260,18 +1298,27 @@ export default function App({
     if (!workspaceArrivalKey || !resolution || typeof resolution !== "object") return;
     setWorkspaceArrivalResolution({ ...resolution, arrivalKey: workspaceArrivalKey });
   }, [workspaceArrivalKey]);
+  const previousWorkspaceTaskOrganizationRef = useRef(
+    String(authSession.organizationId || "").trim()
+  );
   useEffect(() => {
     if (!AMBIENT_UI_ENABLED) return;
+    const currentOrganizationId = String(authSession.organizationId || "").trim();
+    const previousOrganizationId = previousWorkspaceTaskOrganizationRef.current;
+    if (previousOrganizationId && previousOrganizationId !== currentOrganizationId) {
+      clearWorkspaceTaskJourney(previousOrganizationId);
+    }
+    previousWorkspaceTaskOrganizationRef.current = currentOrganizationId;
     const stored = readWorkspaceTaskJourney(authSession.organizationId);
     if (
       stored.ok
       && stored.journey
-      && !workspaceTaskJourneyBelongsToPrincipal(stored.journey, activeWorkspaceTaskPrincipal)
+      && !workspaceTaskJourneyIsRestorable(stored.journey, activeWorkspaceTaskPrincipal)
     ) {
       clearWorkspaceTaskJourney(authSession.organizationId);
     }
     setWorkspaceTaskJourney(
-      stored.ok && workspaceTaskJourneyBelongsToPrincipal(stored.journey, activeWorkspaceTaskPrincipal)
+      stored.ok && workspaceTaskJourneyIsRestorable(stored.journey, activeWorkspaceTaskPrincipal)
         ? stored.journey
         : null
     );
@@ -1736,6 +1783,7 @@ export default function App({
 
   const [adminOpen, setAdminOpen] = useState(false);
   const [adminInitialTab, setAdminInitialTab] = useState("");
+  const [catalogFocusRequest, setCatalogFocusRequest] = useState(null);
   const [scheduleOpen, setScheduleOpen] = useState(false);
   const [integrationsOpen, setIntegrationsOpen] = useState(false);
   const [importStudioOpen, setImportStudioOpen] = useState(false);
@@ -1745,6 +1793,22 @@ export default function App({
   const [dashboardOpen, setDashboardOpen] = useState(false);
   const [compareOpen, setCompareOpen] = useState(false);
   const [openHeaderMenu, setOpenHeaderMenu] = useState("");
+  useEffect(() => {
+    setCatalogFocusRequest(null);
+  }, [authSession.organizationId, authSession.user?.uid]);
+  useEffect(() => {
+    if (
+      workspaceArrivalContext?.destination !== "library"
+      || workspaceArrivalContext?.object?.type !== "menu-item"
+      || workspaceArrivalContext?.intentId !== "review_imported_menu_item"
+      || !workspaceTaskJourneyMatchesArrival(activeWorkspaceTaskJourney, workspaceArrivalContext)
+    ) return;
+    setCatalogFocusRequest({ ...workspaceArrivalContext.focus });
+  }, [
+    activeWorkspaceTaskJourney?.startedAtISO,
+    workspaceArrivalContext,
+    workspaceArrivalKey
+  ]);
   const [workspaceSoundsOn, setWorkspaceSoundsOn] = useState(() => areWorkspaceSoundsEnabled());
   const toggleWorkspaceSounds = useCallback(() => {
     setWorkspaceSoundsOn((current) => {
@@ -1793,6 +1857,9 @@ export default function App({
   const reportingRouteOpen = shellRouteOpen(WORKSPACE_ROUTE_IDS.REPORTING);
   const integrationsRouteOpen = shellRouteOpen(WORKSPACE_ROUTE_IDS.INTEGRATIONS);
   const importsRouteOpen = shellRouteOpen(WORKSPACE_ROUTE_IDS.IMPORTS);
+  const importRouteIntent = resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.IMPORTS
+    ? resolveImportStudioRouteIntent(browserLocation.search)
+    : resolveImportStudioRouteIntent();
   const catalogRouteOpen = shellRouteOpen(WORKSPACE_ROUTE_IDS.CATALOG);
   const staffRouteOpen = shellRouteOpen(WORKSPACE_ROUTE_IDS.STAFF);
   const inventoryRouteOpen = shellRouteOpen(WORKSPACE_ROUTE_IDS.INVENTORY);
@@ -5899,16 +5966,18 @@ export default function App({
 
   const handleSignOut = async () => {
     if (!canLeaveAmbientLibrary("sign out")) return;
+    const taskOrganizationId = String(authSession.organizationId || "").trim();
     try {
       await authSession.signOut();
-      clearWorkspaceTaskJourney(authSession.organizationId);
-      setWorkspaceTaskJourney(null);
     } catch (err) {
       recordDiagnosticError(err, {
         surface: "app",
         action: "sign-out"
       });
       setSubmitState((prev) => ({ ...prev, message: err?.message || "Failed to sign out." }));
+    } finally {
+      clearWorkspaceTaskJourney(taskOrganizationId);
+      setWorkspaceTaskJourney(null);
     }
   };
 
@@ -6332,6 +6401,10 @@ export default function App({
               onReload={catalog.reload}
               saving={catalog.saving}
               initialTab={adminInitialTab}
+              focusRequest={catalogFocusRequest}
+              onFocusResolution={(resolution) => {
+                if (resolution?.requestId === catalogFocusRequest?.requestId) setCatalogFocusRequest(null);
+              }}
               selectedEventType={globalEventTypeId}
               onEventTypeChange={setGlobalEventTypeId}
               onInteractionStateChange={setCatalogModalInteraction}
@@ -6386,6 +6459,8 @@ export default function App({
         arrivalAttempted: workspaceArrivalAttempted,
         onArrivalResolution: handleWorkspaceArrivalResolution,
         onInteractionStateChange: setCatalogRouteInteraction,
+        quoteCreationReady: catalogSetupComplete,
+        onStartQuote: handleGetInstantQuote,
         contextualOrigin: libraryContextualOrigin
           && libraryContextualOrigin.organizationId === String(authSession.organizationId || "").trim()
           && workspaceArrivalContext?.surfaceId === "ambient-library"
@@ -6399,7 +6474,11 @@ export default function App({
                 });
               }
             }
-          } : null
+          } : null,
+        catalogFocusRequest,
+        onCatalogFocusResolution: (resolution) => {
+          if (resolution?.requestId === catalogFocusRequest?.requestId) setCatalogFocusRequest(null);
+        }
       }
     },
     modal: {
@@ -6444,6 +6523,8 @@ export default function App({
       organizationName: workspaceName,
       currentUserUid,
       currentUserEmail,
+      initialImportType: importRouteIntent.initialImportType,
+      arrivalSource: importRouteIntent.arrivalSource,
       catalogRevision: Math.max(0, Number(catalog.settings?.catalogRevision || 0)),
       catalogContext: {
         eventTypeId: globalEventTypeId,
@@ -6451,7 +6532,8 @@ export default function App({
         packages: catalog.packages || [],
         addons: catalog.addons || [],
         rentals: catalog.rentals || [],
-        menuSections: effectiveMenuSections
+        menuSections: effectiveMenuSections,
+        loadMenuByEvent: catalog.loadMenuByEvent
       },
       onReload: () => catalog.reload({ background: true }),
       onReviewCatalog: (result) => {
@@ -6462,10 +6544,24 @@ export default function App({
             ? importType
             : "starter";
         setImportStudioOpen(false);
+        if (reviewTab === "menu" && String(result?.recordId || "").trim()) {
+          const handoff = createWorkspaceArrivalHandoff(
+            importedMenuItemReviewArrivalInput(result)
+          );
+          if (handoff.ok) {
+            setLibraryContextualOrigin(null);
+            return navigateAmbientTaskHandoff(handoff, "review-imported-menu-item");
+          }
+          pushToast(
+            "The accepted import receipt could not open an exact menu item. No catalog record changed.",
+            "warning"
+          );
+        }
         openRoutedWorkspaceTool(WORKSPACE_PATHS.catalog, setAdminOpen, {
           beforeOpen: () => {
             setLibraryContextualOrigin(null);
             setAdminInitialTab(reviewTab);
+            setCatalogFocusRequest(null);
           }
         });
       },
@@ -7617,13 +7713,28 @@ export default function App({
         {PILOT_CREATE_ENABLED && CreateIntake
           && resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.QUOTE_NEW
           && !editingQuote.id && (
-          <CreateIntake
-            eventTypes={catalog.eventTypes || []}
-            styles={Object.keys(STAFF_RULES)}
-            onApplyDraft={applyIntentDraft}
-            organizationId={authSession.organizationId}
-            onModelParse={PILOT_MODEL_ENABLED ? parseIntentDraftWithModel : undefined}
-          />
+          <RecoverableErrorBoundary
+            key={`create-intake-${authSession.organizationId || "no-org"}`}
+            active
+            surfaceName="Create intake"
+            surfaceKind="tool"
+            hasUnsavedWorkspaceChanges={quoteDirty}
+            onRetry={CreateIntake.retry}
+          >
+            <Suspense fallback={(
+              <section className="panel source-note" role="status" data-surface-purpose="clarify">
+                Preparing Create intake. Your quote draft is unchanged.
+              </section>
+            )}>
+              <CreateIntake
+                eventTypes={catalog.eventTypes || []}
+                styles={Object.keys(STAFF_RULES)}
+                onApplyDraft={applyIntentDraft}
+                organizationId={authSession.organizationId}
+                onModelParse={PILOT_MODEL_ENABLED ? parseIntentDraftWithModel : undefined}
+              />
+            </Suspense>
+          </RecoverableErrorBoundary>
         )}
         {PILOT_CHANGE_REQUESTS_ENABLED && ChangeRequestPanel
           && isEditingQuote

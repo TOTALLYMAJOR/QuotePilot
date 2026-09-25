@@ -140,6 +140,7 @@ let originalRequestAnimationFrame;
 let originalCancelAnimationFrame;
 
 beforeEach(() => {
+  vi.setSystemTime(new Date("2026-09-19T12:00:00.000Z"));
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
@@ -152,6 +153,7 @@ beforeEach(() => {
 afterEach(() => {
   act(() => root.unmount());
   container.remove();
+  vi.useRealTimers();
   window.requestAnimationFrame = originalRequestAnimationFrame;
   window.cancelAnimationFrame = originalCancelAnimationFrame;
 });

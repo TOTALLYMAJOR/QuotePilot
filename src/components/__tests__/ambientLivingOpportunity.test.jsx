@@ -622,6 +622,7 @@ describe("AmbientLivingOpportunity", () => {
     expect(dialog.textContent).toContain("Customer inquiry · Aug 11, 2026");
     expect(dialog.textContent).toContain("Final count due Sep 12, 2026");
     expect(dialog.textContent).toContain("4 days remain until the final guest-count lock date");
+    expect(dialog.textContent).not.toContain("Decision Debt");
     expect(dialog.querySelector('[data-attendance-dimension="commercial-basis"]')).toBeTruthy();
     expect(dialog.querySelector('[data-attendance-dimension="best-evidence"]')).toBeTruthy();
     expect(dialog.querySelector('[data-attendance-dimension="decision-timing"]')).toBeTruthy();

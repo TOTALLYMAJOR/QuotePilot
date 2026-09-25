@@ -136,6 +136,18 @@ afterEach(async () => {
 });
 
 describe("InventoryWorkspace ingredient evidence presentation", () => {
+  test("exposes the seven-column evidence table as an instructed keyboard-scroll region", () => {
+    const html = viewMarkup();
+    expect(html).toContain("Scroll horizontally to review all seven evidence columns.");
+    expect(html).toContain('class="history-table-wrap inventory-evidence-table-wrap"');
+    expect(html).toContain('role="region"');
+    expect(html).toContain('aria-label="Ingredient evidence table"');
+    expect(html).toContain('aria-describedby="inventory-list-description inventory-table-instruction"');
+    expect(html).toContain('tabindex="0"');
+    expect(html).toContain("Ingredient on-hand, committed, available-to-allocate, and independent purchase-cost evidence");
+    expect(html.match(/scope="col"/g)).toHaveLength(7);
+  });
+
   test("keeps physical stock and purchase-cost evidence as separate axes", () => {
     const html = viewMarkup();
     expect(html).toContain("40 lb");

@@ -729,8 +729,17 @@ function IngredientEvidenceTable({ ingredients, freshness, packsCurrent, canMana
       <p id="inventory-list-description" className="source-note">
         {freshness === "current" ? "Server-confirmed projections." : "Retained projections for orientation only."} Stock and cost are separate evidence axes.
       </p>
-      <div className="history-table-wrap">
-        <table aria-describedby="inventory-list-description">
+      <p id="inventory-table-instruction" className="source-note inventory-table-instruction">
+        Scroll horizontally to review all seven evidence columns.
+      </p>
+      <div
+        className="history-table-wrap inventory-evidence-table-wrap"
+        role="region"
+        aria-label="Ingredient evidence table"
+        aria-describedby="inventory-list-description inventory-table-instruction"
+        tabIndex="0"
+      >
+        <table aria-describedby="inventory-list-description inventory-table-instruction">
           <caption className="sr-only">Ingredient on-hand, committed, available-to-allocate, and independent purchase-cost evidence</caption>
           <thead>
             <tr><th scope="col">Ingredient</th><th scope="col">Physical on hand</th><th scope="col">Committed</th><th scope="col">Available to allocate</th><th scope="col">Cost evidence</th><th scope="col">Location</th><th scope="col">Purchase packs</th></tr>
