@@ -37,6 +37,8 @@
     "test:e2e:firebase": "node ./scripts/run-firebase-e2e.mjs",
     "test:e2e:firebase:authoritative": "node ./scripts/run-firebase-e2e-authoritative.mjs",
     "test:e2e:firebase:starter-onboarding": "node ./scripts/run-firebase-e2e-starter-onboarding.mjs",
+    "test:e2e:firebase:first-quote-activation": "node ./scripts/run-firebase-e2e-first-quote-activation.mjs",
+    "test:e2e:firebase:guided-inquiry": "node ./scripts/run-firebase-e2e-guided-inquiry.mjs",
     "check:env": "node ./scripts/check-env.mjs",
     "check:workflows": "node ./scripts/check-github-workflows.mjs",
     "check:ambient-release-gate": "node ./scripts/check-ambient-release-gate.mjs",
