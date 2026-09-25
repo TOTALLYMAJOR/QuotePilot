@@ -1,11 +1,106 @@
 # Changelog
 
-Last updated: 2026-09-20 19:43:58 CDT
+Last updated: 2026-09-24 22:00:00 CDT
 
 All notable project changes are documented in this file.
 
-## Unreleased — Event and Commercial activation receipt correction
+## Unreleased — Current candidate refinements
 
+- Reconcile current state, capability, performance, product-intelligence, and
+  operator documentation to QPR-005 source head
+  `dc3cdb1a33c6f75c3cff993f4a4bd9db382bf6c6`. This records source/local
+  evidence only; QPR-007 exact-head validation, push, CI, deployment, hosted,
+  provider, production, accessibility, human, and outcome proof remain open.
+
+- Replace the remaining internal **Decision Debt** label in ordinary Staff read
+  and Living Opportunity final-count copy with **pending decision review** and
+  **final-count decision** language. Internal `decisionDebt` identities,
+  Workflow routing, server bounds, and attendance/commercial authority remain
+  unchanged. Focused language and component tests pass locally; hosted,
+  assistive-technology, human-comprehension, usage, and outcome proof remain
+  open.
+
+- Orient the Library's first-quote menu-import continuation to a reload-stable
+  Import Studio route and a deterministic, header-only canonical CSV template.
+  The template maps menu item, existing event type and menu section, customer
+  price, recorded item cost, pricing type, and active state without embedding
+  catalog IDs or sample records. Download, upload, inspection, staging, save,
+  publication, customer price, recorded cost, recipe/menu-cost evidence, and
+  physical Inventory readiness remain distinct states. Focused component/model
+  tests and local 390/768/1440 route checks prove the exact handoff, template
+  filename, page containment, unchanged local catalog, and zero axe violations.
+  The route now supplies its main landmark and heading hierarchy, labels the
+  file control, and makes the horizontally scrollable progress rail keyboard-
+  focusable. Catalog imports now bind sanitized, operator-declared source file,
+  type, batch, and row context into the exact preflight and save receipt, retain
+  it through shared-draft merges and publication lineage, and stamp it on the
+  active catalog record without treating it as business content for conflict
+  hashes. Legacy changes remain compatible, and partial or invalid provenance
+  fails before draft authority. A staged or reconciled menu-item receipt now
+  carries its first exact accepted row into the administrator Library editor,
+  clears incompatible menu filters, and focuses that record. Missing, stale,
+  cross-batch, incomplete, or non-admin requests fail closed without choosing a
+  substitute item. The review labels recorded cost—including zero—as an
+  operator-declared value rather than recipe evidence, and keeps staged items
+  outside recipe attachment until publication. Focused client/server tests
+  cover this path. A disposable connected Firebase-emulator lane now starts
+  from an empty quote history, publishes the starter foundation, discovers the
+  current menu sections during routed import, stages one receipt-bound menu
+  item into the shared draft, opens that exact item for review, publishes the
+  next catalog revision, and saves one server-authoritative quote/version that
+  retains the exact imported selection snapshot. This is local automated proof
+  only: proposal delivery, customer acceptance, booking, payment, recipe truth,
+  physical Inventory, hosted/production behavior, assistive-technology use,
+  human acceptance, activation timing, and outcomes remain open.
+
+- Add a disposable Firebase-emulator Guided Inquiry acceptance lane covering
+  cross-tenant callable denial, exact active-publication reads, paused and stale
+  submission rejection, idempotent content-free recovery, tenant/IP quotas
+  without inquiry authority writes, stale conversion rejection, and one atomic
+  quote/customer/portal/version/receipt artifact set under a concurrent
+  duplicate. This is local automated evidence only; hosted Turnstile, provider
+  notification, production data, accessibility, human acceptance, and outcome
+  proof remain open.
+
+- Align the Library's semantic and keyboard order with its phone/tablet visual
+  hierarchy: quote readiness now precedes the long catalog in the DOM, while
+  explicit desktop grid placement preserves the selected catalog-left,
+  readiness-right 67/33 composition. Component and 390/768/1440 browser checks
+  cover semantic order, focusable-control order, responsive geometry, and axe;
+  hosted, assistive-technology, human-comprehension, and outcome proof remain
+  open.
+
+- Repair the phone-width Inventory evidence table as a named, keyboard-
+  focusable contained-scroll region. The instruction remains visible wherever
+  the intentional seven-axis table can overflow, including the capped desktop
+  surface, and fixed column layout keeps the final purchase-pack column fully
+  inspectable at maximum scroll. Component-browser checks at 390/768/1440 cover
+  page containment, keyboard scrolling, complete final-column visibility, and
+  forced-colors focus width and color. Complementary route tests prove local
+  fallback cannot self-enable Inventory without tenant authority and that an
+  authenticated Firebase-emulator administrator with the tenant gate can render
+  the same seven-axis table. Hosted, production, assistive-technology, human-
+  comprehension, and outcome proof stay open.
+- Continue quote-ready administrators and sales staff from Library into the
+  existing guarded new-quote draft path. The action explicitly states that it
+  opens an unsaved draft, remains hidden from unauthorized roles, and does not
+  report navigation as quote creation, save, completion, publication, or send.
+  A disposable Firebase-emulator administrator journey now reads the
+  authoritative organization quote IDs immediately before the action, proves
+  the baseline is empty, and proves the identical empty set remains after the
+  new-quote route opens.
+  At tablet and phone widths, readiness now precedes the long Library catalog so
+  the continuation remains discoverable without changing the desktop rail.
+- Make first-quote readiness the primary Business Setup Center outcome. A
+  current published catalog that can create quotes now says so even when cost
+  evidence, starting points, or provider setup remain incomplete; those items
+  stay visible as secondary improvements, and provider connection is scoped to
+  provider-backed actions rather than presented as a quote-creation blocker.
+  Its aggregate machine-readable state now distinguishes fully `ready` setup
+  from `quote-ready` setup with nonblocking follow-up, while preserving the
+  separate quote-readiness authority and action.
+  No quote, publication, proposal send, or provider outcome is created by this
+  presentation change.
 - Bind the existing repository changelog and accepted ADR history into the
   Proofloom control-plane manifest. Proofloom now fails validation if either
   record authority disappears; the binding does not create a parallel log or
@@ -76,6 +171,16 @@ All notable project changes are documented in this file.
 - Keep the revision-bound Kitchen BEO handoff visible in both supported event
   workspace presentations, including its explicit local no-receipt boundary,
   and make arrival focus tolerant of environments without `scrollIntoView`.
+- Move the default-off Create intake implementation behind a recoverable lazy
+  boundary, reducing the local complete-flag Workspace chunk from 461,976 to
+  432,767 bytes while preserving its draft-only authority and explicit loading
+  and recovery states. Reproduce clean committed HEAD under the same flag
+  matrix, record that it already exceeded the preceding exception, and pin the
+  Ambient aggregate exception to the exact-source 4,968,733-byte graph with a
+  4,968,757-byte ceiling
+  without widening the unchanged 445,422-byte largest-chunk ceiling. This is
+  source/local bundle evidence only; exact-PR CI, Core Web Vitals, hosted,
+  production, and human-acceptance proof remain open.
 - Recalibrate the existing expiring graph-specific bundle exception to the
   literal combined-candidate CI matrices: 3,652,845 / 385,181 bytes for
   compatibility and 4,947,989 / 445,422 bytes for Ambient. The ceilings add no

@@ -1,6 +1,6 @@
 # QuotePilot Product Intelligence System
 
-Last updated: 2026-09-20 03:05:35 CDT
+Last updated: 2026-09-24 22:00:00 CDT
 
 ## Purpose
 
@@ -58,6 +58,84 @@ recovery to `OUT-04` and `CAP-06`, with `MET-04` named only as the closest
 diagnostic measure: the AuthGate surface is not currently included in that
 instrumentation, so source, component, or browser evidence cannot establish an
 access-friction outcome.
+
+The first-quote readiness hierarchy refinement is recorded as `LED-011`. It
+tests whether administrators and sales staff can distinguish current quote
+eligibility from optional setup without weakening catalog publication, pricing,
+proposal, or provider authority. Its aggregate state now preserves that
+distinction as `ready`, `quote-ready`, or `attention`. Source and local checks
+do not establish human comprehension, faster first-quote completion, or a
+commercial outcome.
+
+The Library-to-draft continuation is recorded as `LED-012`. It tests whether a
+quote-ready administrator or sales user can continue into the existing guarded
+new-quote path without reconstructing the task or mistaking navigation for a
+saved quote. The disposable Firebase-emulator administrator journey reads the
+organization's authoritative quote IDs immediately before the continuation,
+proves that baseline is empty, and proves the identical empty set remains after
+the draft route opens. Component and emulator evidence remain distinct from
+hosted-role, human-comprehension, completion-time, and commercial outcomes.
+
+The Inventory evidence-table containment repair is recorded as `LED-013`. It
+tests whether an administrator can reach all seven independent evidence axes at
+phone, tablet, and capped desktop widths without page overflow or collapsing
+stock and cost authority. Component-browser evidence, actual route-denial
+evidence, and authenticated Firebase-emulator enabled-route evidence remain
+distinct from hosted, assistive-technology, operator-comprehension, and
+operational outcomes.
+
+The Library semantic-order repair is recorded as `LED-014`. It tests whether
+administrators and sales staff encounter the visually leading quote-readiness
+actions before the long catalog in DOM and keyboard order without weakening the
+desktop commercial hierarchy. Component, responsive-browser, and automated
+accessibility evidence remain distinct from hosted, assistive-technology,
+human-comprehension, completion-time, and commercial outcomes.
+
+The Library-to-menu-import orientation is recorded as `LED-015`. It tests
+whether an administrator can begin with real source material using an exact,
+reload-stable menu destination and a deterministic header-only template without
+mistaking download, upload, staging, or recorded item cost for publication,
+recipe/menu-cost evidence, Inventory readiness, or first-quote activation.
+Focused source tests and local 390/768/1440 browser checks prove the exact route
+handoff, template download name, page containment, unchanged local catalog, and
+zero axe violations after repairing the file label, embedded main/heading
+structure, and horizontal-progress keyboard access. The shared-draft path now
+also binds sanitized operator-declared filename, source kind, import type,
+batch, and row context through preflight, durable receipts, draft merges,
+publication lineage, and active records while excluding that metadata from
+business conflict hashes. Focused client/server tests prove that source-level
+contract. A disposable connected Firebase-emulator lane now proves the bounded
+local sequence from an empty quote history through starter publication, routed
+menu import with asynchronous current-section discovery, exact receipt-bound
+shared-draft review, a second governed publication, and one server-authoritative
+saved quote/version whose imported selection ID, name, and price snapshot match
+the active record. The same experiment includes
+the post-import review handoff: a complete same-batch mutation receipt opens the
+first exact accepted menu row for an administrator, waits for its recorded menu
+context, clears incompatible filters, and focuses only that item. Missing,
+stale, or mismatched targets recover without substitution. Focused component
+tests cover this local behavior. Proposal delivery, customer acceptance,
+booking, payment, recipe truth, physical Inventory, provider attestation,
+assistive-technology use, hosted/production behavior, human comprehension,
+completion-time, and commercial outcomes remain unproven.
+
+The operator-language cleanup is recorded as `LED-016`. It tests whether Staff
+and Living Opportunity users can understand an incomplete pending-decision read
+and an exact final-count deadline without learning the internal **Decision
+Debt** product name. Internal identity, Workflow routing, server bounds, and
+attendance and commercial authority remain unchanged. Focused source and
+component tests are local evidence only; hosted, assistive-technology,
+human-comprehension, workflow-preference, usage, and outcome evidence remain
+absent.
+
+The Guided Inquiry acceptance expansion remains recorded under `LED-004`. Its
+disposable Firebase-emulator journey now proves cross-tenant callable denial,
+exact active-publication behavior, idempotent content-free recovery, tenant and
+IP quotas without inquiry authority artifacts, stale conversion rejection, and
+one atomic authoritative quote artifact set under a concurrent duplicate. This
+local receipt does not establish hosted Turnstile behavior, provider
+notification delivery, production data, accessibility, human acceptance, or a
+commercial outcome.
 
 ## Traceability rule
 

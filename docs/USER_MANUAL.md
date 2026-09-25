@@ -1,6 +1,6 @@
 # User Manual
 
-Last updated: 2026-09-20 06:00:58 CDT
+Last updated: 2026-09-24 22:00:00 CDT
 
 ## Purpose
 This guide explains day-to-day usage of QuotePilot for staff users and admins.
@@ -75,9 +75,20 @@ progressively disclosed Administration, account settings, and sign-out.
 3. At **Offers and menu**, choose **Build offers and menu** for manual entry or
    **Import an existing menu** to open Import Studio. An import is reviewed and
    staged into the existing catalog setup draft; it does not create a second
-   catalog or become active pricing by itself. Choosing a starter catalog opens
+   catalog or become active pricing by itself. Import Studio loads the current
+   published menu sections
+   for the selected event type before section assignment. A loading message
+   means that lookup is still pending; a load failure is reported separately
+   from a genuinely empty menu. Choosing a starter catalog opens
    its exact staged items in the current Library editor for review; it also
    remains inactive until the administrator checks and publishes the draft.
+   After a menu import, choose **Review catalog draft** to open the first exact
+   accepted receipt row. QuotePilot selects only the event type, menu section,
+   and item named by that receipt; if the record is unavailable, it reports
+   recovery instead of opening a different item. A recorded cost of zero is a
+   real recorded value, while a blank cost is missing. Imported cost remains an
+   operator-declared value, not recipe evidence. Publish a staged item before
+   attaching a recipe through the separately governed Inventory extension.
 4. Treat each readiness measure independently. **Cost visibility** is optional
    for the first quote. Missing optional starting
    points, additional users, provider connections, or cost evidence does not by
@@ -2699,6 +2710,22 @@ existing catalog authority. The browser accepts a save receipt only when its
 organization, base revision, expected and resulting generation, projected
 change count, and complete patch identities and payloads match the reviewed
 plan; a success-shaped but substituted response fails closed.
+
+Each newly imported catalog change also carries sanitized source context: the
+operator-declared filename, CSV or PDF kind, import type, batch identity, and
+source row number. The same context is bound into preflight, the shared-draft
+receipt, later draft merges, publication lineage, and the active catalog record.
+It helps staff trace a published record back to the reviewed source, but it is
+not provider attestation, recipe/menu-cost evidence, Inventory evidence, or a
+claim that the file was complete. Partial or invalid context is rejected before
+the draft is staged. Older draft changes without this metadata remain valid.
+
+The disposable local first-quote activation acceptance lane verifies one
+bounded engineering path from an empty quote history through starter
+publication, routed menu import, exact draft review, later publication, and one
+server-authoritative saved quote/version. It does not send or accept a proposal,
+book work, take payment, establish recipe or physical-Inventory truth, or prove
+hosted, production, human, or outcome behavior.
 
 The server also keeps a tenant- and actor-bound mutation receipt for the exact
 request ID and SHA-256-normalized patch set. Publication records the exact patch

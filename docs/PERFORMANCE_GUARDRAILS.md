@@ -1,6 +1,6 @@
 # Performance Guardrails
 
-Last updated: 2026-09-14 04:06:56 CDT
+Last updated: 2026-09-24 22:00:00 CDT
 
 ## Objectives
 Keep delivery speed high while protecting end-user experience and predictable performance.
@@ -162,6 +162,26 @@ Threshold policy:
   pinned to those literal graphs; the compatibility largest-chunk ceiling
   remains unchanged. This is reviewed combined-candidate cost with no future
   growth allowance, and exact-PR CI remains required.
+  Reproducing that complete local flag matrix from clean committed HEAD
+  `568d86bb1505c32c00319a23a854cfb7b068ddf5` measured 4,951,064 / 447,746
+  bytes, already 3,075 / 2,324 bytes over the preceding Ambient exception.
+  The current open-work graph initially measured 4,965,582 / 461,976 bytes.
+  Moving the default-off Create intake implementation behind its existing
+  feature gate and a recoverable lazy boundary reduces the shared Workspace
+  chunk to 432,767 bytes. The extra lazy-chunk wrapper adds 830 aggregate bytes,
+  so the resulting graph measures 4,966,412 aggregate bytes; this is packaging,
+  not deleted capability. The Ambient aggregate ceiling is pinned to that
+  literal local graph while the 445,422-byte largest-chunk ceiling remains
+  unchanged. Exact-PR CI, Core Web Vitals, hosted timing, production behavior,
+  and human acceptance remain separate evidence gates.
+  The subsequent exact imported-menu review handoff adds bounded route intent,
+  exact record focus, and a principal-bound 30-minute task freshness fence.
+  Fresh exact-source Ambient builds measure 4,968,733 / 435,222 bytes. The
+  temporary ceiling is pinned at 4,968,757 / 445,422 bytes, retaining 24 / 10,200
+  bytes of margin with no percentage or future-growth allowance. Removing the delta
+  would remove the governed handoff or its stale-task protection, and moving
+  the same code between chunks would not reduce the aggregate metric. The
+  Ambient aggregate ceiling remains a bounded exception rather than a baseline.
   Searchable-PDF inspection additionally emits 1,667,684 raw runtime bytes in
   `dist/vendor/pdfjs-5.7.284`, with a 1,232,303-byte worker as its largest file.
   These assets are same-origin and load only after PDF inspection begins; they
@@ -170,8 +190,8 @@ Threshold policy:
   `docs/performance/optional-tool-budget.json`. The bundle guard rejects a
   changed, missing, additional, or unbudgeted optional runtime asset.
   `ambient-opportunity-model` and `quote-builder-ui` chunk boundaries reduced
-  the Ambient largest chunk from 436,188 bytes before Team access; the current
-  largest chunk is 391,901 bytes. The remaining
+  the Ambient largest chunk from 436,188 bytes before Team access; at that
+  checkpoint the largest chunk was 391,901 bytes. The remaining
   aggregate cost must still be optimized or replaced by an explicitly reviewed
   clean-main baseline decision before legacy retirement or Ambient promotion.
   See `docs/TECH_EXCEPTIONS.md` for rationale and exit evidence.

@@ -1,6 +1,6 @@
 # Capability / Functional Map
 
-Last updated: 2026-09-20 06:03:00 CDT
+Last updated: 2026-09-24 22:00:00 CDT
 
 ## Purpose and evidence boundary
 
@@ -16,7 +16,7 @@ does not imply hosted, provider, production, human, adoption, or outcome proof.
 
 | Capability ID | Actor can… | Catering value | Outcomes | Current source state | Observation state |
 |---|---|---|---|---|---|
-| `CAP-01` | Publish a bounded inquiry presentation and receive customer preferences. | Start discovery without prematurely promising price, availability, or scope. | `OUT-01` | Implemented and deployed with customer/staff journey proof still open. | Partial: authoritative inquiry receipts exist; end-to-end conversion outcome is not yet measured. |
+| `CAP-01` | Publish a bounded inquiry presentation and receive customer preferences. | Start discovery without prematurely promising price, availability, or scope. | `OUT-01` | Implemented and deployed; disposable Firebase-emulator acceptance covers cross-tenant callable denial, publication lifecycle and version pinning, idempotent recovery, tenant/IP quota rejection without inquiry authority artifacts, stale conversion rejection, and one atomic authoritative artifact set under a concurrent duplicate. | Partial: local emulator authority evidence exists; hosted Turnstile, provider notification, production, accessibility, human, and outcome evidence remain open. |
 | `CAP-02` | Maintain offers, packages, menu items, add-ons, templates, rules, recipes, prices, and recorded costs under revision control. | Make sellable work understandable before estimators quote it. | `OUT-02`, `OUT-03` | Implemented across Library, catalog, pricing, and Inventory authorities; local Firebase actor journeys cover starter, bypass, import, manual setup, and publication. | Partial: catalog/cost state and local setup completion are observable; hosted recovery, human decision quality, and outcomes are not. |
 | `CAP-03` | Capture event facts, configure scope, obtain authoritative pricing, and save a versioned quote. | Reach a defensible priced draft faster with fewer missing facts. | `OUT-01`, `OUT-02` | Implemented; five-step builder and server pricing are established. | Implemented for funnel, completion, add-on behavior, and intent-to-priced-draft timing. |
 | `CAP-04` | Produce, issue, view, discuss, accept, reject, expire, or revise a customer decision artifact without rewriting history. | Preserve what the customer saw and agreed while allowing controlled change. | `OUT-02`, `OUT-04` | Implemented across proposal, portal, conversation, delivery, acceptance, and Commercial Change authorities. | Partial: authority receipts exist; lead time and downstream correction rates are not centrally summarized. |

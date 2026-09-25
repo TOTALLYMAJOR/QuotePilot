@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-09-16 04:06:58 CDT
+Last updated: 2026-09-24 22:00:00 CDT
 
 ## Current evidence boundary
 
@@ -10,6 +10,7 @@ evidence receipts and must not be described as one artifact.
 
 | Surface | Current recorded evidence | Boundary |
 |---|---|---|
+| Local v0.20 source candidate | QPR-005 source head `dc3cdb1a33c6f75c3cff993f4a4bd9db382bf6c6` packages the current product and release-test cohorts; QPR-006 synchronizes this state, capability, performance, and release documentation against that source. | Local source and validation evidence only. QPR-007 still owns one clean exact-SHA candidate proof; push, exact-head CI, deployment, hosted/provider behavior, production data, accessibility, human acceptance, and outcomes remain open. |
 | Public Vercel edge | `v0.19.0`, exact SHA `bf9f48a00547e305fdf155c8d64bf3646198b705`, exact-main CI `34787753902` attempt 2, production workflow `34791516818`, immutable deployment `quoteflow-bgq2wztfk-mbmapps.vercel.app` | The protected workflow promoted the `all-qualified-features` browser build and verified `https://quotepilot.mbmapps.com`. A subsequent public request returned HTTP 200 and the deployed Inquiry chunk contained the reviewed site key, action, and customer-safe route copy. Authenticated role journeys and human acceptance remain open. |
 | Firebase Functions | `v0.19.0`, exact SHA `bf9f48a00547e305fdf155c8d64bf3646198b705`, exact-main CI `34787753902` attempt 2, production workflow `34790618395` | Provider readback found 142 active Functions in `us-central1`. Inquiry callables, the hourly purge function, and `parseIntentDraft` are active; runtime readback pins the coordinated authorities and OpenAI `gpt-5-mini` to `mm05366-sandbox`, with Buyer Access, SMS, Revenue Autopilot sends, test bypasses, and hard App Check enforcement off. |
 | Firebase Hosting fallback | `v0.19.0`, exact SHA and workflow shared with the Firebase Functions receipt above | `https://tonicatering.web.app` returned HTTP 200 and served the same reviewed Inquiry chunk. It remains the origin/fallback rather than the canonical Vercel public edge. |
@@ -17,7 +18,7 @@ evidence receipts and must not be described as one artifact.
 | Authenticated production browser acceptance | On 2026-09-16 an authenticated administrator in `mm05366-sandbox` rendered Living Opportunity, Quote administration, Operations, Inventory, Library pricing, and privacy-bounded Session Diagnostics through `https://quotepilot.mbmapps.com`. Inventory reported server-confirmed location and ingredient projections; Library reported catalog revision 62 as confirmed while retaining a ten-change unpublished draft and 15 cost entries needing attention. Diagnostics reported zero errors and zero warnings. Desktop and 390-by-844 browser checks produced no page-level horizontal overflow or console errors. | This is a partial read-only acceptance receipt. The active identity appears to have platform-admin cross-organization bypass, so it cannot prove ordinary admin/sales tenant denial; no separate non-admin identity was exercised. No browser App Check header or token exchange was observed. Public headers and asset hashes did not identify an exact source SHA or immutable deployment. No Inventory recovery control appeared, and no Commercial Change authorization, Event command, provider action, or production write was issued. The phone-width Inventory table still compresses or clips multi-column evidence labels and needs a responsive presentation repair. |
 | Isolated staging Event/Commercial profile | Exact SHA `2f5d123d9ba06153823def6f44b3f5ff89183023`, CI `34420973414`, Firebase Hosting version `31a0bcbf39d65ec2`, profile `staging-event-operating-spine` | The original deployment and recovery readback proved both runtime gates true, but a later Functions deployment replaced that runtime. Current readback at `2026-09-11T05:31Z` found Commercial Change false; the tenant fields remain true. Staging must be redeployed and read back before it is described as active. |
 | Repository `origin/main` | Protected PR `#145` merged as exact tagged SHA `bf9f48a00547e305fdf155c8d64bf3646198b705` (`v0.19.0`) after all nine exact-head checks passed; exact-main CI run `34787753902` attempt 2 also passed all nine jobs | Repository, CI, deployment, hosted/provider behavior, production data, and human acceptance remain separate evidence classes. |
-| Guided Inquiry and Model Assist | The dedicated managed Inquiry Turnstile widget is restricted to the two approved production hosts, its public site key is compiled on both browser targets, and its secret is bound only through Secret Manager. A fresh OpenAI Responses probe using the rotated production key returned HTTP 200; `parseIntentDraft` is active with secret version 2 and the exact tenant/model runtime fence. | This proves provider-key health and deployed configuration, not a model-authored customer or quote result. No Inquiry Showcase slug was automatically published, and no real Turnstile token, inquiry submission, staff conversion, notification, accessibility, or human-acceptance receipt exists yet. |
+| Guided Inquiry and Model Assist | The dedicated managed Inquiry Turnstile widget is restricted to the two approved production hosts, its public site key is compiled on both browser targets, and its secret is bound only through Secret Manager. A fresh OpenAI Responses probe using the rotated production key returned HTTP 200; `parseIntentDraft` is active with secret version 2 and the exact tenant/model runtime fence. A disposable local emulator lane now passes five browser tests across tenant denial, publication lifecycle, recovery/idempotency, quotas, and atomic conversion. | Provider-key and deployed-configuration evidence remain separate from the local emulator receipt. No production Showcase slug, real hosted Turnstile challenge, production inquiry/conversion, provider notification outcome, accessibility, or human-acceptance receipt exists yet. |
 | Coordinated all-qualified production profile | Firebase workflow `34790618395` and Vercel workflow `34791516818` deployed the exact `v0.19.0` SHA for `mm05366-sandbox`, using separate rollback ancestors `b90fb5d539077c27e640ca58ee1438632d665cf9` and `3fb1443bb6e394133340ede3716548c92b24beea`. | The profile is active on both providers. Deployment did not publish a Showcase, execute an inquiry, invoke a model for a user, send a notification, mutate a quote/event, charge a payment, or establish human acceptance. |
 
 The first production Inventory request exposed an App Check rollout mismatch:
@@ -85,6 +86,32 @@ human acceptance.
 
 ## Current capability placement
 
+- Staff read completeness and Living Opportunity final-count timing now use
+  operator-facing **pending decision review** and **final-count decision** copy
+  instead of the internal **Decision Debt** product name. The internal read
+  identity, exact Workflow task handoff, server bounds, and attendance and
+  commercial authority are unchanged. This is source/local automated language
+  evidence, not hosted, assistive-technology, human-comprehension, usage, or
+  outcome proof.
+
+- The default-off Create intake surface now loads only when its quote-new gate
+  is active, through the same recoverable lazy contract used by other workspace
+  tools. The complete local feature-flag graph reduces its shared Workspace
+  chunk from 461,976 to 432,767 bytes and stays below the unchanged 445,422-byte
+  chunk ceiling. The current exact-source graph measures 4,968,733 aggregate
+  bytes and is bounded by a 4,968,757-byte temporary ceiling, preserving 24
+  aggregate bytes and 10,200 largest-chunk bytes. This is source/local packaging
+  evidence, not CI, Core Web Vitals, hosted, production, human-acceptance, or
+  outcome proof.
+
+- The source/local Import Studio candidate can now translate the first exact
+  receipt-bound menu-item change into an administrator-only Library review
+  target. The editor waits for the recorded event type and menu section, clears
+  incompatible filters, focuses only the exact record, and reports recovery
+  instead of substituting another item when the receipt target is unavailable.
+  This is local automated evidence; it is not deployed, hosted, provider,
+  production-data, assistive-technology, human-acceptance, or outcome proof.
+
 - `/app/quotes/:quoteId` is the Ambient-enabled **Living Opportunity**: exact
   opportunity identity, bounded condition and next action, sold scope,
   commercial lifecycle, and contextual evidence.
@@ -118,13 +145,61 @@ BEO currentness.
 
 ## Open proof and operational risk
 
+- The current source candidate carries the administrator's exact first-quote
+  menu intent from Library into Import Studio and offers a deterministic,
+  header-only menu CSV template. Existing staged review, server preflight, and
+  Menu Builder handoff remain authoritative; the template creates no catalog
+  IDs, records, save, publication, cost proof, or Inventory evidence. Focused
+  tests plus local 390/768/1440 route checks prove the exact handoff, template
+  download name, page containment, unchanged local catalog, and zero axe
+  violations after repairing the file-input label, embedded main/heading
+  structure, and horizontal progress rail's keyboard access. Durable post-
+  publication provenance is now retained as sanitized operator-declared file,
+  source-kind, batch, type, and row context through preflight, shared-draft
+  receipts, publication lineage, and the active record. It is excluded from
+  business conflict hashes and does not establish provider truth. Focused
+  client/server tests cover that shared-draft path. A disposable connected
+  Firebase-emulator lane now proves the bounded local path from starter
+  publication through routed menu import, asynchronous current-section
+  discovery, exact receipt-bound draft review, a second governed publication,
+  and one server-authoritative saved quote/version from an initially empty
+  quote history. The selected item ID, name, and price snapshot are checked
+  against the imported active record. This does not prove proposal delivery,
+  customer acceptance, booking, payment, recipe truth, physical Inventory,
+  hosted/production behavior, assistive-technology use, human acceptance,
+  activation timing, or outcomes.
+- The current source candidate places the Library readiness rail before the
+  catalog in DOM and focusable-control order at every viewport while preserving
+  the desktop catalog-left/readiness-right composition. Focused component and
+  local 390/768/1440 browser checks pass, including axe and geometry checks.
+  Hosted deployment binding, assistive-technology use, operator comprehension,
+  and human acceptance remain open.
+- Business Setup Center now reports incomplete-but-quote-eligible setup as
+  `quote-ready`, reserving aggregate `ready` for complete setup and retaining
+  `attention` for quote-blocking gaps. Focused component checks cover all three
+  states; hosted semantics, assistive-technology interpretation, and human
+  comprehension remain open.
+- A disposable Firebase-emulator administrator journey now proves the Library
+  continuation opens `/app/quotes/new` without creating an authoritative quote:
+  the organization quote-ID baseline is empty immediately before the action and
+  remains the identical empty set after navigation. This is local automated
+  no-save evidence, not hosted-role, human-comprehension, completion-time, or
+  commercial-outcome proof.
 - The 2026-09-16 authenticated production administrator read journey is only
   partial. Ordinary admin/sales role denial, cross-tenant denial, exact source
   SHA/deployment binding, production command receipts, assistive-technology
   acceptance, and founder acceptance remain open.
-- At 390-by-844, the Inventory evidence table avoids page-level overflow but
-  compresses or clips multi-column labels instead of presenting a legible
-  mobile record layout. Treat phone-width Inventory review as a UX backlog item.
+- The current source candidate repairs the observed phone-width Inventory table
+  defect with a named, keyboard-focusable contained-scroll region, persistent
+  overflow guidance, and fixed columns preserving all seven evidence axes.
+  Component-browser checks pass at 390, 768, and 1440 pixels, including full
+  final-column visibility and forced-colors focus width/color. Complementary
+  route checks prove the route stays unavailable when tenant authority is
+  absent and renders the seven-axis table for an authenticated Firebase-
+  emulator administrator when the tenant gate is enabled. The 2026-09-16 hosted
+  observation above remains historical truth; deployment-bound, assistive-
+  technology, operator-comprehension, and founder-acceptance evidence remain
+  open.
 - App Check hard enforcement remains blocked until reviewed browser provider
   registration and hosted token evidence exist.
 - Commercial Change and Event Spine runtime and tenant gates are enabled only
@@ -141,7 +216,11 @@ BEO currentness.
   corresponding receipt exists.
 - Guided Inquiry is deployed and its global/runtime gates, dedicated Turnstile
   configuration, secret bindings, public route chunk, and hourly purge schedule
-  are present. No unique production slug, fresh browser challenge, wrong-host
+  are present. A disposable emulator journey proves cross-tenant callable
+  denial, exact publication pinning, idempotent recovery, tenant/IP quota
+  rejection without inquiry authority artifacts, stale conversion rejection,
+  and one atomic quote artifact set under a concurrent duplicate. No unique
+  production slug, fresh hosted browser challenge, wrong-host
   or replay rejection, customer submission, notification-provider outcome,
   actual 90-day deletion, authenticated hosted conversion, accessibility scan,
   assistive-technology review, customer/staff human acceptance, or commercial
