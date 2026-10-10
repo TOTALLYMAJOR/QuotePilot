@@ -38,6 +38,7 @@ import { useModalDialog } from "../hooks/useModalDialog";
 import CustomerProvisioningAuthorityState from "./CustomerProvisioningAuthorityState";
 import OrganizationRoleAuthorityPanel from "./OrganizationRoleAuthorityPanel";
 import AdaptiveChoiceField from "./AdaptiveChoiceField";
+import GoogleCalendarIntegrationPanel from "./GoogleCalendarIntegrationPanel";
 
 const PROVIDERS = ["crm", "webhook", "webhook_bridge", "hubspot", "salesforce"];
 const STATES = ["queued", "success", "error", "retrying", "skipped"];
@@ -1233,6 +1234,14 @@ export function IntegrationOpsView({
         {feedback && <p className="source-note">{feedback}</p>}
 
         {!provisioningOnly && canManageProviders && <OrganizationRoleAuthorityPanel />}
+
+        {!provisioningOnly && canManageProviders && <GoogleCalendarIntegrationPanel
+          mode="connection"
+          organizationId={organizationId}
+          role="admin"
+          source={state.source || "firebase"}
+          enabled={Boolean(organizationId)}
+        />}
 
         {!provisioningOnly && canManageProviders && <section
           className="admin-section operations-audit-panel"

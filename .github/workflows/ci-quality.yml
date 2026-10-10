@@ -94,6 +94,9 @@ jobs:
         run: npm ci
 
       - name: Run lane:core
+        env:
+          PRODUCT_INTELLIGENCE_PR_ENFORCE: ${{ github.event_name == 'pull_request' }}
+          PRODUCT_INTELLIGENCE_PR_BODY: ${{ github.event.pull_request.body || '' }}
         run: npm run lane:core
 
   product_truth_advisory:

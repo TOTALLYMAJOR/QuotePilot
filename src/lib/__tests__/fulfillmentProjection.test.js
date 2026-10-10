@@ -252,6 +252,34 @@ function expectDeepFrozen(value, seen = new WeakSet()) {
 }
 
 describe("buildFulfillmentProjection", () => {
+  test("preserves current coverage but withholds proposed coverage when event timing changed", () => {
+    const projection = buildFulfillmentProjection(readyInput({
+      proposedEventWindowState: "changed_unchecked"
+    }));
+
+    expect(projection.people).toMatchObject({
+      evidenceState: "available",
+      completeness: "partial",
+      current: {
+        coverageState: "coverage_confirmed",
+        totalRequired: 6,
+        totalAssigned: 6,
+        totalGap: 0
+      },
+      proposed: {
+        coverageState: "unknown",
+        totalRequired: 7,
+        totalAssigned: null,
+        totalGap: null,
+        assignmentBasis: "proposed_event_window_not_evaluated",
+        byRole: { server: { required: 7, assigned: null, gap: null } }
+      },
+      reasonCodes: expect.arrayContaining(["proposed_event_window_not_evaluated"])
+    });
+    expect(projection.people.boundary).toContain("proposed timing changed");
+    expect(projection.state).toBe("partial");
+  });
+
   test("composes exact 125 to 175 People and Supply evidence with the first valid boundary", () => {
     const projection = buildFulfillmentProjection(readyInput());
 

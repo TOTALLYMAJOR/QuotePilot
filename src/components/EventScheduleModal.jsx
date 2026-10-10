@@ -30,6 +30,7 @@ import {
 import { buildEventRunOfShowReadModel } from "../lib/eventRunOfShow";
 import { useEventIngredientExecutionProjection } from "../hooks/useEventIngredientExecutionProjection";
 import EventIngredientOperationsSummary from "./EventIngredientOperationsSummary";
+import GoogleCalendarIntegrationPanel from "./GoogleCalendarIntegrationPanel";
 import "./scheduleMotion.css";
 
 export const EVENT_SCHEDULE_QUOTE_LIMIT = 500;
@@ -932,6 +933,7 @@ export function EventScheduleView({
   onOpenIngredientPlan = null,
   onOpenPeople = null,
   onOpenReporting = null,
+  onOpenIntegrations = null,
   returnFocusRef = null
 }) {
   const embedded = presentation === "embedded";
@@ -1636,7 +1638,12 @@ export function EventScheduleView({
     }
   };
 
-  const handleProductionChecklistToggle = async (quoteId, checklistItemId, completed) => {
+  const handleProductionChecklistToggle = async (
+    quoteId,
+    checklistItemId,
+    completed,
+    { refreshCompletion = false } = {}
+  ) => {
     const id = String(quoteId || "").trim();
     const itemId = String(checklistItemId || "").trim();
     if (!id || !itemId) return;
@@ -1650,8 +1657,12 @@ export function EventScheduleView({
       return {
         ...item,
         completed,
-        completedAtISO: completed ? item.completedAtISO || nowISO : "",
-        completedByEmail: completed ? item.completedByEmail || currentUserEmail : ""
+        completedAtISO: completed
+          ? refreshCompletion ? nowISO : item.completedAtISO || nowISO
+          : "",
+        completedByEmail: completed
+          ? refreshCompletion ? currentUserEmail : item.completedByEmail || currentUserEmail
+          : ""
       };
     });
 
@@ -2073,6 +2084,16 @@ export function EventScheduleView({
                     ) : null}
                   </header>
                   <ScheduleEventFacts item={selectedEvent} compact />
+                  <GoogleCalendarIntegrationPanel
+                    mode="event"
+                    organizationId={organizationId}
+                    quoteId={selectedEvent.id}
+                    sourceVersionId={selectedEvent.activeRevisionId}
+                    eventStatus={selectedEvent.status}
+                    source={state.source}
+                    role={role}
+                    onOpenIntegrations={onOpenIntegrations}
+                  />
                   {operationsMode && ingredientExecution.access.readEnabled ? (
                     <EventIngredientOperationsSummary
                       planRead={ingredientExecution.planRead}
@@ -2226,20 +2247,38 @@ export function EventScheduleView({
                       </progress>
                       <div className="schedule-production-items">
                         {selectedEvent.productionChecklist.items.map((checklistItem) => (
-                          <label key={`${selectedEvent.id}-${checklistItem.id}`}>
-                            <input
-                              type="checkbox"
-                              checked={checklistItem.completed}
-                              onChange={(event) => handleProductionChecklistToggle(
-                                selectedEvent.id,
-                                checklistItem.id,
-                                event.target.checked
-                              )}
-                              disabled={savingChecklistId === selectedEvent.id}
-                            />
-                            <span>{checklistItem.label}</span>
-                            <small>{checklistItem.group}</small>
-                          </label>
+                          <div key={`${selectedEvent.id}-${checklistItem.id}`}>
+                            <label>
+                              <input
+                                type="checkbox"
+                                checked={checklistItem.completed}
+                                onChange={(event) => handleProductionChecklistToggle(
+                                  selectedEvent.id,
+                                  checklistItem.id,
+                                  event.target.checked
+                                )}
+                                disabled={savingChecklistId === selectedEvent.id}
+                              />
+                              <span>{checklistItem.label}</span>
+                              <small>{checklistItem.group}</small>
+                            </label>
+                            {checklistItem.id === "event-brief" && checklistItem.completed ? (
+                              <button
+                                type="button"
+                                className="ghost compact"
+                                style={{ minHeight: 44, marginTop: 8 }}
+                                disabled={savingChecklistId === selectedEvent.id}
+                                onClick={() => handleProductionChecklistToggle(
+                                  selectedEvent.id,
+                                  checklistItem.id,
+                                  true,
+                                  { refreshCompletion: true }
+                                )}
+                              >
+                                Review event brief again
+                              </button>
+                            ) : null}
+                          </div>
                         ))}
                       </div>
                     </div>

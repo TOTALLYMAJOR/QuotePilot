@@ -579,6 +579,19 @@ function responseFor(payload, resultOverrides = {}) {
     result = { schemaVersion: 2, ingredientId: payload.command.ingredientId, revision: payload.command.expectedRevision + 1, baseUnitId: payload.command.baseUnitId, active: payload.command.active, affectedMenuItemIds: [] };
   } else if (payload.command.kind === "opening_balance") {
     result = { schemaVersion: 2, ingredientId: payload.command.ingredientId, locationId: payload.command.locationId, movementId: `imv_${"c".repeat(48)}`, stockRevision: payload.command.expectedStockRevision + 1, onHandMicros: 40_000_000, onHandQuantity: payload.command.quantity };
+  } else if (payload.command.kind === "record_stock_count") {
+    const countedQuantityMicros = Math.round(Number(payload.command.countedQuantity) * 1_000_000);
+    result = {
+      schemaVersion: 2,
+      ingredientId: payload.command.ingredientId,
+      locationId: payload.command.locationId,
+      movementId: `imv_${"9".repeat(48)}`,
+      stockRevision: payload.command.expectedStockRevision + 1,
+      countedQuantity: payload.command.countedQuantity,
+      countedQuantityMicros,
+      signedDeltaMicros: countedQuantityMicros - 40_000_000,
+      onHandQuantity: payload.command.countedQuantity
+    };
   } else {
     if (payload.command.kind === "publish_pack_conversion") {
       result = { schemaVersion: 2, ingredientId: payload.command.ingredientId, packUnitId: payload.command.packUnitId, packConversionRevisionId: PACK_CONVERSION_REVISION_ID, revision: payload.command.expectedRevision + 1, affectedMenuItemIds: [] };
@@ -898,6 +911,51 @@ describe("inventory schema-v2 command authority", () => {
     })).rejects.toThrow(/unsupported fields/i);
   });
 
+  test.each([
+    ["37.500", "37.5", 37_500_000, -2_500_000],
+    ["0.000", "0", 0, -40_000_000]
+  ])("canonicalizes a %s stock count before submit and validates its authoritative receipt", async (
+    inputQuantity, canonicalQuantity, countedQuantityMicros, signedDeltaMicros
+  ) => {
+    const command = {
+      kind: "record_stock_count",
+      ingredientId: "chicken",
+      locationId: "main-kitchen",
+      countedQuantity: inputQuantity,
+      baseUnitId: "lb",
+      occurredAtISO: NOW,
+      note: "Human-confirmed shelf count",
+      expectedStockRevision: 1
+    };
+    mocks.callable.mockImplementation(async (payload) => ({ data: responseFor(payload) }));
+    await expect(applyInventoryCommand({
+      ...ADMIN_SCOPE,
+      requestId: `inventory_request_${"d".repeat(32)}`,
+      command
+    })).resolves.toMatchObject({
+      commandKind: "record_stock_count",
+      confirmation: {
+        stockRevision: 2,
+        countedQuantity: canonicalQuantity,
+        countedQuantityMicros,
+        signedDeltaMicros
+      }
+    });
+    expect(mocks.callable.mock.calls.at(-1)[0].command).toEqual({ ...command, countedQuantity: canonicalQuantity });
+    await expect(applyInventoryCommand({
+      ...ADMIN_SCOPE,
+      organizationId: "org-stock-count-negative",
+      requestId: `inventory_request_${"e".repeat(32)}`,
+      command: { ...command, countedQuantity: "-1" }
+    })).rejects.toThrow(/canonical decimal/i);
+    await expect(applyInventoryCommand({
+      ...ADMIN_SCOPE,
+      organizationId: "org-stock-count-extra",
+      requestId: `inventory_request_${"f".repeat(32)}`,
+      command: { ...command, supplierId: "forbidden" }
+    })).rejects.toThrow(/unsupported fields/i);
+  });
+
   test("validates dimension-safe event allocation and release receipts", async () => {
     mocks.callable.mockImplementation(async (payload) => ({ data: responseFor(payload) }));
     const allocation = await applyInventoryCommand({
@@ -978,6 +1036,57 @@ describe("inventory schema-v2 command authority", () => {
     mocks.callable.mockImplementationOnce(async (payload) => ({ data: { ...responseFor(payload), idempotent: true } }));
     await expect(reconcileInventoryCommand({ ...scope, requestId: REQUEST_ID })).resolves.toMatchObject({ mutationMode: "reconciliation", idempotent: true });
     expect(mocks.callable.mock.calls[1][0]).toEqual(mocks.callable.mock.calls[0][0]);
+  });
+
+  test("retains the canonical stock-count quantity through uncertain reconciliation", async () => {
+    const scope = { ...ADMIN_SCOPE, organizationId: "org-uncertain-stock-count" };
+    const requestId = `inventory_request_${"7".repeat(32)}`;
+    const command = {
+      kind: "record_stock_count",
+      ingredientId: "chicken",
+      locationId: "main-kitchen",
+      countedQuantity: "37.500",
+      baseUnitId: "lb",
+      occurredAtISO: NOW,
+      note: "Human-confirmed recount",
+      expectedStockRevision: 1
+    };
+    mocks.callable.mockRejectedValueOnce(Object.assign(new Error("connection ended"), { code: "functions/unavailable" }));
+    await expect(applyInventoryCommand({ ...scope, requestId, command })).rejects.toThrow(/connection ended/i);
+    expect(readPendingInventoryCommands(scope)[0]).toMatchObject({
+      command: { countedQuantity: "37.5" }, state: "uncertain", definitive: false
+    });
+    mocks.callable.mockImplementationOnce(async (payload) => ({ data: { ...responseFor(payload), idempotent: true } }));
+    await expect(reconcileInventoryCommand({ ...scope, requestId })).resolves.toMatchObject({
+      commandKind: "record_stock_count", mutationMode: "reconciliation", idempotent: true,
+      confirmation: { countedQuantity: "37.5", countedQuantityMicros: 37_500_000 }
+    });
+    expect(mocks.callable.mock.calls[1][0]).toEqual(mocks.callable.mock.calls[0][0]);
+  });
+
+  test("tracks uncertain stock counts independently for different ingredients at one location", async () => {
+    const scope = { ...ADMIN_SCOPE, organizationId: "org-independent-stock-counts" };
+    const chicken = {
+      kind: "record_stock_count",
+      ingredientId: "chicken",
+      locationId: "main-kitchen",
+      countedQuantity: "37",
+      baseUnitId: "lb",
+      occurredAtISO: NOW,
+      note: "Chicken count",
+      expectedStockRevision: 1
+    };
+    const pasta = { ...chicken, ingredientId: "pasta", countedQuantity: "22", note: "Pasta count" };
+    mocks.callable
+      .mockRejectedValueOnce(Object.assign(new Error("connection ended"), { code: "functions/unavailable" }))
+      .mockRejectedValueOnce(Object.assign(new Error("connection ended"), { code: "functions/unavailable" }));
+
+    await expect(applyInventoryCommand({ ...scope, requestId: `inventory_request_${"4".repeat(32)}`, command: chicken })).rejects.toThrow(/connection ended/i);
+    await expect(applyInventoryCommand({ ...scope, requestId: `inventory_request_${"5".repeat(32)}`, command: pasta })).rejects.toThrow(/connection ended/i);
+    expect(readPendingInventoryCommands(scope)).toEqual(expect.arrayContaining([
+      expect.objectContaining({ targetId: "chicken", command: expect.objectContaining({ ingredientId: "chicken" }) }),
+      expect.objectContaining({ targetId: "pasta", command: expect.objectContaining({ ingredientId: "pasta" }) })
+    ]));
   });
 
   test("treats aborted as definitive and allows a deliberate reset", async () => {

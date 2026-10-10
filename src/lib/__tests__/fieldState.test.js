@@ -115,7 +115,7 @@ describe("field-state contract", () => {
     const contract = readContract("docs/field-state-contract.json");
     const registry = readContract("docs/field-state-surface-contracts.json");
     contract.axes.availability.states[0].label = "Maybe";
-    registry.surfaces[1].modes = ["select"];
+    registry.surfaces.find((surface) => surface.id === "adaptive-choice-field").modes = ["select"];
 
     expect(validateFieldStateContract({ contract, registry, repoRoot: REPO_ROOT })).toEqual(
       expect.arrayContaining([

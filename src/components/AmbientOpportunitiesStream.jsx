@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useMemo, useRef, useState } from "react";
 import StatusChip from "./StatusChip";
 import {
   createAmbientAction,
@@ -11,6 +11,8 @@ import {
 import { formatWorkspaceDateTime } from "../lib/workspacePresentation";
 import WorkspaceRecoveryState from "./WorkspaceRecoveryState";
 import "./ambientOpportunitiesStream.css";
+
+const InquiryQueue = lazy(() => import("./InquiryQueue"));
 
 const MOMENTUM_LABELS = Object.freeze({
   proposal: "Proposal completeness",
@@ -288,6 +290,10 @@ export default function AmbientOpportunitiesStream({
   onOpenWorkflow,
   onStartOpportunity,
   onRefresh,
+  organizationId = "",
+  catalog = null,
+  onInquiryQuoteCreated,
+  inquiryShowcaseEnabled = false,
   controller = null
 }) {
   const acknowledgementRef = useRef(null);
@@ -494,6 +500,14 @@ export default function AmbientOpportunitiesStream({
           </p>
         </div>
       </header>
+      {inquiryShowcaseEnabled && ["admin", "sales"].includes(role(currentUserRole)) && <Suspense fallback={<p role="status">Loading customer inquiries…</p>}>
+        <InquiryQueue
+          organizationId={organizationId}
+          catalog={catalog}
+          enabled
+          onQuoteCreated={onInquiryQuoteCreated}
+        />
+      </Suspense>}
 
       {acknowledgement && (
         <div

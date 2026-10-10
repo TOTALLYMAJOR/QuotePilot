@@ -202,14 +202,35 @@ describe("Customer 360 rebooking radar", () => {
       customerId: CUSTOMER_ID, quoteId: quote.id, eventDate: quote.event.date,
       sourceVersionId: "v0001", acceptanceReceiptId: "older-acceptance-receipt",
       dueDate: "2026-08-15", state: "open", reviewItems: {},
-      policy: { state: "configured", timeZone: "America/Chicago" }
+      policy: { state: "configured", timeZone: "America/Chicago" },
+      actualAttendance: {
+        schemaVersion: 1,
+        revision: 1,
+        count: 118,
+        sourceType: "staff_observed",
+        note: "Lead server confirmed the final served headcount.",
+        sourceReferenceId: `closeout_attendance_${"a".repeat(48)}`,
+        recordedAtISO: "2026-08-15T15:30:00.000Z",
+        recordedBy: { email: "owner@example.test", role: "admin" },
+        lastReceiptId: `closeout_attendance_${"a".repeat(48)}`
+      }
     };
     const action = (closeout) => build(makeWorkspace({ quotes: [{
       ...quote, workflow: { postEventCloseout: closeout }
     }] }), { date: "2026-08-15" }).opportunities[0].reviewedAction;
     expect(action(projected)).toMatchObject({
-      sourceVersionId: "v0001", acceptanceReceiptId: "older-acceptance-receipt"
+      sourceVersionId: "v0001",
+      acceptanceReceiptId: "older-acceptance-receipt",
+      actualAttendance: {
+        count: 118,
+        revision: 1,
+        sourceType: "staff_observed"
+      }
     });
+    expect(action({
+      ...projected,
+      actualAttendance: { ...projected.actualAttendance, count: 0 }
+    }).actualAttendance).toBeNull();
     // Never substitute the quote's newer accepted version or receipt.
     expect(action({ ...projected, sourceVersionId: undefined, acceptanceReceiptId: undefined }))
       .toMatchObject({ sourceVersionId: "", acceptanceReceiptId: "" });

@@ -35,6 +35,12 @@ const CLOSEOUT_REVIEW_ITEMS = Object.freeze([
   Object.freeze({ code: "review_request", label: "Review a customer-feedback request" }),
   Object.freeze({ code: "operational_follow_up", label: "Review unresolved operational follow-up" })
 ]);
+const ACTUAL_ATTENDANCE_SOURCE_TYPES = new Set([
+  "staff_observed",
+  "customer_reported",
+  "venue_reported",
+  "imported_record"
+]);
 
 function text(value) {
   return String(value ?? "").trim();
@@ -539,6 +545,50 @@ function authoritativeCloseoutProjection(quote, { organizationId, customerId, qu
   };
 }
 
+function authoritativeActualAttendance(closeout) {
+  const actual = isRecord(closeout?.actualAttendance)
+    ? closeout.actualAttendance
+    : null;
+  const count = Number(actual?.count);
+  const revision = Number(actual?.revision);
+  const sourceType = text(actual?.sourceType).toLowerCase();
+  const sourceReferenceId = safeOpaqueId(actual?.sourceReferenceId);
+  const lastReceiptId = safeOpaqueId(actual?.lastReceiptId);
+  const recordedAtISO = validISO(actual?.recordedAtISO);
+  const note = text(actual?.note);
+  if (
+    Number(actual?.schemaVersion) !== 1
+    || !Number.isSafeInteger(count)
+    || count < 1
+    || count > 400
+    || !Number.isSafeInteger(revision)
+    || revision < 1
+    || !ACTUAL_ATTENDANCE_SOURCE_TYPES.has(sourceType)
+    || !sourceReferenceId
+    || !/^closeout_attendance_[a-f0-9]{48}$/u.test(sourceReferenceId)
+    || sourceReferenceId !== lastReceiptId
+    || !recordedAtISO
+    || !note
+    || note.length > 240
+  ) return null;
+  return {
+    schemaVersion: 1,
+    revision,
+    count,
+    sourceType,
+    note,
+    sourceReferenceId,
+    recordedAtISO,
+    recordedBy: isRecord(actual.recordedBy)
+      ? {
+          email: text(actual.recordedBy.email).toLowerCase(),
+          role: text(actual.recordedBy.role).toLowerCase()
+        }
+      : null,
+    lastReceiptId
+  };
+}
+
 function authoritativeCloseoutCalendarDate(closeout, calendarContext) {
   const policyState = text(closeout?.policy?.state).toLowerCase();
   if (policyState !== "configured") return calendarContext.date;
@@ -609,6 +659,7 @@ function buildCloseoutOpportunity({ quote, event, calendarContext, eventDate, qu
       acceptanceReceiptId: safeOpaqueId(closeout.acceptanceReceiptId),
       dueDate: text(closeout.dueDate),
       policy: isRecord(closeout.policy) ? { ...closeout.policy } : {},
+      actualAttendance: authoritativeActualAttendance(closeout),
       completedAtISO: text(closeout.completedAtISO),
       completedBy: text(closeout.completedBy?.email || closeout.completedBy),
       performed: displayState === "completed"

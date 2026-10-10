@@ -1,6 +1,6 @@
 # QuotePilot Staff Workspace Design System
 
-Last updated: 2026-09-10 15:09:08 CDT
+Last updated: 2026-09-12 17:33:23 CDT
 
 Status: living canonical staff-workspace design system. Its v0.5.0 foundation
 has been extended by the Ambient, UX-convergence, commercial, Staffing, and
@@ -189,7 +189,12 @@ recorded payment context, and saved plan. Control Room then reads: needs
 attention, planned run of show, recorded checklist, Actuals boundary, preserved
 evidence, and one valid next action. Checklist completion is never styled or
 worded as live phase, attendance, readiness, or event completion. Exact BEO and
-staffing reads stay independent, and unavailable evidence remains unavailable.
+staffing reads stay independent. An exact-source post-event closeout projection
+may add actual attendance to Event Focus and the Control Room Actuals boundary,
+but it remains visually and semantically separate from priced guests, staffing,
+BEO, run of show, event phase, readiness, and financial actuals. A mismatched
+accepted version or acceptance receipt withholds the count and names the stale
+source; unavailable evidence remains unavailable.
 At 760px and below the coordination columns become one reading-order stack;
 controls remain at least 44px and route transitions focus the exact H1.
 
@@ -208,8 +213,10 @@ freshness, exact staffing coverage, bounded Workflow, complete Schedule
 conflicts, and BEO invalidations. Missing, stale, partial, truncated, malformed,
 or unclassified evidence never passes. Inventory may join only through its
 exact current event projection and remains independent of allocation and menu-
-cost completeness. Actual attendance, live phase, and live issues remain
-unavailable until separately governed authority exists.
+cost completeness. Actual attendance remains outside the Preflight synthesis
+even when its separately governed post-event closeout evidence is displayed in
+the adjacent Actuals boundary. Live phase and live issues remain unavailable
+until their own governed authorities exist.
 
 ## Ambient Intelligence extension (current source, release-profile enabled)
 
@@ -868,6 +875,14 @@ than a process strip, dashboard card grid, or repeated `Review` controls. One
 ranked setup action may appear only when its evidence is explicit and may not be
 duplicated in the inventory.
 
+The overview is a useful read-only index, not merely a list of destinations.
+Each category surfaces up to eight exact normalized record names with its
+recorded active, enabled, dependency, grouping, or pricing-confirmation state;
+when more records exist, the exact remainder count points to the full existing
+editor. Incomplete Menu evidence stays explicitly unavailable. The overview
+does not aggregate price, margin, stock, operational availability, or readiness
+that its completed organization-scoped catalog read does not establish.
+
 Existing Packages appear as Offers without changing their stored record type,
 IDs, inclusions, pricing, or save path. **Your bundle** remains the derived
 composition of the one quote draft; Library may explain its ingredients but may
@@ -1103,6 +1118,15 @@ provenance, and the draft-only authority boundary. Its two outcomes are
 the bound organization, catalog observation and revision, proposal fingerprint,
 and affected draft-field snapshot still match. It changes only the isolated
 draft; a later outcome-named trusted save owns repricing and persistence.
+
+The Commercial Scenario Workbench keeps Current and every session alternative
+visible together when its container has room. Current remains the saved
+revision; each alternative labels its result as exact, retained, updating, or
+not evaluated, and the selected alternative receives the restrained gold
+emphasis. In the stacked layout, the same facts become Current, selected, and
+difference rows rather than a horizontally compressed table. Both
+presentations use the same session-only scenarios and cached projections; they
+add no apply, undo, persistence, pricing, Staffing, Inventory, or BEO authority.
 
 ### Operational staffing authority surface
 

@@ -480,18 +480,21 @@ function coverageProjection({
   assignmentBasis
 }) {
   if (!requirements || !assigned) {
+    const knownRequirements = requirements || null;
     return {
       guestCount,
       requirementSource: requirementSource || null,
       assignmentBasis: assignmentBasis || null,
       coverageState: "unknown",
       byRole: Object.fromEntries(ROLES.map((role) => [role, {
-        required: null,
+        required: knownRequirements?.[role] ?? null,
         assigned: assigned?.[role] ?? null,
         gap: null,
         eligibleBackupCount: resilience?.eligibleBackupCountByRole?.[role] ?? null
       }])),
-      totalRequired: null,
+      totalRequired: knownRequirements
+        ? Object.values(knownRequirements).reduce((sum, count) => sum + count, 0)
+        : null,
       totalAssigned: assigned ? Object.values(assigned).reduce((sum, count) => sum + count, 0) : null,
       totalGap: null
     };
@@ -621,12 +624,17 @@ function buildPeopleProjection({ input, identity, scenario }) {
     : proposedRequirements && scenario.proposedGuestCount === scenario.currentGuestCount
       ? "commercial_quote_revision"
       : proposedRequirements ? "operator_declared_policy_projection" : null;
+  const proposedEventWindowState = text(input.proposedEventWindowState || "current");
+  const proposedEventWindowCurrent = proposedEventWindowState === "current";
   if (proposedRequirementsInput !== undefined && !explicitSourceValid) {
     reasonCodes.push("proposed_role_requirement_source_invalid");
   } else if (proposedRequirementsInput !== undefined && !explicitProposedRequirements) {
     reasonCodes.push("proposed_role_requirements_invalid");
   } else if (state === "available" && policy.valid && !proposedRequirements) {
     reasonCodes.push("proposed_guest_count_outside_staffing_policy");
+  }
+  if (!proposedEventWindowCurrent) {
+    reasonCodes.push("proposed_event_window_not_evaluated");
   }
   if (people.profilesTruncated === true) reasonCodes.push("staff_profiles_truncated");
   if (resilience.evidenceState !== "available") reasonCodes.push(...resilience.reasonCodes);
@@ -636,6 +644,7 @@ function buildPeopleProjection({ input, identity, scenario }) {
     && resilience.evidenceState === "available"
     && staffingHeadroom.evidenceState === "available"
     && proposedRequirements
+    && proposedEventWindowCurrent
     && people.profilesTruncated !== true
       ? "complete"
       : "partial";
@@ -661,14 +670,18 @@ function buildPeopleProjection({ input, identity, scenario }) {
     proposed: coverageProjection({
       guestCount: scenario.proposedGuestCount,
       requirements: proposedRequirements,
-      assigned: state === "available" ? assigned : null,
+      assigned: state === "available" && proposedEventWindowCurrent ? assigned : null,
       resilience,
       requirementSource: proposedRequirementSource,
-      assignmentBasis: "current_revision_operator_confirmed_comparison"
+      assignmentBasis: proposedEventWindowCurrent
+        ? "current_revision_operator_confirmed_comparison"
+        : "proposed_event_window_not_evaluated"
     }),
     staffingHeadroom,
     resilience,
-    boundary: "Proposed requirements compare against current-revision operator-confirmed assignments only; neither explicit commercial-form counts nor policy-derived counts confirm proposed assignments or change the quote."
+    boundary: proposedEventWindowCurrent
+      ? "Proposed requirements compare against current-revision operator-confirmed assignments only; neither explicit commercial-form counts nor policy-derived counts confirm proposed assignments or change the quote."
+      : "Current coverage remains visible, but proposed timing changed. Availability and conflicts have not been evaluated for that window, so no proposed coverage or assignment conclusion is made."
   };
 }
 

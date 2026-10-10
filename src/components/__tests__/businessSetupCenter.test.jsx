@@ -11,8 +11,13 @@ describe("BusinessSetupCenter", () => {
     />);
     expect(html).toContain('data-capability-id="business-setup-readiness"');
     expect(html).toContain('data-readiness-state="attention"');
-    expect(html).toContain("Before the next quote");
+    expect(html).toContain("Your path to the first quote");
     expect(html).toContain("7 setup areas need attention");
+    expect(html).toContain('aria-label="First quote setup path"');
+    expect(html).toContain('data-activation-stage="basics"');
+    expect(html).toContain('data-activation-stage="menu"');
+    expect(html).toContain('data-activation-stage="selling-price"');
+    expect(html).toContain('data-activation-stage="cost-visibility"');
     expect(html.indexOf("Identity")).toBeLessThan(html.indexOf("Offerings"));
     expect(html).toContain('data-readiness-icon="identity"');
     expect(html).toContain('data-readiness-icon="offerings"');
@@ -21,6 +26,25 @@ describe("BusinessSetupCenter", () => {
     expect(html).not.toContain("Ask an administrator");
     expect(html).not.toContain("Unavailable by policy");
     expect(html).not.toContain("<button");
+  });
+
+  test("offers an import path when offers and menu are the next incomplete activation stage", () => {
+    const html = renderToStaticMarkup(<BusinessSetupCenter
+      catalog={{
+        source: "firebase-org",
+        organizationName: "North Star Catering",
+        packages: [],
+        eventTypes: [],
+        settings: { organizationName: "North Star Catering", menuSections: [] }
+      }}
+      onOpenSection={() => {}}
+      onOpenImport={() => {}}
+    />);
+
+    expect(html).toContain('data-activation-current="true"');
+    expect(html).toContain("Build offers and menu");
+    expect(html).toContain("Import an existing menu");
+    expect(html).toContain("Missing costs do not block quoting");
   });
 
   test("compresses complete setup behind one healthy outcome", () => {

@@ -16,6 +16,32 @@ function sourceBetween(startMarker, endMarker) {
 }
 
 describe("Kitchen BEO callable source ownership", () => {
+  test("keeps operational notes callable-owned, revision-bound, and receipt-backed", () => {
+    const readCallable = sourceBetween(
+      "exports.getEventOperationalNotesSnapshot =",
+      "exports.applyEventOperationalNoteCommand ="
+    );
+    expect(readCallable).toContain("await assertStaff(context");
+    expect(readCallable).toContain("eventOperationalNotes.normalizeReadRequest(data)");
+    expect(readCallable).toContain("tx.get(refs.quoteRef)");
+    expect(readCallable).toContain("tx.get(refs.journalRef)");
+    expect(readCallable).toContain("eventOperationalNotes.projectStaffSnapshot({");
+    expect(readCallable).toContain("projectEventBriefReviewConsequences(quote, snapshot)");
+    expect(readCallable).not.toMatch(/data\?\.(notes|journal|receipt|actor)/u);
+
+    const commandCallable = sourceBetween(
+      "exports.applyEventOperationalNoteCommand =",
+      "function kitchenBeoRefs"
+    );
+    expect(commandCallable).toContain("eventOperationalNotes.normalizeRequest(data)");
+    expect(commandCallable).toContain("eventOperationalNotes.receiptIdFor(request)");
+    expect(commandCallable).toContain("eventOperationalNotes.planCommand({");
+    expect(commandCallable).toContain("tx.create(refs.receiptRef, planned.receipt)");
+    expect(commandCallable).toContain("tx.set(refs.journalRef, planned.nextJournal)");
+    expect(commandCallable).toContain("eventOperationalNotes.publicReceipt(planned.receipt)");
+    expect(commandCallable).not.toContain("functions.logger.info");
+  });
+
   test("derives artifact status from the canonical quote, private receipt, and invalidations", () => {
     const statusReader = sourceBetween(
       "async function readKitchenBeoStatus",
@@ -87,22 +113,26 @@ describe("Kitchen BEO callable source ownership", () => {
     expect(projection).toContain("projectStoredKitchenBeoArtifact(record");
   });
 
-  test("generates from a server-read quote and rechecks the same canonical claim before persistence", () => {
+  test("generates from server-read quote and notes, then rechecks the same canonical claim before persistence", () => {
     const callable = sourceBetween(
       "exports.generateKitchenBeo =",
       "exports.reopenQuote ="
     );
     expect(callable).toContain("await assertStaff(context");
     expect(callable).toContain("same-organization staff authority");
-    expect(callable).toContain("const initialQuoteSnap = await initialRefs.quoteRef.get()");
+    expect(callable).toContain("const [initialQuoteSnap, initialOperationalNotesSnap] = await Promise.all([");
+    expect(callable).toContain("initialRefs.quoteRef.get()");
+    expect(callable).toContain("initialRefs.operationalNotesRef.get()");
+    expect(callable).toContain("projectVerifiedOperationalNotesForBeo({");
     expect(callable).toMatch(
-      /buildGenerationClaim\(\{[\s\S]{0,300}canonicalQuote,[\s\S]{0,200}request:\s*\{ requestId \},[\s\S]{0,120}trustedContext/u
+      /buildGenerationClaim\(\{[\s\S]{0,300}canonicalQuote,[\s\S]{0,200}operationalNotes:\s*initialOperationalNotes\.projection,[\s\S]{0,200}request:\s*\{ requestId \},[\s\S]{0,120}trustedContext/u
     );
     expect(callable).toMatch(
       /renderKitchenBeoPdf\(\{\s*payload:\s*claim\.payload,\s*provenance:\s*\{ \.\.\.claim, generatedAtISO \}\s*\}\)/u
     );
 
     const transactionRead = callable.indexOf("tx.get(refs.quoteRef)");
+    const transactionNotesRead = callable.indexOf("tx.get(refs.operationalNotesRef)");
     const transactionClaim = callable.indexOf(
       "const transactionClaim = kitchenBeoAuthority.buildGenerationClaim"
     );
@@ -113,8 +143,9 @@ describe("Kitchen BEO callable source ownership", () => {
     const reconciliationRead = callable.indexOf("tx.get(refs.applyReceiptsRef.doc(latestApplyReceiptId))");
     const receiptCreate = callable.indexOf("tx.create(refs.receiptRef, {");
     expect(transactionRead).toBeGreaterThan(-1);
+    expect(transactionNotesRead).toBeGreaterThan(transactionRead);
     expect(dependencyStateRead).toBeGreaterThan(transactionRead);
-    expect(transactionClaim).toBeGreaterThan(transactionRead);
+    expect(transactionClaim).toBeGreaterThan(transactionNotesRead);
     expect(canonicalComparison).toBeGreaterThan(transactionClaim);
     expect(reconciliationRead).toBeGreaterThan(canonicalComparison);
     expect(receiptCreate).toBeGreaterThan(canonicalComparison);

@@ -305,6 +305,18 @@ export function buildTaskPlan({
     profile: profileId,
     contract: selectedContract
   });
+  const productIntelligenceConfig = selectedContract.productIntelligence || {};
+  const mechanicalProductIntelligence = findTaskSignals(
+    task,
+    selectedContract.domainRouting?.mechanicalTaskKeywords
+  ).length > 0;
+  const productIntelligence = {
+    disposition: domainClassification.applicable && !mechanicalProductIntelligence
+      ? "required"
+      : "not_applicable_allowed",
+    requiredFields: unique(productIntelligenceConfig.requiredFields || []),
+    notApplicableRequiresRationale: productIntelligenceConfig.notApplicableRequiresRationale !== false
+  };
 
   const escalation = selectedContract.highRiskEscalation || {};
   const highRiskSignal = hasTaskKeyword(task, escalation.taskKeywords)
@@ -339,6 +351,9 @@ export function buildTaskPlan({
       ]
     }]
     : [];
+  const productIntelligenceDocs = productIntelligence.disposition === "required"
+    ? (productIntelligenceConfig.docRequirements || [])
+    : [];
 
   const plan = {
     schemaVersion: selectedContract.schemaVersion,
@@ -355,6 +370,7 @@ export function buildTaskPlan({
       highRiskSignal
     },
     domainClassification,
+    productIntelligence,
     modelRouting: {
       tier: modelTier,
       selectedModel: String(env[envKey] || tier.defaultModel),
@@ -372,8 +388,14 @@ export function buildTaskPlan({
         ...(profile.readFirst || []),
         ...domainClassification.authorityReads
       ]),
-      docRequirements: mergeDocRequirements(profile.docRequirements, capabilityDocs),
-      validations: unique(profile.validations)
+      docRequirements: mergeDocRequirements(
+        profile.docRequirements,
+        [...capabilityDocs, ...productIntelligenceDocs]
+      ),
+      validations: unique([
+        ...(profile.validations || []),
+        productIntelligenceConfig.validation
+      ])
     }
   };
   const expertiseEvaluationRequired = hasPath(normalizedFiles, {
@@ -419,6 +441,8 @@ function formatText(plan) {
     `- risk: ${plan.classification.riskLevel}`,
     `- domain_applicable: ${plan.domainClassification.applicable}`,
     `- domain_contexts: ${plan.domainClassification.contexts.join(", ")}`,
+    `- product_intelligence: ${plan.productIntelligence.disposition}`,
+    `- catering_value_fields: ${plan.productIntelligence.requiredFields.join(", ") || "none"}`,
     `- model: ${plan.modelRouting.selectedModel} (${plan.modelRouting.tier}, ${plan.modelRouting.reasoningEffort})`,
     `- switch_authority: ${plan.modelRouting.switchAuthority}`,
     `- files: ${plan.files.length ? plan.files.join(", ") : "working tree auto-detection"}`,

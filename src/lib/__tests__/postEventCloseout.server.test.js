@@ -15,11 +15,14 @@ const {
   calendarDateAtISO,
   derivePostEventCloseoutState,
   normalizeIanaTimeZone,
+  normalizePostEventActualAttendanceRequest,
   normalizePostEventCloseoutActionRequest,
   normalizePostEventCloseoutPolicyRefreshRequest,
   planPostEventCloseoutAction,
+  planPostEventActualAttendance,
   planPostEventCloseoutPolicyRefresh,
-  resolvePostEventCloseoutSource
+  resolvePostEventCloseoutSource,
+  verifyPostEventActualAttendanceReceipt
 } = require("../../../functions/postEventCloseout.js");
 
 const ORGANIZATION_ID = "org-one";
@@ -140,6 +143,21 @@ function requestFor(record, overrides = {}) {
     action: "review",
     requestId: "closeout-review-request-0001",
     note: "Internal event notes reviewed.",
+    ...overrides
+  };
+}
+
+function attendanceRequestFor(record, overrides = {}) {
+  return {
+    organizationId: ORGANIZATION_ID,
+    quoteId: QUOTE_ID,
+    closeoutId: record.closeoutId,
+    action: "record",
+    requestId: "closeout-attendance-request-0001",
+    expectedRevision: 0,
+    count: 118,
+    sourceType: "staff_observed",
+    note: "Lead server confirmed the final served headcount.",
     ...overrides
   };
 }
@@ -634,5 +652,161 @@ describe("post-event closeout action and receipt planning", () => {
       code: "aborted",
       message: "example"
     });
+  });
+});
+
+describe("post-event actual attendance authority", () => {
+  test("records one exact-source fact and immutable actor/time receipt without changing closeout completion", () => {
+    const { record, source } = recordFixture();
+    const request = attendanceRequestFor(record);
+    const normalized = normalizePostEventActualAttendanceRequest(request);
+    const plan = planPostEventActualAttendance({
+      request,
+      record,
+      source,
+      actor: ACTOR,
+      nowISO: "2026-08-15T15:30:00.000Z"
+    });
+
+    expect(normalized.receiptId).toMatch(/^closeout_attendance_[a-f0-9]{48}$/);
+    expect(plan).toMatchObject({
+      kind: "record",
+      idempotent: false,
+      nextRecord: {
+        state: "pending",
+        actualAttendance: {
+          schemaVersion: 1,
+          revision: 1,
+          count: 118,
+          sourceType: "staff_observed",
+          sourceReferenceId: normalized.receiptId,
+          recordedAtISO: "2026-08-15T15:30:00.000Z",
+          recordedBy: ACTOR,
+          lastReceiptId: normalized.receiptId
+        }
+      },
+      receipt: {
+        receiptId: normalized.receiptId,
+        sourceVersionId: SOURCE_VERSION_ID,
+        acceptanceReceiptId: ACCEPTANCE_RECEIPT_ID,
+        priorRevision: 0,
+        resultRevision: 1,
+        priorActualAttendance: null
+      }
+    });
+    expect(verifyPostEventActualAttendanceReceipt(plan.receipt))
+      .toEqual(plan.receipt);
+    expect(plan.nextRecord.reviewItems).toEqual(record.reviewItems);
+    expect(plan.nextRecord.completedAtISO).toBe("");
+  });
+
+  test("corrects by CAS while preserving the prior fact in the next receipt", () => {
+    const { record, source } = recordFixture();
+    const recorded = planPostEventActualAttendance({
+      request: attendanceRequestFor(record),
+      record,
+      source,
+      actor: ACTOR,
+      nowISO: "2026-08-15T15:30:00.000Z"
+    });
+    const corrected = planPostEventActualAttendance({
+      request: attendanceRequestFor(recorded.nextRecord, {
+        action: "correct",
+        requestId: "closeout-attendance-request-0002",
+        expectedRevision: 1,
+        count: 116,
+        sourceType: "venue_reported",
+        note: "Venue captain reconciled the final door count."
+      }),
+      record: recorded.nextRecord,
+      source,
+      actor: ACTOR,
+      nowISO: "2026-08-15T16:00:00.000Z"
+    });
+
+    expect(corrected.nextRecord.actualAttendance).toMatchObject({
+      revision: 2,
+      count: 116,
+      sourceType: "venue_reported"
+    });
+    expect(corrected.receipt.priorActualAttendance).toEqual(
+      recorded.nextRecord.actualAttendance
+    );
+    expect(corrected.receipt.resultActualAttendance)
+      .toEqual(corrected.nextRecord.actualAttendance);
+  });
+
+  test("reconciles only the unchanged request against the retained receipt-backed fact", () => {
+    const { record, source } = recordFixture();
+    const request = attendanceRequestFor(record);
+    const recorded = planPostEventActualAttendance({
+      request,
+      record,
+      source,
+      actor: ACTOR,
+      nowISO: "2026-08-15T15:30:00.000Z"
+    });
+    expect(planPostEventActualAttendance({
+      request,
+      record: recorded.nextRecord,
+      source,
+      existingReceipt: recorded.receipt
+    })).toMatchObject({
+      kind: "reconcile",
+      idempotent: true,
+      nextRecord: null,
+      receipt: recorded.receipt
+    });
+    expect(() => planPostEventActualAttendance({
+      request: { ...request, count: 119 },
+      record: recorded.nextRecord,
+      source,
+      existingReceipt: recorded.receipt
+    })).toThrowError(expect.objectContaining({ code: "already-exists" }));
+  });
+
+  test.each([
+    [{ count: 0 }, /whole number/i],
+    [{ count: 401 }, /whole number/i],
+    [{ sourceType: "guessed" }, /supported/i],
+    [{ note: "" }, /source note/i],
+    [{ expectedRevision: -1 }, /nonnegative/i],
+    [{ customerEmail: "not-allowed@example.test" }, /unsupported fields/i]
+  ])("rejects unsafe actual-attendance input %j", (override, message) => {
+    const { record } = recordFixture();
+    expect(() => normalizePostEventActualAttendanceRequest({
+      ...attendanceRequestFor(record),
+      ...override
+    })).toThrow(message);
+  });
+
+  test("fails closed before the due date, on stale revision, and on receipt tampering", () => {
+    const { record, source } = recordFixture();
+    const request = attendanceRequestFor(record);
+    expect(() => planPostEventActualAttendance({
+      request,
+      record,
+      source,
+      actor: ACTOR,
+      nowISO: "2026-08-14T15:30:00.000Z"
+    })).toThrowError(expect.objectContaining({ code: "failed-precondition" }));
+    expect(() => planPostEventActualAttendance({
+      request: { ...request, expectedRevision: 1 },
+      record,
+      source,
+      actor: ACTOR,
+      nowISO: "2026-08-15T15:30:00.000Z"
+    })).toThrowError(expect.objectContaining({ code: "aborted" }));
+    const recorded = planPostEventActualAttendance({
+      request,
+      record,
+      source,
+      actor: ACTOR,
+      nowISO: "2026-08-15T15:30:00.000Z"
+    });
+    expect(() => verifyPostEventActualAttendanceReceipt({
+      ...recorded.receipt,
+      count: 119
+    })).toThrow(/integrity validation/i);
   });
 });

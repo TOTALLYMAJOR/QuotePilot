@@ -472,6 +472,9 @@ describe("AmbientNowView", () => {
     expect(css).toMatch(/@media \(max-width: 760px\)/u);
     expect(css).toMatch(/@media \(max-width: 470px\)/u);
     expect(css).toContain("var(--font-editorial)");
+    expect(css).toMatch(/\.ambient-now-priority\s*\{[^}]*display:\s*block;/su);
+    expect(css).not.toContain(".ambient-now-priority__number");
+    expect(css).not.toMatch(/\.ambient-now-priority\s*\{[^}]*grid-template-columns:/su);
     expect(css).toContain(".ambient-now__return-anchor.sr-only:focus");
   });
 

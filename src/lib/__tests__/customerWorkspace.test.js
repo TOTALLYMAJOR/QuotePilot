@@ -345,8 +345,20 @@ describe("buildCustomerWorkspaceDto", () => {
       }
     ]));
 
-    const workspace = await getCustomerWorkspace({ organizationId: "org-1", customerId: "customer-1" });
+    const coreReads = [];
+    const workspace = await getCustomerWorkspace({
+      organizationId: "org-1",
+      customerId: "customer-1",
+      onCoreWorkspace: (coreWorkspace) => coreReads.push(coreWorkspace)
+    });
 
+    expect(coreReads).toHaveLength(1);
+    expect(coreReads[0]).toMatchObject({
+      source: "local",
+      customer: { customerId: "customer-1" },
+      quotes: [expect.objectContaining({ id: "quote-1" })],
+      proposalVersions: []
+    });
     expect(workspace?.source).toBe("local");
     expect(workspace?.proposalVersions.map((version) => version.versionId))
       .toEqual(["v0002", "v0001"]);

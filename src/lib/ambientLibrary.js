@@ -1214,6 +1214,21 @@ export function buildAmbientLibrary({
       `review-library-template:${template.id}`
     )
   }));
+  const overviewRecords = {
+    packages,
+    menu: menuInventoryComplete ? menu.items : [],
+    addons,
+    rentals,
+    templates: templateRows.map((template) => ({
+      id: template.id,
+      name: template.name,
+      active: template.dependencyState === "resolved",
+      dependencyState: template.dependencyState,
+      style: template.style
+    })),
+    pricing: [],
+    rules: rules.records
+  };
   const sectionIssueCounts = {
     packages: summaries.packages.totalCount === 0 ? 1 : 0,
     menu: summaries.menu.availability === "unavailable"
@@ -1235,6 +1250,7 @@ export function buildAmbientLibrary({
       label: SECTION_DEFINITIONS[sectionId].label,
       health: sectionIssueCounts[sectionId] > 0 ? "attention" : "healthy",
       summary: summaries[sectionId],
+      records: overviewRecords[sectionId],
       issueCount: sectionIssueCounts[sectionId],
       descriptor: buildSectionDescriptor({
         sectionId,

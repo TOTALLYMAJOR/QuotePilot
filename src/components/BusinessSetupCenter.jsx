@@ -102,7 +102,45 @@ function buildReadinessPresentation(model) {
     ready,
     unresolved,
     complete: unresolved.length === 0,
-    primary: unresolved[0] || null
+    primary: unresolved[0] || null,
+    activation: [
+      {
+        id: "basics",
+        label: "Business basics",
+        detail: "Name the business and establish the proposal identity.",
+        actionLabel: "Update business identity",
+        rows: ["identity"]
+      },
+      {
+        id: "menu",
+        label: "Offers and menu",
+        detail: "Add one event type, a sellable offer, and the menu it can use.",
+        actionLabel: "Build offers and menu",
+        rows: ["offerings"]
+      },
+      {
+        id: "selling-price",
+        label: "Selling price",
+        detail: "Review rates, fees, tax, deposit, and the active catalog revision.",
+        actionLabel: "Review selling price",
+        rows: ["pricing"]
+      },
+      {
+        id: "cost-visibility",
+        label: "Cost visibility",
+        detail: "Record item and labor costs when you want margin evidence.",
+        actionLabel: "Record missing costs",
+        rows: ["costs"],
+        optional: true
+      }
+    ].map((stage) => {
+      const stageRows = stage.rows.map((id) => rows.find((row) => row.id === id)).filter(Boolean);
+      return {
+        ...stage,
+        complete: stageRows.length > 0 && stageRows.every((row) => row.status === "Ready"),
+        target: stageRows.find((row) => row.status !== "Ready")?.target || stageRows[0]?.target
+      };
+    })
   };
 }
 
@@ -112,6 +150,7 @@ export default function BusinessSetupCenter({
   currentUserRole = "admin",
   providerConnected = false,
   onOpenSection,
+  onOpenImport,
   onRefresh
 }) {
   const model = buildBusinessReadiness({ catalog, draftState, currentUserRole, providerConnected });
@@ -130,6 +169,12 @@ export default function BusinessSetupCenter({
     onOpenSection?.(presentation.primary.target, event.currentTarget);
   };
 
+  const activationPrimary = presentation.activation.find((stage) => !stage.complete) || null;
+  const runActivationAction = (stage, event) => {
+    if (!model.isAdmin || stage.complete) return;
+    onOpenSection?.(stage.target, event.currentTarget);
+  };
+
   return (
     <section
       className={`business-setup-center${presentation.complete ? " is-complete" : " has-attention"}`}
@@ -139,7 +184,7 @@ export default function BusinessSetupCenter({
     >
       <header className="business-setup-center__header">
         <p className="ambient-library__label">
-          {presentation.complete ? "Business setup" : "Before the next quote"}
+          {presentation.complete ? "Business setup" : "Your path to the first quote"}
         </p>
         <h2 id="business-setup-title">{headline}</h2>
         <p>
@@ -147,7 +192,7 @@ export default function BusinessSetupCenter({
             ? "Offers, starting points, and selling policy are ready to use."
             : "Start with the first unresolved area; completed setup stays out of the way."}
         </p>
-        {model.isAdmin && presentation.primary && (
+        {model.isAdmin && presentation.primary?.actionKind === "refresh" && (
           <button type="button" className="business-setup-center__primary" onClick={runPrimaryAction}>
             {presentation.primary.actionLabel}<span aria-hidden="true">→</span>
           </button>
@@ -159,19 +204,58 @@ export default function BusinessSetupCenter({
         )}
       </header>
 
-      {!presentation.complete && (
-        <ol className="business-setup-center__attention" aria-label="Setup areas needing attention">
-          {presentation.unresolved.map((row) => (
-            <li key={row.id} data-readiness-id={row.id} data-readiness-ready="false">
-              <ReadinessIcon id={row.id} />
-              <div>
-                <strong>{row.label}</strong>
-                <small>{row.detail}</small>
+      <ol className="business-setup-center__activation" aria-label="First quote setup path">
+        {presentation.activation.map((stage, index) => (
+          <li
+            key={stage.id}
+            data-activation-stage={stage.id}
+            data-activation-complete={stage.complete ? "true" : "false"}
+            data-activation-current={activationPrimary?.id === stage.id ? "true" : undefined}
+          >
+            <span className="business-setup-center__activation-index" aria-hidden="true">
+              {stage.complete ? "✓" : index + 1}
+            </span>
+            <div>
+              <strong>{stage.label}{stage.optional ? " · optional" : ""}</strong>
+              <small>{stage.detail}</small>
+              {stage.id === "cost-visibility" && !stage.complete && (
+                <small className="business-setup-center__activation-boundary">
+                  Missing costs do not block quoting. They keep margin unavailable for the affected items.
+                </small>
+              )}
+            </div>
+            {model.isAdmin && !stage.complete && activationPrimary?.id === stage.id && (
+              <div className="business-setup-center__activation-actions">
+                <button type="button" onClick={(event) => runActivationAction(stage, event)}>
+                  {stage.actionLabel}
+                </button>
+                {stage.id === "menu" && typeof onOpenImport === "function" && (
+                  <button type="button" className="is-secondary" onClick={(event) => onOpenImport(event.currentTarget)}>
+                    Import an existing menu
+                  </button>
+                )}
               </div>
-              <span className="business-setup-center__attention-status">{issueStatus(row)}</span>
-            </li>
-          ))}
-        </ol>
+            )}
+          </li>
+        ))}
+      </ol>
+
+      {!presentation.complete && (
+        <details className="business-setup-center__remaining">
+          <summary>{count} setup {count === 1 ? "area needs" : "areas need"} attention</summary>
+          <ol className="business-setup-center__attention" aria-label="Setup areas needing attention">
+            {presentation.unresolved.map((row) => (
+              <li key={row.id} data-readiness-id={row.id} data-readiness-ready="false">
+                <ReadinessIcon id={row.id} />
+                <div>
+                  <strong>{row.label}</strong>
+                  <small>{row.detail}</small>
+                </div>
+                <span className="business-setup-center__attention-status">{issueStatus(row)}</span>
+              </li>
+            ))}
+          </ol>
+        </details>
       )}
 
       {presentation.ready.length > 0 && (

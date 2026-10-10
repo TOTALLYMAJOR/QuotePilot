@@ -1392,14 +1392,39 @@
 
 .pc-save-blockers {
   margin: 0.7rem 0 0;
-  padding: 0 0 0 1.05rem;
+  padding: 0;
+  list-style: none;
   color: var(--pc-ink);
   font-size: 0.79rem;
   line-height: 1.45;
 }
 
+.pc-save-blockers li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.6rem;
+}
+
 .pc-save-blockers li + li {
   margin-top: 0.28rem;
+}
+
+.pc-save-blocker-action {
+  appearance: none;
+  min-height: 44px;
+  padding: 0.45rem 0.7rem;
+  border: 1px solid var(--pc-rule);
+  border-radius: 8px;
+  background: var(--pc-sheet);
+  color: var(--pc-brass-deep);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.pc-save-blocker-action:hover {
+  border-color: var(--pc-brass);
 }
 
 .pc-draft-notice {
@@ -1682,6 +1707,31 @@
     color: var(--pc-ink);
     border-color: var(--pc-sheet);
   }
+
+  .pc-mobile-actions {
+    display: flex;
+    align-items: stretch;
+    gap: 0.5rem;
+  }
+
+  .pc-mobile-details {
+    appearance: none;
+    min-height: 44px;
+    padding: 0.55rem 0.8rem;
+    border: 1px solid rgba(251, 250, 246, 0.45);
+    border-radius: 10px;
+    background: transparent;
+    color: var(--pc-sheet);
+    font-size: 0.82rem;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  /* Tablet keyboards can cover the same inline Apply and Cancel controls as
+     mobile keyboards, so the shared save bar yields across its full range. */
+  .proposal-composer:has(.ambient-inline-value--editing) .pc-mobile-bar {
+    display: none;
+  }
 }
 
 @media (max-width: 820px) {
@@ -1742,12 +1792,13 @@
   .pc-domain-copy small,
   .pc-domain-state { display: none; }
 
-  /* A mobile keyboard can reduce the visual viewport enough for the sticky
-     review bar to cover an inline editor's Apply and Cancel controls. Keep the
-     quote review available as soon as the edit closes, but remove it while an
-     inline field is active so the whole editor remains reachable. */
-  .proposal-composer:has(.ambient-inline-value--editing) .pc-mobile-bar {
-    display: none;
+  .pc-mobile-bar {
+    align-items: flex-end;
+  }
+
+  .pc-mobile-actions {
+    flex-direction: column;
+    min-width: min(52vw, 13rem);
   }
 }
 

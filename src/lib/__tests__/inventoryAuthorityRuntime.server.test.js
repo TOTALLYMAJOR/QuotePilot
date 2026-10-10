@@ -243,6 +243,18 @@ const receivingCommand = (overrides = {}) => ({
   ...overrides
 });
 
+const stockCountCommand = (overrides = {}) => ({
+  kind: "record_stock_count",
+  ingredientId: "chicken",
+  locationId: "main-kitchen",
+  countedQuantity: "37.5",
+  baseUnitId: "lb",
+  occurredAtISO: EVIDENCE_TIME,
+  note: "Human-confirmed shelf count",
+  expectedStockRevision: 1,
+  ...overrides
+});
+
 const costCommand = (overrides = {}) => ({
   kind: "record_ingredient_cost",
   ingredientId: "chicken",
@@ -384,15 +396,17 @@ function installQuoteRevision(harness, { versionId = "v0002", guests = 150 } = {
   const quotePath = `organizations/${ORGANIZATION_ID}/quotes/quote-alfredo`;
   const priorQuote = harness.db.store.get(quotePath);
   const priorVersion = harness.db.store.get(`${quotePath}/versions/v0001`);
+  const versionNumber = Number(versionId.slice(1));
   harness.db.store.set(quotePath, {
     ...priorQuote,
     activeVersionId: versionId,
-    versionMeta: { versionId }
+    latestVersionNumber: versionNumber,
+    versionMeta: { versionId, versionNumber }
   });
   harness.db.store.set(`${quotePath}/versions/${versionId}`, {
     ...priorVersion,
     versionId,
-    versionNumber: 2,
+    versionNumber,
     snapshot: {
       ...priorVersion.snapshot,
       activeVersionId: versionId,
@@ -440,7 +454,8 @@ function quoteDemandEntries() {
       organizationId: ORGANIZATION_ID,
       status: "accepted",
       activeVersionId: "v0001",
-      versionMeta: { versionId: "v0001" }
+      latestVersionNumber: 1,
+      versionMeta: { versionId: "v0001", versionNumber: 1 }
     }],
     [`organizations/${ORGANIZATION_ID}/quotes/quote-alfredo/versions/v0001`, {
       versionId: "v0001",
@@ -450,6 +465,42 @@ function quoteDemandEntries() {
       snapshot
     }]
   ];
+}
+
+function projectedQuoteVersion(harness, {
+  versionId = "v0002",
+  versionNumber = 2,
+  date = "2026-10-05",
+  time = "18:30",
+  menuItems = ["chicken-alfredo"]
+} = {}) {
+  const prior = clone(harness.db.store.get(
+    `organizations/${ORGANIZATION_ID}/quotes/quote-alfredo/versions/v0001`
+  ));
+  return {
+    ...prior,
+    versionId,
+    versionNumber,
+    createdAtISO: EVIDENCE_TIME,
+    reason: "quote_edit",
+    status: "draft",
+    snapshot: {
+      ...prior.snapshot,
+      activeVersionId: versionId,
+      latestVersionNumber: versionNumber,
+      versionMeta: { versionId, versionNumber },
+      event: { ...prior.snapshot.event, date, time },
+      selection: {
+        ...prior.snapshot.selection,
+        packageInclusions: { menuItems: [] },
+        menuItems,
+        menuItemsSnapshot: menuItems.map((id) => ({
+          id,
+          name: id === "chicken-alfredo" ? "Chicken Alfredo" : "Garden salad"
+        }))
+      }
+    }
+  };
 }
 
 async function configureEventDemandFixture(harness) {
@@ -697,6 +748,46 @@ describe("ingredient inventory authority runtime", () => {
       stock: { onHandMicros: 55000000, stockRevision: 3 },
       cost: { costRevision: 1, basisQuantityMicros: 10000000, totalCostMinor: 3000 }
     });
+  });
+
+  test("records an exact human stock count idempotently and refuses stale or substituted evidence", async () => {
+    const harness = createHarness();
+    await configureChicken(harness);
+    await harness.runtime.applyInventoryCommand(
+      envelope(openingCommand(), "opening-before-count-0001"), adminContext
+    );
+    const request = envelope(stockCountCommand(), "stock-count-chicken-0001");
+    const first = await harness.runtime.applyInventoryCommand(request, adminContext);
+    expect(first).toMatchObject({
+      ok: true,
+      idempotent: false,
+      commandKind: "record_stock_count",
+      result: {
+        ingredientId: "chicken",
+        locationId: "main-kitchen",
+        stockRevision: 2,
+        countedQuantity: "37.5",
+        countedQuantityMicros: 37_500_000,
+        signedDeltaMicros: -2_500_000,
+        onHandQuantity: "37.5"
+      }
+    });
+    const movement = harness.db.store.get(
+      `organizations/${ORGANIZATION_ID}/inventoryMovements/${first.result.movementId}`
+    );
+    expect(inventory.verifyMovement(movement)).toBe(movement);
+    await expect(harness.runtime.applyInventoryCommand(request, adminContext))
+      .resolves.toEqual({ ...first, idempotent: true });
+    await expect(harness.runtime.applyInventoryCommand(envelope(
+      stockCountCommand({ countedQuantity: "38" }), "stock-count-chicken-0001"
+    ), adminContext)).rejects.toMatchObject({ code: "already-exists" });
+    await expect(harness.runtime.applyInventoryCommand(envelope(
+      stockCountCommand({ expectedStockRevision: 1 }), "stock-count-chicken-stale-0002"
+    ), adminContext)).rejects.toMatchObject({ code: "aborted" });
+    await expect(harness.runtime.applyInventoryCommand(envelope(
+      { ...stockCountCommand({ expectedStockRevision: 2 }), purchaseOrderId: "forbidden" },
+      "stock-count-chicken-extra-0003"
+    ), adminContext)).rejects.toMatchObject({ code: "invalid-argument" });
   });
 
   test("rejects stale receiving revisions before writing quantity or cost evidence", async () => {
@@ -1077,6 +1168,137 @@ describe("ingredient inventory authority runtime", () => {
       requiredByBasis: command.requiredByBasis,
       selections: command.selections
     }, adminContext)).rejects.toMatchObject({ code: "aborted" });
+  });
+
+  test("previews proposed vNext Inventory demand from the proposed date and explicit output rows without writes", async () => {
+    const harness = createHarness({ entries: [
+      [`organizations/${ORGANIZATION_ID}/settings/config`, {
+        inventoryAuthorityEnabled: true, catalogRevision: 7, businessTimeZone: "America/Chicago"
+      }],
+      [`organizations/${ORGANIZATION_ID}/menuItems/chicken-alfredo`, menuItem()],
+      ...quoteDemandEntries()
+    ] });
+    await configureEventDemandFixture(harness);
+    const projectedVersion = projectedQuoteVersion(harness);
+    const before = clone([...harness.db.store.entries()]);
+    const transactionCountBeforePreview = harness.db.transactions.length;
+
+    const preview = await harness.runtime.previewProjectedEventInventory({
+      organizationId: ORGANIZATION_ID,
+      quoteId: "quote-alfredo",
+      expectedBaseQuoteRevisionId: "v0001",
+      projectedVersion,
+      outputRows: [{ menuItemId: "chicken-alfredo", requiredOutputQuantity: "42.5" }]
+    }, adminContext);
+
+    expect(preview).toMatchObject({
+      ok: true,
+      schemaVersion: 2,
+      organizationId: ORGANIZATION_ID,
+      quoteId: "quote-alfredo",
+      quoteRevisionId: "v0002",
+      preview: true,
+      projection: {
+        quoteRevisionId: "v0002",
+        requiredByISO: "2026-10-05T23:30:00.000Z",
+        demandState: "complete",
+        costState: "complete",
+        projectedCostMinor: 3400
+      },
+      ingredientLabels: [
+        { ingredientId: "chicken", name: "Chicken breast" },
+        { ingredientId: "pasta", name: "Pasta" }
+      ]
+    });
+    expect(preview.inputDigest).toMatch(/^[a-f0-9]{64}$/u);
+    expect(preview.requirementRevision).toMatchObject({
+      quoteRevisionId: "v0002",
+      requiredByISO: "2026-10-05T23:30:00.000Z",
+      selections: [expect.objectContaining({
+        selectionId: "chicken-alfredo",
+        menuItemId: "chicken-alfredo",
+        requiredOutputQuantity: "42.5"
+      })]
+    });
+    expect(preview.projection.ingredients).toEqual(expect.arrayContaining([
+      expect.objectContaining({ ingredientId: "chicken", requiredQuantityMicros: 8500000 }),
+      expect.objectContaining({ ingredientId: "pasta", requiredQuantityMicros: 4250000 })
+    ]));
+    expect([...harness.db.store.entries()]).toEqual(before);
+    expect(harness.db.transactions.slice(transactionCountBeforePreview)).toHaveLength(1);
+    expect(harness.db.transactions.slice(transactionCountBeforePreview)
+      .every(({ writes }) => writes.length === 0)).toBe(true);
+  });
+
+  test("uses the proposed menu and derives missing recipe evidence instead of accepting caller authority fields", async () => {
+    const harness = createHarness({ entries: [
+      [`organizations/${ORGANIZATION_ID}/settings/config`, {
+        inventoryAuthorityEnabled: true, catalogRevision: 7, businessTimeZone: "America/Chicago"
+      }],
+      ...quoteDemandEntries()
+    ] });
+    const projectedVersion = projectedQuoteVersion(harness, { menuItems: ["garden-salad"] });
+    const before = clone([...harness.db.store.entries()]);
+
+    const preview = await harness.runtime.previewProjectedEventInventory({
+      organizationId: ORGANIZATION_ID,
+      quoteId: "quote-alfredo",
+      expectedBaseQuoteRevisionId: "v0001",
+      projectedVersion,
+      outputRows: [{ menuItemId: "garden-salad", requiredOutputQuantity: "12" }]
+    }, adminContext);
+
+    expect(preview.requirementRevision).toMatchObject({
+      quoteRevisionId: "v0002",
+      demandState: "incomplete",
+      selections: [expect.objectContaining({
+        selectionId: "garden-salad",
+        menuItemId: "garden-salad",
+        recipeRevisionId: null,
+        requiredOutputQuantity: "12",
+        outputUnitId: null
+      })],
+      issues: [{ code: "missing_recipe_revision", menuItemId: "garden-salad", selectionId: "garden-salad" }]
+    });
+    expect([...harness.db.store.entries()]).toEqual(before);
+
+    const transactionCountBeforeInvalidRow = harness.db.transactions.length;
+    await expect(harness.runtime.previewProjectedEventInventory({
+      organizationId: ORGANIZATION_ID,
+      quoteId: "quote-alfredo",
+      expectedBaseQuoteRevisionId: "v0001",
+      projectedVersion,
+      outputRows: [{
+        menuItemId: "garden-salad",
+        requiredOutputQuantity: "12",
+        recipeRevisionId: "forged-recipe"
+      }]
+    }, adminContext)).rejects.toMatchObject({ code: "invalid-argument" });
+    expect(harness.db.transactions).toHaveLength(transactionCountBeforeInvalidRow);
+  });
+
+  test("aborts projected Inventory preview when the saved base quote revision drifts", async () => {
+    const harness = createHarness({ entries: [
+      [`organizations/${ORGANIZATION_ID}/settings/config`, {
+        inventoryAuthorityEnabled: true, catalogRevision: 7, businessTimeZone: "America/Chicago"
+      }],
+      ...quoteDemandEntries()
+    ] });
+    const projectedVersion = projectedQuoteVersion(harness);
+    installQuoteRevision(harness, { versionId: "v0009" });
+    const before = clone([...harness.db.store.entries()]);
+    const transactionCountBeforePreview = harness.db.transactions.length;
+
+    await expect(harness.runtime.previewProjectedEventInventory({
+      organizationId: ORGANIZATION_ID,
+      quoteId: "quote-alfredo",
+      expectedBaseQuoteRevisionId: "v0001",
+      projectedVersion,
+      outputRows: [{ menuItemId: "chicken-alfredo", requiredOutputQuantity: "42.5" }]
+    }, adminContext)).rejects.toMatchObject({ code: "aborted" });
+    expect([...harness.db.store.entries()]).toEqual(before);
+    expect(harness.db.transactions.slice(transactionCountBeforePreview)
+      .every(({ writes }) => writes.length === 0)).toBe(true);
   });
 
   test("records immutable event demand and an as-recorded exact-document projection with receipt replay", async () => {

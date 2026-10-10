@@ -306,6 +306,13 @@ test.describe("Ambient Library", () => {
       await expect(page.locator('[data-library-section="templates"]')).toBeVisible();
       await expect(page.locator('[data-library-section="policy"]')).toBeVisible();
       await expect(page.locator("[data-library-readiness-rail]")).toBeVisible();
+      await expect(page.locator('[data-library-overview-section="packages"]')).toContainText("Classic");
+      await expect(page.locator('[data-library-overview-section="addons"]')).toContainText("Dessert");
+      await expect(page.locator('[data-library-overview-section="rentals"]')).toContainText("Linens");
+      await expect(page.locator('[data-library-overview-section="templates"]')).toContainText("Wedding");
+      await expect(page.locator('[data-library-overview-section="pricing"]')).toContainText("Catalog version 12");
+      await expect(page.locator('[data-library-overview-section="menu"][data-library-overview-count="0"]'))
+        .toContainText("full menu is not available");
       const readinessRows = page.locator(".business-setup-center__attention [data-readiness-id]");
       const readinessIcons = readinessRows.locator("[data-readiness-icon]");
       expect(await readinessIcons.count()).toBe(await readinessRows.count());
@@ -520,6 +527,24 @@ test.describe("Ambient Library", () => {
         fullPage: true
       });
     }
+  });
+
+  test("opens the exact Rentals editor without changing the catalog", async ({ page }) => {
+    await page.setViewportSize({ width: 768, height: 900 });
+    await seedLibrary(page);
+    await openAmbientLibrary(page);
+    const persistedBeforeBrowse = await readPersistedCatalog(page);
+
+    await page.locator('[data-library-action-id="review-library-rentals"]').click();
+    await expect(page.locator('[data-admin-tab-id="rentals"]')).toHaveClass(/active/u);
+    await expect(page.locator(".ambient-library__breadcrumb strong")).toHaveText("Rentals");
+    await expect(page.locator('[data-commercial-component-collection="rentals"]')).toBeVisible();
+    expect(await readPersistedCatalog(page)).toBe(persistedBeforeBrowse);
+
+    const accessibility = await new AxeBuilder({ page })
+      .include('[data-commercial-component-collection="rentals"]')
+      .analyze();
+    expect(accessibility.violations).toEqual([]);
   });
 
   test("presents configured quote rules as a readable ledger before advanced source", async ({ page }) => {

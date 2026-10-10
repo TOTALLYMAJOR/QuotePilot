@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Last updated: 2026-09-08 15:16:08 CDT
+Last updated: 2026-09-16 18:04:49 CDT
 
 ## Mission
 Maintain QuotePilot as a reliable production system.
@@ -93,3 +93,17 @@ Ship safe changes with validation evidence and canonical documentation sync.
 ## Local Skill Pack
 Canonical skill assets are tracked in `.codex/skills/`.
 Governance policy is defined in `docs/AGENT_GOVERNANCE.md`.
+
+## Agent skills
+
+### Issue tracker
+
+Issues and specs are tracked in GitHub Issues for `TOTALLYMAJOR/quoteflow`. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Use the default `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, and `wontfix` labels. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Use the single-context domain layout: an optional root `CONTEXT.md` glossary and system-wide decisions under `docs/adr/`. See `docs/agents/domain.md`.

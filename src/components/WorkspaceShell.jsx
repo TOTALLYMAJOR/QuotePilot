@@ -326,8 +326,7 @@ export default function WorkspaceShell({
           aria-pressed={sound ? sounds.enabled === true : undefined}
           onClick={() => {
             if (!sound) close();
-            if (operation) call(action, triggerRefs[openMenu]);
-            else call(action);
+            call(action, operation ? triggerRefs[openMenu] : undefined);
           }}
         >
           {item.attention ? (
@@ -430,9 +429,10 @@ export default function WorkspaceShell({
       open: true,
       dirty: false,
       busy: false,
-      requestDismiss: () => {
+      requestDismiss: (reason, continuation) => {
         if (accountSettingsOpen) closeAccountSettings();
         else call(menu.onOpenChange, "");
+        if (reason === "navigation") return continuation();
         // Browser/mobile Back is consumed by this overlay. The history
         // continuation intentionally remains untouched until a later Back.
         return { status: "guarded" };

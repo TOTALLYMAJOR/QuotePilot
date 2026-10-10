@@ -444,7 +444,7 @@ describe("Admin Catalog starter choice", () => {
 
     expect(html).toContain("Needs attention · fee tiers source");
     expect(html).toContain("Needs attention · tax region source");
-    expect(html).toContain("Needs attention · 1 advanced source needs correction");
+    expect(html).toContain("1 advanced source needs correction");
   });
 
   test("keeps component identity and sell price primary while nesting planning and technical detail", () => {

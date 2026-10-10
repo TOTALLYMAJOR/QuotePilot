@@ -19,5 +19,8 @@ export {
   recordProductAnalyticsIssueResolved,
   recordProductAnalyticsIssueSurfaced,
   recordProductAnalyticsPricedDraftReceipt,
+  recordQuoteCompletionActionResolved,
+  recordQuoteCompletionActionShown,
+  recordQuoteCompletionSendableReached,
   resetProductAnalyticsIssueObservationState
 } from "./productAnalyticsAmbient";

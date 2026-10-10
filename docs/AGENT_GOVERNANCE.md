@@ -1,6 +1,6 @@
 # Agent Governance
 
-Last updated: 2026-09-08 15:16:08 CDT
+Last updated: 2026-09-17 02:53:24 CDT
 
 ## Scope
 This document defines governance for repository-managed agent and skill assets under `.codex/skills/`.
@@ -16,6 +16,21 @@ This document defines governance for repository-managed agent and skill assets u
 - Agent interface metadata: `.codex/skills/*/agents/openai.yaml`
 - Skill references/scripts: `.codex/skills/*/references/`, `.codex/skills/*/scripts/`
 - Index only: `docs/SKILLS.md`
+
+## External Engineering Skill Configuration
+
+Repository-local configuration consumed by externally installed engineering
+skills lives under `docs/agents/`:
+
+- `issue-tracker.md`: selected tracker and bounded command conventions.
+- `triage-labels.md`: mapping from canonical triage roles to tracker labels.
+- `domain.md`: domain glossary and ADR discovery rules.
+
+These subordinate files configure skill consumption only. They do not approve
+external skill source, expand repository or provider authority, or replace
+QuotePilot's canonical product, runtime, release, evidence, or governance
+documents. Installing or updating a global skill remains an external operation
+and is not a repository deployment.
 
 ## Validation Requirements
 - Maintainer skill checks:
@@ -40,6 +55,7 @@ This document defines governance for repository-managed agent and skill assets u
   - `npm run evidence:index`
   - `npm run status:product`
   - `npm run check:product-drift`
+  - `npm run check:product-intelligence`
   - `npm run check:docs:governance`
   - `npm run check:perf:bundle`
   - `npm run check:perf:cwv`
@@ -86,6 +102,13 @@ adds `catering-domain-intelligence` to `dependencies.requiredSkills`, adds
 current QuotePilot authorities to `readFirst`, and keeps advisory domain
 references separate so the agent can form a provisional action before reading
 them.
+
+Every packet also emits `productIntelligence.disposition`, the required
+catering-value declaration fields, and whether `not_applicable` requires a
+rationale. Applicable work requires the Product Intelligence index and
+release/experiment ledger to move together. The planner always emits
+`npm run check:product-intelligence`; the gate validates the canonical graph
+and change-impact mappings before `lane:core` may pass.
 
 For applicable work, the required reasoning order is: reconstruct the user
 objective, inspect repository authority and implementation, form a provisional

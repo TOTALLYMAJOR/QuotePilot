@@ -254,12 +254,14 @@ export function buildCommercialInventoryConsequences({
   organizationId = "",
   quoteId = "",
   savedQuoteRevisionId = "",
+  proposedQuoteRevisionId = "",
   scenarioFingerprint = ""
 } = {}) {
   const expected = {
     organizationId: text(organizationId),
     quoteId: text(quoteId),
     savedQuoteRevisionId: text(savedQuoteRevisionId),
+    proposedQuoteRevisionId: text(proposedQuoteRevisionId),
     scenarioFingerprint: text(scenarioFingerprint)
   };
   if (scenarioPreview?.state === "not_evaluated") {
@@ -291,12 +293,12 @@ export function buildCommercialInventoryConsequences({
     && before.quoteId === expected.quoteId
     && proposedAfter.quoteId === expected.quoteId
     && before.quoteRevisionId === expected.savedQuoteRevisionId
-    && proposedAfter.quoteRevisionId === expected.savedQuoteRevisionId;
+    && proposedAfter.quoteRevisionId === expected.proposedQuoteRevisionId;
   if (!identityMatches) {
     return unavailable("mismatched", expected, ["projection_identity_mismatch"]);
   }
   return deepFreeze({
-    schemaVersion: "commercial-inventory-consequences-v1",
+    schemaVersion: "commercial-inventory-consequences-v2",
     authority: "read_only_advisory",
     state: "current",
     expected,

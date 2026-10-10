@@ -149,6 +149,23 @@ function changedFiles(extra = []) {
 }
 
 describe("capability surfacing delivery gate", () => {
+  test("presentation state evidence is bound to its own canonical surface and cannot weaken authority states", () => {
+    const contract = userContract({ capabilityKind: "presentation_surface", backendPaths: ["src/lib/exampleProjection.js"], backendExports: [], surfaceId: "example", surfaceStates: ["ready"], entryPointLocators: [{ path: frontendPath, locator: 'data-capability-id="example"' }], stateEvidence: [{ state: "ready", path: testPath, locator: "renders its own ready state", assertionLocator: 'data-capability-state="ready"' }] });
+    const read = (surface) => `${readFixturePath()}\ndata-capability-id="example"\ntest("renders its own ready state", () => { expect(markup).toContain('data-capability-id="${surface}"'); expect(markup).toContain('data-capability-state="ready"'); });`;
+    const check = (value, surface = "example") => validateCapabilitySurfacing({ changedFiles: changedFiles().filter((file) => file !== backendPath).concat(contract.backendPaths), manifest: manifest(value), baseManifest: manifest({ ...contract, reviewRevision: 1 }, 1), pathExists: () => true, readPath: (file) => file === frontendPath ? 'data-capability-id="example"' : read(surface), currentBackendExports: [], baseBackendExports: [] });
+    expect(check(contract)).toEqual([]);
+    expect(check(contract, "another-surface").join(" ")).toContain("surface");
+    expect(check({ ...contract, surfaceStates: [] }).join(" ")).toContain("surfaceStates");
+    expect(check({ ...contract, surfaceStates: ["invented"] }).join(" ")).toContain("surfaceStates");
+    expect(check({ ...contract, capabilityKind: "read_surface" }).join(" ")).toContain("cannot override");
+  });
+  test.each(["getExampleCapability", "applyExampleCapability"])("rejects downgrading callable owner %s to a presentation contract", (exportName) => {
+    const exportLocator = `functions/exampleCapability.js#${exportName}`;
+    const previous = userContract({ reviewRevision: 1, capabilityKind: exportName.startsWith("get") ? "read_surface" : "mutation_surface", backendExports: [exportLocator] });
+    const contract = { ...previous, reviewRevision: 2, capabilityKind: "presentation_surface", surfaceId: "example", surfaceStates: ["ready"], entryPointLocators: [{ path: frontendPath, locator: 'data-capability-id="example"' }], stateEvidence: [{ state: "ready", path: testPath, locator: "renders its own ready state", assertionLocator: 'data-capability-state="ready"' }] };
+    const errors = validateCapabilitySurfacing({ changedFiles: changedFiles(), manifest: manifest(contract), baseManifest: manifest(previous, 1), pathExists: () => true, readPath: (file) => file === frontendPath ? 'data-capability-id="example"' : `${readFixturePath()}\ntest("renders its own ready state", () => { expect(markup).toContain('data-capability-id="example"'); expect(markup).toContain('data-capability-state="ready"'); });`, currentBackendExports: [exportLocator], baseBackendExports: [exportLocator] });
+    expect(errors).toContain("example-capability: presentation surfaces cannot own callable exports; retain read or mutation exports in their authority contract.");
+  });
   test("is mechanically required by lane:core", () => {
     expect(packageJson.scripts["check:capability-surfaces"]).toBe(
       "node ./scripts/check-capability-surfacing.mjs"
@@ -299,15 +316,25 @@ describe("capability surfacing delivery gate", () => {
 
   test("inventories every explicit Functions export without swallowing later declarations", () => {
     const currentExports = parseFunctionExports(functionsEntrypointSource);
-    expect(currentExports).toHaveLength(128);
+    expect(currentExports).toHaveLength(152);
+    expect(currentExports).toContain("functions/index.js#getEventOperationalNotesSnapshot");
+    expect(currentExports).toContain("functions/index.js#applyEventOperationalNoteCommand");
+    expect(currentExports).toContain("functions/index.js#getGoogleCalendarStatus");
+    expect(currentExports).toContain("functions/index.js#startGoogleCalendarConnection");
+    expect(currentExports).toContain("functions/index.js#googleCalendarOAuthCallback");
+    expect(currentExports).toContain("functions/index.js#applyGoogleCalendarEventCommand");
+    expect(currentExports).toContain("functions/index.js#disconnectGoogleCalendar");
     expect(currentExports).toContain("functions/index.js#getInventoryWorkspace");
     expect(currentExports).toContain("functions/index.js#applyInventoryCommand");
+    expect(currentExports).toContain("functions/index.js#getEventSupplyActionPlan");
+    expect(currentExports).toContain("functions/index.js#applyEventSupplyActionPlanCommand");
     expect(currentExports).toContain("functions/index.js#previewEventInventory");
     expect(currentExports).toContain("functions/index.js#invalidateEventIngredientsOnQuoteChange");
     expect(currentExports).toContain("functions/index.js#invalidateEventIngredientsOnRecipeChange");
     expect(currentExports).toContain("functions/index.js#invalidateEventIngredientsOnMenuCostChange");
     expect(currentExports).toContain("functions/index.js#getEventOperatingSnapshot");
     expect(currentExports).toContain("functions/index.js#applyEventOperatingCommand");
+    expect(currentExports).toContain("functions/index.js#recordPostEventActualAttendance");
     expect(currentExports).toContain("functions/index.js#getEventOperatingWorkSnapshot");
     expect(currentExports).toContain("functions/index.js#applyEventOperatingWorkCommand");
     expect(currentExports).toContain("functions/index.js#getEventOperatingActualsSnapshot");
@@ -325,6 +352,15 @@ describe("capability surfacing delivery gate", () => {
     expect(currentExports).toContain("functions/index.js#getWorkflowPackSnapshot");
     expect(currentExports).toContain("functions/index.js#previewWorkflowPackMigration");
     expect(currentExports).toContain("functions/index.js#applyWorkflowPackCommand");
+    for (const exportName of [
+      "getPublishedInquiryShowcase", "submitPublicInquiry", "resolveInquirySubmission",
+      "getInquiryShowcaseAdminState", "saveInquiryShowcaseDraft", "publishInquiryShowcase",
+      "pauseInquiryShowcase", "republishInquiryShowcaseVersion", "getInquiryQueue",
+      "acknowledgeInquiry", "previewInquiryConversion", "convertInquiryToQuoteDraft",
+      "dismissInquiry", "purgeExpiredInquiries"
+    ]) {
+      expect(currentExports).toContain(`functions/index.js#${exportName}`);
+    }
 
     const source = [
       "exports.first = onCall(async () => {",

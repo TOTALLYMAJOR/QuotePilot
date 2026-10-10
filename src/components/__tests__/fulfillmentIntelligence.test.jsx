@@ -350,14 +350,19 @@ describe("FulfillmentIntelligence", () => {
     const surface = container.querySelector('[data-capability-id="living-commercial-twin-fulfillment"]');
     const answer = surface.querySelector('[data-decision-state="conditional"]');
     expect(answer.getAttribute("data-sourcing-state")).toBe("unique_policy_match");
+    expect(answer.querySelector("h4").textContent).toBe("Conditional");
+    expect([...answer.querySelectorAll("[data-decision-clause]")]
+      .map((node) => node.getAttribute("data-decision-clause")))
+      .toEqual(["commercial", "staffing", "supply", "execution"]);
     expect(answer.textContent).toContain("175 guests is conditionally supportable");
     expect(answer.textContent).toContain("Chicken Alfredo leaves Chicken breast 6 lb short.");
     expect(answer.textContent).toContain("Policy-selected current option: purchase 6 lb from Supplier B.");
-    expect(answer.textContent).toContain("Proposed quote total: $17,472.00");
-    expect(answer.textContent).toContain("Quoted value, not earned revenue or a guaranteed amount preserved.");
+    expect(answer.textContent).toContain("Proposed quote: $17,472.00");
+    expect(answer.textContent).toContain("Margin unavailable because costs are incomplete.");
     expect(answer.textContent).toContain("BEO review is required.");
     expect(answer.textContent).toContain("Current assignments cover the proposed staffing requirement.");
-    expect(answer.textContent).toContain("Inventory remains short until received stock is recorded");
+    expect(answer.textContent).toContain("Stock remains short until the missing amount is received");
+    expect(answer.textContent).toContain("Final count has not been checked for this change.");
     expect(answer.textContent).not.toContain("You can accept");
     expect(answer.textContent).not.toContain("Revenue preserved");
     expect(surface.querySelector('[data-domain="supply"]').textContent).toContain("Working coverageShortage");
@@ -399,10 +404,10 @@ describe("FulfillmentIntelligence", () => {
 
     const answer = container.querySelector('[data-decision-state="unverifiable"]');
     expect(answer.getAttribute("data-sourcing-state")).toBe("none");
-    expect(answer.textContent).toContain("175 guests is not yet verifiable");
-    expect(answer.textContent).toContain("At 175 guests, Chicken breast is 6 lb short. Exact menu attribution is not available.");
-    expect(answer.textContent).toContain("A preferred resolution is not yet evidenced. Review Inventory.");
-    expect(answer.textContent).toContain("The staffing effect is not yet verified.");
+    expect(answer.textContent).toContain("175 guests cannot be confirmed yet");
+    expect(answer.textContent).toContain("At 175 guests, Chicken breast is 6 lb short. The menu item causing the shortage is not available.");
+    expect(answer.textContent).toContain("No preferred replacement has been selected. Review Inventory.");
+    expect(answer.textContent).toContain("No staffing conclusion yet.");
     expect(answer.textContent).not.toContain("Supplier B");
     expect(answer.textContent).not.toContain("Chicken Alfredo");
   });
@@ -444,15 +449,15 @@ describe("FulfillmentIntelligence", () => {
 
     const answer = container.querySelector('[data-decision-state="stale"]');
     expect(answer.getAttribute("data-sourcing-state")).toBe("withheld");
-    expect(answer.textContent).toContain("Current answer withheld");
-    expect(answer.textContent).toContain("do not apply to the active scenario");
+    expect(answer.textContent).toContain("Checking");
+    expect(answer.textContent).toContain("does not apply to this option");
     expect(answer.textContent).not.toContain("Supplier B");
     expect(answer.textContent).not.toContain("$17,472.00");
     expect(answer.textContent).not.toContain("Current assignments cover");
     expect(answer.querySelectorAll("button")).toHaveLength(0);
   });
 
-  test("presents exact synthesis, domain detail, every shortage, ordered constraints, and source revisions", () => {
+  test("presents the current capacity detail, every shortage, and ordered priorities", () => {
     const onToggleConstraint = vi.fn();
     const onUseSafeThrough = vi.fn();
     const onOpenStaffing = vi.fn();
@@ -478,9 +483,9 @@ describe("FulfillmentIntelligence", () => {
     expect(surface.getAttribute("data-authority")).toBe("presentation-only");
     expect(surface.getAttribute("data-capability-state")).toBe("success");
     expect(surface.getAttribute("data-projection-state")).toBe("complete");
-    expect(surface.textContent).toContain("Overall guest-count headroomCurrent+12 guestsChicken is the limiting constraint");
-    expect(surface.textContent).toContain("People boundary+42 guestsCurrent");
-    expect(surface.textContent).toContain("Supply boundary+12 guestsCurrent");
+    expect(surface.textContent).toContain("Guest-count flexibilityCurrent+12 guestsChicken sets the current limit");
+    expect(surface.textContent).toContain("People capacity+42 guestsCurrent");
+    expect(surface.textContent).toContain("Supply capacity+12 guestsCurrent");
     expect(surface.textContent).toContain("Current coverage6 / 6Required roles assigned");
     expect(surface.textContent).toContain("Working need6 current / 7 required");
     expect(surface.textContent).toContain("Servers6 / 66 current / 7 required1");
@@ -497,18 +502,17 @@ describe("FulfillmentIntelligence", () => {
       expect.stringContaining("Servers"),
       expect.stringContaining("Tomatoes")
     ]);
-    expect(surface.textContent).toContain("quote-version-14");
-    expect(surface.textContent).toContain("staffing-policy-3 · revision 3");
-    expect(surface.textContent).toContain("requirement-before-5");
-    expect(surface.textContent).toContain("requirement-proposed-6");
-    expect(surface.textContent).toContain("inventory-headroom-2");
+    expect(surface.textContent).toContain("What this review can change");
+    expect(surface.textContent).not.toContain("quote-version-14");
+    expect(surface.textContent).not.toContain("staffing-policy-3");
+    expect(surface.textContent).not.toContain("requirement-before-5");
     expect(surface.textContent).not.toContain("private.example");
     expect(surface.textContent).not.toContain("payrollRate");
     expect(surface.textContent).not.toContain("do-not-render-customer-note");
     expect(surface.textContent).not.toContain("sk_live_do_not_render");
 
     act(() => button("Review staffing in event").click());
-    act(() => button("Review inventory evidence").click());
+    act(() => button("Open inventory").click());
     act(() => surface.querySelector(".csw-constraint-trigger").click());
     expect(onOpenStaffing).toHaveBeenCalledOnce();
     expect(onOpenInventory).toHaveBeenCalledOnce();
@@ -527,9 +531,9 @@ describe("FulfillmentIntelligence", () => {
       />
     ));
     expect(container.querySelector(".csw-constraint-explanation").textContent)
-      .toContain("Declared demand is 35 lb. The recorded shortfall is 5 lb.");
+      .toContain("Required amount: 35 lb. The recorded shortfall is 5 lb.");
     expect(container.querySelector(".csw-constraint-explanation").textContent)
-      .toContain("safe through 137 guests; the first failing boundary is 138");
+      .toContain("covered through 137 guests; the first shortage appears at 138");
     act(() => button("Try 137 guests").click());
     expect(onUseSafeThrough).toHaveBeenCalledExactlyOnceWith(137);
     expect(source.fulfillment.scenario.proposedGuestCount).toBe(175);
@@ -549,9 +553,9 @@ describe("FulfillmentIntelligence", () => {
 
     const surface = container.querySelector('[data-capability-id="living-commercial-twin-fulfillment"]');
     expect(surface.getAttribute("data-capability-state")).toBe("partial");
-    expect(surface.textContent).toContain("Overall guest-count headroomMissingNot verified");
-    expect(surface.textContent).toContain("People boundaryNot verifiedMissing");
-    expect(surface.textContent).toContain("Missing or partial evidence is not a zero-capacity conclusion.");
+    expect(surface.textContent).toContain("Guest-count flexibilityUnavailableUnavailable");
+    expect(surface.textContent).toContain("People capacityUnavailableUnavailable");
+    expect(surface.textContent).toContain("Unavailable details do not mean there is no capacity.");
     expect(surface.textContent).not.toContain("+0 guests");
     expect(surface.textContent).not.toContain("0 guests");
   });
@@ -588,12 +592,12 @@ describe("FulfillmentIntelligence", () => {
     ));
 
     const surface = container.querySelector('[data-capability-id="living-commercial-twin-fulfillment"]');
-    expect(surface.textContent).toContain("Not yet available");
-    expect(surface.textContent).toContain("Contradictory");
-    expect(surface.textContent).toContain("People boundaryNot verifiedSchema drift");
-    expect(surface.textContent).toContain("Not yet available · backup capacity not verified");
-    expect(surface.textContent).toContain("Not applicable");
-    expect(surface.textContent).toContain("Not yet available · cost evidence is not usable");
+    expect(surface.textContent).toContain("Still checking");
+    expect(surface.textContent).toContain("Details conflict");
+    expect(surface.textContent).toContain("People capacityUnavailableUpdate needed");
+    expect(surface.textContent).toContain("Still checking · backup staffing is still checking");
+    expect(surface.textContent).toContain("Not needed");
+    expect(surface.textContent).toContain("Still checking · ingredient cost is unavailable");
   });
 
   test("exposes loading, retained, and refresh behavior through caller-owned state and callbacks", () => {
@@ -615,8 +619,8 @@ describe("FulfillmentIntelligence", () => {
     let surface = container.querySelector('[data-capability-id="living-commercial-twin-fulfillment"]');
     expect(surface.getAttribute("data-capability-state")).toBe("loading");
     expect(surface.getAttribute("aria-busy")).toBe("true");
-    expect(surface.textContent).toContain("Updating");
-    act(() => button("Refresh People evidence").click());
+    expect(surface.textContent).toContain("Checking");
+    act(() => button("Refresh staffing").click());
     expect(onRefreshStaffing).toHaveBeenCalledOnce();
 
     act(() => root.render(
@@ -631,6 +635,6 @@ describe("FulfillmentIntelligence", () => {
     surface = container.querySelector('[data-capability-id="living-commercial-twin-fulfillment"]');
     expect(surface.getAttribute("data-capability-state")).toBe("stale");
     expect(surface.getAttribute("aria-busy")).toBe("true");
-    expect(surface.textContent).toContain("Retained · not current");
+    expect(surface.textContent).toContain("The previous result does not apply to this option");
   });
 });

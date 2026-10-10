@@ -35,7 +35,7 @@ async function commitInline(page, label, value) {
 }
 
 async function completeSavableDraft(page) {
-  await page.getByLabel("Event type", { exact: true }).selectOption({ index: 1 });
+  await page.getByRole("combobox", { name: /^Event type\b/ }).selectOption({ index: 1 });
   await commitInline(page, "Event name", "Persistence Boundary Dinner");
   await commitInline(page, "Date", "2027-10-18");
   await commitInline(page, "Guests", "60");
@@ -85,7 +85,7 @@ test("composes package, Menu, rentals, and enhancements inside Experience", asyn
 
 test("preserves Event and Menu work across domain switches and returns focus when Menu closes", async ({ page }) => {
   await commitInline(page, "Event name", "Continuity Dinner");
-  await page.getByLabel("Event type", { exact: true }).selectOption({ index: 1 });
+  await page.getByRole("combobox", { name: /^Event type\b/ }).selectOption({ index: 1 });
 
   await openDomain(page, "experience");
   const menuToggle = page.getByTestId("pc-edit-menu");
@@ -387,7 +387,7 @@ test("gives a blank quote honest identity, readable Event context, and named reg
 
 test("keeps a realistic Menu usable in normal flow at phone width", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.getByLabel("Event type", { exact: true }).selectOption({ index: 1 });
+  await page.getByRole("combobox", { name: /^Event type\b/ }).selectOption({ index: 1 });
   await openDomain(page, "experience");
   await page.getByTestId("pc-edit-menu").click();
 

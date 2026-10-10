@@ -1,5 +1,8 @@
 import { buildFulfillmentProjection } from "./fulfillmentProjection";
 
+const DECISION_PACKET_BUILD_ENABLED = import.meta.env.MODE === "test"
+  || import.meta.env.VITE_DECISION_PACKET_ENABLED === "true";
+
 const EVIDENCE_STATES = Object.freeze({
   AVAILABLE: "available",
   NOT_YET_AVAILABLE: "not_yet_available",
@@ -268,6 +271,49 @@ function commercialRail(commercialModel, evidenceState) {
     staleCount: nodes.filter((node) => node.advisoryClass === "STALE").length,
     boundary: text(commercialModel?.boundary)
       || "Values are carried from the authoritative server preview; this projection performs no pricing."
+  };
+}
+
+function marginRail(value) {
+  if (!record(value)) {
+    return {
+      evidenceState: EVIDENCE_STATES.MISSING,
+      before: null,
+      proposedAfter: null,
+      delta: null,
+      boundary: "Complete recorded-cost coverage for both snapshots is required before margin can be compared."
+    };
+  }
+  const state = text(value.evidenceState).toLowerCase();
+  if (state !== EVIDENCE_STATES.AVAILABLE) {
+    return {
+      evidenceState: Object.values(EVIDENCE_STATES).includes(state)
+        ? state
+        : EVIDENCE_STATES.MISSING,
+      before: null,
+      proposedAfter: null,
+      delta: null,
+      boundary: text(value.boundary)
+        || "Margin stays unavailable when recorded-cost evidence is missing, stale, contradictory, or unavailable."
+    };
+  }
+  const before = finiteNumber(value.before);
+  const proposedAfter = finiteNumber(value.proposedAfter);
+  if (before === null || proposedAfter === null) {
+    return {
+      evidenceState: EVIDENCE_STATES.SCHEMA_DRIFT,
+      before: null,
+      proposedAfter: null,
+      delta: null,
+      boundary: "The provided margin comparison does not contain two finite recorded-cost ratios."
+    };
+  }
+  return {
+    evidenceState: EVIDENCE_STATES.AVAILABLE,
+    before,
+    proposedAfter,
+    delta: proposedAfter - before,
+    boundary: "Existing recorded-cost margin presentation only; no missing cost, rate, or policy is inferred."
   };
 }
 
@@ -1282,6 +1328,7 @@ export function buildLivingCommercialTwinProjection({
   previewError = null,
   previewScopeCurrent = false,
   commercialModel = null,
+  marginComparison = null,
   authorityState = "",
   authorizationRequired = false,
   authorizationReceiptId = "",
@@ -1296,6 +1343,7 @@ export function buildLivingCommercialTwinProjection({
   staffingRead = null,
   proposedStaffingRequirements = null,
   proposedStaffingRequirementsSource = "proposed_commercial_and_canonical_counts",
+  proposedStaffingEventWindowState = "current",
   staffingRequirementPolicy = null,
   appliedQuote = null,
   workbenchRequest = null
@@ -1332,6 +1380,7 @@ export function buildLivingCommercialTwinProjection({
     commercialModel
   });
   const commercial = commercialRail(commercialModel, commercialEvidenceState);
+  const margin = DECISION_PACKET_BUILD_ENABLED ? marginRail(marginComparison) : null;
   const inventoryState = inventoryEvidenceState({
     scenarioChanged,
     inventoryScenarioEligible,
@@ -1371,6 +1420,7 @@ export function buildLivingCommercialTwinProjection({
       ? proposedStaffingRequirements
       : undefined,
     proposedRequirementsSource: text(proposedStaffingRequirementsSource),
+    proposedEventWindowState: text(proposedStaffingEventWindowState) || "current",
     staffingPolicy: staffingRequirementPolicy,
     supply: buildFulfillmentSupplyInput({
       inventory,
@@ -1406,7 +1456,9 @@ export function buildLivingCommercialTwinProjection({
       selectedMenuItems: resolvedMenuItems,
       workbenchRequest: workbenchRequestEnvelope(workbenchRequest)
     },
-    consequences: { commercial, inventory, staffing, beo },
+    consequences: DECISION_PACKET_BUILD_ENABLED
+      ? { commercial, margin, inventory, staffing, beo }
+      : { commercial, inventory, staffing, beo },
     fulfillment,
     decisionAnswer: buildDecisionAnswer({
       organizationId,

@@ -1,6 +1,6 @@
 # QuotePilot Commercial Platform Program
 
-Last updated: 2026-09-10 15:09:08 CDT
+Last updated: 2026-09-14 01:31:14 CDT
 
 ## Program status
 
@@ -101,6 +101,16 @@ Library is the business-facing place to understand Packages/Offers, Event
 Templates, components, pricing, and rules. UI presentation grants no pricing,
 payment, catalog, or lifecycle authority.
 
+### Delivery Planning relationship
+
+An Offer or Event Template may reference an exact versioned Delivery Blueprint
+without embedding it. The [Delivery Planning Program](DELIVERY_PLANNING_PROGRAM.md)
+owns that Blueprint, its declared quantity-policy references, and the
+session-only Delivery Proposal contract. Commercial retains Offer, Template,
+catalog revision, quote, price, proposal, acceptance, and change authority.
+Delivery Planning cannot make a quote valid or invalid, alter a total, publish
+catalog configuration, or turn operational advice into customer commitment.
+
 ## Reuse and change ledger
 
 | Classification | Decision |
@@ -111,6 +121,12 @@ payment, catalog, or lifecycle authority.
 | MIGRATE | Compatibility is read-time/additive. Existing Package, Event Template, upsell rule, and pricing-v1 records remain valid without destructive migration. |
 | RETIRE | No source authority in this program. Compatibility adapters retire only after all supported tenant records are natively versioned and readback evidence proves no legacy dependency. |
 | NEW | Shared commercial kernel contracts, pricing-v2 reconstruction, Golden Pricing Corpus, differential certification, Pricing Constitution, and acceptance matrix. |
+
+### Inquiry Showcase boundary
+
+The Guided Inquiry Page extends Library with one versioned, customer-safe Inquiry Showcase. It references canonical Offer, component, menu-item, and Event Template identities and records catalog revision and item-version evidence at publication. It owns only public copy, HTTPS images, a featured label, display order, visibility, slug, and publication receipts. It never copies or overrides price, cost, margin, inclusions, rules, staffing, inventory, or availability and therefore is not a second catalog or commercial price book.
+
+Public submissions are preference evidence, not commercial scope. Conversion re-resolves references against the current catalog, exposes every drift and same-tenant email claim for staff choice, and uses the existing authoritative quote-creation transaction. The original publication and request remain provenance on the quote with `commercialStatus: unconfirmed_preferences`; they cannot establish availability, allergen safety, proposal, acceptance, booking, payment, Calendar state, or customer consent beyond service response.
 
 ## Explicit non-goals
 

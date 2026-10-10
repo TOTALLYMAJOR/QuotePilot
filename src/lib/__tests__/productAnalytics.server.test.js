@@ -24,6 +24,26 @@ function event(eventName, sequence, extra = {}) {
 }
 
 describe("product analytics server contract", () => {
+  test("keeps learning observations categorical and requires a receipt-backed applied category", () => {
+    const proposed = sanitizeAnalyticsEvent(event("post_event_learning_proposed", 2, { category: "recipe", quoteId: "private-quote", sourceReferences: ["private-receipt"], rationale: "private free text", price: 99 }), context);
+    expect(proposed).toMatchObject({ eventName: "post_event_learning_proposed", category: "recipe" });
+    for (const key of ["quoteId", "sourceReferences", "rationale", "price"]) expect(proposed).not.toHaveProperty(key);
+    expect(() => sanitizeAnalyticsEvent(event("post_event_learning_applied", 3, { category: "recipe" }), context)).toThrow();
+    expect(() => sanitizeAnalyticsEvent(event("post_event_learning_proposed", 3, { category: "pricing" }), context)).toThrow();
+    const applied = sanitizeAnalyticsEvent(event("post_event_learning_applied", 3, { category: "recipe", authority: "existing_authority_receipt", receiptId: "private" }), context);
+    expect(applied).not.toHaveProperty("receiptId");
+    const summary = summarizeAnalyticsEvents([sanitizeAnalyticsEvent(event("wizard_started", 1), context), proposed, applied]);
+    expect(summary.postEventLearning).toMatchObject({ observationSource: "client", proposed: 1, applied: 1 });
+    expect(summary.postEventLearning.categories).toEqual([
+      { category: "recipe", proposed: 1, applied: 1 },
+      { category: "template", proposed: 0, applied: 0 },
+      { category: "pack_conversion", proposed: 0, applied: 0 },
+      { category: "workflow", proposed: 0, applied: 0 }
+    ]);
+    expect(summarizeAnalyticsEvents([]).quoteCompletion.actionResolutionRate).toBeNull();
+    const invalidCategory = summarizeAnalyticsEvents([sanitizeAnalyticsEvent(event("wizard_started", 1), context), { ...proposed, category: "__proto__" }]);
+    expect(invalidCategory.postEventLearning.proposed).toBe(0);
+  });
   test("keeps only allow-listed, non-PII dimensions and derives a stable retry ID", () => {
     const sanitized = sanitizeAnalyticsEvent({
       ...event("addon_selected", 2, { addonId: "dessert-bar" }),
@@ -95,6 +115,45 @@ describe("product analytics server contract", () => {
     });
   });
 
+  test("accepts only aggregate quote completion categories", () => {
+    const shown = sanitizeAnalyticsEvent(event("quote_completion_action_shown", 11, {
+      completionState: "blocked",
+      actionKind: "resolve_field",
+      surface: "proposal_composer",
+      quoteId: "quote-private",
+      customerEmail: "private@example.test"
+    }), context);
+    expect(shown).toMatchObject({
+      eventName: "quote_completion_action_shown",
+      completionState: "blocked",
+      actionKind: "resolve_field",
+      surface: "proposal_composer"
+    });
+    expect(shown).not.toHaveProperty("quoteId");
+    expect(shown).not.toHaveProperty("customerEmail");
+
+    expect(sanitizeAnalyticsEvent(event("quote_completion_action_resolved", 12, {
+      completionState: "sendable",
+      actionKind: "send_proposal",
+      surface: "living_opportunity",
+      result: "success"
+    }), context)).toMatchObject({
+      result: "success"
+    });
+    expect(sanitizeAnalyticsEvent(event("quote_completion_sendable_reached", 13, {
+      completionState: "sendable",
+      surface: "review"
+    }), context)).toMatchObject({
+      completionState: "sendable",
+      surface: "review"
+    });
+    expect(() => sanitizeAnalyticsEvent(event("quote_completion_action_shown", 14, {
+      completionState: "blocked",
+      actionKind: "free_form_private_action",
+      surface: "proposal_composer"
+    }), context)).toThrow("category");
+  });
+
   test("rejects fabricated authority, unbounded timing, free-form issue categories, and non-primary assessments", () => {
     expect(() => sanitizeAnalyticsEvent(event("priced_draft_receipt_observed", 8, {
       durationMs: 100,
@@ -139,6 +198,7 @@ describe("product analytics server contract", () => {
       { ...event("wizard_started", 1), sessionId: "session-other-1234" }
     ];
     expect(summarizeAnalyticsEvents(events)).toEqual({
+      postEventLearning: { observationSource: "client", proposed: 0, applied: 0, categories: ["recipe", "template", "pack_conversion", "workflow"].map((category) => ({ category, proposed: 0, applied: 0 })) },
       sessionsStarted: 2,
       quotesSaved: 1,
       completionRate: 50,
@@ -175,6 +235,13 @@ describe("product analytics server contract", () => {
         medianMs: null,
         p75Ms: null,
         byCategory: []
+      },
+      quoteCompletion: {
+        observationSource: "client",
+        actionsShown: 0,
+        actionsResolved: 0,
+        actionResolutionRate: null,
+        sendableReached: 0
       }
     });
   });
@@ -278,6 +345,51 @@ describe("product analytics server contract", () => {
         { issueCategory: "staffing-guidance", samples: 1, medianMs: 5000, p75Ms: 5000 }
       ]
     });
+  });
+
+  test("summarizes quote completion events as aggregate counts only", () => {
+    const summary = summarizeAnalyticsEvents([
+      event("wizard_started", 1),
+      event("quote_completion_action_shown", 2, {
+        completionState: "blocked",
+        actionKind: "resolve_field",
+        surface: "proposal_composer"
+      }),
+      event("quote_completion_action_resolved", 3, {
+        completionState: "review_required",
+        actionKind: "resolve_field",
+        surface: "proposal_composer",
+        result: "recovery"
+      }),
+      event("quote_completion_action_resolved", 5, {
+        completionState: "sendable",
+        actionKind: "send_proposal",
+        surface: "proposal_composer",
+        result: "success"
+      }),
+      event("quote_completion_sendable_reached", 4, {
+        completionState: "sendable",
+        surface: "review"
+      }),
+      {
+        ...event("quote_completion_action_shown", 1, {
+          completionState: "blocked",
+          actionKind: "resolve_field",
+          surface: "proposal_composer"
+        }),
+        sessionId: "session-without-start"
+      }
+    ]);
+
+    expect(summary.quoteCompletion).toEqual({
+      observationSource: "client",
+      actionsShown: 1,
+      actionsResolved: 1,
+      actionResolutionRate: 1,
+      sendableReached: 1
+    });
+    expect(JSON.stringify(summary.quoteCompletion)).not.toContain("quote");
+    expect(JSON.stringify(summary.quoteCompletion)).not.toContain("customer");
   });
 
   test("omits orphan receipts, mismatched issue resolutions, and events outside a started session", () => {

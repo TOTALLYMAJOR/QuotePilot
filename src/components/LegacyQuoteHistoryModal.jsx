@@ -2155,8 +2155,17 @@ export function QuoteHistoryView({
               organizationId={organizationId}
               quoteId={kitchenBeoQuote.id}
               quoteNumber={kitchenBeoQuote.quoteNumber}
+              currentUserUid={currentUserUid}
+              currentUserRole={permissions.role}
+              source={state.source}
+              sourceVersionId={String(
+                kitchenBeoQuote.activeVersionId || kitchenBeoQuote.versionMeta?.versionId || ""
+              ).trim()}
               returnFocusRef={kitchenBeoReturnFocusRef}
               onClose={() => setKitchenBeoQuote(null)}
+              onOpenProductionChecklist={scheduleAvailable && typeof onOpenSchedule === "function"
+                ? () => onOpenSchedule(kitchenBeoQuote.id)
+                : undefined}
               onGenerated={(result) => {
                 const feedback = result?.idempotent
                   ? `Matching server Kitchen BEO receipt confirmed for ${kitchenBeoQuote.quoteNumber}.`
@@ -3192,8 +3201,17 @@ export function QuoteHistoryView({
             organizationId={organizationId}
             quoteId={kitchenBeoQuote.id}
             quoteNumber={kitchenBeoQuote.quoteNumber}
+            currentUserUid={currentUserUid}
+            currentUserRole={permissions.role}
+            source={state.source}
+            sourceVersionId={String(
+              kitchenBeoQuote.activeVersionId || kitchenBeoQuote.versionMeta?.versionId || ""
+            ).trim()}
             returnFocusRef={kitchenBeoReturnFocusRef}
             onClose={() => setKitchenBeoQuote(null)}
+            onOpenProductionChecklist={scheduleAvailable && typeof onOpenSchedule === "function"
+              ? () => onOpenSchedule(kitchenBeoQuote.id)
+              : undefined}
             onGenerated={(result) => {
               const feedback = result?.idempotent
                 ? `Matching server Kitchen BEO receipt confirmed for ${kitchenBeoQuote.quoteNumber}.`

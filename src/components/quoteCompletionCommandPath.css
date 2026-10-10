@@ -1,0 +1,115 @@
+.quote-completion-command {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--tone-line, #e4e4e0);
+  border-radius: var(--radius-md, 10px);
+  background: var(--tone-surface, #fff);
+  color: var(--tone-ink-1, #1f2023);
+  box-shadow: var(--shadow-soft, 0 8px 24px rgba(31, 32, 35, 0.06));
+}
+
+.quote-completion-command__summary {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.quote-completion-command__eyebrow {
+  margin: 0 0 3px;
+  color: var(--tone-muted, #6b6e74);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.quote-completion-command h3,
+.quote-completion-command p {
+  margin: 0;
+}
+
+.quote-completion-command__state {
+  flex: 0 0 auto;
+  color: var(--tone-muted, #6b6e74);
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.quote-completion-command[data-capability-state="sendable"] .quote-completion-command__state,
+.quote-completion-command[data-capability-state="sent"] .quote-completion-command__state,
+.quote-completion-command[data-capability-state="accepted"] .quote-completion-command__state {
+  color: var(--tone-gold-3, #8d611a);
+}
+
+.quote-completion-command__group {
+  padding: 12px;
+  border-radius: var(--radius-sm, 8px);
+  background: var(--tone-surface-inset, #f4f4f2);
+}
+
+.quote-completion-command__group ul {
+  margin: 6px 0 0;
+  padding-left: 20px;
+  color: var(--tone-muted, #5f6268);
+}
+
+.quote-completion-command__message {
+  padding: 10px 12px;
+  border-left: 3px solid var(--tone-gold-3, #8d611a);
+  background: var(--tone-surface-inset, #f4f4f2);
+}
+
+.quote-completion-command[data-command-state="failure"] .quote-completion-command__message,
+.quote-completion-command[data-command-state="stale"] .quote-completion-command__message {
+  border-left-color: var(--tone-danger, #a13a32);
+}
+
+.quote-completion-command__action {
+  min-height: 44px;
+  justify-self: start;
+  padding: 0 18px;
+  border: 1px solid var(--tone-gold-3, #8d611a);
+  border-radius: var(--radius-sm, 8px);
+  background: var(--tone-gold-3, #8d611a);
+  color: #fff;
+  font: inherit;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.quote-completion-command__action:focus-visible {
+  outline: 2px solid rgba(141, 97, 26, 0.55);
+  outline-offset: 3px;
+}
+
+.quote-completion-command__action:disabled {
+  border-color: var(--tone-line, #e4e4e0);
+  background: var(--tone-surface-inset, #f4f4f2);
+  color: var(--tone-muted, #6b6e74);
+  cursor: not-allowed;
+}
+
+.quote-completion-command__compatibility {
+  color: var(--tone-muted, #6b6e74);
+  font-size: 0.8rem;
+}
+
+.quote-completion-command__compatibility summary {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+}
+
+@media (max-width: 520px) {
+  .quote-completion-command__summary {
+    display: grid;
+    gap: 6px;
+  }
+
+  .quote-completion-command__action {
+    width: 100%;
+  }
+}

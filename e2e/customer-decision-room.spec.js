@@ -102,6 +102,9 @@ const PORTAL_QUOTE = {
 };
 
 async function seedDecisionRoom(page) {
+  // The portal authority caps token lifetime from issuance, even when a fixture
+  // declares a distant expiry. Keep this historical issuance within its window.
+  await page.clock.setFixedTime(new Date("2026-08-13T12:00:00.000Z"));
   await page.addInitScript((quote) => {
     localStorage.clear();
     sessionStorage.clear();

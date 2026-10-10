@@ -1,9 +1,10 @@
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { calculateQuote, currency, serviceChargeLabel } from "../lib/quoteCalculator";
 import { MAX_EVENT_HOURS, MIN_EVENT_HOURS, normalizeEventHours } from "../lib/wizardUi";
 import AdaptiveChoiceField from "./AdaptiveChoiceField";
 import DecisionCard from "./DecisionCard";
 import FieldStateIndicator from "./FieldStateIndicator";
+import { buildQuoteCompletionProjection } from "../lib/quoteCompletionProjection";
 import { buildGuidedSellingCards } from "./guidedSellingPresentation";
 import { playCue } from "./soundKit";
 import "./wizardMotion.css";
@@ -14,6 +15,11 @@ import "./wizardMotion.css";
 const PILOT_GUIDED_SELLING_ENABLED = ["1", "true", "yes", "on"].includes(
   String(import.meta.env.VITE_PILOT_GUIDED_SELLING_ENABLED || "").trim().toLowerCase()
 );
+const QUOTE_COMPLETION_BUILD_ENABLED = import.meta.env.MODE === "test"
+  || import.meta.env.VITE_QUOTE_COMPLETION_COMMAND_PATH_ENABLED === "true";
+const QuoteCompletionCommandPath = QUOTE_COMPLETION_BUILD_ENABLED
+  ? lazy(() => import("./QuoteCompletionCommandPath"))
+  : null;
 
 function joinClassNames(...parts) {
   return parts.filter(Boolean).join(" ");
@@ -657,6 +663,7 @@ export function StepEvent({
           <Field label="Event name" error={getError("eventName")} required>
             <input
               type="text"
+              data-ambient-field="eventName"
               value={form.eventName}
               onChange={(e) => updateField("eventName", e.target.value)}
               onBlur={() => markBlur("eventName")}
@@ -704,6 +711,7 @@ export function StepEvent({
           <Field label="Your name" error={getError("name")} required>
             <input
               type="text"
+              data-ambient-field="name"
               value={form.name}
               onChange={(e) => updateField("name", e.target.value)}
               onBlur={() => markBlur("name")}
@@ -729,6 +737,7 @@ export function StepEvent({
           <Field label="Email" error={getError("email")} required>
             <input
               type="email"
+              data-ambient-field="email"
               value={form.email}
               onChange={(e) => updateField("email", e.target.value)}
               onBlur={() => markBlur("email")}
@@ -1669,7 +1678,15 @@ export function StepServices({
   );
 }
 
-export function StepReview({ form, totals, settings, readiness = null }) {
+export function StepReview({
+  form,
+  totals,
+  settings,
+  readiness = null,
+  quoteCompletionCommandPathEnabled = false,
+  quoteCompletionSaveBlockers = [],
+  onQuoteCompletionAction = null
+}) {
   const quoteDate = new Date().toLocaleDateString();
   const eventDateLabel = form.date ? new Date(`${form.date}T12:00:00`).toLocaleDateString() : "-";
   const eventTimeLabel = form.time ? new Date(`2000-01-01T${form.time}`).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : "-";
@@ -1697,10 +1714,34 @@ export function StepReview({ form, totals, settings, readiness = null }) {
     settings.businessPhone,
     settings.businessEmail
   ].filter(Boolean).join("  •  ");
+  const quoteCompletion = QUOTE_COMPLETION_BUILD_ENABLED ? buildQuoteCompletionProjection({
+    quote: form,
+    readiness,
+    saveBlockers: quoteCompletionSaveBlockers,
+    draftDirty: true,
+    saveRevisionLabel: "Continue to save review",
+    saveRevisionDestination: {
+      surfaceId: "quote-wizard",
+      step: 5,
+      actionId: "review_before_save"
+    }
+  }) : null;
 
   return (
     <div className="review">
-      {readiness && (
+      {quoteCompletionCommandPathEnabled && QuoteCompletionCommandPath ? (
+        <Suspense fallback={<p className="status-strip" role="status">Loading quote completion…</p>}>
+          <QuoteCompletionCommandPath
+            enabled
+            projection={quoteCompletion}
+            onAction={(action) => onQuoteCompletionAction?.(action) || {
+              state: "recovery",
+              message: action.reason
+            }}
+            surface="review"
+          />
+        </Suspense>
+      ) : readiness && (
         <section className={`readiness-panel readiness-${readiness.status?.id || "review"}`}>
           <div className="readiness-head">
             <div>

@@ -1003,6 +1003,13 @@ export function ReportingDashboardView({
         </div>
 
         <section className="dashboard-section" aria-labelledby="wizard-funnel-heading">
+          <details data-reporting-learning="client-observation">
+            <summary>Quote completion and event learning observations</summary>
+            <p>Bounded client-session observations, not conversion or commercial outcomes. Missing sessions are not zero; fewer than 50 eligible observations are informational.</p>
+            <p>Completion actions shown: {state.analytics?.quoteCompletion?.actionsShown ?? "Not available"}; resolved: {state.analytics?.quoteCompletion?.actionsResolved ?? "Not available"}; sendable reached: {state.analytics?.quoteCompletion?.sendableReached ?? "Not available"}.</p>
+            <p>Learning proposed: {state.analytics?.postEventLearning?.proposed ?? "Not available"}; receipt-backed operator confirmations: {state.analytics?.postEventLearning?.applied ?? "Not available"}. These counts are not paired proposal-level adoption rates.</p>
+            {state.analytics?.postEventLearning?.categories?.map((item) => <p key={item.category}>{item.category.replaceAll("_", " ")}: {item.proposed} proposed; {item.applied} confirmed.</p>)}
+          </details>
           <div className="dashboard-section-head">
             <div>
               <h3 id="wizard-funnel-heading">Quote wizard funnel</h3>

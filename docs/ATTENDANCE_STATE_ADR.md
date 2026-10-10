@@ -1,8 +1,8 @@
 # Attendance State and Confirmation Architecture Decision
 
-Last updated: 2026-09-05 16:46:47 CDT
+Last updated: 2026-09-12 14:51:07 CDT
 
-Status: Accepted; Slices A–E implemented in the isolated Tenant Operating Model source; actual-attendance Slice F remains open
+Status: Accepted; Slices A–F implemented in current source with local automated evidence; deployment, connected hosted use, and human acceptance remain separate
 
 ## Context
 
@@ -315,10 +315,30 @@ administrator booking review; original acceptance, booking and payment evidence
 remain historical and unchanged. The versioned attendance envelope records the
 actual apply receipt. No automatic charge, send or new acceptance occurs.
 
-### Slice F — Operational and actual attendance (not implemented by this program)
+### Slice F — Operational and actual attendance (implemented source/local)
 
 Expose count/revision freshness on staffing/BEO/run-of-show surfaces and record
 actual attendance through post-event closeout.
+
+Current source adds one callable-owned actual-attendance journal under the
+existing private post-event closeout. A staff command records or corrects one
+bounded whole count with a required source type and source note. The command is
+bound to the exact organization, quote, deterministic closeout, accepted
+version, and acceptance receipt; it uses compare-and-set revision fencing,
+idempotent request identity, server actor/time evidence, and an immutable
+receipt that retains the prior fact on correction. It is unavailable before the
+tenant-local closeout date or while closeout time-zone policy is unresolved.
+
+Customer 360 owns the record/correct/reconcile interaction. Event Focus and
+Control Room consume only the bounded quote projection when its accepted
+version and acceptance receipt still match the current commercial source.
+Mismatch is shown as stale source evidence and withholds the count. The
+operational view keeps priced guests and actual attendance separate; staffing,
+BEO, run-of-show, Event Preflight, event phase, issue, labor, purchasing,
+payment, invoice, refund, settlement, customer communication, and accepted
+history remain under their existing authorities. Local pure, client, component,
+rules, and emulator fixtures cover the boundary; no deployment, production
+record, provider outcome, or human acceptance is established here.
 
 ## Consequences
 

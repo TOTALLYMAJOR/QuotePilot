@@ -27,6 +27,35 @@
 }
 .post-event-closeout-action .workflow-attention-head { align-items: start; gap: .75rem; }
 .post-event-closeout-action .closeout-progress { font-weight: 600; color: var(--tone-ink-1, #1f2023); margin: .35rem 0; }
+.post-event-actual-attendance {
+  margin-top: .25rem;
+  padding: 1rem;
+  border: 1px solid var(--tone-line, #e4e4e0);
+  border-radius: var(--radius-md, 10px);
+  background: var(--tone-surface-soft, #f4f4f2);
+  min-width: 0;
+}
+.post-event-actual-attendance__heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: .75rem;
+}
+.post-event-actual-attendance__heading h5 { margin: .15rem 0 .35rem; font-size: 1rem; }
+.post-event-actual-attendance__form {
+  display: grid;
+  grid-template-columns: minmax(8rem, .55fr) minmax(14rem, 1fr);
+  gap: .75rem 1rem;
+  align-items: end;
+  margin-top: .9rem;
+}
+.post-event-actual-attendance__form .compact-field { margin: 0; max-width: none; }
+.post-event-actual-attendance__form input,
+.post-event-actual-attendance__form select { min-height: 44px; }
+.post-event-actual-attendance__note,
+.post-event-actual-attendance__actions { grid-column: 1 / -1; }
+.post-event-actual-attendance__actions { justify-content: flex-start; }
+.post-event-actual-attendance__actions button { min-height: 44px; }
 .post-event-closeout-items { gap: 0; }
 .post-event-closeout-action .post-event-closeout-item {
   grid-template-columns: minmax(0, 1fr) auto;
@@ -62,6 +91,12 @@
 .closeout-supporting-detail > .source-note { margin-bottom: .75rem; }
 .post-event-closeout-item .right-actions button { min-height: 44px; }
 @media (max-width: 760px) {
+  .post-event-actual-attendance__heading { display: grid; }
+  .post-event-actual-attendance__form { grid-template-columns: minmax(0, 1fr); }
+  .post-event-actual-attendance__note,
+  .post-event-actual-attendance__actions { grid-column: auto; }
+  .post-event-actual-attendance__actions,
+  .post-event-actual-attendance__actions button { width: 100%; }
   .post-event-closeout-item > .right-actions,
   .post-event-closeout-item > .right-actions button { width: auto; }
   .post-event-closeout-action .post-event-closeout-item { gap: .2rem .6rem; }

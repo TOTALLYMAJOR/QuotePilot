@@ -5,6 +5,14 @@ function stableIds(value) {
     .slice(0, 100);
 }
 
+function deliveryBlueprintRef(value) {
+  const source = typeof value === "string" ? { id: value } : value;
+  if (!source || typeof source !== "object" || Array.isArray(source)) return null;
+  const id = String(source.id || source.blueprintId || "").trim();
+  const revision = String(source.revision || source.blueprintRevision || "").trim();
+  return id ? { id, revision } : null;
+}
+
 export function normalizePricingType(value) {
   const raw = String(value || "").trim().toLowerCase();
   if (raw === "per_person" || raw === "per_item" || raw === "per_event") {
@@ -28,6 +36,7 @@ export function toNullableMinor(value) {
 }
 
 export function packageWriteShape(item = {}) {
+  const blueprintRef = deliveryBlueprintRef(item.deliveryBlueprintRef);
   return {
     name: String(item.name || ""),
     pppMinor: Math.round(Number(item.ppp || 0) * 100),
@@ -45,6 +54,7 @@ export function packageWriteShape(item = {}) {
         maxChoices: Number(group?.maxChoices ?? (Array.isArray(group?.componentIds) ? group.componentIds.length : 0))
       }))
     } : {}),
+    ...(blueprintRef ? { deliveryBlueprintRef: blueprintRef } : {}),
     ...(stableIds(item.quantityPolicyRefs).length ? { quantityPolicyRefs: stableIds(item.quantityPolicyRefs) } : {}),
     ...(stableIds(item.ruleRefs).length ? { ruleRefs: stableIds(item.ruleRefs) } : {}),
     ...(item.offerVersion && item.offerVersion !== "configurable-offer-v1" ? { offerVersion: String(item.offerVersion) } : {}),

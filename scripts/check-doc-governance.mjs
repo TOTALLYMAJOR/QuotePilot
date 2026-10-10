@@ -27,6 +27,7 @@ const DEPLOY_DOCS = [
 ];
 
 const TASK_ORCHESTRATION_IMPLEMENTATION = [
+  "scripts/check-product-intelligence.mjs",
   "scripts/task-orchestration-plan.mjs",
   "docs/task-orchestration-contracts.json"
 ];
@@ -344,7 +345,8 @@ function checkTaskOrchestrationContract(errors) {
     "task-orchestration-contracts.json",
     "design-language",
     "domainClassification",
-    "catering-domain-intelligence"
+    "catering-domain-intelligence",
+    "check:product-intelligence"
   ]) {
     if (!governedText.toLowerCase().includes(marker.toLowerCase())) {
       errors.push(`Task orchestration governance docs are missing required marker: ${marker}`);

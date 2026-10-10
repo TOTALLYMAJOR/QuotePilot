@@ -111,6 +111,89 @@ test("closeout navigation matches the exact loaded tenant and quote without subs
   expect(resolveCustomerCloseoutTarget({ ...base, target: { ...base.target, attentionType: "follow_up" } })).toBeNull();
 });
 
+test("renders the exact client overview while retained history and private controls continue loading", async () => {
+  const coreWorkspace = closeoutWorkspace();
+  const completeWorkspace = {
+    ...coreWorkspace,
+    proposalVersions: [{ id: "version-one", quoteId: "quote-one" }]
+  };
+  let resolveComplete;
+  const completeRead = new Promise((resolve) => { resolveComplete = resolve; });
+  mocks.radar = null;
+  mocks.getWorkspace.mockImplementation(({ onCoreWorkspace }) => {
+    onCoreWorkspace(coreWorkspace);
+    return completeRead;
+  });
+  const container = document.createElement("div");
+  document.body.append(container);
+  const root = createRoot(container);
+  try {
+    await act(async () => {
+      root.render(
+        <CustomerWorkspaceView
+          organizationId="org-one"
+          customerId="customer-one"
+          ambientMode
+        />
+      );
+      await Promise.resolve();
+    });
+
+    expect(container.querySelector("main")?.dataset.clientProfilePhase).toBe("core");
+    expect(container.querySelector("#ambient-client-overview-title")?.textContent).toBe("Exact client");
+    expect(container.textContent).toContain("The client overview above is ready to use.");
+    expect(container.querySelector(".customer-workspace-tabs")).toBeNull();
+
+    await act(async () => {
+      resolveComplete(completeWorkspace);
+      await completeRead;
+    });
+
+    expect(container.querySelector("main")?.dataset.clientProfilePhase).toBe("complete");
+    expect(container.querySelector(".customer-workspace-tabs")).not.toBeNull();
+    expect(container.textContent).not.toContain("The client overview above is ready to use.");
+  } finally {
+    act(() => root.unmount());
+    container.remove();
+  }
+});
+
+test("keeps the core client overview recoverable when supplemental reads fail", async () => {
+  const coreWorkspace = closeoutWorkspace();
+  mocks.radar = null;
+  mocks.getWorkspace.mockImplementation(({ onCoreWorkspace }) => {
+    onCoreWorkspace(coreWorkspace);
+    return Promise.reject(new Error("Retained history read failed."));
+  });
+  const container = document.createElement("div");
+  document.body.append(container);
+  const root = createRoot(container);
+  try {
+    await act(async () => {
+      root.render(
+        <CustomerWorkspaceView
+          organizationId="org-one"
+          customerId="customer-one"
+          ambientMode
+        />
+      );
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(container.querySelector("main")?.dataset.clientProfilePhase).toBe("core-error");
+    expect(container.querySelector("#ambient-client-overview-title")?.textContent).toBe("Exact client");
+    expect(container.querySelector('[data-capability-state="partial"] [role="alert"]')?.textContent)
+      .toContain("The client record and linked opportunities remain available above.");
+    expect([...container.querySelectorAll("button")].some((button) => (
+      button.textContent.trim() === "Retry client details"
+    ))).toBe(true);
+  } finally {
+    act(() => root.unmount());
+    container.remove();
+  }
+});
+
 test("client follow-up reveals one exact native review and restores its trigger without a Workflow round trip", async () => {
   mocks.getWorkspace.mockResolvedValue(closeoutWorkspace());
   mocks.radar = { status: "available", opportunities: [closeout] };

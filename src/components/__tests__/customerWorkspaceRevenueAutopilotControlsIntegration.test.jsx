@@ -160,10 +160,11 @@ describe("Customer 360 Revenue Autopilot controls integration", () => {
     expect(controls.getAttribute("data-projection-error")).toBe("");
     expect(controls.getAttribute("data-has-refresh")).toBe("true");
     expect(container.querySelector("#customer-panel-overview")?.contains(controls)).toBe(true);
-    expect(mocks.getCustomerWorkspace).toHaveBeenCalledWith({
+    expect(mocks.getCustomerWorkspace).toHaveBeenCalledWith(expect.objectContaining({
       organizationId: "org-one",
-      customerId: "customer-one"
-    });
+      customerId: "customer-one",
+      onCoreWorkspace: expect.any(Function)
+    }));
   });
 
   test("passes a non-admin role through to the same discoverable role-safe surface", async () => {

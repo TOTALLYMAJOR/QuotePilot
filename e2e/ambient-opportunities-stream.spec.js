@@ -29,6 +29,8 @@ const OPPORTUNITIES = [
     latestVersionNumber: 2,
     createdAtISO: "2026-08-10T12:00:00.000Z",
     updatedAtISO: "2026-08-11T18:00:00.000Z",
+    // Preserve the editable draft while the separately dated follow-up stays overdue.
+    expiresAtISO: "2099-09-11T18:00:00.000Z",
     customer: {
       name: "Maya Bennett",
       email: "maya@example.test",

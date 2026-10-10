@@ -295,6 +295,48 @@ describe("workspace exact-arrival handoff", () => {
     expect(parseWorkspaceArrivalHandoff(locationFor(proposal))).toEqual(proposal);
   });
 
+  test("preserves exact accepted revision and receipt pins through a Proposal administration arrival", () => {
+    const proposal = createWorkspaceArrivalHandoff(administrationInput({
+      object: { id: "quote-42", type: "customer-decision-artifact" },
+      focus: {
+        quoteId: "quote-42",
+        acceptedRevisionId: "v0017",
+        acceptanceReceiptId: "acceptance-17"
+      },
+      intentId: "review_proposal_controls"
+    }));
+
+    expect(proposal).toMatchObject({
+      ok: true,
+      contract: {
+        focus: {
+          quoteId: "quote-42",
+          acceptedRevisionId: "v0017",
+          acceptanceReceiptId: "acceptance-17"
+        }
+      }
+    });
+    expect(parseWorkspaceArrivalHandoff(locationFor(proposal))).toEqual(proposal);
+  });
+
+  test("rejects a partial or non-Proposal accepted revision arrival", () => {
+    const partial = createWorkspaceArrivalHandoff(administrationInput({
+      object: { id: "quote-42", type: "customer-decision-artifact" },
+      focus: { quoteId: "quote-42", acceptedRevisionId: "v0017" },
+      intentId: "review_proposal_controls"
+    }));
+    const generic = createWorkspaceArrivalHandoff(administrationInput({
+      focus: {
+        quoteId: "quote-42",
+        acceptedRevisionId: "v0017",
+        acceptanceReceiptId: "acceptance-17"
+      }
+    }));
+
+    expect(partial).toMatchObject({ ok: false });
+    expect(generic).toMatchObject({ ok: false });
+  });
+
   test("rejects substituted administration records, objects, and routes", () => {
     const wrongQuote = createWorkspaceArrivalHandoff(administrationInput({
       object: { id: "quote-other", type: "payment-evidence" }

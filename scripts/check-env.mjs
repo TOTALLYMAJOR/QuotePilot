@@ -46,13 +46,18 @@ const RELEASE_CANDIDATE_DISABLED_FLAGS = Object.freeze([
   "VITE_PILOT_MODEL_ENABLED",
   "VITE_BUYER_ACCESS_ENABLED",
   "VITE_BUYER_ACCESS_PUBLIC_CTA_ENABLED",
+  "VITE_INQUIRY_SHOWCASE_ENABLED",
   ...PRODUCTION_UNSAFE_FLAGS
 ]);
 const BUYER_ACCESS_ROUTE_FLAG = "VITE_BUYER_ACCESS_ENABLED";
 const BUYER_ACCESS_CTA_FLAG = "VITE_BUYER_ACCESS_PUBLIC_CTA_ENABLED";
 const BUYER_ACCESS_TURNSTILE_SITE_KEY = "VITE_BUYER_ACCESS_TURNSTILE_SITE_KEY";
+const INQUIRY_SHOWCASE_FLAG = "VITE_INQUIRY_SHOWCASE_ENABLED";
+const INQUIRY_TURNSTILE_SITE_KEY = "VITE_INQUIRY_TURNSTILE_SITE_KEY";
 const FORBIDDEN_BROWSER_PROVIDER_VALUES = Object.freeze([
   "VITE_BUYER_ACCESS_TURNSTILE_SECRET",
+  "VITE_INQUIRY_TURNSTILE_SECRET",
+  "VITE_INQUIRY_RATE_LIMIT_SECRET",
   "VITE_PINGRAM_API_KEY",
   "VITE_PINGRAM_WEBHOOK_SECRET",
   "VITE_SMS_CONTACT_DIGEST_SECRET",
@@ -218,6 +223,33 @@ if (buyerAccessRouteEnabled || buyerAccessCtaEnabled) {
     );
     process.exit(1);
   }
+}
+
+const inquiryShowcaseValue = effectiveValue(INQUIRY_SHOWCASE_FLAG);
+if (!isBooleanLike(inquiryShowcaseValue)) {
+  console.error(`${INQUIRY_SHOWCASE_FLAG} must use an explicit boolean value.`);
+  process.exit(1);
+}
+const inquiryShowcaseEnabled = isTruthy(inquiryShowcaseValue);
+const inquiryTurnstileSiteKey = effectiveValue(INQUIRY_TURNSTILE_SITE_KEY);
+if (!inquiryShowcaseEnabled && inquiryTurnstileSiteKey) {
+  console.error(
+    `${INQUIRY_TURNSTILE_SITE_KEY} must remain empty while ${INQUIRY_SHOWCASE_FLAG} is disabled.`
+  );
+  process.exit(1);
+}
+if (
+  inquiryShowcaseEnabled
+  && (
+    !inquiryTurnstileSiteKey
+    || isPlaceholder(inquiryTurnstileSiteKey)
+    || !/^[A-Za-z0-9_-]{10,100}$/.test(inquiryTurnstileSiteKey)
+  )
+) {
+  console.error(
+    `${INQUIRY_TURNSTILE_SITE_KEY} must be a syntactically valid non-placeholder public Turnstile site key whenever Inquiry Showcase is compiled into an artifact.`
+  );
+  process.exit(1);
 }
 
 const appCheckEnabledValue = effectiveValue(APP_CHECK_ENABLED_FLAG);

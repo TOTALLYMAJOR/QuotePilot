@@ -28,6 +28,10 @@ const StaffInvitationResponsePage = createRecoverableLazy(
   () => import("./components/StaffInvitationResponsePage"),
   "StaffInvitationResponsePage"
 );
+const PublicInquiryPage = createRecoverableLazy(
+  () => import("./components/PublicInquiryPage"),
+  "PublicInquiryPage"
+);
 const WorkspaceRoute = createRecoverableLazy(
   () => import("./components/WorkspaceRoute"),
   "WorkspaceRoute"
@@ -75,7 +79,10 @@ const isStaffInvitationRoute = !isPortalRoute
 const isMarketingRoute = normalizedPath === "/" && !isPortalRoute;
 const isSystemMarketingRoute = normalizedPath === "/system" && !isPortalRoute;
 const isBuyerAccessRoute = normalizedPath === "/start" && !isPortalRoute;
-const routeKind = isStaffInvitationRoute
+const isPublicInquiryRoute = !isPortalRoute && /^\/inquire\/[a-z0-9](?:[a-z0-9-]{1,62}[a-z0-9])?$/u.test(normalizedPath);
+const routeKind = isPublicInquiryRoute
+  ? "public-inquiry"
+  : isStaffInvitationRoute
   ? "staff-invitation"
   : isRevenueAutopilotUnsubscribeRoute
     ? "revenue-autopilot-unsubscribe"
@@ -101,7 +108,13 @@ recordDiagnosticEvent({
 
 createRoot(document.getElementById("root")).render(
   <React.StrictMode>
-    {isStaffInvitationRoute ? (
+    {isPublicInquiryRoute ? (
+      <LazyPublicRoute
+        surfaceName="Event inquiry"
+        loadingMessage="Loading inquiry page…"
+        component={PublicInquiryPage}
+      />
+    ) : isStaffInvitationRoute ? (
       <LazyPublicRoute
         surfaceName="Staff assignment invitation"
         loadingMessage="Loading staff assignment…"

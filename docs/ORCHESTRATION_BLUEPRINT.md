@@ -1,6 +1,6 @@
 # Cloud + Local Orchestration Blueprint
 
-Last updated: 2026-09-08 15:16:08 CDT
+Last updated: 2026-09-17 02:01:13 CDT
 
 ## Goal
 Accelerate delivery while preserving production safety by using:
@@ -63,6 +63,9 @@ Each PR declares:
 - `tenant_impact`: `none` / `read` / `write` / `rules`
 - `required_lanes`: `auto` or manual override
 - `doc_impact`: canonical docs touched and rationale
+- `product_intelligence`: required catering actor/job/improvement, governed
+  outcome or metric IDs, guardrails, evidence need, and ledger entry; or an
+  explicit `not_applicable` rationale for mechanical work
 
 Before implementation, `npm run plan:task` may derive the same decision inputs
 from a bounded task description and explicit path set. Its canonical policy is
@@ -78,6 +81,12 @@ relevant catering contexts, current QuotePilot authority reads, and advisory
 reference slices. References remain separate from `readFirst` so the runner can
 form a provisional action from current authority and code before domain
 reconsideration. Existing packet fields remain available to runners.
+
+The packet also carries a `productIntelligence` contract independently of the
+execution profile. Applicable work is fail-closed on the catering-value fields,
+the Product Intelligence index, the release/experiment ledger, and
+`npm run check:product-intelligence`. Mechanical work may be marked
+`not_applicable` only with a rationale; it may not invent a catering benefit.
 
 ## Token-Efficient Task Planning
 - Pass explicit paths in a dirty worktree so unrelated changes do not raise the
@@ -107,6 +116,8 @@ reconsideration. Existing packet fields remain available to runners.
   - `npm run check:workflows`
 - `lane:core`
   - `npm run check:capability-surfaces`
+  - `npm run check:field-states`
+  - `npm run check:product-intelligence`
   - `npm run test:unit`
   - `npm run build`
   - `npm run check:docs:governance`

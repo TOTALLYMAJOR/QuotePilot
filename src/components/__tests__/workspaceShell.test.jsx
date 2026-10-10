@@ -389,6 +389,31 @@ describe("WorkspaceShell", () => {
     expect(currentProps.actions.onImports).toHaveBeenCalledTimes(1);
   });
 
+  test("lets a Workspace tools action continue through its own overlay guard", () => {
+    let guard = null;
+    const continuation = vi.fn(() => "/app/operations");
+    const onOperations = vi.fn(() => guard.requestDismiss("navigation", continuation));
+    render({
+      ambientNavigation: true,
+      menu: { openId: "more", onOpenChange: vi.fn() },
+      actions: {
+        onOperations,
+        onWorkspaceToolsGuardChange: vi.fn((nextGuard) => {
+          guard = nextGuard;
+        })
+      }
+    });
+
+    const tools = container.querySelector('[role="dialog"][aria-labelledby="workspace-tools-title"]');
+    const operations = buttonsByText(tools, "Operations")[0];
+    operations.focus();
+    act(() => operations.click());
+
+    expect(onOperations).toHaveBeenCalledTimes(1);
+    expect(continuation).toHaveBeenCalledTimes(1);
+    expect(currentProps.menu.onOpenChange).toHaveBeenCalledWith("");
+  });
+
   test("surfaces ingredient Inventory only for an enabled administrator", () => {
     render({
       ambientNavigation: true,

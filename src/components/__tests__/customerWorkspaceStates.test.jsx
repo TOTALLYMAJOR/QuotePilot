@@ -667,10 +667,11 @@ describe("customer workspace executable presentation states", () => {
     expect(integrationContainer.querySelector("[data-return-status]")?.dataset.returnStatus)
       .toBe("restored");
     expect(mocks.getCustomerWorkspace).toHaveBeenCalledTimes(2);
-    expect(mocks.getCustomerWorkspace).toHaveBeenNthCalledWith(2, {
+    expect(mocks.getCustomerWorkspace).toHaveBeenNthCalledWith(2, expect.objectContaining({
       organizationId: "org-one",
-      customerId: "customer-one"
-    });
+      customerId: "customer-one",
+      onCoreWorkspace: expect.any(Function)
+    }));
     expect(writeAttempt).not.toHaveBeenCalled();
     expect(JSON.stringify(workspace)).toBe(workspaceBefore);
   });

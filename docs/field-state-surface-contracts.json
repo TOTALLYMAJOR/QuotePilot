@@ -20,6 +20,12 @@
   },
   "surfaces": [
     {
+      "id": "post-event-learning-recommendations",
+      "path": "src/components/PostEventLearningPanel.jsx",
+      "markers": ["FieldStateIndicator", "data-field-state-surface=\"post-event-learning-recommendations\""],
+      "testPath": "src/components/__tests__/postEventLearningPanel.test.jsx"
+    },
+    {
       "id": "field-state-indicator",
       "path": "src/components/FieldStateIndicator.jsx",
       "markers": [
@@ -151,6 +157,15 @@
       "testPath": "src/components/__tests__/QuickUpdatesPanel.test.jsx"
     },
     {
+      "id": "post-event-actual-attendance-source-states",
+      "path": "src/components/PostEventCloseoutReviewAction.jsx",
+      "markers": [
+        "data-choice-field=\"post-event-actual-attendance-source\"",
+        "AdaptiveChoiceField"
+      ],
+      "testPath": "src/components/__tests__/postEventCloseoutReviewAction.test.jsx"
+    },
+    {
       "id": "sales-workflow-authoritative-quote-states",
       "path": "src/components/SalesWorkflowModal.jsx",
       "markers": [
@@ -203,6 +218,27 @@
         "AdaptiveChoiceField"
       ],
       "testPath": "src/components/__tests__/proposalComposerMarginCost.test.jsx"
+    },
+    {
+      "id": "delivery-proposal-advisory-states",
+      "path": "src/components/DeliveryProposal.jsx",
+      "markers": [
+        "data-delivery-proposal-state",
+        "data-capability-state",
+        "data-evidence-state",
+        "data-override-state"
+      ],
+      "testPath": "src/components/__tests__/deliveryProposal.test.jsx"
+    },
+    {
+      "id": "delivery-planning-configuration-states",
+      "path": "src/components/DeliveryPlanningConfigurationPanel.jsx",
+      "markers": [
+        "data-field-state-surface=\"delivery-planning-configuration\"",
+        "AdaptiveChoiceField",
+        "FieldStateIndicator"
+      ],
+      "testPath": "src/components/__tests__/deliveryPlanningConfigurationPanel.test.jsx"
     },
     {
       "id": "quote-comparison-choice-states",
