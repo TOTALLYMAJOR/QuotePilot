@@ -21,7 +21,7 @@ for (const viewport of VIEWPORTS) {
 
     const results = await new AxeBuilder({ page })
       .include(".app-shell")
-      .withRules(["color-contrast"])
+      .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"])
       .analyze();
     expect(results.violations).toEqual([]);
 

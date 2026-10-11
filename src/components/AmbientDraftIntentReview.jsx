@@ -115,52 +115,88 @@ function intentIdentity(intent, contract) {
   ].join("\u0000");
 }
 
+function TechnicalEvidence({ children, label = "Exact record details" }) {
+  return (
+    <details
+      className="ambient-draft-review__technical-evidence"
+      data-draft-technical-evidence="collapsed"
+    >
+      <summary>{label}</summary>
+      <dl className="ambient-draft-review__facts">{children}</dl>
+    </details>
+  );
+}
+
+function catalogName(catalogContext, collectionName, id) {
+  const stableId = text(id);
+  if (!stableId) return "";
+  return text(
+    (Array.isArray(catalogContext?.[collectionName]) ? catalogContext[collectionName] : [])
+      .find((item) => text(item?.id) === stableId)?.name
+  );
+}
+
 function ValueFacts({ value, kind, side, candidate, catalogContext }) {
   if (kind === "replace_package") {
+    const packageName = text(
+      value.packageName
+      || (side === "proposed" ? candidate?.name : "")
+      || catalogName(catalogContext, "packages", value.packageId)
+    );
     return (
-      <dl className="ambient-draft-review__facts">
-        {side === "proposed" && text(value.packageName || candidate?.name) && (
+      <>
+        <dl className="ambient-draft-review__facts">
           <div>
             <dt>Name</dt>
-            <dd>{text(value.packageName || candidate?.name)}</dd>
+            <dd>{packageName || "Name not recorded in this handoff"}</dd>
           </div>
-        )}
-        <div>
-          <dt>Package ID</dt>
-          <dd><code>{text(value.packageId) || "Unavailable"}</code></dd>
-        </div>
-      </dl>
+        </dl>
+        <TechnicalEvidence>
+          <div>
+            <dt>Package ID</dt>
+            <dd><code>{text(value.packageId) || "Unavailable"}</code></dd>
+          </div>
+        </TechnicalEvidence>
+      </>
     );
   }
 
   if (kind === "replace_menu_item") {
+    const itemName = text(
+      value.itemName
+      || value.name
+      || (side === "proposed" ? candidate?.name : "")
+      || catalogName(catalogContext, "menuItems", value.itemId)
+    );
     return (
-      <dl className="ambient-draft-review__facts">
-        {side === "proposed" && text(candidate?.name) && (
+      <>
+        <dl className="ambient-draft-review__facts">
           <div>
             <dt>Name</dt>
-            <dd>{text(candidate.name)}</dd>
+            <dd>{itemName || "Name not recorded in this handoff"}</dd>
           </div>
-        )}
-        <div>
-          <dt>Menu item ID</dt>
-          <dd><code>{text(value.itemId) || "Unavailable"}</code></dd>
-        </div>
-        <div>
-          <dt>Position</dt>
-          <dd>{Number.isSafeInteger(value.orderIndex) ? value.orderIndex + 1 : "Unavailable"}</dd>
-        </div>
-        <div>
-          <dt>Quantity</dt>
-          <dd>{Number.isSafeInteger(value.quantity) ? value.quantity : "Unavailable"}</dd>
-        </div>
-        {side === "proposed" && text(value.quantityPolicy) && (
           <div>
-            <dt>Quantity handling</dt>
-            <dd><code>{text(value.quantityPolicy)}</code></dd>
+            <dt>Position</dt>
+            <dd>{Number.isSafeInteger(value.orderIndex) ? value.orderIndex + 1 : "Unavailable"}</dd>
           </div>
-        )}
-      </dl>
+          <div>
+            <dt>Quantity</dt>
+            <dd>{Number.isSafeInteger(value.quantity) ? value.quantity : "Unavailable"}</dd>
+          </div>
+        </dl>
+        <TechnicalEvidence>
+          <div>
+            <dt>Menu item ID</dt>
+            <dd><code>{text(value.itemId) || "Unavailable"}</code></dd>
+          </div>
+          {side === "proposed" && text(value.quantityPolicy) && (
+            <div>
+              <dt>Quantity handling</dt>
+              <dd><code>{text(value.quantityPolicy)}</code></dd>
+            </div>
+          )}
+        </TechnicalEvidence>
+      </>
     );
   }
 
@@ -171,17 +207,26 @@ function ValueFacts({ value, kind, side, candidate, catalogContext }) {
       .filter(([id, name]) => id && name)
   );
   return order.length ? (
-    <ol className="ambient-draft-review__order" aria-label={`${side} menu order`}>
-      {order.map((itemId, index) => (
-        <li key={`${text(itemId)}-${index}`}>
-          <span>{index + 1}</span>
-          <div>
-            {menuLabels.has(text(itemId)) && <strong>{menuLabels.get(text(itemId))}</strong>}
-            <code>{text(itemId)}</code>
+    <>
+      <ol className="ambient-draft-review__order" aria-label={`${side} menu order`}>
+        {order.map((itemId, index) => (
+          <li key={`${text(itemId)}-${index}`}>
+            <span>{index + 1}</span>
+            <div>
+              <strong>{menuLabels.get(text(itemId)) || "Menu item name unavailable"}</strong>
+            </div>
+          </li>
+        ))}
+      </ol>
+      <TechnicalEvidence label="Exact menu record details">
+        {order.map((itemId, index) => (
+          <div key={`${text(itemId)}-${index}`}>
+            <dt>Position {index + 1}</dt>
+            <dd><code>{text(itemId) || "Unavailable"}</code></dd>
           </div>
-        </li>
-      ))}
-    </ol>
+        ))}
+      </TechnicalEvidence>
+    </>
   ) : <p className="ambient-draft-review__unavailable">Exact order unavailable.</p>;
 }
 

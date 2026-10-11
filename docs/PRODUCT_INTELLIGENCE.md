@@ -1,6 +1,6 @@
 # QuotePilot Product Intelligence System
 
-Last updated: 2026-09-24 22:00:00 CDT
+Last updated: 2026-10-10 21:35:47 CDT
 
 ## Purpose
 
@@ -34,6 +34,64 @@ separate so strength in one area cannot hide failure in another.
 | 7 | [Quality / Reliability Guardrails](product-intelligence/QUALITY_GUARDRAILS.md) | Could apparent growth hide a broken or unsafe product? | Furnished from existing authority and quality gates. |
 | 8 | [Release / Experiment Ledger](product-intelligence/RELEASE_EXPERIMENT_LEDGER.md) | What changed that might explain a result? | Furnished with historical seeds and a prospective decision protocol. |
 | 9 | [Layered Evaluation Manifest](product-intelligence/evaluation-manifest.json) | Which independent evaluation dimensions, thresholds, evidence classes, and owner decisions govern a candidate? | Versioned manifest and local receipt runner implemented; human, hosted, provider, production, and outcome evaluations remain unclaimed until separately recorded. |
+
+## Safety and loading hypothesis
+
+`LED-018` records the unreleased safety/loading tranche for catering staff
+reviewing clients, quotes, and current work. Deferred code and independently
+settling reads should reduce waiting; nested diagnostic redaction protects
+privacy during recovery. The compatibility Quote Workspace also reuses its
+existing event summary for identity and guest count, removing an unnecessary
+Ambient presentation dependency while preserving displayed values and business
+authority. The affected capabilities are `CAP-06`, `CAP-10`,
+`CAP-11`, and `CAP-12`. No new event or metric definition is introduced, and
+local source or test evidence establishes neither a measured speed gain nor a
+catering outcome. The ledger retains `no_outcome_claim` until separately bound
+journey and comparison evidence exists.
+
+## Inventory traceability and dependency-review hypothesis
+
+`LED-019` records the unreleased Inventory candidate for administrators who
+must explain one ingredient's stock changes and event commitments, then judge
+the affected menu scope before publishing a recipe revision. The expected
+improvement is less reconciliation ambiguity and fewer stale downstream
+menu-cost decisions without treating a movement, commitment, or dependency
+review as physical-count, valuation, procurement, pricing, customer-document,
+or whole-event readiness authority. The affected capabilities are `CAP-02`,
+`CAP-05`, and `CAP-06`; `MET-11` and `MET-12` are the closest governed outcome
+measures, but neither is centrally observable for this change.
+
+Catering value
+- Actor: same-tenant organization administrators managing ingredient and menu
+  recipe evidence.
+- Job or decision: explain one ingredient's verified movement and committed
+  event basis, then review exactly which menu items a recipe draft affects.
+- Expected improvement: reduce avoidable reconciliation and stale dependency
+  rework while preserving separate commercial and operational authorities.
+- Outcome or metric IDs: `OUT-02`, `OUT-03`, `MET-11`, `MET-12`.
+- Guardrail IDs: `GRD-01`, `GRD-02`, `GRD-06`, `GRD-07`, `GRD-11`, `GRD-15`,
+  `GRD-16`.
+- Evidence needed: focused source/runtime/client/component checks; a deployed
+  matching Firestore index; authenticated hosted administrator journeys;
+  assistive-technology and human comprehension review; then a declared
+  baseline/window for reconciliation and late-correction outcomes.
+
+## Progressive operability hypothesis
+
+`LED-020` groups the unreleased route-performance, interaction, exact-consequence,
+multi-line receiving, and release-evidence refinements. The hypothesis is that
+catering staff can reach usable work sooner, preserve context while inspecting
+dependent evidence, and recover individual receiving failures without replaying
+successful stock receipts. The release-evidence gate should also prevent local
+fixtures from being mistaken for representative hosted role qualification.
+The same candidate now removes decorative one-sided accents from opportunity and
+schedule state surfaces while retaining state meaning through calm hairlines,
+full-state borders, and subtle washes; human comprehension remains unmeasured.
+Applicable capabilities are `CAP-05`, `CAP-06`, `CAP-10`, and `CAP-12`; the
+closest diagnostic metrics are `MET-03`–`MET-05`, `MET-11`, `MET-12`, and
+`MET-18`. Local code, tests, browser fixtures, bundle bytes, and a gate schema do
+not establish faster human work, correct physical stock, hosted qualification,
+deployment, or a catering outcome.
 
 ## Catering-value declaration
 
@@ -127,6 +185,13 @@ attendance and commercial authority remain unchanged. Focused source and
 component tests are local evidence only; hosted, assistive-technology,
 human-comprehension, workflow-preference, usage, and outcome evidence remain
 absent.
+
+The workspace accessibility-lane expansion is recorded as `LED-017`. It tests
+whether administrators can inspect the quote-creation step rail by keyboard at
+phone width while broadening the focused local axe gate from contrast alone to
+supported WCAG 2.0, 2.1, and 2.2 A/AA rules. Local automated checks do not
+establish hosted behavior, assistive-technology usability, human acceptance,
+task completion, or commercial outcomes.
 
 The Guided Inquiry acceptance expansion remains recorded under `LED-004`. Its
 disposable Firebase-emulator journey now proves cross-tenant callable denial,

@@ -16,7 +16,10 @@ function environmentFlagEnabled(value) {
   return ["1", "true", "yes", "on"].includes(String(value || "").trim().toLowerCase());
 }
 
-export default defineConfig(({ mode }) => {
+export default defineConfig(({ command, mode }) => {
+  // React 18's classic transform emits less JSX boilerplate in this graph.
+  // Keep automatic JSX in development/tests for its existing diagnostics.
+  const compactProductionJsx = command === "build" && mode !== "test";
   const buildEnvironment = {
     ...loadEnv(mode, process.cwd(), ""),
     ...process.env
@@ -87,7 +90,12 @@ export default defineConfig(({ mode }) => {
   return ({
   envDir: ".",
   publicDir: "public",
-  plugins: [react()],
+  plugins: [react({ jsxRuntime: compactProductionJsx ? "classic" : "automatic" })],
+  esbuild: compactProductionJsx ? {
+    jsxFactory: "__qpCreateElement",
+    jsxFragment: "__qpFragment",
+    jsxInject: "import * as __qpReact from 'react'; const __qpCreateElement = __qpReact.createElement; const __qpFragment = __qpReact.Fragment;"
+  } : undefined,
   resolve: {
     alias: {
       "commercial-dependency-graph-core": COMMERCIAL_DEPENDENCY_GRAPH_CORE,
@@ -154,6 +162,15 @@ export default defineConfig(({ mode }) => {
           ) {
             return "vendor-react";
           }
+          // Public entrypoints share these helpers with tools. Pin the helpers
+          // separately so optional UI cannot absorb them through manual chunks.
+          if ([
+            "/src/components/RecoverableErrorBoundary.jsx",
+            "/src/hooks/useModalDialog.js",
+            "/src/lib/sessionDiagnostics.js",
+            "/src/lib/productIdentity.js",
+            "/src/lib/buyerAccessConfig.js"
+          ].some((path) => normalizedId.endsWith(path))) return "public-runtime";
           if (normalizedId.endsWith("/src/components/LegacyCustomerPortalView.jsx")) {
             return "legacy-customer-portal";
           }
@@ -183,14 +200,6 @@ export default defineConfig(({ mode }) => {
             || normalizedId.endsWith("/src/lib/staffMaturity.js")
           ) {
             return "commercial-scenario-intelligence";
-          }
-          if (
-            normalizedId.endsWith("/src/components/WizardSteps.jsx")
-            || normalizedId.endsWith("/src/lib/wizardUi.js")
-            || normalizedId.endsWith("/src/components/ProposalComposer.jsx")
-            || normalizedId.endsWith("/src/components/proposalComposerPresentation.js")
-          ) {
-            return "quote-builder-ui";
           }
           return undefined;
         }

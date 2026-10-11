@@ -1,4 +1,4 @@
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useId, useState } from "react";
 import {
   LazySurfaceLoading,
   RecoverableErrorBoundary
@@ -13,6 +13,79 @@ export function useStickyMount(active) {
   }, [active]);
 
   return Boolean(active) || hasMounted;
+}
+
+export function WorkspaceSectionLoading({
+  label,
+  rows = 2,
+  className = ""
+}) {
+  const rowCount = Math.min(4, Math.max(1, Number(rows) || 1));
+
+  return (
+    <div
+      className={`workspace-section-loading ${className}`.trim()}
+      data-workspace-section-loading="true"
+      role="status"
+      aria-live="polite"
+      aria-busy="true"
+    >
+      <p className="source-note">{label}</p>
+      <div className="workspace-section-loading__rows" aria-hidden="true">
+        {Array.from({ length: rowCount }, (_, index) => (
+          <span
+            key={index}
+            className="workspace-loading-row"
+            data-workspace-loading-row="true"
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+export function WorkspaceRouteLoading({ surfaceName }) {
+  const titleId = `workspace-route-loading-${useId().replace(/[^a-zA-Z0-9_-]/g, "")}`;
+
+  return (
+    <main
+      className="container workspace-route-main workspace-route-loading qp-route-loading"
+      aria-labelledby={titleId}
+      data-workspace-route-loading="true"
+    >
+      <section
+        className="panel workspace-route-loading__panel"
+        role="status"
+        aria-live="polite"
+        aria-busy="true"
+      >
+        <header className="workspace-route-head workspace-route-loading__head">
+          <div>
+            <p className="eyebrow">{surfaceName}</p>
+            <h1 id={titleId} className="workspace-route-heading">Loading {surfaceName}</h1>
+            <p className="source-note">Preparing this workspace…</p>
+          </div>
+        </header>
+        <div className="workspace-route-loading__grid" aria-hidden="true">
+          <div
+            className="workspace-route-loading__block workspace-route-loading__block--primary"
+            data-workspace-loading-slot="primary"
+          >
+            <span className="workspace-loading-row" />
+            <span className="workspace-loading-row" />
+            <span className="workspace-loading-row" />
+          </div>
+          <div
+            className="workspace-route-loading__block workspace-route-loading__block--supplemental"
+            data-workspace-loading-slot="supplemental"
+          >
+            <span className="workspace-loading-row" />
+            <span className="workspace-loading-row" />
+          </div>
+        </div>
+      </section>
+    </main>
+  );
 }
 
 export function WorkspaceLazyTool({
@@ -66,7 +139,7 @@ export function WorkspaceLazyRoute({
     >
       <Suspense
         fallback={active
-          ? <div className="qp-route-loading" role="status">Loading {surfaceName}...</div>
+          ? <WorkspaceRouteLoading surfaceName={surfaceName} />
           : null}
       >
         {children}

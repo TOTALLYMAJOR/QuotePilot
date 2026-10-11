@@ -7,6 +7,9 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
 const navigationMocks = vi.hoisted(() => ({ adapter: null }));
+const performanceMocks = vi.hoisted(() => ({ markRouteStage: vi.fn() }));
+
+vi.mock("../../lib/routePerformance", () => performanceMocks);
 
 vi.mock("../../context/WorkspaceNavigationContext", () => ({
   useWorkspaceReturnContextAdapter: (adapter) => {
@@ -83,6 +86,7 @@ let root;
 
 beforeEach(() => {
   navigationMocks.adapter = null;
+  performanceMocks.markRouteStage.mockClear();
   window.requestAnimationFrame = (callback) => window.setTimeout(() => callback(Date.now()), 0);
   window.cancelAnimationFrame = (handle) => window.clearTimeout(handle);
   container = document.createElement("div");
@@ -102,6 +106,43 @@ function mount(props = {}) {
 }
 
 describe("AmbientNowView", () => {
+  test("marks core before supplemental work settles and emits each readiness stage only once", () => {
+    mount({ snapshot: snapshot({ loading: true, attentionSummary: null, reads: {
+      attention: { status: "loading" }, history: { status: "loading" }
+    } }) });
+    expect(performanceMocks.markRouteStage).not.toHaveBeenCalled();
+    mount({ snapshot: snapshot({ loading: true, reads: {
+      attention: { status: "success" }, history: { status: "loading" }
+    } }) });
+    expect(performanceMocks.markRouteStage.mock.calls).toEqual([[{
+      routeId: "now", stage: "usable-core", outcome: "ready"
+    }]]);
+    mount();
+    mount();
+    expect(performanceMocks.markRouteStage.mock.calls).toEqual([
+      [{ routeId: "now", stage: "usable-core", outcome: "ready" }],
+      [{ routeId: "now", stage: "supplemental-complete", outcome: "ready" }]
+    ]);
+  });
+
+  test.each(["loading", "pending"])("does not call unresolved %s reads supplemental completion", (status) => {
+    mount({ snapshot: snapshot({ reads: { attention: { status: "success" }, history: { status } } }) });
+    expect(performanceMocks.markRouteStage).toHaveBeenCalledTimes(1);
+    expect(performanceMocks.markRouteStage).toHaveBeenCalledWith({ routeId: "now", stage: "usable-core", outcome: "ready" });
+  });
+
+  test.each([
+    [{ error: "Read failed", reads: { attention: { status: "error" } } }, "error"],
+    [{ partial: true, reads: { attention: { status: "success" }, history: { status: "unavailable" } } }, "partial"],
+    [{ stale: true }, "partial"]
+  ])("labels failed or degraded evidence without fabricating ready", (overrides, outcome) => {
+    mount({ snapshot: snapshot(overrides) });
+    expect(performanceMocks.markRouteStage.mock.calls).toEqual([
+      [{ routeId: "now", stage: "usable-core", outcome }],
+      [{ routeId: "now", stage: "supplemental-complete", outcome }]
+    ]);
+  });
+
   test("renders the approved editorial home with at most three state-ordered priorities", () => {
     const items = [0, 1, 2, 3].map((index) => attentionItem(index));
     const markup = renderToStaticMarkup(
@@ -382,7 +423,8 @@ describe("AmbientNowView", () => {
     );
 
     expect(healthy).toContain('data-caught-up="true"');
-    expect(healthy).toContain("You are caught up on the work tracked here.");
+    expect(healthy.match(/You(?:'|&#x27;)re caught up on the work tracked here\./g)).toHaveLength(1);
+    expect(healthy).not.toContain("Nothing tracked in this view currently needs you.");
     expect(paymentPending).toContain('data-caught-up="false"');
     expect(paymentPending).toContain("recorded payment steps remain below");
   });

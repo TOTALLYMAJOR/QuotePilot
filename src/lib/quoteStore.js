@@ -2,6 +2,7 @@ import {
   collection,
   deleteDoc,
   doc,
+  documentId,
   getDoc,
   getDocFromServer,
   getDocs,
@@ -10,6 +11,7 @@ import {
   query,
   runTransaction,
   setDoc,
+  startAfter,
   updateDoc,
   writeBatch,
   where
@@ -47,6 +49,7 @@ import {
   captureCommercialEvidencePresence,
   restoreCommercialEvidenceSource
 } from "./commercialEvidencePresence";
+import { coalesceScopedRead } from "./scopedReadCoalescer";
 
 // Local demo storage has no server authority. Preserve reviewed evidence using
 // the same read-model schema; Firebase requests always go through quoteCreation.
@@ -4095,6 +4098,126 @@ export async function getWorkflowAttentionSnapshot({ organizationId = "" } = {})
     source: "local",
     quotes: sortQuotesDesc(quotes)
   };
+}
+
+export function projectLocalEventScheduleQuotes({
+  quotes: sourceQuotes = [],
+  organizationId,
+  startDate,
+  endDate,
+  pageSize = 100,
+  observedAtISO = isoNow()
+} = {}) {
+  const scopedOrgId = normalizeOrganizationId(organizationId);
+  const quotes = (Array.isArray(sourceQuotes) ? sourceQuotes : [])
+    .filter((quote) => {
+      const eventDate = String(quote?.event?.date || "").trim();
+      return normalizeOrganizationId(quote?.organizationId) === scopedOrgId
+        && eventDate >= startDate
+        && eventDate <= endDate;
+    })
+    .sort((left, right) => (
+      String(left?.event?.date || "").localeCompare(String(right?.event?.date || ""))
+      || String(left?.id || "").localeCompare(String(right?.id || ""))
+    ))
+    .map((quote) => hydrateQuote(quote, observedAtISO));
+  return {
+    quotes,
+    source: "local",
+    interval: { startDate, endDate },
+    complete: true,
+    pageCount: quotes.length ? Math.ceil(quotes.length / pageSize) : 0
+  };
+}
+
+export async function getEventScheduleQuotes({
+  organizationId = "",
+  principalId = "",
+  startDate = "",
+  endDate = "",
+  pageSize = 100
+} = {}) {
+  const scopedOrgId = normalizeOrganizationId(organizationId);
+  if (!scopedOrgId) throw new Error("organizationId is required for schedule reads.");
+  const normalizedStartDate = String(startDate || "").trim();
+  const normalizedEndDate = String(endDate || "").trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/u.test(normalizedStartDate)) {
+    throw new Error("startDate is required in YYYY-MM-DD format for schedule reads.");
+  }
+  if (!/^\d{4}-\d{2}-\d{2}$/u.test(normalizedEndDate) || normalizedEndDate < normalizedStartDate) {
+    throw new Error("endDate must be an inclusive YYYY-MM-DD date on or after startDate.");
+  }
+  const requestedPageSize = Number(pageSize);
+  const boundedPageSize = Number.isInteger(requestedPageSize) && requestedPageSize > 0
+    ? Math.min(100, requestedPageSize)
+    : 100;
+  const interval = { startDate: normalizedStartDate, endDate: normalizedEndDate };
+
+  const read = async () => {
+    const nowISO = isoNow();
+    if (firebaseReady) {
+      const readableOrgId = requireReadOrganizationId(scopedOrgId, "schedule read");
+      const quotes = [];
+      let afterDate = "";
+      let afterId = "";
+      let pageCount = 0;
+      while (true) {
+        const constraints = [
+          where("event.date", ">=", normalizedStartDate),
+          where("event.date", "<=", normalizedEndDate),
+          orderBy("event.date"),
+          orderBy(documentId())
+        ];
+        if (afterId) constraints.push(startAfter(afterDate, afterId));
+        constraints.push(queryLimit(boundedPageSize));
+        const snapshot = await getDocs(query(quotesCollectionRef(readableOrgId), ...constraints));
+        if (!snapshot.docs.length) break;
+        pageCount += 1;
+        snapshot.docs.forEach((documentSnapshot) => {
+          const data = documentSnapshot.data();
+          const createdAtISO = data.createdAt?.toDate
+            ? data.createdAt.toDate().toISOString()
+            : data.createdAtISO;
+          quotes.push(hydrateQuote({
+            id: documentSnapshot.id,
+            ...data,
+            organizationId: normalizeOrganizationId(data.organizationId || readableOrgId),
+            createdAtISO: createdAtISO || nowISO
+          }, nowISO));
+        });
+        const lastDocument = snapshot.docs[snapshot.docs.length - 1];
+        const nextAfterDate = String(lastDocument.data()?.event?.date || "").trim();
+        const nextAfterId = lastDocument.id;
+        if (!nextAfterDate || (nextAfterDate === afterDate && nextAfterId === afterId)) {
+          throw new Error("Schedule page cursor did not advance.");
+        }
+        afterDate = nextAfterDate;
+        afterId = nextAfterId;
+        if (snapshot.docs.length < boundedPageSize) break;
+      }
+      return { quotes, source: "firebase", interval, complete: true, pageCount };
+    }
+
+    const existing = JSON.parse(localStorage.getItem(LOCAL_QUOTES_KEY) || "[]");
+    return projectLocalEventScheduleQuotes({
+      quotes: existing,
+      organizationId: scopedOrgId,
+      startDate: normalizedStartDate,
+      endDate: normalizedEndDate,
+      pageSize: boundedPageSize,
+      observedAtISO: nowISO
+    });
+  };
+
+  return String(principalId || "").trim()
+    ? coalesceScopedRead({
+        organizationId: scopedOrgId,
+        principalId,
+        operation: "schedule.visible-interval",
+        arguments: { ...interval, pageSize: boundedPageSize },
+        read
+      })
+    : read();
 }
 
 export async function getQuoteHistory(filters = {}) {

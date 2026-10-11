@@ -1,5 +1,6 @@
 import { lazy, Suspense, useEffect, useId, useMemo, useRef, useState } from "react";
 import AdaptiveChoiceField from "./AdaptiveChoiceField";
+import DisabledActionReason from "./DisabledActionReason";
 import InlineValue from "./ambient/InlineValue";
 import DigitRoll from "./DigitRoll";
 import DeliveryProposal from "./DeliveryProposal";
@@ -396,67 +397,7 @@ function ClientPreviewDialog({
   );
 }
 
-export function buildDraftSaveBlockers({
-  form = {},
-  totals = {},
-  catalogLoading = false,
-  selectedMenuItemCount = 0,
-  quoteEditUnavailable = false,
-  pilotScenarioReviewPending = false,
-  draftIntentReviewPending = false,
-  changeImpactReviewRequired = false,
-  changeImpactAuthorizationRequired = false
-} = {}) {
-  const blockers = [];
-  const add = (id, message) => blockers.push({ id, message });
-  const email = String(form.email || "").trim();
-
-  if (catalogLoading) {
-    add("catalog-loading", "Wait for the current catalog to finish loading.");
-  }
-  if (quoteEditUnavailable) {
-    add("quote-edit-loading", "Reload the saved quote before editing or saving it.");
-  }
-  if (pilotScenarioReviewPending) {
-    add("pilot-scenario-review", "Resolve the pending Pilot scenario review.");
-  }
-  if (draftIntentReviewPending) {
-    add("draft-intent-review", "Resolve the pending Package or Menu review.");
-  }
-  if (changeImpactReviewRequired) {
-    add("change-impact-review", "Build and review a current Change Impact simulation.");
-  } else if (changeImpactAuthorizationRequired) {
-    add("change-impact-authorization", "Authorize and apply governed dependencies from Change Impact.");
-  }
-  if (Math.max(0, Number(totals.guests) || 0) <= 0) {
-    add("guest-count", "Set a guest count above zero.");
-  }
-  if (!String(form.name || "").trim()) {
-    add("client-name", "Add the client name.");
-  }
-  if (!email) {
-    add("client-email", "Add the client email.");
-  } else if (!/^\S+@\S+\.\S+$/.test(email)) {
-    add("client-email-format", "Correct the client email format.");
-  }
-  if (!String(form.eventTypeId || "").trim()) {
-    add("event-type", "Choose an event type.");
-  }
-  if (!String(form.date || "").trim()) {
-    add("event-date", "Add the event date.");
-  }
-  if (!String(form.eventName || "").trim()) {
-    add("event-name", "Add the event name.");
-  }
-  if (!String(form.venue || "").trim()) {
-    add("venue", "Add the venue.");
-  }
-  if (Math.max(0, Number(selectedMenuItemCount) || 0) < 1) {
-    add("menu-selection", "Select at least one menu item.");
-  }
-
-  return blockers;
-}
+export { buildDraftSaveBlockers } from "./proposalSaveReadiness";
 
 export function buildSaveActionModel({
   saveBlockers = [],
@@ -612,6 +553,18 @@ export default function ProposalComposer({
     saveLabel,
     saveDisabled
   });
+  const saveActionDisabledReason = saveAction.disabled
+    ? String(saveDisabledReason || "").trim()
+      || (saving
+        ? "Wait for the current save to finish."
+        : "Saving is unavailable from the current quote state.")
+    : "";
+  const compareActionDisabled = catalogLoading || !String(form.pkg || "").trim();
+  const compareActionDisabledReason = !compareActionDisabled
+    ? ""
+    : catalogLoading
+      ? "Wait for the current catalog to finish loading."
+      : "Choose a package before comparing scenarios.";
 
   const logActivity = (label) => {
     activityIdRef.current += 1;
@@ -1319,25 +1272,36 @@ export default function ProposalComposer({
         <button type="button" className="pc-ghost" onClick={() => setPreviewOpen(true)}>
           Preview client view
         </button>
-        <button
-          type="button"
-          className="pc-cta"
-          onClick={requestSave}
-          disabled={saveAction.disabled}
-          title={saveAction.disabled && saveDisabledReason ? saveDisabledReason : undefined}
-          data-testid="pc-save"
+        <DisabledActionReason
+          id="proposal-pulse-save-disabled-reason"
+          reason={saveActionDisabledReason}
+          grouped
         >
-          {saveAction.label}
-        </button>
-        {compareEnabled ? (
           <button
             type="button"
-            className="pc-ghost"
-            onClick={onOpenCompare}
-            disabled={catalogLoading || !String(form.pkg || "").trim()}
+            className="pc-cta"
+            onClick={requestSave}
+            disabled={saveAction.disabled}
+            data-testid="pc-save"
           >
-            Compare scenarios
+            {saveAction.label}
           </button>
+        </DisabledActionReason>
+        {compareEnabled ? (
+          <DisabledActionReason
+            id="proposal-pulse-compare-disabled-reason"
+            reason={compareActionDisabledReason}
+            grouped
+          >
+            <button
+              type="button"
+              className="pc-ghost"
+              onClick={onOpenCompare}
+              disabled={compareActionDisabled}
+            >
+              Compare scenarios
+            </button>
+          </DisabledActionReason>
         ) : null}
       </div>
     </>
@@ -1369,28 +1333,39 @@ export default function ProposalComposer({
             {header.saveState.label}
           </p>
           <div className="pc-header-actions">
-            <button
-              type="button"
-              className="pc-cta pc-compact"
-              onClick={requestSave}
-              disabled={saveAction.disabled}
-              title={saveAction.disabled && saveDisabledReason ? saveDisabledReason : undefined}
-              data-testid="pc-save-header"
+            <DisabledActionReason
+              id="proposal-header-save-disabled-reason"
+              reason={saveActionDisabledReason}
+              grouped
             >
-              {saveAction.label}
-            </button>
+              <button
+                type="button"
+                className="pc-cta pc-compact"
+                onClick={requestSave}
+                disabled={saveAction.disabled}
+                data-testid="pc-save-header"
+              >
+                {saveAction.label}
+              </button>
+            </DisabledActionReason>
             <button type="button" className="pc-ghost" onClick={() => setPreviewOpen(true)}>
               Preview client view
             </button>
             {compareEnabled ? (
-              <button
-                type="button"
-                className="pc-ghost"
-                onClick={onOpenCompare}
-                disabled={catalogLoading || !String(form.pkg || "").trim()}
+              <DisabledActionReason
+                id="proposal-header-compare-disabled-reason"
+                reason={compareActionDisabledReason}
+                grouped
               >
-                Compare scenarios
-              </button>
+                <button
+                  type="button"
+                  className="pc-ghost"
+                  onClick={onOpenCompare}
+                  disabled={compareActionDisabled}
+                >
+                  Compare scenarios
+                </button>
+              </DisabledActionReason>
             ) : null}
             <button type="button" className="pc-ghost" onClick={onGuidedMode} data-testid="pc-guided-mode">
               Guided mode
@@ -2291,16 +2266,21 @@ export default function ProposalComposer({
           {investment.perGuest !== null ? <small>{currency(investment.perGuest)} / guest</small> : null}
         </p>
         <div className="pc-mobile-actions">
-          <button
-            type="button"
-            className="pc-cta pc-compact"
-            onClick={requestSave}
-            disabled={saveAction.disabled}
-            title={saveAction.disabled && saveDisabledReason ? saveDisabledReason : undefined}
-            data-testid="pc-save-mobile"
+          <DisabledActionReason
+            id="proposal-mobile-save-disabled-reason"
+            reason={saveActionDisabledReason}
+            grouped
           >
-            {saveAction.label}
-          </button>
+            <button
+              type="button"
+              className="pc-cta pc-compact"
+              onClick={requestSave}
+              disabled={saveAction.disabled}
+              data-testid="pc-save-mobile"
+            >
+              {saveAction.label}
+            </button>
+          </DisabledActionReason>
           <button
             type="button"
             className="pc-mobile-details"

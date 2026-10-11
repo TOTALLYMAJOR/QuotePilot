@@ -1,4 +1,5 @@
 import { createRequire } from "node:module";
+import { readFileSync } from "node:fs";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
 const require = createRequire(import.meta.url);
@@ -38,8 +39,12 @@ class FakeCollectionRef {
   }
   orderBy(field, direction = "asc") {
     return new FakeCollectionRef(this.store, this.path, {
-      ...this.constraints, orderBy: { field, direction }
+      ...this.constraints,
+      orderBy: [...(this.constraints.orderBy || []), { field, direction }]
     });
+  }
+  startAfter(...values) {
+    return new FakeCollectionRef(this.store, this.path, { ...this.constraints, startAfter: values });
   }
   limit(limit) { return new FakeCollectionRef(this.store, this.path, { ...this.constraints, limit }); }
 }
@@ -64,15 +69,25 @@ function collectionSnapshot(ref, store) {
     if (filter.operator !== "==") throw new Error("Unsupported fake query operator.");
     docs = docs.filter((doc) => doc.data()[filter.field] === filter.value);
   }
-  const ordering = ref.constraints.orderBy;
-  if (ordering) {
+  const orderings = ref.constraints.orderBy || [];
+  if (orderings.length) {
     docs.sort((left, right) => {
-      const a = left.data()[ordering.field];
-      const b = right.data()[ordering.field];
-      const order = a < b ? -1 : a > b ? 1 : left.id.localeCompare(right.id);
-      return ordering.direction === "desc" ? -order : order;
+      for (const ordering of orderings) {
+        const a = ordering.field === "__name__" ? left.id : left.data()[ordering.field];
+        const b = ordering.field === "__name__" ? right.id : right.data()[ordering.field];
+        const order = a < b ? -1 : a > b ? 1 : 0;
+        if (order) return ordering.direction === "desc" ? -order : order;
+      }
+      return left.id.localeCompare(right.id);
     });
   } else docs.sort((left, right) => left.id.localeCompare(right.id));
+  if (ref.constraints.startAfter) {
+    const cursor = ref.constraints.startAfter;
+    const cursorIndex = docs.findIndex((doc) => orderings.every((ordering, index) => (
+      (ordering.field === "__name__" ? doc.id : doc.data()[ordering.field]) === cursor[index]
+    )));
+    docs = cursorIndex >= 0 ? docs.slice(cursorIndex + 1) : [];
+  }
   if (Number.isSafeInteger(ref.constraints.limit)) docs = docs.slice(0, ref.constraints.limit);
   return { docs, size: docs.length };
 }
@@ -196,6 +211,18 @@ function envelope(command, retryId) {
   return { schemaVersion: 2, organizationId: ORGANIZATION_ID, requestId: retryId, command };
 }
 
+function ingredientTraceEnvelope(projection, cursor = null) {
+  return {
+    schemaVersion: 2,
+    organizationId: ORGANIZATION_ID,
+    ingredientId: projection.ingredientId,
+    expectedIngredientRevision: projection.ingredientRevision,
+    expectedStockRevision: projection.stock.stockRevision,
+    expectedAllocationRevision: projection.stock.allocationRevision,
+    cursor
+  };
+}
+
 const locationCommand = (overrides = {}) => ({
   kind: "upsert_location",
   locationId: "main-kitchen",
@@ -299,6 +326,36 @@ const recipeCommand = (overrides = {}) => ({
   ],
   ...overrides
 });
+
+async function reviewedRecipeEnvelope(harness, command, requestId) {
+  const { dependencyPreflightDigest: _priorDigest, ...draft } = command;
+  const preflight = await harness.runtime.getInventoryWorkspace({
+    schemaVersion: 2,
+    organizationId: ORGANIZATION_ID,
+    recipeDependencyPreflight: draft
+  }, adminContext);
+  return envelope({
+    ...draft,
+    dependencyPreflightDigest: preflight.dependencyPreflightDigest
+  }, requestId);
+}
+
+async function reviewedCostEnvelope(harness, command, requestId) {
+  const { dependencyPreflightDigest: _priorDigest, ...draft } = command;
+  const ingredient = harness.db.store.get(
+    `organizations/${ORGANIZATION_ID}/inventoryIngredients/${draft.ingredientId}`
+  );
+  const preflight = await harness.runtime.getInventoryWorkspace({
+    schemaVersion: 2,
+    organizationId: ORGANIZATION_ID,
+    expectedIngredientRevision: ingredient.revision,
+    costDependencyPreflight: draft
+  }, adminContext);
+  return envelope({
+    ...draft,
+    dependencyPreflightDigest: preflight.dependencyPreflightDigest
+  }, requestId);
+}
 
 const eventDemandCommand = ({ recipeRevisionId, overrides = {} } = {}) => ({
   kind: "compile_event_ingredient_demand",
@@ -502,7 +559,7 @@ async function configureEventDemandFixture(harness) {
     quantity: "30"
   }), "opening-event-pasta-0001"), adminContext);
   const published = await harness.runtime.applyInventoryCommand(
-    envelope(recipeCommand(), "recipe-event-alfredo-0001"),
+    await reviewedRecipeEnvelope(harness, recipeCommand(), "recipe-event-alfredo-0001"),
     adminContext
   );
   return published.result.recipeRevisionId;
@@ -550,6 +607,26 @@ async function configureChicken(harness) {
 }
 
 describe("ingredient inventory authority runtime", () => {
+  test("declares the exact compound index required by bounded ingredient movement history", () => {
+    const indexConfiguration = JSON.parse(readFileSync(
+      new URL("../../../firestore.indexes.json", import.meta.url),
+      "utf8"
+    ));
+    const movementIndexes = indexConfiguration.indexes.filter(
+      ({ collectionGroup }) => collectionGroup === "inventoryMovements"
+    );
+
+    expect(movementIndexes).toEqual([{
+      collectionGroup: "inventoryMovements",
+      queryScope: "COLLECTION",
+      fields: [
+        { fieldPath: "ingredientId", order: "ASCENDING" },
+        { fieldPath: "recordedAtISO", order: "DESCENDING" },
+        { fieldPath: "__name__", order: "DESCENDING" }
+      ]
+    }]);
+  });
+
   beforeEach(() => vi.restoreAllMocks());
 
   test("requires exact schema-v2 envelopes and supported ingredient commands", async () => {
@@ -957,6 +1034,119 @@ describe("ingredient inventory authority runtime", () => {
     });
     expect(JSON.stringify(workspace)).not.toContain("admin@example.com");
     expect(JSON.stringify(workspace)).not.toContain("Verified opening count");
+  });
+
+  test("pages equal-time ingredient movements by recorded time and immutable identity with verified receipts", async () => {
+    const harness = createHarness();
+    await configureChicken(harness);
+    await harness.runtime.applyInventoryCommand(envelope(openingCommand(), "trace-opening-0001"), adminContext);
+    for (let index = 1; index <= 25; index += 1) {
+      await harness.runtime.applyInventoryCommand(envelope(receivingCommand({
+        quantity: "1",
+        expectedStockRevision: index,
+        expectedCostRevision: index === 1 ? 0 : 1
+      }), `trace-receiving-${String(index).padStart(4, "0")}`), adminContext);
+    }
+    const projection = harness.db.store.get(
+      `organizations/${ORGANIZATION_ID}/inventoryIngredientProjections/chicken`
+    );
+
+    const first = await harness.runtime.getInventoryWorkspace(
+      ingredientTraceEnvelope(projection), adminContext
+    );
+    expect(first).toMatchObject({
+      schemaVersion: 2,
+      organizationId: ORGANIZATION_ID,
+      ingredientId: "chicken",
+      baseUnitId: "lb",
+      movementPage: { limit: 25, size: 25, complete: false, hasNext: true },
+      commitments: { complete: true, totalQuantityMicros: 0, totalQuantity: "0", rows: [] }
+    });
+    expect(first.movements).toHaveLength(25);
+    expect(new Set(first.movements.map(({ movementId }) => movementId)).size).toBe(25);
+    expect(new Set(first.movements.map(({ recordedAtISO }) => recordedAtISO))).toEqual(new Set([EVIDENCE_TIME]));
+    expect(first.movements.every(({ receiptId }) => /^iar_[a-f0-9]{48}$/u.test(receiptId))).toBe(true);
+    expect(JSON.stringify(first)).not.toContain("admin@example.com");
+    expect(JSON.stringify(first)).not.toContain("Verified delivery");
+
+    const second = await harness.runtime.getInventoryWorkspace(
+      ingredientTraceEnvelope(projection, first.movementPage.nextCursor), adminContext
+    );
+    expect(second.movementPage).toMatchObject({
+      limit: 25, size: 1, complete: true, hasNext: false, cursor: first.movementPage.nextCursor, nextCursor: null
+    });
+    expect(second.movements).toHaveLength(1);
+    expect(first.movements.map(({ movementId }) => movementId)).not.toContain(second.movements[0].movementId);
+  });
+
+  test("returns exact event commitments that reconcile to the current allocation fence", async () => {
+    const harness = createHarness({ entries: [
+      [`organizations/${ORGANIZATION_ID}/settings/config`, {
+        inventoryAuthorityEnabled: true, catalogRevision: 7, businessTimeZone: "America/Chicago"
+      }],
+      [`organizations/${ORGANIZATION_ID}/menuItems/chicken-alfredo`, menuItem()],
+      ...quoteDemandEntries()
+    ] });
+    const compiled = await compileEventDemandFixture(harness);
+    await harness.runtime.applyInventoryCommand(envelope(
+      allocateCommand(compiled.eventRequirementRevisionId), "trace-allocation-0001"
+    ), adminContext);
+    const projection = harness.db.store.get(
+      `organizations/${ORGANIZATION_ID}/inventoryIngredientProjections/chicken`
+    );
+
+    const trace = await harness.runtime.getInventoryWorkspace(
+      ingredientTraceEnvelope(projection), adminContext
+    );
+    expect(trace.commitments).toMatchObject({
+      complete: true,
+      fenceRevision: projection.stock.allocationRevision,
+      totalQuantityMicros: projection.stock.committedMicros,
+      totalQuantity: projection.stock.committedQuantity,
+      rows: [{
+        quoteId: "quote-alfredo",
+        eventPlanId: allocation.eventPlanIdFor(ORGANIZATION_ID, "quote-alfredo"),
+        eventRequirementRevisionId: compiled.eventRequirementRevisionId,
+        allocatedQuantityMicros: 20000000,
+        allocatedQuantity: "20",
+        planState: "reserved"
+      }]
+    });
+    expect(trace.commitments.rows[0].requiredByISO).toBe("2026-10-04T22:00:00.000Z");
+    expect(trace.commitments.rows.reduce((sum, row) => sum + row.allocatedQuantityMicros, 0))
+      .toBe(trace.commitments.totalQuantityMicros);
+
+    await expect(harness.runtime.getInventoryWorkspace({
+      ...ingredientTraceEnvelope(projection),
+      expectedAllocationRevision: projection.stock.allocationRevision - 1
+    }, adminContext)).rejects.toMatchObject({ code: "aborted" });
+  });
+
+  test("fails ingredient trace reads closed for foreign scope, malformed identity, and tampered immutable evidence", async () => {
+    const harness = createHarness();
+    await configureChicken(harness);
+    const opening = await harness.runtime.applyInventoryCommand(
+      envelope(openingCommand(), "trace-tamper-opening-0001"), adminContext
+    );
+    const projection = harness.db.store.get(
+      `organizations/${ORGANIZATION_ID}/inventoryIngredientProjections/chicken`
+    );
+    const crossTenant = { staff: { ...adminContext.staff, organizationId: "org-foreign" } };
+    await expect(harness.runtime.getInventoryWorkspace(
+      ingredientTraceEnvelope(projection), crossTenant
+    )).rejects.toMatchObject({ code: "permission-denied" });
+    await expect(harness.runtime.getInventoryWorkspace({
+      ...ingredientTraceEnvelope(projection), ingredientId: "bad/id"
+    }, adminContext)).rejects.toMatchObject({ code: "invalid-argument" });
+
+    const movementPath = `organizations/${ORGANIZATION_ID}/inventoryMovements/${opening.result.movementId}`;
+    harness.db.store.set(movementPath, {
+      ...harness.db.store.get(movementPath),
+      movementDigest: "0".repeat(64)
+    });
+    await expect(harness.runtime.getInventoryWorkspace(
+      ingredientTraceEnvelope(projection), adminContext
+    )).rejects.toMatchObject({ code: "data-loss" });
   });
 
   test("fails closed when canonical evidence is misfiled across tenants", async () => {
@@ -1624,7 +1814,7 @@ describe("ingredient inventory authority runtime", () => {
     ), adminContext)).rejects.toMatchObject({ code: "aborted" });
 
     const recipeDrift = await preparedHarness();
-    await recipeDrift.harness.runtime.applyInventoryCommand(envelope(recipeCommand({
+    await recipeDrift.harness.runtime.applyInventoryCommand(await reviewedRecipeEnvelope(recipeDrift.harness, recipeCommand({
       expectedRecipeRevision: 1
     }), "recipe-drift-before-allocation-0002"), adminContext);
     await expect(recipeDrift.harness.runtime.applyInventoryCommand(envelope(
@@ -1810,7 +2000,7 @@ describe("ingredient inventory authority runtime", () => {
     const planPath = `organizations/${ORGANIZATION_ID}/eventIngredientPlans/quote-alfredo`;
     const heldPlan = clone(harness.db.store.get(planPath));
     const pinnedSelection = harness.db.store.get(projectionPath).selections[0];
-    await harness.runtime.applyInventoryCommand(envelope(costCommand({
+    await harness.runtime.applyInventoryCommand(await reviewedCostEnvelope(harness, costCommand({
       expectedCostRevision: 1,
       totalCostMinor: 16000
     }), "cost-before-event-invalidation-0002"), adminContext);
@@ -1840,7 +2030,7 @@ describe("ingredient inventory authority runtime", () => {
     });
     expect(harness.db.store.get(planPath)).toEqual(heldPlan);
 
-    const changedRecipe = await harness.runtime.applyInventoryCommand(envelope(recipeCommand({
+    const changedRecipe = await harness.runtime.applyInventoryCommand(await reviewedRecipeEnvelope(harness, recipeCommand({
       expectedRecipeRevision: 1
     }), "recipe-before-event-invalidation-0002"), adminContext);
     await expect(harness.runtime.invalidateEventIngredientsForMenuChange({
@@ -1897,7 +2087,7 @@ describe("ingredient inventory authority runtime", () => {
     const firstRecipeId = recipeHarness.db.store.get(
       `organizations/${ORGANIZATION_ID}/inventoryRecipeHeads/chicken-alfredo`
     ).recipeRevisionId;
-    const secondRecipe = await recipeHarness.runtime.applyInventoryCommand(envelope(recipeCommand({
+    const secondRecipe = await recipeHarness.runtime.applyInventoryCommand(await reviewedRecipeEnvelope(recipeHarness, recipeCommand({
       expectedRecipeRevision: 1,
       outputYield: "20"
     }), "recipe-source-transition-0002"), adminContext);
@@ -1921,7 +2111,7 @@ describe("ingredient inventory authority runtime", () => {
       freshnessState: { demand: { state: "current", reason: "" } }
     });
     expect(firstRecipeRequirement.requirementRevision).toBe(1);
-    await recipeHarness.runtime.applyInventoryCommand(envelope(recipeCommand({
+    await recipeHarness.runtime.applyInventoryCommand(await reviewedRecipeEnvelope(recipeHarness, recipeCommand({
       expectedRecipeRevision: 2,
       outputYield: "25"
     }), "recipe-source-transition-0003"), adminContext);
@@ -1932,7 +2122,7 @@ describe("ingredient inventory authority runtime", () => {
     await compileEventDemandFixture(costHarness);
     const eventProjectionPath = `organizations/${ORGANIZATION_ID}/eventIngredientProjections/quote-alfredo`;
     const pinned = costHarness.db.store.get(eventProjectionPath).selections[0];
-    const changedCost = await costHarness.runtime.applyInventoryCommand(envelope(costCommand({
+    const changedCost = await costHarness.runtime.applyInventoryCommand(await reviewedCostEnvelope(costHarness, costCommand({
       expectedCostRevision: 1,
       totalCostMinor: 16000
     }), "cost-source-transition-0002"), adminContext);
@@ -1957,7 +2147,7 @@ describe("ingredient inventory authority runtime", () => {
       .resolves.toEqual({ changed: false, affectedQuoteCount: 0 });
     expect(costHarness.db.store.get(eventProjectionPath).freshnessState.cost)
       .toEqual({ state: "current", reason: "" });
-    await costHarness.runtime.applyInventoryCommand(envelope(costCommand({
+    await costHarness.runtime.applyInventoryCommand(await reviewedCostEnvelope(costHarness, costCommand({
       expectedCostRevision: 2,
       totalCostMinor: 18000
     }), "cost-source-transition-0003"), adminContext);
@@ -2041,7 +2231,7 @@ describe("ingredient inventory authority runtime", () => {
       selections: draft.selections
     }, adminContext);
 
-    await harness.runtime.applyInventoryCommand(envelope(costCommand({
+    await harness.runtime.applyInventoryCommand(await reviewedCostEnvelope(harness, costCommand({
       expectedCostRevision: 1,
       totalCostMinor: 16000,
       observedAtISO: "2026-09-09T09:00:00.000Z"
@@ -2128,7 +2318,7 @@ describe("ingredient inventory authority runtime", () => {
     ] });
     await configureRecipeFixture(harness);
     const result = await harness.runtime.applyInventoryCommand(
-      envelope(recipeCommand(), "recipe-alfredo-0001"), adminContext
+      await reviewedRecipeEnvelope(harness, recipeCommand(), "recipe-alfredo-0001"), adminContext
     );
     expect(result).toMatchObject({
       commandKind: "publish_menu_recipe",
@@ -2161,6 +2351,133 @@ describe("ingredient inventory authority runtime", () => {
     expect(harness.db.store.get(`organizations/${ORGANIZATION_ID}/menuItems/chicken-alfredo`).costMinor).toBeNull();
   });
 
+  test("reviews bounded reverse dependencies and rejects publication when that evidence changes", async () => {
+    const harness = createHarness({ entries: [
+      [`organizations/${ORGANIZATION_ID}/settings/config`, {
+        inventoryAuthorityEnabled: true, catalogRevision: 7
+      }],
+      [`organizations/${ORGANIZATION_ID}/menuItems/chicken-alfredo`, menuItem()]
+    ] });
+    await configureRecipeFixture(harness);
+    const command = recipeCommand();
+    const firstReview = await harness.runtime.getInventoryWorkspace({
+      schemaVersion: 2,
+      organizationId: ORGANIZATION_ID,
+      recipeDependencyPreflight: command
+    }, adminContext);
+    expect(firstReview).toMatchObject({
+      organizationId: ORGANIZATION_ID,
+      menuItemId: "chicken-alfredo",
+      reviewedCatalogRevision: 7,
+      reviewedRecipeRevision: 0,
+      reviewedRecipeDigest: null,
+      changedIngredientIds: ["chicken", "pasta"],
+      affectedMenuItems: [{ menuItemId: "chicken-alfredo", name: "Chicken Alfredo" }],
+      complete: true,
+      limit: 200
+    });
+    expect(firstReview.dependencyPreflightDigest).toMatch(/^[a-f0-9]{64}$/u);
+    harness.db.store.set(`organizations/${ORGANIZATION_ID}/menuItems/garden-salad`, menuItem({
+      eventTypeId: "event-lunch",
+      categoryId: "salads",
+      name: "Garden Salad"
+    }));
+    harness.db.store.set(`organizations/${ORGANIZATION_ID}/inventoryRecipeDependencyIndex/chicken`, {
+      authorityVersion: inventory.INVENTORY_AUTHORITY_VERSION,
+      schemaVersion: 2,
+      model: "ingredient-recipe-dependency-index-v2",
+      organizationId: ORGANIZATION_ID,
+      ingredientId: "chicken",
+      menuItemIds: ["garden-salad"],
+      revision: 1,
+      updatedAtISO: EVIDENCE_TIME
+    });
+    await expect(harness.runtime.applyInventoryCommand(envelope({
+      ...command,
+      dependencyPreflightDigest: firstReview.dependencyPreflightDigest
+    }, "recipe-stale-dependency-preflight-0001"), adminContext)).rejects.toMatchObject({
+      code: "aborted"
+    });
+
+    const reviewed = await reviewedRecipeEnvelope(
+      harness, command, "recipe-current-dependency-preflight-0001"
+    );
+    await expect(harness.runtime.applyInventoryCommand(reviewed, adminContext)).resolves.toMatchObject({
+      commandKind: "publish_menu_recipe",
+      result: { recipeRevision: 1 }
+    });
+  });
+
+  test("reviews exact cost dependencies and fails closed when reverse evidence changes", async () => {
+    const harness = createHarness({ entries: [
+      [`organizations/${ORGANIZATION_ID}/settings/config`, {
+        inventoryAuthorityEnabled: true, catalogRevision: 7
+      }],
+      [`organizations/${ORGANIZATION_ID}/menuItems/chicken-alfredo`, menuItem()]
+    ] });
+    await configureRecipeFixture(harness);
+    await harness.runtime.applyInventoryCommand(
+      await reviewedRecipeEnvelope(harness, recipeCommand(), "recipe-before-cost-review-0001"),
+      adminContext
+    );
+    const command = costCommand({
+      expectedCostRevision: 1,
+      sourceLabel: "Current chicken invoice",
+      totalCostMinor: 16000
+    });
+    const review = await harness.runtime.getInventoryWorkspace({
+      schemaVersion: 2,
+      organizationId: ORGANIZATION_ID,
+      expectedIngredientRevision: 1,
+      costDependencyPreflight: command
+    }, adminContext);
+    expect(review).toMatchObject({
+      organizationId: ORGANIZATION_ID,
+      ingredientId: "chicken",
+      reviewedIngredientRevision: 1,
+      reviewedCostRevision: 1,
+      dependencyEvidence: { menuItemIds: ["chicken-alfredo"] },
+      affectedMenuItems: [{ menuItemId: "chicken-alfredo", name: "Chicken Alfredo" }],
+      complete: true,
+      limit: 200
+    });
+    await expect(harness.runtime.applyInventoryCommand(
+      envelope(command, "cost-without-dependency-review-0001"),
+      adminContext
+    )).rejects.toMatchObject({ code: "aborted" });
+    await expect(harness.runtime.applyInventoryCommand(envelope({
+      ...command,
+      dependencyPreflightDigest: review.dependencyPreflightDigest
+    }, "cost-with-dependency-review-0001"), adminContext)).resolves.toMatchObject({
+      result: { ingredientId: "chicken", costRevision: 2, affectedMenuItemIds: ["chicken-alfredo"] }
+    });
+
+    const changedCommand = costCommand({
+      expectedCostRevision: 2,
+      sourceLabel: "Replacement chicken invoice",
+      totalCostMinor: 17000
+    });
+    const changedReview = await harness.runtime.getInventoryWorkspace({
+      schemaVersion: 2,
+      organizationId: ORGANIZATION_ID,
+      expectedIngredientRevision: 1,
+      costDependencyPreflight: changedCommand
+    }, adminContext);
+    const dependencyPath = `organizations/${ORGANIZATION_ID}/inventoryRecipeDependencyIndex/chicken`;
+    const dependency = harness.db.store.get(dependencyPath);
+    harness.db.store.set(dependencyPath, {
+      ...dependency,
+      revision: dependency.revision + 1,
+      updatedAtISO: "2026-09-09T06:00:00.000Z"
+    });
+    await expect(harness.runtime.applyInventoryCommand(envelope({
+      ...changedCommand,
+      dependencyPreflightDigest: changedReview.dependencyPreflightDigest
+    }, "cost-stale-dependency-review-0001"), adminContext)).rejects.toMatchObject({
+      code: "aborted"
+    });
+  });
+
   test("reads recipe publication and dependency-refresh inputs before their first transactional write", async () => {
     const harness = createHarness({ entries: [
       [`organizations/${ORGANIZATION_ID}/settings/config`, {
@@ -2169,10 +2486,13 @@ describe("ingredient inventory authority runtime", () => {
       [`organizations/${ORGANIZATION_ID}/menuItems/chicken-alfredo`, menuItem()]
     ] });
     await configureRecipeFixture(harness);
+    const reviewed = await reviewedRecipeEnvelope(
+      harness, recipeCommand(), "recipe-read-before-write-0001"
+    );
     harness.db.transactions.length = 0;
 
     await harness.runtime.applyInventoryCommand(
-      envelope(recipeCommand(), "recipe-read-before-write-0001"), adminContext
+      reviewed, adminContext
     );
     expect(harness.db.transactions).toHaveLength(1);
     expect(harness.db.transactions[0].reads).toEqual(expect.arrayContaining([
@@ -2186,13 +2506,23 @@ describe("ingredient inventory authority runtime", () => {
     expect(harness.db.transactions[0].writes[0].path)
       .toContain(`/inventoryRecipePolicies/`);
 
-    harness.db.transactions.length = 0;
-    await harness.runtime.applyInventoryCommand(envelope(costCommand({
+    const costDraft = costCommand({
       expectedCostRevision: 1,
       basisQuantity: "40",
       totalCostMinor: 16000,
       sourceLabel: "Current chicken receipt"
-    }), "cost-read-before-write-0002"), adminContext);
+    });
+    const costReview = await harness.runtime.getInventoryWorkspace({
+      schemaVersion: 2,
+      organizationId: ORGANIZATION_ID,
+      expectedIngredientRevision: 1,
+      costDependencyPreflight: costDraft
+    }, adminContext);
+    harness.db.transactions.length = 0;
+    await harness.runtime.applyInventoryCommand(envelope({
+      ...costDraft,
+      dependencyPreflightDigest: costReview.dependencyPreflightDigest
+    }, "cost-read-before-write-0002"), adminContext);
     expect(harness.db.transactions).toHaveLength(2);
     expect(harness.db.transactions[0].reads).toEqual(expect.arrayContaining([
       `organizations/${ORGANIZATION_ID}/inventoryRecipeDependencyIndex/chicken`,
@@ -2215,7 +2545,7 @@ describe("ingredient inventory authority runtime", () => {
     const firstPack = await harness.runtime.applyInventoryCommand(
       envelope(packCommand(), "pack-pinned-recipe-0001"), adminContext
     );
-    await harness.runtime.applyInventoryCommand(envelope(recipeCommand({
+    await harness.runtime.applyInventoryCommand(await reviewedRecipeEnvelope(harness, recipeCommand({
       lines: [{
         lineId: "chicken-case",
         ingredientId: "chicken",
@@ -2250,8 +2580,10 @@ describe("ingredient inventory authority runtime", () => {
       [`organizations/${ORGANIZATION_ID}/menuItems/chicken-alfredo`, menuItem()]
     ] });
     await configureRecipeFixture(harness);
-    await harness.runtime.applyInventoryCommand(envelope(recipeCommand(), "recipe-alfredo-cost-change"), adminContext);
-    const result = await harness.runtime.applyInventoryCommand(envelope(costCommand({
+    await harness.runtime.applyInventoryCommand(
+      await reviewedRecipeEnvelope(harness, recipeCommand(), "recipe-alfredo-cost-change"), adminContext
+    );
+    const result = await harness.runtime.applyInventoryCommand(await reviewedCostEnvelope(harness, costCommand({
       expectedCostRevision: 1,
       basisQuantity: "40",
       totalCostMinor: 16000,
@@ -2284,7 +2616,7 @@ describe("ingredient inventory authority runtime", () => {
     ] });
     await configureRecipeFixture(harness, { pastaCost: false });
     const first = await harness.runtime.applyInventoryCommand(
-      envelope(recipeCommand(), "recipe-partial-0001"), adminContext
+      await reviewedRecipeEnvelope(harness, recipeCommand(), "recipe-partial-0001"), adminContext
     );
     let projection = harness.db.store.get(
       `organizations/${ORGANIZATION_ID}/inventoryMenuCostProjections/chicken-alfredo`
@@ -2298,7 +2630,7 @@ describe("ingredient inventory authority runtime", () => {
     const firstPolicy = clone(harness.db.store.get(
       `organizations/${ORGANIZATION_ID}/inventoryRecipePolicies/${first.result.recipeRevisionId}`
     ));
-    const second = await harness.runtime.applyInventoryCommand(envelope(recipeCommand({
+    const second = await harness.runtime.applyInventoryCommand(await reviewedRecipeEnvelope(harness, recipeCommand({
       expectedRecipeRevision: 1,
       outputYield: "20"
     }), "recipe-partial-0002"), adminContext);
@@ -2320,18 +2652,22 @@ describe("ingredient inventory authority runtime", () => {
       [`organizations/${ORGANIZATION_ID}/menuItems/chicken-alfredo`, menuItem()]
     ] });
     await configureRecipeFixture(harness);
-    await expect(harness.runtime.applyInventoryCommand(envelope(
-      recipeCommand({ menuItemId: "not-published" }), "recipe-missing-menu"
-    ), adminContext)).rejects.toMatchObject({ code: "not-found" });
-    await expect(harness.runtime.applyInventoryCommand(envelope(
-      recipeCommand({ expectedCatalogRevision: 6 }), "recipe-stale-catalog"
-    ), adminContext)).rejects.toMatchObject({ code: "aborted" });
-    const exact = envelope(recipeCommand(), "recipe-idempotent-0001");
+    await expect(reviewedRecipeEnvelope(
+      harness, recipeCommand({ menuItemId: "not-published" }), "recipe-missing-menu"
+    )).rejects.toMatchObject({ code: "not-found" });
+    await expect(reviewedRecipeEnvelope(
+      harness, recipeCommand({ expectedCatalogRevision: 6 }), "recipe-stale-catalog"
+    )).rejects.toMatchObject({ code: "aborted" });
+    const exact = await reviewedRecipeEnvelope(harness, recipeCommand(), "recipe-idempotent-0001");
     const first = await harness.runtime.applyInventoryCommand(exact, adminContext);
     await expect(harness.runtime.applyInventoryCommand(exact, adminContext))
       .resolves.toEqual({ ...first, idempotent: true });
     await expect(harness.runtime.applyInventoryCommand(envelope(
-      recipeCommand({ outputYield: "11" }), "recipe-idempotent-0001"
+      {
+        ...recipeCommand({ outputYield: "11" }),
+        dependencyPreflightDigest: exact.command.dependencyPreflightDigest
+      },
+      "recipe-idempotent-0001"
     ), adminContext)).rejects.toMatchObject({ code: "already-exists" });
   });
 });

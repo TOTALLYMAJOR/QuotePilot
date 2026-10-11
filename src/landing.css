@@ -1020,9 +1020,21 @@
     font-size: 0.98rem;
   }
 
-  .qp-landing-brand-lockup small,
-  .qp-landing-header-login {
+  .qp-landing-brand-lockup small {
     display: none;
+  }
+
+  .qp-landing-header-actions {
+    gap: 0.55rem;
+  }
+
+  .qp-landing-header-login {
+    display: inline-flex;
+    min-height: 2.75rem;
+    align-items: center;
+    padding: 0.45rem 0.2rem;
+    font-size: 0.72rem;
+    white-space: nowrap;
   }
 
   .qp-landing-header .qp-landing-button {
@@ -1363,6 +1375,17 @@ html.qp-landing-motion {
 .qp-landing-film-status > div {
   display: flex;
   gap: 0.5rem;
+}
+
+.qp-landing-film-status [data-media-preference="restricted"] {
+  max-width: 34ch;
+  color: rgba(255, 253, 247, 0.78);
+  font-size: 0.72rem;
+  font-weight: 600;
+  line-height: 1.4;
+  letter-spacing: 0;
+  text-align: right;
+  text-transform: none;
 }
 
 .qp-landing-film-status button {
@@ -1841,6 +1864,10 @@ html.qp-landing-motion {
     justify-items: start;
   }
 
+  .qp-landing-film-status [data-media-preference="restricted"] {
+    text-align: left;
+  }
+
   .qp-landing-scroll-cue {
     bottom: 1rem;
     white-space: nowrap;
@@ -1903,7 +1930,7 @@ html.qp-landing-motion {
     scroll-behavior: auto;
   }
 
-  .qp-landing-film-layer video {
+  .qp-landing:not([data-motion-override="true"]) .qp-landing-film-layer video {
     display: none;
   }
 

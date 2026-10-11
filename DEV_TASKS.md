@@ -1,11 +1,25 @@
 # QuotePilot Development Tasks
 
-Last updated: 2026-09-24 22:05:00 CDT
+Last updated: 2026-10-10 21:06:24 CDT
 
 This file contains open work only. Completed delivery belongs in
 [`CHANGELOG.md`](CHANGELOG.md), current evidence in
 [`PROJECT_STATUS.md`](PROJECT_STATUS.md), and full capability inventory in
 [`docs/FEATURE_MATRIX.md`](docs/FEATURE_MATRIX.md).
+
+## Progressive-program open work
+
+- [ ] Supply authorized production-profile fixtures, then calibrate and enforce
+  Inventory and quote-review route budgets without substituting local fallback
+  authority.
+- [ ] Run UAT v5 against one immutable hosted candidate with distinct
+  administrator, sales, customer, and cross-tenant observations.
+- [ ] Repair the Ambient workspace browser entry fixture, then repeat the
+  390/768/1440 route-identity/loading geometry and assistive-technology review.
+- [ ] Design and approve the new Inventory authorities for reviewed physical
+  counts, a bounded event-shortage worklist, and explicitly confirmed inbound
+  supply. Do not begin valuation or actual COGS until the owner selects an
+  accounting policy.
 
 ## Actor-journey initiative delivery packets
 
@@ -253,19 +267,14 @@ turning GitHub issues or the plan into a competing roadmap.
   scheduled retention deletion. Preserve source/local, CI, hosted, provider,
   production-data, accessibility, human, and commercial-outcome receipts
   separately.
-- [ ] Add emulator acceptance for anonymous direct-Firestore denial, tenant
-  isolation, exact-slug lookup, IP/tenant quotas, replay/recovery, stale
-  publication rejection, concurrent duplicate conversion, and atomic
-  quote/customer/portal/version/Converted-receipt creation before production
-  tenant activation.
 
 ## P1 — Operational coherence
 
-- [ ] Replace the phone-width Inventory evidence table with a legible
-  responsive record layout or clearly signposted contained scroll treatment.
-  Preserve ingredient, physical on-hand, committed, available-to-allocate,
-  cost-evidence, location, and purchase-pack axes without clipped headers or
-  collapsing distinct stock and cost evidence.
+- [ ] Promote and verify the source/local phone-width Inventory contained-scroll
+  repair in a deployment-bound hosted journey. Confirm 390/768/1440 behavior,
+  keyboard and assistive-technology operation, all seven evidence axes, and
+  operator comprehension without rewriting the 2026-09-16 production
+  observation as if it had already included this candidate.
 - [ ] Run the Delivery Planning evidence baseline with at least five owner-
   operators and two recent staffed-buffet events each; freeze the reviewable-
   quote-plus-proposal milestone, 30% median-time target, and material-

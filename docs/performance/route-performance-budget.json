@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "profileId": "ambient-local-staff-v1",
+  "calibration": null,
+  "routes": {},
+  "status": "uncalibrated",
+  "reason": "No successful four-route production-preview calibration yet. Inventory requires existing tenant-authorized Firebase fixture data; quote review requires production Library availability. Development-only local catalog fallback is not production authority. No default or raised ceilings are permitted."
+}

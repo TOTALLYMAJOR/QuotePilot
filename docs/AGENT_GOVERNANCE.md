@@ -1,6 +1,6 @@
 # Agent Governance
 
-Last updated: 2026-09-19 19:05:53 CDT
+Last updated: 2026-10-10 19:54:09 CDT
 
 ## Scope
 This document defines governance for repository-managed agent and skill assets under `.codex/skills/`.
@@ -70,6 +70,7 @@ and is not a repository deployment.
   - `npm run lane:release`
 - Governance controls:
   - `npm run plan:task -- --task "<work>" --files <path,...>`
+  - `node scripts/check-enhancement-impact-contract.mjs`
   - `npm run evidence:task -- --task "<work>" --phase complete ...`
   - `npm run evidence:index`
   - `npm run status:product`
@@ -160,6 +161,16 @@ Every planner result includes `lifecycle.phase` and an exact ISO-8601 UTC
 `lifecycle.recordedAt`. Use `plan` before work, `update` for a material status
 checkpoint, and `complete` for the final report. Completion reports must carry
 the emitted `recordedAt`; do not substitute an approximate conversational time.
+
+Tasks naming an enhancement or item number are fail-closed against
+`docs/enhancement-impact-manifest.json`. Each registered item declares its
+affected routes, authority identifiers, and runnable tests. The planner checks
+its explicit file set against the manifest's registered authority paths and
+adds the declared tests to the task packet. Presentation-only work must
+explicitly declare `authorities: []`; touching a pricing, commercial-quote, or
+Inventory authority path requires a separate non-presentation declaration.
+This is source-level change-scope evidence, not semantic completeness, CI,
+hosted, production, or human-acceptance proof.
 
 To minimize tokens, read only `dependencies.readFirst` plus task-owned files,
 execute `taskGraph` in dependency order, and run the narrowest relevant check

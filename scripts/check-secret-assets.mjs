@@ -58,9 +58,12 @@ function run(command) {
 }
 
 function listTrackedFiles() {
-  const output = run("git ls-files");
+  const deleted = new Set(run("git ls-files --deleted -z").split("\0").filter(Boolean));
+  const output = run("git ls-files -z");
   if (!output) return [];
-  return output.split(/\r?\n/).filter(Boolean);
+  // Git still lists unstaged deletions in the index. Skip only those confirmed
+  // deletions; other read failures must continue to fail the scan.
+  return output.split("\0").filter((file) => file && !deleted.has(file));
 }
 
 function isAssignmentSurface(file) {

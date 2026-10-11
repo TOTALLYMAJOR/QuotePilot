@@ -9,7 +9,8 @@ const mocks = vi.hoisted(() => ({
   getCustomerWorkspace: vi.fn()
 }));
 
-vi.mock("../../lib/customerWorkspace", () => ({
+vi.mock("../../lib/customerWorkspace", async () => ({
+  ...(await vi.importActual("../../lib/customerWorkspace")),
   getCustomerWorkspace: mocks.getCustomerWorkspace,
   buildStaffProposalPreview: vi.fn()
 }));

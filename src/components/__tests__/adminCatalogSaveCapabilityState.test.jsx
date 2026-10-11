@@ -384,6 +384,13 @@ describe("AdminCatalogModal save capability state", () => {
         inventoryAttempt: { requestId: "recipe-rejected-1" }
       });
     });
+    const previewRecipeDependencies = vi.fn(async () => ({
+      reviewedCatalogRevision: 1,
+      reviewedRecipeRevision: 1,
+      reviewedRecipeDigest: "a".repeat(64),
+      dependencyPreflightDigest: "b".repeat(64),
+      affectedMenuItems: [{ menuItemId: "item-1", name: "Chicken Alfredo" }]
+    }));
     const resetRecipe = vi.fn(async () => ({ state: "idle" }));
     const recipeExtension = (recipeRevision = 1, outputYield = "10") => ({
       enabled: true,
@@ -409,6 +416,7 @@ describe("AdminCatalogModal save capability state", () => {
           recipeDefinition: { outputUnitId: "portion" }
         }
       },
+      previewRecipeDependencies,
       publishRecipe,
       resetRecipe
     });
@@ -479,6 +487,8 @@ describe("AdminCatalogModal save capability state", () => {
       publishRecipeButton.disabled,
       container.querySelector("[data-recipe-publish-disabled]")?.textContent || "recipe publish should be enabled"
     ).toBe(false);
+    await act(async () => publishRecipeButton.click());
+    expect(previewRecipeDependencies).toHaveBeenCalledOnce();
     await act(async () => publishRecipeButton.click());
     expect(container.querySelector("[data-recipe-operation-state='rejected']")).not.toBeNull();
 

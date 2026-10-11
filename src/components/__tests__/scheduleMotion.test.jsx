@@ -44,7 +44,8 @@ describe("schedule board drop-physics rendering", () => {
       <EventScheduleView open onClose={() => {}} organizationId="org-a" />
     );
 
-    expect(markup).toContain('role="region"');
+    expect(markup).toContain('<main class="container workspace-route-main embedded-workspace-route"');
+    expect(markup).toContain('<h1 id="event-schedule-title"');
     expect(markup).toContain('aria-labelledby="event-schedule-title"');
     // One-shot feedback classes must never appear in a static/initial render;
     // they only exist between a successful assignment persist and self-clear.

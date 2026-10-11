@@ -77,8 +77,16 @@ function recordUiRecoveryEvent({ level = "error", action, surfaceName, surfaceKi
   }
 }
 
-export function createRecoverableLazy(importer, displayName = "RecoverableLazy") {
-  let CurrentLazyComponent = lazy(importer);
+export function createRecoverableLazy(importer, displayName = "RecoverableLazy", selectModule = (module) => module) {
+  let lastImportError = null;
+  const load = (operation) => Promise.resolve().then(operation).then((module) => {
+    lastImportError = null;
+    return selectModule(module);
+  }).catch((error) => {
+    lastImportError = error;
+    throw error;
+  });
+  let CurrentLazyComponent = lazy(() => load(importer));
   let retryAttempt = 0;
   function RecoverableLazyComponent(props) {
     const Current = CurrentLazyComponent;
@@ -87,12 +95,10 @@ export function createRecoverableLazy(importer, displayName = "RecoverableLazy")
   RecoverableLazyComponent.displayName = displayName;
   RecoverableLazyComponent.retry = (error) => {
     retryAttempt += 1;
-    const retryUrl = resolveRecoverableImportUrl(error, retryAttempt);
-    CurrentLazyComponent = lazy(
-      retryUrl
-        ? () => import(/* @vite-ignore */ retryUrl)
-        : importer
-    );
+    const retryUrl = resolveRecoverableImportUrl(lastImportError || error, retryAttempt);
+    CurrentLazyComponent = lazy(() => load(
+      retryUrl ? () => import(/* @vite-ignore */ retryUrl) : importer
+    ));
   };
   return RecoverableLazyComponent;
 }

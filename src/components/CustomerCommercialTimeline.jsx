@@ -6,6 +6,9 @@ import {
 
 function timelineBoundsSummary(pageInfo = {}) {
   const notes = [];
+  if (pageInfo.versionReadUnloadedQuoteCount > 0) {
+    notes.push(`Proposal history is not loaded for ${pageInfo.versionReadUnloadedQuoteCount} displayed quote${pageInfo.versionReadUnloadedQuoteCount === 1 ? "" : "s"}. Open a quote’s proposal history to include its retained versions.`);
+  }
   if (pageInfo.timelineTruncated) {
     notes.push(`Showing the latest ${pageInfo.returned} of ${pageInfo.candidateCount} recorded milestones.`);
   }

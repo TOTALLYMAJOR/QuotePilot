@@ -260,6 +260,7 @@ function ScopedAmbientCustomerDirectoryView({
         state={visibleState}
         organizationId={organizationId}
         searchDraft={searchDraft}
+        appliedSearch={search}
         directoryFilter={directoryFilter}
         aboutOpen={aboutOpen}
         cursorHistoryLength={cursorHistory.length}

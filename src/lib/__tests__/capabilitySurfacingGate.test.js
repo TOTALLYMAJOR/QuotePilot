@@ -182,6 +182,8 @@ describe("capability surfacing delivery gate", () => {
     expect(isBackendDeliveryPath("src/hooks/useBrowserLocation.js")).toBe(false);
     expect(isBackendDeliveryPath("src/hooks/useCommercialWorkspaceSnapshot.js")).toBe(false);
     expect(isBackendDeliveryPath("src/hooks/useWorkspaceRouteHeadingFocus.js")).toBe(false);
+    expect(isBackendDeliveryPath("src/hooks/useDisclosureRefreshAnchor.js")).toBe(false);
+    expect(isBackendDeliveryPath("src/hooks/useReducedMotionPreference.js")).toBe(false);
     expect(isBackendDeliveryPath("src/lib/__tests__/quoteStore.test.js")).toBe(false);
     expect(isBackendDeliveryPath("src/lib/aiui01CompatibilityBaseline.js")).toBe(false);
     expect(isBackendDeliveryPath("src/lib/ambientContracts.js")).toBe(false);
@@ -200,6 +202,9 @@ describe("capability surfacing delivery gate", () => {
     expect(isBackendDeliveryPath("src/lib/workspaceRoutes.js")).toBe(false);
     expect(isBackendDeliveryPath("src/lib/workspaceShellModel.js")).toBe(false);
     expect(isBackendDeliveryPath("src/lib/workspaceLayoutAudit.js")).toBe(false);
+    expect(isBackendDeliveryPath("src/lib/commercialConsequenceNavigation.js")).toBe(false);
+    expect(isBackendDeliveryPath("src/lib/routeFonts.js")).toBe(false);
+    expect(isBackendDeliveryPath("src/lib/routePerformance.js")).toBe(false);
     expect(isBackendDeliveryPath("src/lib/statusSemantics.js")).toBe(false);
     expect(isBackendDeliveryPath("functions/package.json")).toBe(false);
     expect(isBackendDeliveryPath("src/components/QuoteHistoryModal.jsx")).toBe(false);
@@ -220,6 +225,8 @@ describe("capability surfacing delivery gate", () => {
       "src/LegacyApp.jsx",
       "src/context/AmbientContext.jsx",
       "src/hooks/useWorkspaceRouteHeadingFocus.js",
+      "src/hooks/useDisclosureRefreshAnchor.js",
+      "src/hooks/useReducedMotionPreference.js",
       "src/lib/aiui01CompatibilityBaseline.js",
       "src/lib/ambientContracts.js",
       "src/lib/ambientEventLogisticsObjects.js",
@@ -235,7 +242,10 @@ describe("capability surfacing delivery gate", () => {
       "src/lib/quoteDraftRuntimeBase.js",
       "src/lib/workspacePresentation.js",
       "src/lib/workspaceShellModel.js",
-      "src/lib/workspaceLayoutAudit.js"
+      "src/lib/workspaceLayoutAudit.js",
+      "src/lib/commercialConsequenceNavigation.js",
+      "src/lib/routeFonts.js",
+      "src/lib/routePerformance.js"
     ])).toEqual([
       "src/new-runtime/FutureAuthority.js",
       "src/future-data/FutureRepository.ts"
@@ -260,6 +270,8 @@ describe("capability surfacing delivery gate", () => {
     expect(findBackendDeliveryPaths([
       "src/context/AmbientContext.jsx",
       "src/hooks/useWorkspaceRouteHeadingFocus.js",
+      "src/hooks/useDisclosureRefreshAnchor.js",
+      "src/hooks/useReducedMotionPreference.js",
       "src/LegacyApp.jsx",
       "src/lib/aiui01CompatibilityBaseline.js",
       "src/lib/ambientContracts.js",
@@ -276,24 +288,37 @@ describe("capability surfacing delivery gate", () => {
       "src/lib/quoteDraftRuntimeBase.js",
       "src/lib/workspacePresentation.js",
       "src/lib/workspaceShellModel.js",
-      "src/lib/workspaceLayoutAudit.js"
+      "src/lib/workspaceLayoutAudit.js",
+      "src/lib/commercialConsequenceNavigation.js",
+      "src/lib/routeFonts.js",
+      "src/lib/routePerformance.js"
     ], {
       pathExists: () => true,
       readPath: (file) => (
         file.includes("HeadingFocus")
+          || file.includes("DisclosureRefreshAnchor")
+          || file.includes("ReducedMotionPreference")
           || file === "src/LegacyApp.jsx"
           || file.includes("ambientContracts")
           || file.includes("ambientPackageMenuCatalogEvidence")
           || file.includes("ambientPackageMenuDraftAdoption")
+          || file.includes("commercialConsequenceNavigation")
+          || file.includes("routeFonts")
+          || file.includes("routePerformance")
           ? directAuthority
           : commentsAndStrings
       )
     })).toEqual([
       "src/hooks/useWorkspaceRouteHeadingFocus.js",
+      "src/hooks/useDisclosureRefreshAnchor.js",
+      "src/hooks/useReducedMotionPreference.js",
       "src/LegacyApp.jsx",
       "src/lib/ambientContracts.js",
       "src/lib/ambientPackageMenuCatalogEvidence.js",
-      "src/lib/ambientPackageMenuDraftAdoption.js"
+      "src/lib/ambientPackageMenuDraftAdoption.js",
+      "src/lib/commercialConsequenceNavigation.js",
+      "src/lib/routeFonts.js",
+      "src/lib/routePerformance.js"
     ]);
   });
 

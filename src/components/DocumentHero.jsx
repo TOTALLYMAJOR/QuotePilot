@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import useReducedMotionPreference from "../hooks/useReducedMotionPreference";
 import "../documentHero.css";
 
 const SLIDE_LABELS = [
@@ -398,10 +399,7 @@ function PlansSlide({ live }) {
 const SLIDE_COMPONENTS = [InquirySlide, ProposalSlide, PaymentSlide, StaffingSlide, KitchenSlide, PlansSlide];
 
 export default function DocumentHero({ buyCta = null }) {
-  const reducedMotion = useMemo(
-    () => typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches,
-    []
-  );
+  const reducedMotion = useReducedMotionPreference();
   const [active, setActive] = useState(0); // 0 = "the change" default; 1-6 = tabs
   const [visited, setVisited] = useState(() => new Set());
   const [swapping, setSwapping] = useState(false);

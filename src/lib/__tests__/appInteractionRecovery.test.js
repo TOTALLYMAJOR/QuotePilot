@@ -83,9 +83,11 @@ describe("workspace interaction recovery wiring", () => {
     expect(appSource).toContain('href="https://mbmapps.com/contact"');
     expect(appSource).toContain('onClick={handleRefreshAccess}');
     expect(appSource).toContain("await authSession.refreshAccess()");
-    expect(appSource).toContain('import CatalogReadNotice from "./components/CatalogReadNotice"');
+    expect(appSource).toContain('const CatalogReadNotice = createRecoverableLazy(loadQuoteWorkflowModule, "CatalogReadNotice", quoteWorkflowComponent("CatalogReadNotice"))');
+    expect(appSource).not.toContain('import CatalogReadNotice from "./components/CatalogReadNotice"');
     expect(appSource.match(/onRetry=\{catalog\.reload\}/g)).toHaveLength(2);
-    expect(legacyAppSource).toContain('import CatalogReadNotice from "./components/CatalogReadNotice"');
+    expect(legacyAppSource).toContain('const CatalogReadNotice = createRecoverableLazy(loadQuoteWorkflowModule, "CatalogReadNotice", quoteWorkflowComponent("CatalogReadNotice"))');
+    expect(legacyAppSource).not.toContain('import CatalogReadNotice from "./components/CatalogReadNotice"');
     expect(legacyAppSource.match(/onRetry=\{catalog\.reload\}/g)).toHaveLength(2);
     expect(appSource).toContain("Check for catalog updates");
   });

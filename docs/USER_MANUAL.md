@@ -1,6 +1,6 @@
 # User Manual
 
-Last updated: 2026-09-24 22:00:00 CDT
+Last updated: 2026-10-10 21:06:24 CDT
 
 ## Purpose
 This guide explains day-to-day usage of QuotePilot for staff users and admins.
@@ -838,11 +838,18 @@ code.
   `/app/customers/<customerId>`. A missing or other-tenant ID does not reveal a
   customer and offers a safe return to the directory.
 - The client identity and bounded linked opportunities become available first.
-  While retained proposal history and private customer controls are still
-  loading, the relationship overview remains usable and **More client history
-  and controls** names the unfinished read. If that supplemental read fails,
-  the exact client and current opportunities remain visible; use **Retry client
-  details** to request a fresh complete profile read without changing records.
+  Private email controls finish separately. A controls read failure leaves the
+  client overview usable; **Retry client details** refreshes that exact profile.
+- In **Quotes & Proposals**, open **Review proposal versions** for the quote
+  whose retained history you need. An unopened history has not been checked;
+  it does not mean the quote has no versions. Histories load independently,
+  with at most four active reads. **Retry history** retries only the failed
+  quote history. Changing client or organization discards obsolete results;
+  no retry changes a saved quote or version. Rebooking and post-event closeout
+  remain unavailable until the current client controls and supporting read
+  evidence finish successfully. The relationship timeline stays
+  explicitly partial while quote histories remain unread and incorporates
+  successfully loaded versions without treating failed histories as empty.
 - `Customer directory read context` and `Customer 360 read context` name the
   exact tenant, source, bounded contract, device-time last complete read, and
   loading/current/partial/retained-stale/error outcome. A fresh staff read does
@@ -1502,6 +1509,16 @@ The initial setup is intentionally small:
    unavailable purchase cost, then wait for the realtime stock projection to
    confirm the receipt.
 
+When several deliveries must be recorded, open **Receive multiple lines**.
+Each row remains an independent use of the same receiving authority and shows
+its own pending, confirmed, uncertain, or failed outcome. Do not resubmit a
+confirmed row. For an uncertain row, use its recovery control so QuotePilot
+checks the original request identity before another submission can become
+eligible. A definitive failure may be corrected and retried without repeating
+successful rows. The batch surface is convenience orchestration, not a purchase
+order, supplier confirmation, allocation, valuation, or proof that goods were
+physically received.
+
 For example, record **Chicken**, `40 lb`, and a `$120` total cost basis. The
 stock receipt establishes 40 lb on hand; the separate cost receipt retains the
 exact `$120 / 40 lb` evidence. A cost failure does not undo the stock record,
@@ -1512,6 +1529,17 @@ realtime. **Cached**, **pending**, **stale**, **unavailable**, and **uncertain**
 states are not confirmation. If an action may have reached the server but no
 receipt returned, keep the entered values and use **Check exact request**; do
 not start a replacement request.
+
+To inspect one ingredient, open **Movement history and commitments** beside
+that ingredient. QuotePilot then loads only that ingredient's bounded verified
+summary. Movement pages retain their exact receipts, and each commitment names
+the exact event plan and requirement revision that contributes to the displayed
+total. **Load earlier movements** follows the server cursor; it does not scan
+the whole ledger. A partial page or failed request stays inside that disclosure
+and does not clear the current Inventory workspace. Use **Retry this ingredient
+trace** to retry the same ingredient; keyboard focus remains on that recovery
+action. These summaries do not prove a physical count, inventory value,
+procurement, or event readiness.
 
 The founder-pilot staging and production workspaces may contain the
 `ragnakok-realistic-v1` planning fixture: five kitchen locations, 132
@@ -1583,7 +1611,14 @@ To cost an existing menu item:
    of that ingredient's declared purchase packs.
 4. Mark the quantity **As purchased** or **Usable quantity**. A usable quantity
    needs an explicit yield ratio, such as `0.8`; QuotePilot does not assume one.
-5. Publish the recipe revision. A local, dirty, staged, saving, or stale catalog
+5. Select **Review affected menu items**. QuotePilot returns a bounded,
+   role-safe review for this exact recipe draft and focuses it in the editor.
+   Inspect the named menu items and evidence digest; this is dependency scope,
+   not a claim that their price, production plan, or customer document changed.
+6. Confirm publication without editing the draft. QuotePilot sends the
+   server-issued review digest with the unchanged recipe. If the catalog,
+   recipe, draft, or dependency evidence changed, publication fails closed and
+   the review must be repeated. A local, dirty, staged, saving, or stale catalog
    item must first be saved and refreshed.
 
 The cost card is a server-calculated projection, not browser arithmetic. It
@@ -2130,6 +2165,10 @@ reporting remain unavailable until their own bounded evidence authorities exist.
   token hash, or other private data.
 
 ## Reporting Dashboard
+- Commercial records and product analytics load independently. Available
+  commercial measures stay usable while analytics are loading or unavailable;
+  loading is not zero activity. Use the existing refresh/retry control to
+  request current evidence, and read any retained-stale label before acting.
 - Open `Reporting` or `/app/reporting` to review quote pipeline, conversion,
   accepted/booked quote value, and the separately verified paid-deposit total.
   These operational values are not accounting revenue.

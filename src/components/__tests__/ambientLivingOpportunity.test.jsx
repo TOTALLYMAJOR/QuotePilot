@@ -378,6 +378,34 @@ describe("AmbientLivingOpportunity", () => {
     expect(document.activeElement).toBe(trigger);
   });
 
+  test("keeps quote number, current saved revision, and unsaved preview state in the context bar", async () => {
+    mount();
+
+    const contextBar = container.querySelector('[data-testid="quick-updates-context-bar"]');
+    const contextSummary = contextBar.querySelector('[aria-label="Current saved quote context"]');
+    expect(contextSummary.textContent).toContain("Q-ALPHA");
+    expect(contextSummary.textContent).toContain("Current saved revision version-alpha");
+    expect(contextSummary.textContent).toContain("Saved quote");
+    expect(contextSummary.dataset.opportunityDraftState).toBe("saved");
+
+    act(() => container.querySelector('[aria-label="Change Guest count scenario"]').click());
+    const input = container.querySelector('input[type="number"]');
+    act(() => {
+      const valueSetter = Object.getOwnPropertyDescriptor(
+        window.HTMLInputElement.prototype,
+        "value"
+      ).set;
+      valueSetter.call(input, "150");
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    act(() => button("Apply change").click());
+    await settle();
+
+    expect(contextSummary.textContent).toContain("Unsaved preview");
+    expect(contextSummary.dataset.opportunityDraftState).toBe("unsaved_preview");
+    expect(contextSummary.textContent).toContain("Current saved revision version-alpha");
+  });
+
   test("hides Quick Updates when a saved opportunity has no authoritative version identity", () => {
     mount({
       quote: {

@@ -1,14 +1,16 @@
-import { collection, doc, limit, onSnapshot, orderBy, query } from "firebase/firestore";
+import { collection, doc, documentId, limit, onSnapshot, orderBy, query, startAfter } from "firebase/firestore";
 import { httpsCallable } from "firebase/functions";
 import { auth, cloudFunctions, db, firebaseReady } from "./firebase";
 
 export const INVENTORY_AUTHORITY_SCHEMA_VERSION = 2;
 export const INVENTORY_AUTHORITY_VERSION = "inventory-ingredient-authority-v2";
 export const INVENTORY_INGREDIENT_PROJECTION_LIMIT = 200;
+export const INVENTORY_INGREDIENT_TRACE_LIMIT = 25;
 export const INVENTORY_MENU_COST_PROJECTION_LIMIT = 200;
 export const INVENTORY_MAX_PUBLISHED_RECIPE_LINES = 50;
 export const INVENTORY_AUTHORITY_CALLABLES = Object.freeze({
   applyCommand: "applyInventoryCommand",
+  readWorkspace: "getInventoryWorkspace",
   previewEvent: "previewEventInventory"
 });
 export const INVENTORY_EVENT_SELECTION_LIMIT = 100;
@@ -72,8 +74,99 @@ const CURRENCY_PATTERN = /^[A-Z]{3}$/u;
 const MAX_REVISION = 1_000_000_000;
 const MAX_JSON_BYTES = 262_144;
 const MAX_PENDING_ATTEMPTS = 32;
+const PENDING_SESSION_STORAGE_KEY = "quotepilot.inventory.pending.v1";
 const QUANTITY_SCALE = 1_000_000n;
 const pendingAttempts = new Map();
+
+function pendingSessionStorage() {
+  try {
+    return typeof globalThis.sessionStorage?.getItem === "function"
+      && typeof globalThis.sessionStorage?.setItem === "function"
+      ? globalThis.sessionStorage
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function storedPendingRecords() {
+  const storage = pendingSessionStorage();
+  if (!storage) return [];
+  try {
+    const parsed = JSON.parse(storage.getItem(PENDING_SESSION_STORAGE_KEY) || "[]");
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeStoredPendingRecords(records) {
+  const storage = pendingSessionStorage();
+  if (!storage) return;
+  try {
+    if (records.length) {
+      storage.setItem(PENDING_SESSION_STORAGE_KEY, JSON.stringify(records.slice(-MAX_PENDING_ATTEMPTS)));
+    } else {
+      storage.removeItem(PENDING_SESSION_STORAGE_KEY);
+    }
+  } catch {
+    // Session recovery is best-effort; callable authority remains unchanged.
+  }
+}
+
+function persistPendingAttempt(attempt) {
+  const nextRecord = {
+    schemaVersion: 1,
+    uid: attempt.uid,
+    payload: canonicalClone(attempt.payload, "Pending inventory request"),
+    state: attempt.state,
+    error: String(attempt.error || "").slice(0, 240),
+    definitive: attempt.definitive === true
+  };
+  const records = storedPendingRecords().filter((record) => (
+    record?.uid !== attempt.uid
+    || record?.payload?.organizationId !== attempt.payload.organizationId
+    || record?.payload?.requestId !== attempt.payload.requestId
+  ));
+  writeStoredPendingRecords([...records, nextRecord]);
+}
+
+function removeStoredPendingAttempt(attempt) {
+  writeStoredPendingRecords(storedPendingRecords().filter((record) => (
+    record?.uid !== attempt.uid
+    || record?.payload?.organizationId !== attempt.payload.organizationId
+    || record?.payload?.requestId !== attempt.payload.requestId
+  )));
+}
+
+function hydratePendingAttempts(input, scope) {
+  storedPendingRecords().forEach((record) => {
+    if (!isRecord(record) || record.schemaVersion !== 1 || record.uid !== scope.uid) return;
+    if (!isRecord(record.payload) || record.payload.organizationId !== scope.organizationId) return;
+    try {
+      const { uid, payload } = normalizeEnvelope({
+        ...input,
+        organizationId: scope.organizationId,
+        requestId: record.payload.requestId,
+        command: record.payload.command
+      });
+      if (uid !== scope.uid || canonical(payload, "Inventory request") !== canonical(record.payload, "Pending inventory request")) return;
+      const key = attemptKey(payload, uid);
+      if (pendingAttempts.has(key)) return;
+      pendingAttempts.set(key, {
+        key,
+        uid,
+        payload,
+        fingerprint: canonical(payload, "Inventory request"),
+        definitive: record.definitive === true,
+        state: record.definitive === true ? "error" : "uncertain",
+        error: String(record.error || "This exact inventory request was restored after a refresh and needs reconciliation.").slice(0, 240)
+      });
+    } catch {
+      // Ignore malformed, stale, cross-scope, or no-longer-valid records.
+    }
+  });
+}
 
 function compareCodePoints(left, right) {
   return left < right ? -1 : left > right ? 1 : 0;
@@ -103,6 +196,27 @@ function exactKeys(value, keys, label, code = "invalid-argument") {
     throw clientError(code, `${label} contains missing or unsupported fields.`);
   }
   return value;
+}
+
+function ingredientPageCursor(value) {
+  if (value === null || value === undefined) return null;
+  exactKeys(value, ["nameSortKey", "ingredientId"], "Inventory ingredient page cursor");
+  return Object.freeze({
+    nameSortKey: exactText(value.nameSortKey, "Inventory ingredient cursor sort key", 100),
+    ingredientId: identifier(value.ingredientId, "Inventory ingredient cursor identity")
+  });
+}
+
+function ingredientTraceCursor(value, code = "invalid-argument") {
+  if (value === null || value === undefined) return null;
+  exactKeys(value, ["recordedAtISO", "movementId"], "Ingredient movement page cursor", code);
+  if (!MOVEMENT_ID_PATTERN.test(value.movementId)) {
+    throw clientError(code, "Ingredient movement cursor identity is invalid.");
+  }
+  return Object.freeze({
+    recordedAtISO: exactIso(value.recordedAtISO, "ingredient movement cursor time", code),
+    movementId: value.movementId
+  });
 }
 
 function identifier(value, label, code = "invalid-argument") {
@@ -331,6 +445,19 @@ function requireMutationAccess(input) {
   return { access, uid: identifier(uid.trim(), "signed-in administrator", "unauthenticated") };
 }
 
+function requireAuthorityReadAccess(input) {
+  const access = getInventoryBrowserAccess(input);
+  if (!access.readEnabled) throw clientError("permission-denied", access.reason || "Inventory read access is unavailable.");
+  if (!firebaseReady || !cloudFunctions) {
+    throw clientError("failed-precondition", "Inventory trace requires a connected QuotePilot workspace.");
+  }
+  const uid = auth?.currentUser?.uid;
+  if (typeof uid !== "string" || !uid.trim()) {
+    throw clientError("unauthenticated", "Restore the signed-in administrator before reading inventory trace evidence.");
+  }
+  return { access, uid: identifier(uid.trim(), "signed-in administrator", "unauthenticated") };
+}
+
 function requirePreviewAccess(input) {
   const access = getInventoryMenuCostBrowserAccess(input);
   if (!access.readEnabled) {
@@ -462,6 +589,7 @@ function normalizeCostCommand(value) {
     throw clientError("invalid-argument", "Ingredient cost command is invalid.");
   }
   const common = ["kind", "ingredientId", "baseUnitId", "availability", "sourceLabel", "observedAtISO", "note", "expectedCostRevision"];
+  if (Object.hasOwn(value, "dependencyPreflightDigest")) common.push("dependencyPreflightDigest");
   exactKeys(value, value.availability === "available"
     ? [...common, "basisQuantity", "totalCostMinor", "currency"]
     : common, "Ingredient cost command");
@@ -483,6 +611,12 @@ function normalizeCostCommand(value) {
       throw clientError("invalid-argument", "currency must be an uppercase ISO code.");
     }
     result.currency = value.currency;
+  }
+  if (Object.hasOwn(value, "dependencyPreflightDigest")) {
+    if (!SHA256_PATTERN.test(value.dependencyPreflightDigest || "")) {
+      throw clientError("invalid-argument", "Ingredient cost evidence requires a reviewed dependency preflight digest.");
+    }
+    result.dependencyPreflightDigest = value.dependencyPreflightDigest;
   }
   return result;
 }
@@ -542,11 +676,15 @@ function normalizeRecipeLine(value, index) {
   return line;
 }
 
-function normalizeRecipeCommand(value) {
-  exactKeys(value, [
+function normalizeRecipeCommand(value, { requireDependencyPreflight = true } = {}) {
+  const keys = [
     "kind", "menuItemId", "expectedCatalogRevision", "expectedRecipeRevision",
     "outputYield", "outputUnitId", "lines"
-  ], "Menu recipe publication command");
+  ];
+  if (requireDependencyPreflight) keys.push("dependencyPreflightDigest");
+  exactKeys(value, keys, requireDependencyPreflight
+    ? "Menu recipe publication command"
+    : "Menu recipe dependency preflight");
   if (value.kind !== "publish_menu_recipe" || !Array.isArray(value.lines)
     || value.lines.length > INVENTORY_MAX_PUBLISHED_RECIPE_LINES) {
     throw clientError("invalid-argument", `Menu recipes support at most ${INVENTORY_MAX_PUBLISHED_RECIPE_LINES} ingredient lines.`);
@@ -556,7 +694,7 @@ function normalizeRecipeCommand(value) {
   if (new Set(lines.map((line) => line.lineId)).size !== lines.length) {
     throw clientError("invalid-argument", "Recipe line identities must be unique.");
   }
-  return {
+  const command = {
     kind: value.kind,
     menuItemId: identifier(value.menuItemId, "menuItemId"),
     expectedCatalogRevision: exactRevision(value.expectedCatalogRevision, "catalog expected revision"),
@@ -565,6 +703,13 @@ function normalizeRecipeCommand(value) {
     outputUnitId: identifier(value.outputUnitId, "recipe output unit"),
     lines
   };
+  if (requireDependencyPreflight) {
+    if (!SHA256_PATTERN.test(value.dependencyPreflightDigest || "")) {
+      throw clientError("invalid-argument", "Recipe publication requires a reviewed dependency preflight digest.");
+    }
+    command.dependencyPreflightDigest = value.dependencyPreflightDigest;
+  }
+  return command;
 }
 
 function normalizePortionBasis(value, index) {
@@ -874,6 +1019,7 @@ function beginAttempt(input) {
     error: ""
   };
   pendingAttempts.set(key, attempt);
+  persistPendingAttempt(attempt);
   return attempt;
 }
 
@@ -903,12 +1049,14 @@ function markAttemptError(attempt, error) {
   const current = pendingAttempts.get(attempt.key);
   if (!current || current.uid !== attempt.uid || current.payload.requestId !== attempt.payload.requestId) return;
   const definitive = isDefinitiveInventoryError(error);
-  pendingAttempts.set(attempt.key, {
+  const next = {
     ...current,
     definitive,
     state: definitive ? "error" : "uncertain",
     error: String(error?.message || "Inventory did not return a verified receipt.").trim().slice(0, 240)
-  });
+  };
+  pendingAttempts.set(attempt.key, next);
+  persistPendingAttempt(next);
 }
 
 function normalizeReceipt(value, attempt) {
@@ -1151,6 +1299,7 @@ async function executeAttempt(attempt) {
     const response = await call(canonicalClone(attempt.payload, "Inventory callable request"));
     const result = normalizeResultOrUncertain(response?.data, attempt);
     pendingAttempts.delete(attempt.key);
+    removeStoredPendingAttempt(attempt);
     return result;
   } catch (error) {
     markAttemptError(attempt, error);
@@ -1169,6 +1318,7 @@ function pendingForScope(input) {
 
 export function readPendingInventoryCommands(input = {}) {
   const scope = pendingForScope(input);
+  hydratePendingAttempts(input, scope);
   return deepFreeze([...pendingAttempts.values()]
     .filter((attempt) => attempt.payload.organizationId === scope.organizationId && attempt.uid === scope.uid)
     .sort((left, right) => compareCodePoints(left.payload.requestId, right.payload.requestId))
@@ -1185,6 +1335,7 @@ export function readPendingInventoryCommands(input = {}) {
 
 function findAttempt(input, { required = true } = {}) {
   const scope = pendingForScope(input);
+  hydratePendingAttempts(input, scope);
   const requestId = normalizeRequestId(input.requestId);
   const matches = [...pendingAttempts.values()].filter((attempt) => (
     attempt.payload.organizationId === scope.organizationId
@@ -1205,6 +1356,7 @@ export async function reconcileInventoryCommand(input = {}) {
   }
   const next = { ...current, state: "reconciliation", error: "" };
   pendingAttempts.set(current.key, next);
+  persistPendingAttempt(next);
   return executeAttempt(next);
 }
 
@@ -1213,7 +1365,498 @@ export function resetDefinitiveInventoryCommand(input = {}) {
   if (!current) return false;
   if (!current.definitive) return false;
   pendingAttempts.delete(current.key);
+  removeStoredPendingAttempt(current);
   return true;
+}
+
+export function normalizeInventoryCostDependencyPreflightResult(
+  value,
+  expectedOrganizationId,
+  expectedIngredientRevision,
+  expectedCommand
+) {
+  exactKeys(value, [
+    "schemaVersion", "organizationId", "ingredientId", "reviewedIngredientRevision",
+    "reviewedCostRevision", "draftDigest", "dependencyEvidence", "affectedMenuItems",
+    "complete", "limit", "dependencyPreflightDigest"
+  ], "Ingredient cost dependency preflight result", "data-loss");
+  const organizationId = identifier(expectedOrganizationId, "expected organizationId", "data-loss");
+  const ingredientRevision = exactRevision(
+    expectedIngredientRevision,
+    "expected ingredient revision",
+    { allowZero: false, code: "data-loss" }
+  );
+  const command = normalizeCostCommand(expectedCommand);
+  const reviewedIngredientRevision = exactRevision(
+    value.reviewedIngredientRevision,
+    "reviewed ingredient revision",
+    { allowZero: false, code: "data-loss" }
+  );
+  const reviewedCostRevision = exactRevision(
+    value.reviewedCostRevision,
+    "reviewed cost revision",
+    { code: "data-loss" }
+  );
+  if (Object.hasOwn(command, "dependencyPreflightDigest")
+    || value.schemaVersion !== INVENTORY_AUTHORITY_SCHEMA_VERSION
+    || value.organizationId !== organizationId
+    || value.ingredientId !== command.ingredientId
+    || reviewedIngredientRevision !== ingredientRevision
+    || reviewedCostRevision !== command.expectedCostRevision
+    || value.complete !== true
+    || value.limit !== INVENTORY_MENU_COST_PROJECTION_LIMIT
+    || !SHA256_PATTERN.test(value.draftDigest || "")
+    || !SHA256_PATTERN.test(value.dependencyPreflightDigest || "")) {
+    throw clientError("data-loss", "Ingredient cost dependency preflight crossed its scope or revision fence.");
+  }
+  exactKeys(
+    value.dependencyEvidence,
+    ["revision", "updatedAtISO", "menuItemIds"],
+    "Ingredient dependency evidence",
+    "data-loss"
+  );
+  const dependencyRevision = exactRevision(
+    value.dependencyEvidence.revision,
+    "ingredient dependency revision",
+    { code: "data-loss" }
+  );
+  if ((dependencyRevision === 0
+    ? value.dependencyEvidence.updatedAtISO !== null
+    : typeof value.dependencyEvidence.updatedAtISO !== "string")
+    || !Array.isArray(value.dependencyEvidence.menuItemIds)
+    || value.dependencyEvidence.menuItemIds.length > INVENTORY_MENU_COST_PROJECTION_LIMIT) {
+    throw clientError("data-loss", "Ingredient dependency evidence is internally inconsistent.");
+  }
+  const menuItemIds = value.dependencyEvidence.menuItemIds.map((id) => identifier(
+    id,
+    "dependent menu item identity",
+    "data-loss"
+  ));
+  if ([...menuItemIds].sort(compareCodePoints).join("\u0000") !== menuItemIds.join("\u0000")
+    || new Set(menuItemIds).size !== menuItemIds.length) {
+    throw clientError("data-loss", "Dependent menu item identities are not a stable unique set.");
+  }
+  if (!Array.isArray(value.affectedMenuItems)
+    || value.affectedMenuItems.length !== menuItemIds.length
+    || value.affectedMenuItems.length > INVENTORY_MENU_COST_PROJECTION_LIMIT) {
+    throw clientError("data-loss", "Affected menu item evidence is incomplete.");
+  }
+  const affectedMenuItems = value.affectedMenuItems.map((entry, index) => {
+    exactKeys(entry, ["menuItemId", "name", "identityDigest"], `Affected menu item ${index + 1}`, "data-loss");
+    if (!SHA256_PATTERN.test(entry.identityDigest || "")) {
+      throw clientError("data-loss", "Affected menu identity digest is invalid.");
+    }
+    return {
+      menuItemId: identifier(entry.menuItemId, "affected menu item identity", "data-loss"),
+      name: exactText(entry.name, "affected menu item name", 120, { code: "data-loss" }),
+      identityDigest: entry.identityDigest
+    };
+  });
+  if (new Set(affectedMenuItems.map((entry) => entry.menuItemId)).size !== affectedMenuItems.length
+    || [...affectedMenuItems.map((entry) => entry.menuItemId)].sort(compareCodePoints).join("\u0000")
+      !== menuItemIds.join("\u0000")) {
+    throw clientError("data-loss", "Affected menu identities do not match the dependency index.");
+  }
+  return deepFreeze({
+    schemaVersion: INVENTORY_AUTHORITY_SCHEMA_VERSION,
+    organizationId,
+    ingredientId: command.ingredientId,
+    reviewedIngredientRevision,
+    reviewedCostRevision,
+    draftDigest: value.draftDigest,
+    dependencyEvidence: {
+      revision: dependencyRevision,
+      updatedAtISO: dependencyRevision === 0
+        ? null
+        : exactIso(value.dependencyEvidence.updatedAtISO, "dependency evidence update time", "data-loss"),
+      menuItemIds
+    },
+    affectedMenuItems,
+    complete: true,
+    limit: INVENTORY_MENU_COST_PROJECTION_LIMIT,
+    dependencyPreflightDigest: value.dependencyPreflightDigest
+  });
+}
+
+export async function getInventoryCostDependencyPreflight(input = {}) {
+  const { access } = requireAuthorityReadAccess(input);
+  const expectedIngredientRevision = exactRevision(
+    input.expectedIngredientRevision,
+    "expected ingredient revision",
+    { allowZero: false }
+  );
+  const command = normalizeCostCommand(input.command);
+  if (Object.hasOwn(command, "dependencyPreflightDigest")) {
+    throw clientError("invalid-argument", "Cost dependency review requires an unreviewed cost command.");
+  }
+  const payload = {
+    schemaVersion: INVENTORY_AUTHORITY_SCHEMA_VERSION,
+    organizationId: access.organizationId,
+    expectedIngredientRevision,
+    costDependencyPreflight: command
+  };
+  const call = httpsCallable(cloudFunctions, INVENTORY_AUTHORITY_CALLABLES.readWorkspace);
+  const response = await call(payload);
+  return normalizeInventoryCostDependencyPreflightResult(
+    response?.data,
+    access.organizationId,
+    expectedIngredientRevision,
+    command
+  );
+}
+
+export function normalizeInventoryRecipeDependencyPreflightResult(
+  value,
+  expectedOrganizationId,
+  expectedCommand
+) {
+  exactKeys(value, [
+    "schemaVersion", "organizationId", "menuItemId", "reviewedCatalogRevision",
+    "reviewedRecipeRevision", "reviewedRecipeDigest", "draftDigest", "changedIngredientIds",
+    "dependencyEvidence", "affectedMenuItems", "complete", "limit", "dependencyPreflightDigest"
+  ], "Menu recipe dependency preflight result", "data-loss");
+  const organizationId = identifier(expectedOrganizationId, "expected organizationId", "data-loss");
+  const command = normalizeRecipeCommand(expectedCommand, { requireDependencyPreflight: false });
+  const reviewedCatalogRevision = exactRevision(
+    value.reviewedCatalogRevision, "reviewed catalog revision", { code: "data-loss" }
+  );
+  const reviewedRecipeRevision = exactRevision(
+    value.reviewedRecipeRevision, "reviewed recipe revision", { code: "data-loss" }
+  );
+  if (value.schemaVersion !== INVENTORY_AUTHORITY_SCHEMA_VERSION
+    || value.organizationId !== organizationId
+    || value.menuItemId !== command.menuItemId
+    || reviewedCatalogRevision !== command.expectedCatalogRevision
+    || reviewedRecipeRevision !== command.expectedRecipeRevision
+    || value.complete !== true
+    || value.limit !== INVENTORY_MENU_COST_PROJECTION_LIMIT
+    || !SHA256_PATTERN.test(value.draftDigest || "")
+    || !SHA256_PATTERN.test(value.dependencyPreflightDigest || "")
+    || (reviewedRecipeRevision === 0
+      ? value.reviewedRecipeDigest !== null
+      : !SHA256_PATTERN.test(value.reviewedRecipeDigest || ""))) {
+    throw clientError("data-loss", "Menu recipe dependency preflight crossed its scope or revision fence.");
+  }
+  if (!Array.isArray(value.changedIngredientIds)
+    || value.changedIngredientIds.length > INVENTORY_MAX_PUBLISHED_RECIPE_LINES) {
+    throw clientError("data-loss", "Changed recipe ingredient evidence exceeds its bounded contract.");
+  }
+  const changedIngredientIds = value.changedIngredientIds.map((id) => identifier(
+    id, "changed recipe ingredient identity", "data-loss"
+  ));
+  if ([...changedIngredientIds].sort(compareCodePoints).join("\u0000") !== changedIngredientIds.join("\u0000")
+    || new Set(changedIngredientIds).size !== changedIngredientIds.length) {
+    throw clientError("data-loss", "Changed recipe ingredients are not a stable unique set.");
+  }
+  if (!Array.isArray(value.dependencyEvidence)
+    || value.dependencyEvidence.length !== changedIngredientIds.length) {
+    throw clientError("data-loss", "Recipe dependency evidence is incomplete.");
+  }
+  const dependencyEvidence = value.dependencyEvidence.map((entry, index) => {
+    exactKeys(entry, ["ingredientId", "revision", "updatedAtISO", "menuItemIds"],
+      `Recipe dependency evidence ${index + 1}`, "data-loss");
+    const ingredientId = identifier(entry.ingredientId, "dependency ingredient identity", "data-loss");
+    const revision = exactRevision(entry.revision, "dependency revision", { code: "data-loss" });
+    if (ingredientId !== changedIngredientIds[index]
+      || (revision === 0 ? entry.updatedAtISO !== null : typeof entry.updatedAtISO !== "string")
+      || !Array.isArray(entry.menuItemIds)
+      || entry.menuItemIds.length > INVENTORY_MENU_COST_PROJECTION_LIMIT) {
+      throw clientError("data-loss", "Recipe dependency evidence is internally inconsistent.");
+    }
+    const menuItemIds = entry.menuItemIds.map((id) => identifier(id, "dependent menu item identity", "data-loss"));
+    if ([...menuItemIds].sort(compareCodePoints).join("\u0000") !== menuItemIds.join("\u0000")
+      || new Set(menuItemIds).size !== menuItemIds.length) {
+      throw clientError("data-loss", "Dependent menu item identities are not a stable unique set.");
+    }
+    return {
+      ingredientId,
+      revision,
+      updatedAtISO: revision === 0 ? null : exactIso(entry.updatedAtISO, "dependency evidence update time"),
+      menuItemIds
+    };
+  });
+  if (!Array.isArray(value.affectedMenuItems)
+    || value.affectedMenuItems.length === 0
+    || value.affectedMenuItems.length > INVENTORY_MENU_COST_PROJECTION_LIMIT) {
+    throw clientError("data-loss", "Affected menu items exceed their bounded complete contract.");
+  }
+  const affectedMenuItems = value.affectedMenuItems.map((entry, index) => {
+    exactKeys(entry, ["menuItemId", "name", "identityDigest"], `Affected menu item ${index + 1}`, "data-loss");
+    if (!SHA256_PATTERN.test(entry.identityDigest || "")) {
+      throw clientError("data-loss", "Affected menu identity digest is invalid.");
+    }
+    return {
+      menuItemId: identifier(entry.menuItemId, "affected menu item identity", "data-loss"),
+      name: exactText(entry.name, "affected menu item name", 120, { code: "data-loss" }),
+      identityDigest: entry.identityDigest
+    };
+  });
+  if (!affectedMenuItems.some((entry) => entry.menuItemId === command.menuItemId)
+    || new Set(affectedMenuItems.map((entry) => entry.menuItemId)).size !== affectedMenuItems.length) {
+    throw clientError("data-loss", "Affected menu item evidence is incomplete or duplicated.");
+  }
+  return deepFreeze({
+    schemaVersion: INVENTORY_AUTHORITY_SCHEMA_VERSION,
+    organizationId,
+    menuItemId: command.menuItemId,
+    reviewedCatalogRevision,
+    reviewedRecipeRevision,
+    reviewedRecipeDigest: value.reviewedRecipeDigest,
+    draftDigest: value.draftDigest,
+    changedIngredientIds,
+    dependencyEvidence,
+    affectedMenuItems,
+    complete: true,
+    limit: INVENTORY_MENU_COST_PROJECTION_LIMIT,
+    dependencyPreflightDigest: value.dependencyPreflightDigest
+  });
+}
+
+export async function getInventoryRecipeDependencyPreflight(input = {}) {
+  const { access } = requireAuthorityReadAccess(input);
+  const command = normalizeRecipeCommand(input.command, { requireDependencyPreflight: false });
+  const payload = {
+    schemaVersion: INVENTORY_AUTHORITY_SCHEMA_VERSION,
+    organizationId: access.organizationId,
+    recipeDependencyPreflight: command
+  };
+  const call = httpsCallable(cloudFunctions, INVENTORY_AUTHORITY_CALLABLES.readWorkspace);
+  const response = await call(payload);
+  return normalizeInventoryRecipeDependencyPreflightResult(
+    response?.data,
+    access.organizationId,
+    command
+  );
+}
+
+function normalizeIngredientTraceMovement(value, baseUnitId) {
+  const commonKeys = [
+    "movementId", "receiptId", "commandKind", "kind", "quantityMicros", "quantity",
+    "baseUnitId", "occurredAtISO", "recordedAtISO"
+  ];
+  const eventKeys = [
+    "direction", "quoteId", "eventPlanId", "eventRequirementRevisionId",
+    "eventExecutionRevisionId", "consumedQuantityMicros", "consumedQuantity",
+    "wasteQuantityMicros", "wasteQuantity"
+  ];
+  const keys = value?.kind === "receive_stock" ? [...commonKeys, "sourceLabel"]
+    : ["event_depletion", "event_depletion_correction"].includes(value?.kind)
+      ? [...commonKeys, ...eventKeys]
+      : commonKeys;
+  exactKeys(value, keys, "Ingredient movement summary", "data-loss");
+  const expectedCommandKind = value.kind === "opening_balance" ? "opening_balance"
+    : value.kind === "receive_stock" ? "receive_stock"
+      : value.kind === "event_depletion" ? "record_event_ingredient_execution"
+        : value.kind === "event_depletion_correction" ? "correct_event_ingredient_execution"
+          : "";
+  const quantityMicros = exactSafeInteger(value.quantityMicros, "ingredient movement quantity", {
+    minimum: 1, code: "data-loss"
+  });
+  if (!expectedCommandKind || value.commandKind !== expectedCommandKind
+    || !MOVEMENT_ID_PATTERN.test(value.movementId)
+    || !RECEIPT_ID_PATTERN.test(value.receiptId)
+    || baseUnit(value.baseUnitId, "ingredient movement base unit", "data-loss") !== baseUnitId
+    || parseQuantityMicros(value.quantity, "ingredient movement quantity", { code: "data-loss" }) !== quantityMicros) {
+    throw clientError("data-loss", "Ingredient movement summary is inconsistent.");
+  }
+  const movement = {
+    movementId: value.movementId,
+    receiptId: value.receiptId,
+    commandKind: value.commandKind,
+    kind: value.kind,
+    quantityMicros,
+    quantity: value.quantity,
+    baseUnitId,
+    occurredAtISO: exactIso(value.occurredAtISO, "ingredient movement occurrence time"),
+    recordedAtISO: exactIso(value.recordedAtISO, "ingredient movement record time")
+  };
+  if (value.kind === "receive_stock") {
+    movement.sourceLabel = exactText(value.sourceLabel, "ingredient receiving source", 120, { code: "data-loss" });
+  }
+  if (["event_depletion", "event_depletion_correction"].includes(value.kind)) {
+    const consumedQuantityMicros = exactSafeInteger(value.consumedQuantityMicros, "event consumed quantity");
+    const wasteQuantityMicros = exactSafeInteger(value.wasteQuantityMicros, "event waste quantity");
+    if (!EVENT_PLAN_ID_PATTERN.test(value.eventPlanId)
+      || !EVENT_REQUIREMENT_REVISION_ID_PATTERN.test(value.eventRequirementRevisionId)
+      || !EVENT_EXECUTION_REVISION_ID_PATTERN.test(value.eventExecutionRevisionId)
+      || !["decrease", "increase"].includes(value.direction)
+      || formatQuantityMicros(consumedQuantityMicros, "event consumed quantity") !== value.consumedQuantity
+      || formatQuantityMicros(wasteQuantityMicros, "event waste quantity") !== value.wasteQuantity) {
+      throw clientError("data-loss", "Event ingredient movement summary is inconsistent.");
+    }
+    Object.assign(movement, {
+      direction: value.direction,
+      quoteId: identifier(value.quoteId, "event movement quote identity", "data-loss"),
+      eventPlanId: value.eventPlanId,
+      eventRequirementRevisionId: value.eventRequirementRevisionId,
+      eventExecutionRevisionId: value.eventExecutionRevisionId,
+      consumedQuantityMicros,
+      consumedQuantity: value.consumedQuantity,
+      wasteQuantityMicros,
+      wasteQuantity: value.wasteQuantity
+    });
+  }
+  return movement;
+}
+
+export function normalizeInventoryIngredientTraceResult(
+  value,
+  expectedOrganizationId,
+  expectedIngredientId,
+  expectedRevisions,
+  expectedCursor = undefined
+) {
+  exactKeys(value, [
+    "schemaVersion", "organizationId", "ingredientId", "ingredientRevision", "stockRevision",
+    "allocationRevision", "baseUnitId", "movements", "movementPage", "commitments"
+  ], "Ingredient trace result", "data-loss");
+  const organizationId = identifier(expectedOrganizationId, "expected organizationId", "data-loss");
+  const ingredientId = identifier(expectedIngredientId, "expected ingredientId", "data-loss");
+  exactKeys(expectedRevisions, ["ingredientRevision", "stockRevision", "allocationRevision"], "Expected ingredient trace revisions");
+  const ingredientRevision = exactRevision(value.ingredientRevision, "ingredient trace ingredient revision", { allowZero: false, code: "data-loss" });
+  const stockRevision = exactRevision(value.stockRevision, "ingredient trace stock revision", { code: "data-loss" });
+  const allocationRevision = exactRevision(value.allocationRevision, "ingredient trace allocation revision", { code: "data-loss" });
+  if (value.schemaVersion !== INVENTORY_AUTHORITY_SCHEMA_VERSION
+    || value.organizationId !== organizationId || value.ingredientId !== ingredientId
+    || ingredientRevision !== exactRevision(expectedRevisions.ingredientRevision, "expected ingredient revision", { allowZero: false })
+    || stockRevision !== exactRevision(expectedRevisions.stockRevision, "expected stock revision")
+    || allocationRevision !== exactRevision(expectedRevisions.allocationRevision, "expected allocation revision")) {
+    throw clientError("data-loss", "Ingredient trace result crossed its authority scope or stale revision fence.");
+  }
+  const baseUnitId = baseUnit(value.baseUnitId, "ingredient trace base unit", "data-loss");
+  if (!Array.isArray(value.movements) || value.movements.length > INVENTORY_INGREDIENT_TRACE_LIMIT) {
+    throw clientError("data-loss", "Ingredient movement page exceeds its bounded contract.");
+  }
+  const movements = value.movements.map((movement) => normalizeIngredientTraceMovement(movement, baseUnitId));
+  const movementIds = new Set();
+  movements.forEach((movement, index) => {
+    if (movementIds.has(movement.movementId) || (index > 0 && (
+      movements[index - 1].recordedAtISO < movement.recordedAtISO
+      || (movements[index - 1].recordedAtISO === movement.recordedAtISO
+        && compareCodePoints(movements[index - 1].movementId, movement.movementId) <= 0)
+    ))) {
+      throw clientError("data-loss", "Ingredient movement page is not a stable ordered set.");
+    }
+    movementIds.add(movement.movementId);
+  });
+  exactKeys(value.movementPage, [
+    "limit", "size", "bounded", "complete", "hasNext", "cursor", "nextCursor"
+  ], "Ingredient movement page metadata", "data-loss");
+  const cursor = ingredientTraceCursor(value.movementPage.cursor, "data-loss");
+  const nextCursor = ingredientTraceCursor(value.movementPage.nextCursor, "data-loss");
+  if (expectedCursor !== undefined) {
+    const requestedCursor = ingredientTraceCursor(expectedCursor, "data-loss");
+    if (cursor?.recordedAtISO !== requestedCursor?.recordedAtISO
+      || cursor?.movementId !== requestedCursor?.movementId) {
+      throw clientError("data-loss", "Ingredient movement page did not echo its requested stable cursor.");
+    }
+  }
+  const hasNext = exactBoolean(value.movementPage.hasNext, "ingredient movement hasNext");
+  const complete = exactBoolean(value.movementPage.complete, "ingredient movement completeness");
+  if (value.movementPage.limit !== INVENTORY_INGREDIENT_TRACE_LIMIT
+    || value.movementPage.size !== movements.length
+    || value.movementPage.bounded !== true
+    || complete === hasNext
+    || hasNext !== Boolean(nextCursor)
+    || (nextCursor && (!movements.length
+      || nextCursor.recordedAtISO !== movements.at(-1).recordedAtISO
+      || nextCursor.movementId !== movements.at(-1).movementId))) {
+    throw clientError("data-loss", "Ingredient movement page metadata is inconsistent.");
+  }
+  exactKeys(value.commitments, [
+    "complete", "fenceRevision", "totalQuantityMicros", "totalQuantity", "rows"
+  ], "Ingredient commitment summary", "data-loss");
+  const fenceRevision = exactRevision(value.commitments.fenceRevision, "ingredient commitment fence revision", { code: "data-loss" });
+  const totalQuantityMicros = exactSafeInteger(value.commitments.totalQuantityMicros, "ingredient commitment total");
+  if (value.commitments.complete !== true || fenceRevision !== allocationRevision
+    || formatQuantityMicros(totalQuantityMicros, "ingredient commitment total") !== value.commitments.totalQuantity
+    || !Array.isArray(value.commitments.rows) || value.commitments.rows.length > 300) {
+    throw clientError("data-loss", "Ingredient commitment summary is incomplete or inconsistent.");
+  }
+  let reconciledMicros = 0;
+  const rows = value.commitments.rows.map((row, index) => {
+    exactKeys(row, [
+      "quoteId", "eventPlanId", "eventRequirementRevisionId", "allocationRevision", "planState",
+      "requiredByISO", "allocatedQuantityMicros", "allocatedQuantity"
+    ], `Ingredient commitment row ${index + 1}`, "data-loss");
+    const allocatedQuantityMicros = exactSafeInteger(row.allocatedQuantityMicros, "ingredient commitment quantity", {
+      minimum: 1, code: "data-loss"
+    });
+    if (!EVENT_PLAN_ID_PATTERN.test(row.eventPlanId)
+      || !EVENT_REQUIREMENT_REVISION_ID_PATTERN.test(row.eventRequirementRevisionId)
+      || !["reserved", "shortage"].includes(row.planState)
+      || formatQuantityMicros(allocatedQuantityMicros, "ingredient commitment quantity") !== row.allocatedQuantity) {
+      throw clientError("data-loss", "Ingredient commitment row is inconsistent.");
+    }
+    reconciledMicros += allocatedQuantityMicros;
+    return {
+      quoteId: identifier(row.quoteId, "ingredient commitment quote identity", "data-loss"),
+      eventPlanId: row.eventPlanId,
+      eventRequirementRevisionId: row.eventRequirementRevisionId,
+      allocationRevision: exactRevision(row.allocationRevision, "ingredient commitment allocation revision", { allowZero: false, code: "data-loss" }),
+      planState: row.planState,
+      requiredByISO: exactIso(row.requiredByISO, "ingredient commitment required time"),
+      allocatedQuantityMicros,
+      allocatedQuantity: row.allocatedQuantity
+    };
+  });
+  if (reconciledMicros !== totalQuantityMicros) {
+    throw clientError("data-loss", "Ingredient commitment rows do not reconcile to the displayed total.");
+  }
+  return deepFreeze({
+    schemaVersion: INVENTORY_AUTHORITY_SCHEMA_VERSION,
+    organizationId,
+    ingredientId,
+    ingredientRevision,
+    stockRevision,
+    allocationRevision,
+    baseUnitId,
+    movements,
+    movementPage: {
+      limit: INVENTORY_INGREDIENT_TRACE_LIMIT,
+      size: movements.length,
+      bounded: true,
+      complete,
+      hasNext,
+      cursor,
+      nextCursor
+    },
+    commitments: {
+      complete: true,
+      fenceRevision,
+      totalQuantityMicros,
+      totalQuantity: value.commitments.totalQuantity,
+      rows
+    }
+  });
+}
+
+export async function getInventoryIngredientTrace(input = {}) {
+  const { access } = requireAuthorityReadAccess(input);
+  const ingredientId = identifier(input.ingredientId, "ingredientId");
+  const expectedRevisions = {
+    ingredientRevision: exactRevision(input.expectedIngredientRevision, "expected ingredient revision", { allowZero: false }),
+    stockRevision: exactRevision(input.expectedStockRevision, "expected stock revision"),
+    allocationRevision: exactRevision(input.expectedAllocationRevision, "expected allocation revision")
+  };
+  const payload = {
+    schemaVersion: INVENTORY_AUTHORITY_SCHEMA_VERSION,
+    organizationId: access.organizationId,
+    ingredientId,
+    expectedIngredientRevision: expectedRevisions.ingredientRevision,
+    expectedStockRevision: expectedRevisions.stockRevision,
+    expectedAllocationRevision: expectedRevisions.allocationRevision,
+    cursor: ingredientTraceCursor(input.cursor)
+  };
+  const call = httpsCallable(cloudFunctions, INVENTORY_AUTHORITY_CALLABLES.readWorkspace);
+  const response = await call(payload);
+  return normalizeInventoryIngredientTraceResult(
+    response?.data,
+    access.organizationId,
+    ingredientId,
+    expectedRevisions,
+    payload.cursor
+  );
 }
 
 function sourceState(metadata) {
@@ -2500,7 +3143,14 @@ function projectionModel(scope, state) {
       ingredients: { ...state.sources.ingredients }
     },
     freshness: combinedFreshness(state.sources),
-    bounded: state.bounded
+    bounded: state.bounded,
+    page: {
+      size: ingredients.length,
+      cursor: state.page.cursor ? { ...state.page.cursor } : null,
+      nextCursor: state.page.nextCursor ? { ...state.page.nextCursor } : null,
+      hasPrevious: state.page.cursor !== null,
+      hasNext: state.page.nextCursor !== null
+    }
   });
 }
 
@@ -2508,6 +3158,7 @@ export function subscribeToInventoryIngredientProjections(input = {}) {
   const access = requireReadAccess(input);
   if (typeof input.onData !== "function") throw clientError("invalid-argument", "Inventory projection listener requires onData.");
   const scope = { organizationId: access.organizationId };
+  const cursor = ingredientPageCursor(input.cursor);
   let active = true;
   let workspaceUnsubscribe = null;
   let ingredientsUnsubscribe = null;
@@ -2515,6 +3166,7 @@ export function subscribeToInventoryIngredientProjections(input = {}) {
     workspace: null,
     ingredients: [],
     bounded: false,
+    page: { cursor, nextCursor: null },
     sources: {
       workspace: { state: "loading", fromCache: false, hasPendingWrites: false },
       ingredients: { state: "loading", fromCache: false, hasPendingWrites: false }
@@ -2536,11 +3188,14 @@ export function subscribeToInventoryIngredientProjections(input = {}) {
   };
 
   const workspaceRef = doc(db, "organizations", scope.organizationId, "inventoryWorkspaceProjections", "current");
-  const ingredientQuery = query(
+  const ingredientQueryParts = [
     collection(db, "organizations", scope.organizationId, "inventoryIngredientProjections"),
     orderBy("nameSortKey", "asc"),
-    limit(INVENTORY_INGREDIENT_PROJECTION_LIMIT)
-  );
+    orderBy(documentId(), "asc")
+  ];
+  if (cursor) ingredientQueryParts.push(startAfter(cursor.nameSortKey, cursor.ingredientId));
+  ingredientQueryParts.push(limit(INVENTORY_INGREDIENT_PROJECTION_LIMIT + 1));
+  const ingredientQuery = query(...ingredientQueryParts);
   try {
     workspaceUnsubscribe = onSnapshot(workspaceRef, { includeMetadataChanges: true }, (snapshot) => {
       if (!active) return;
@@ -2562,15 +3217,20 @@ export function subscribeToInventoryIngredientProjections(input = {}) {
     ingredientsUnsubscribe = onSnapshot(ingredientQuery, { includeMetadataChanges: true }, (snapshot) => {
       if (!active) return;
       try {
-        if (!Array.isArray(snapshot?.docs) || snapshot.docs.length > INVENTORY_INGREDIENT_PROJECTION_LIMIT) {
+        if (!Array.isArray(snapshot?.docs) || snapshot.docs.length > INVENTORY_INGREDIENT_PROJECTION_LIMIT + 1) {
           throw clientError("data-loss", "Ingredient projection query exceeded its bounded contract.");
         }
-        const ingredients = snapshot.docs.map((entry) => normalizeInventoryIngredientProjection(entry.data(), scope.organizationId, entry.id));
-        const sortKeys = ingredients.map((entry) => entry.nameSortKey);
-        if (sortKeys.some((key, index) => index > 0 && compareCodePoints(sortKeys[index - 1], key) > 0)
-          || new Set(ingredients.map((entry) => entry.ingredientId)).size !== ingredients.length) {
+        const received = snapshot.docs.map((entry) => normalizeInventoryIngredientProjection(entry.data(), scope.organizationId, entry.id));
+        if (received.some((entry, index) => index > 0 && (
+          compareCodePoints(received[index - 1].nameSortKey, entry.nameSortKey) > 0
+          || (received[index - 1].nameSortKey === entry.nameSortKey
+            && compareCodePoints(received[index - 1].ingredientId, entry.ingredientId) >= 0)
+        )) || new Set(received.map((entry) => entry.ingredientId)).size !== received.length) {
           throw clientError("data-loss", "Ingredient projection query is not a stable ordered set.");
         }
+        const hasNext = received.length > INVENTORY_INGREDIENT_PROJECTION_LIMIT;
+        const ingredients = received.slice(0, INVENTORY_INGREDIENT_PROJECTION_LIMIT);
+        const finalIngredient = ingredients.at(-1) || null;
         const metadata = snapshot?.metadata || {};
         state.sources.ingredients = {
           state: sourceState(metadata),
@@ -2578,7 +3238,11 @@ export function subscribeToInventoryIngredientProjections(input = {}) {
           hasPendingWrites: metadata.hasPendingWrites === true
         };
         state.ingredients = ingredients;
-        state.bounded = ingredients.length === INVENTORY_INGREDIENT_PROJECTION_LIMIT;
+        state.page.nextCursor = hasNext && finalIngredient ? Object.freeze({
+          nameSortKey: finalIngredient.nameSortKey,
+          ingredientId: finalIngredient.ingredientId
+        }) : null;
+        state.bounded = cursor !== null || hasNext;
         emit();
       } catch {
         fail("ingredients")();

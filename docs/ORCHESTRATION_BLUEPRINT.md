@@ -1,6 +1,6 @@
 # Cloud + Local Orchestration Blueprint
 
-Last updated: 2026-09-19 13:09:29 CDT
+Last updated: 2026-10-10 19:54:09 CDT
 
 ## Goal
 Accelerate delivery while preserving production safety by using:
@@ -66,6 +66,9 @@ Each PR declares:
 - `product_intelligence`: required catering actor/job/improvement, governed
   outcome or metric IDs, guardrails, evidence need, and ledger entry; or an
   explicit `not_applicable` rationale for mechanical work
+- for each named enhancement, `routes`, `authorities`, and `tests` from
+  `docs/enhancement-impact-manifest.json`; presentation-only work uses the
+  literal empty authority list and cannot include a registered authority path
 
 Before implementation, `npm run plan:task` may derive the same decision inputs
 from a bounded task description and explicit path set. Its canonical policy is
@@ -74,6 +77,13 @@ reasoning effort, read/update dependencies, ordered validations, and a task
 graph. The external runner—not repository code—owns the actual model switch.
 Every plan also carries an exact UTC lifecycle timestamp. The `complete` phase
 is the authoritative time included in the final task report.
+
+The planner extracts exact enhancement/item IDs from bounded task text or
+accepts `--enhancement <id>`. Missing declarations fail before a packet is
+emitted. Registered pricing, commercial-quote, Inventory, and orchestration
+paths also fail when the declaration omits their authority identifier. The
+manifest checker proves declaration shape and explicit path mapping only; it
+does not prove that the authority map is semantically exhaustive.
 
 Schema-v2 packets preserve the execution profile and add an orthogonal
 `domainClassification`. When applicable, the packet names the smallest

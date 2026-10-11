@@ -78,6 +78,7 @@ describe("recoverable lazy surfaces", () => {
   test("wires every public route and workspace tool through an independent boundary", () => {
     const mainSource = readSource("../../main.jsx");
     const appSource = readSource("../../App.jsx");
+    const compatibilityAppSource = readSource("../../LegacyApp.jsx");
     const workspaceBoundarySource = readSource("../WorkspaceSurfaceBoundary.jsx");
 
     expect(mainSource.match(/<LazyPublicRoute/g)).toHaveLength(6);
@@ -121,6 +122,10 @@ describe("recoverable lazy surfaces", () => {
     expect(appSource).not.toContain("WorkspaceModalFallback");
     expect(appSource).toContain('from "./components/WorkspaceSurfaceBoundary"');
     expect(appSource).not.toContain("function WorkspaceLazyTool(");
+    expect(compatibilityAppSource).toContain('from "./components/WorkspaceSurfaceBoundary"');
+    expect(compatibilityAppSource).not.toContain("function WorkspaceLazyTool(");
+    expect(compatibilityAppSource).not.toContain("function WorkspaceLazyRoute(");
+    expect(compatibilityAppSource).not.toContain("function useStickyMount(");
     expect(workspaceBoundarySource).toContain("export function WorkspaceLazyTool(");
     expect(workspaceBoundarySource).toContain("export function WorkspaceLazyRoute(");
     expect(workspaceBoundarySource).toContain("export function WorkspaceToolSurface(");

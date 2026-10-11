@@ -19,6 +19,14 @@ function workspace(overrides = {}) {
 }
 
 describe("customer commercial timeline adapter", () => {
+  test("marks unrequested proposal histories partial instead of a completed empty history", () => {
+    const timeline = buildCustomerCommercialTimeline(workspace({
+      quotes: [{ id: "quote-1", customerId: "customer-1" }],
+      versionPageInfo: { perQuoteLimit: 10, truncatedQuoteIds: [], unloadedQuoteIds: ["quote-1", "foreign"] }
+    }));
+    expect(timeline.status).toBe("partial");
+    expect(timeline.pageInfo.versionReadUnloadedQuoteCount).toBe(1);
+  });
   test("builds a descending, source-labeled timeline from recorded DTO milestones", () => {
     const timeline = buildCustomerCommercialTimeline(workspace({
       quotes: [{
@@ -358,6 +366,7 @@ describe("customer commercial timeline adapter", () => {
       quoteReadLimit: 25,
       versionReadTruncated: true,
       versionReadTruncatedQuoteCount: 1,
+      versionReadUnloadedQuoteCount: 0,
       versionPerQuoteLimit: 10
     });
   });

@@ -54,6 +54,13 @@ function comparison(overrides = {}) {
 }
 
 describe("Quote version comparison presentation", () => {
+  test("keeps typed before and after values in independently alignable columns", () => {
+    const markup = renderToStaticMarkup(<QuoteVersionComparisonPresentation comparison={comparison()} />);
+    expect(markup).toContain('data-comparison-value-type="number"');
+    expect(markup).toContain('class="workspace-comparison-value" data-value-side="before">Before: 125</span>');
+    expect(markup).toContain('class="workspace-comparison-value" data-value-side="after">After: 175</span>');
+  });
+
   test("renders only material immutable-version changes with human-readable values", () => {
     const markup = renderToStaticMarkup(
       <QuoteVersionComparisonPresentation comparison={comparison()} />

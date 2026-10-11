@@ -114,7 +114,120 @@ function commercialPriorityRoundTrip(store, { originRouteId = "home", ...overrid
   });
 }
 
+function commercialConsequenceRoundTrip(store, {
+  destinationRouteId = "inventory",
+  destinationPathname = "/app/inventory",
+  kind = "inventory_ingredient",
+  ...overrides
+} = {}) {
+  store.setScope(scope);
+  return store.prepare({
+    entry: originEntry,
+    origin: {
+      routeId: "quote-edit",
+      pathname: "/app/quotes/rivera-wedding/edit",
+      search: ""
+    },
+    destination: {
+      routeId: destinationRouteId,
+      pathname: destinationPathname,
+      search: ""
+    },
+    surfaceId: "commercial-consequence",
+    view: {
+      routeId: "quote-edit",
+      scrollY: 906,
+      focus: {
+        kind: "commercial-consequence",
+        objectId: "rivera-wedding",
+        actionId: `review-commercial-consequence:${kind}`,
+        controlId: `commercial-change-artifact-${kind}`
+      }
+    },
+    ...overrides
+  });
+}
+
 describe("workspace return context", () => {
+  test.each([
+    ["quote-list", "/app/quotes", "proposal"],
+    ["quote-detail", "/app/quotes/rivera-wedding", "staffing_requirement"],
+    ["operations", "/app/operations", "production_plan"],
+    ["inventory", "/app/inventory", "inventory_ingredient"]
+  ])("returns from an exact %s commercial consequence to its initiating edit control", (
+    destinationRouteId,
+    destinationPathname,
+    kind
+  ) => {
+    const store = createWorkspaceReturnContextStore();
+    const prepared = commercialConsequenceRoundTrip(store, {
+      destinationRouteId,
+      destinationPathname,
+      kind
+    });
+
+    expect(prepared).toMatchObject({
+      ok: true,
+      token: {
+        origin: { routeId: "quote-edit", pathname: "/app/quotes/rivera-wedding/edit" },
+        destination: { routeId: destinationRouteId, pathname: destinationPathname },
+        surfaceId: "commercial-consequence"
+      }
+    });
+    expect(store.commit({ token: prepared.token, destinationEntry })).toEqual({ ok: true });
+    expect(store.resolveOrigin({
+      entry: destinationEntry,
+      state: withWorkspaceReturnContextState(null, prepared.token),
+      route: prepared.token.destination,
+      targetRouteId: "quote-edit"
+    })).toMatchObject({
+      ok: true,
+      routeId: "quote-edit",
+      view: {
+        scrollY: 906,
+        focus: {
+          kind: "commercial-consequence",
+          objectId: "rivera-wedding",
+          actionId: `review-commercial-consequence:${kind}`,
+          controlId: `commercial-change-artifact-${kind}`
+        }
+      }
+    });
+  });
+
+  test("rejects a commercial consequence whose return object does not match its edit route", () => {
+    const store = createWorkspaceReturnContextStore();
+    expect(commercialConsequenceRoundTrip(store, {
+      view: {
+        routeId: "quote-edit",
+        focus: {
+          kind: "commercial-consequence",
+          objectId: "another-quote",
+          actionId: "review-commercial-consequence:proposal",
+          controlId: "commercial-change-artifact-proposal"
+        }
+      }
+    })).toEqual({ ok: false, reason: "invalid_context" });
+  });
+
+  test("rejects a commercial consequence whose kind does not match its destination", () => {
+    const store = createWorkspaceReturnContextStore();
+    expect(commercialConsequenceRoundTrip(store, {
+      destinationRouteId: "operations",
+      destinationPathname: "/app/operations",
+      kind: "inventory_ingredient"
+    })).toEqual({ ok: false, reason: "invalid_context" });
+  });
+
+  test("rejects staffing navigation to a different quote", () => {
+    const store = createWorkspaceReturnContextStore();
+    expect(commercialConsequenceRoundTrip(store, {
+      destinationRouteId: "quote-detail",
+      destinationPathname: "/app/quotes/another-quote",
+      kind: "staffing_requirement"
+    })).toEqual({ ok: false, reason: "invalid_context" });
+  });
+
   test.each([
     ["home", "priority-action"],
     ["quote-list", "opportunity-action"]

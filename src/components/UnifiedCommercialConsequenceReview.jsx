@@ -8,11 +8,12 @@ export default function UnifiedCommercialConsequenceReview({
   onApplySelected,
   onKeepQuotedPlan
 }) {
-  const allIds = useMemo(() => review?.selectableRecommendationIds || [], [review]);
+  const allIdsKey = JSON.stringify(review?.selectableRecommendationIds || []);
+  const allIds = useMemo(() => JSON.parse(allIdsKey), [allIdsKey]);
   const [selectedIds, setSelectedIds] = useState(allIds);
   useEffect(() => {
-    setSelectedIds(allIds);
-  }, [allIds, review?.fence?.proposedRevisionId]);
+    setSelectedIds(JSON.parse(allIdsKey));
+  }, [allIdsKey, review?.fence?.proposedRevisionId]);
   if (!review) return null;
 
   const toggle = (id) => {
@@ -71,10 +72,10 @@ export default function UnifiedCommercialConsequenceReview({
       {!scopeCurrent && <p className="warning-note" role="alert">The quote, catalog, or simulation fence changed. Refresh consequence review before choosing an outcome.</p>}
       <div className="right-actions">
         <button type="button" className="ghost compact" onClick={onKeepQuotedPlan} disabled={busy}>Keep quoted plan</button>
-        <button type="button" className="ghost compact" onClick={() => onApplySelected?.(selectedIds)} disabled={disabled || selectedIds.length === 0}>Apply selected</button>
-        <button type="button" className="cta compact" onClick={() => onApplyAll?.(allIds)} disabled={disabled}>Apply all</button>
+        <button type="button" className="ghost compact" onClick={() => onApplySelected?.(selectedIds)} disabled={disabled || selectedIds.length === 0}>Stage selected in form</button>
+        <button type="button" className="cta compact" onClick={() => onApplyAll?.(allIds)} disabled={disabled}>Stage all in form</button>
       </div>
-      <p className="workflow-attention-boundary" role="note">Apply actions rebuild an exact proposed form and require a fresh server-authoritative simulation before the existing governed version action can run. Keep discards only this unsaved proposal.</p>
+      <p className="workflow-attention-boundary" role="note">Stage actions rebuild an exact proposed form and require a fresh server-authoritative simulation before the existing governed version action can run. They do not save, approve, or authoritatively apply a quote. Keep discards only this unsaved proposal.</p>
     </section>
   );
 }

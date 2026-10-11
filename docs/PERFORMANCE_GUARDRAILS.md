@@ -1,6 +1,6 @@
 # Performance Guardrails
 
-Last updated: 2026-09-24 22:00:00 CDT
+Last updated: 2026-10-10 21:06:24 CDT
 
 ## Objectives
 Keep delivery speed high while protecting end-user experience and predictable performance.
@@ -239,6 +239,84 @@ Current enforced assertions:
 - LCP maximum threshold
 - CLS maximum threshold
 - TBT maximum threshold
+
+## Authenticated workspace route performance
+
+`npm run calibrate:perf:routes` builds an isolated production Ambient graph and
+runs each of Now, Clients customer detail, Inventory, and quote review five
+times. `npm run check:perf:routes` runs each three times and evaluates the median
+of route bytes, route-start to usable core, and route-start to supplemental
+completion separately. `npm run test:perf:routes` checks the aggregation and
+fail-closed budget rules; either browser command accepts `-- --list` to inspect
+the exact test matrix without a build or browser run.
+
+The fixed profile is `ambient-local-staff-v1`: Chromium, 1440 x 900, DPR 1,
+4x simulated CPU slowdown, 40 ms latency, 200,000 bytes/s download and 93,750
+bytes/s upload, cold contexts with cache disabled, reduced motion, fixed
+2026-10-10 wall-clock date and deterministic random seed. These are declared
+test inputs, not measured device capabilities. Google Fonts stylesheet/font
+requests are aborted in this isolated profile, using the native font fallback;
+their transfer bytes and font-service latency are excluded explicitly. Other
+external services fail the scenario. The exact installed Playwright
+version, host CPU/OS, Git HEAD/dirty state, and SHA-256 of the built HTML/assets
+are recorded in each receipt. The strict loopback preview never reuses another
+server; its build marker must match before route navigation.
+
+Only Date and the fixture's random/data inputs are overridden. Native
+Performance and native timers remain intact: Playwright 1.58.2's fixed-time
+clock also replaces Performance and cannot supply native mark/resource entries
+for this measurement contract.
+
+Route bytes are encoded resource bodies initiated from document arrival through
+the matched supplemental-complete mark, plus the document body. They include
+the shared shell as well as route assets; they are not incremental warm-route
+bytes or total raw emitted bundle bytes. The two stage durations start at the
+application's actual `markRouteStage` route-start mark, so shell/bootstrap time
+before that mark is recorded separately as `documentToRouteStartMs`. Only a
+matched navigation with usable-core outcome `ready` can qualify. Supplemental
+`partial` remains explicit in the receipt; errors, unavailable stages, missing
+marks, failed tests, missing runs, or uncalibrated budgets fail closed. No
+test-created performance marks are permitted.
+
+This profile uses the existing synthetic admin session and local quote data.
+It does not prove Firebase authentication, persistence, hosted timing,
+production timing, accessibility, visual acceptance, or physical-device
+performance. It covers the Ambient graph only. The existing authenticated
+Inventory success fixture lives inside
+`e2e/inventory-workspace-responsive.spec.js` and requires the Firebase emulator
+tenant-authority profile; the local fallback cannot qualify Inventory. Until a
+successful authorized fixture is available to this gate, Inventory calibration
+is BLOCKED and the command exits nonzero. This command is available for CI use
+but is not yet wired as a required CI job.
+
+Quote review also requires the organization Library in the production
+transform. `useCatalogData` permits local catalog fallback only in a development
+transform; setting its fallback flag or seeding a local catalog does not grant
+production Library availability. This Firebase-free profile therefore cannot
+qualify quote review either. No development transform or invented catalog or
+Inventory authority may be substituted to make calibration pass. Ambient Now
+reports real bounded-read readiness once per organization/mount, including
+partial/error/stale outcomes; canonical `clients` is accepted by the same route
+mark allow-list as its customer-detail alias.
+
+`docs/performance/route-performance-budget.json` starts uncalibrated with no
+ceilings. A fully successful five-run calibration emits an ignored
+`output/playwright/quotepilot-route-performance-*/budget-proposal.json` with
+nearest-rank p75 plus 10% headroom, rounded up to integer bytes/milliseconds.
+Review the measured receipt before replacing the budget; the command never
+changes committed ceilings automatically. The check rejects a ceiling that
+does not equal its recorded p75 + 10% calculation. Any ceiling increase requires
+a new successful measured calibration, retained receipt, and review. Existing
+bundle and CWV budgets remain independent.
+
+The October 10 integrated dirty-worktree snapshot passes the unchanged Ambient
+exception at 4,964,683 total JavaScript bytes versus 4,968,757 allowed (4,074
+bytes headroom); its largest chunk is 385,181 bytes versus 445,422 allowed.
+This narrow artifact margin is not a request to raise the ceiling. Now and
+Clients have repeatable route-stage measurements, while Inventory and quote
+review remain deliberately uncalibrated until authorized production-profile
+fixtures exist. Those blocked scenarios must remain failures rather than being
+replaced with local fallback authority.
 
 ## Exception Workflow
 If a change needs temporary threshold relaxation or major dependency upgrade:

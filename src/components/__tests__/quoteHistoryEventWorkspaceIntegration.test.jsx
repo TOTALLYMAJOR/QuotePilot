@@ -24,6 +24,7 @@ vi.mock("../../lib/menuService", async () => ({
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
 let isExactQuoteAdministrationArrival;
+let commercialConsequenceRevisionMatchesQuote;
 let QuoteHistoryView;
 
 const QUOTE = Object.freeze({
@@ -50,7 +51,11 @@ let root;
 
 beforeAll(async () => {
   vi.stubEnv("VITE_AMBIENT_UI_ENABLED", "false");
-  ({ isExactQuoteAdministrationArrival, QuoteHistoryView } = await import("../QuoteHistoryModal"));
+  ({
+    commercialConsequenceRevisionMatchesQuote,
+    isExactQuoteAdministrationArrival,
+    QuoteHistoryView
+  } = await import("../QuoteHistoryModal"));
 });
 
 async function settle() {
@@ -282,6 +287,34 @@ describe("QuoteHistoryView event workspace integration", () => {
         intentId: "review_proposal_controls"
       },
       focusQuoteId: QUOTE.id
+    })).toBe(false);
+  });
+
+  test.each([
+    ["customer-decision-artifact", "review_commercial_proposal_consequence"],
+    ["kitchen-beo", "review_kitchen_beo_consequence"]
+  ])("accepts an exact revision-bound %s commercial arrival", (objectType, intentId) => {
+    const arrivalContext = {
+      destination: "administration",
+      surfaceId: "quote-administration",
+      focusConsumerState: "supported",
+      object: { id: QUOTE.id, type: objectType },
+      intentId,
+      focus: {
+        quoteId: QUOTE.id,
+        sourceRevisionId: "revision-current",
+        proposedRevisionId: "revision-proposed"
+      }
+    };
+
+    expect(isExactQuoteAdministrationArrival({ arrivalContext, focusQuoteId: QUOTE.id })).toBe(true);
+    expect(commercialConsequenceRevisionMatchesQuote(arrivalContext, {
+      ...QUOTE,
+      activeVersionId: "revision-current"
+    })).toBe(true);
+    expect(commercialConsequenceRevisionMatchesQuote(arrivalContext, {
+      ...QUOTE,
+      activeVersionId: "revision-newer"
     })).toBe(false);
   });
 

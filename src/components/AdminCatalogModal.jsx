@@ -3774,6 +3774,7 @@ export function AdminCatalogView({
                           ingredientSourceState={inventoryRecipeExtension?.ingredientSourceState}
                           recipeSourceState={activeMenuCostProjectionState}
                           publishEligibility={recipePublishEligibility}
+                          onPreviewDependencies={inventoryRecipeExtension?.previewRecipeDependencies}
                           onPublish={inventoryRecipeExtension?.publishRecipe}
                           onReconcile={inventoryRecipeExtension?.reconcileRecipe}
                           onReset={inventoryRecipeExtension?.resetRecipe}

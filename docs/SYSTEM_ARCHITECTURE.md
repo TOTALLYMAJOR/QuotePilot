@@ -1,6 +1,6 @@
 # QuotePilot System Architecture
 
-Last updated: 2026-09-24 01:57:41 CDT
+Last updated: 2026-10-10 21:06:24 CDT
 
 Status: present-tense system architecture. Domain ADRs and executable contracts
 remain authoritative for their own invariants.
@@ -27,6 +27,90 @@ business authority.
 | Evidence exporter (`evidence/`) | Deterministic projection of already-read authoritative records into reconciliation bundles | Credentials, network access, writes, or policy inference |
 | Commercial Truth Loop (`truthloop/`) | Deterministic read-only reconciliation and findings | Pricing, approval, mutation, customer presentation, or provider action |
 | Product/release governance | Traceability, validation, evidence classification, and release receipts | Product-owner, provider, production, human, or outcome acceptance |
+
+## Loading and diagnostic boundaries
+
+The October 10 local candidate separates the public entry graph from optional
+workspace modules. Staff application loading waits for authentication and tenant
+resolution; public portal token precedence and existing missing-configuration
+recovery remain intact. The quote composer, wizard steps, and catalog revision
+review enter through recoverable lazy boundaries. Existing application checks
+still own role eligibility and protected data access; splitting code grants no
+new authority. Catalog settings retain their workspace-wide loading gate:
+route eligibility and feature controls depend on that shared authority. Each
+recoverable lazy instance retains its own failed
+import and module selector so retry cannot substitute a sibling module or lose
+a named wizard-step export. Dirty quote reload continues to require confirmation.
+The compatibility Quote Workspace reuses the existing event summary for event
+identity and guest count instead of constructing the full Ambient presentation
+model for those fields. This removes an unnecessary presentation dependency
+without changing their values, pricing, or authorization.
+
+Ambient and compatibility shells now import the same recoverable route/tool
+boundary and sticky-mount helper. Route fallbacks and supplemental section
+placeholders reserve bounded responsive geometry, expose status/busy semantics,
+and add no focusable controls. Routed Now and Operations own one programmatic
+page identity; the Schedule dialog retains its dialog-local heading. These are
+presentation/loading contracts and do not move role, tenant, read, or mutation
+authority into the boundary.
+
+Production builds use the classic JSX transform with React 18
+`createElement`/`Fragment` to reduce emitted helper boilerplate. Development and
+test builds retain the automatic JSX transform for diagnostics and Fast Refresh.
+This reversible build configuration changes no feature, business authority, or
+visual style. Final bundle validation owns the byte evidence; the transform
+alone establishes no runtime speed improvement.
+
+Client 360 publishes its exact customer and bounded quote page first. Opening a
+proposal history requests only that quote's bounded retained versions; one
+scope-owned loader admits at most four reads concurrently, deduplicates active
+requests, and gives each failed history its own retry. Scope disposal drops
+queued work and ignores late results. Private email controls settle without
+waiting for histories. `versionPageInfo.unloadedQuoteIds` distinguishes
+unrequested histories from empty completed reads; the relationship timeline
+remains partial until its retained histories have been loaded. Earlier read-only
+availability does not enable rebook or closeout writes: those controls still
+require the exact current completed Firebase read and successful radar evidence.
+
+Now publishes attention, quote history, unread-reply, and pending-decision reads
+as they settle. Reporting separates bounded commercial records from product
+analytics. Each surface retains loading, unavailable/error, empty, and retained
+stale distinctions; unresolved reads cannot produce caught-up or zero-activity
+claims. Existing generation and organization fences prevent stale responses
+from populating a different scope.
+
+Inventory keeps broad current projections separate from narrow trace and
+dependency reads. Opening one ingredient disclosure requests only a bounded,
+cursor-ordered set of verified movement summaries plus commitments that
+reconcile to exact event plans; raw ledger documents remain server-side. Each
+ingredient owns its loading, partial, error, pagination, and retry state, and
+generation/entity fences discard late responses. Recipe publication is a
+two-step authority: the server returns a bounded role-safe dependency review
+for one exact draft, then transactionally recomputes that evidence before
+accepting the unchanged command with its issued digest. Browser and direct
+population paths cannot create that digest locally. These projections and
+reviews do not become stock valuation, physical-count, procurement, pricing,
+or whole-event readiness authority.
+
+Multi-line receiving is a client coordinator over the unchanged singular
+receive command. It submits lines sequentially, preserves a stable request ID
+and receipt outcome per line, locks confirmed work, reconciles uncertain work
+through that exact request, and retries only definitive failures. There is no
+batch mutation, new write schema, or rule bypass; partial failure therefore
+cannot replay an already confirmed stock movement.
+
+Release qualification uses UAT receipt version 5 and production evidence
+version 6. The UAT input is a closed, privacy-safe summary bound to one full
+release SHA, target, candidate profile, staging deployment, and public provider
+origin. It requires distinct hosted administrator, sales, customer, and
+cross-tenant observations and rejects emulator, fixture, and auth-bypass modes.
+Only the digest and safe summary enter the receipt. This gate validates evidence
+shape; it does not run the hosted journeys or establish deployment success.
+
+Session diagnostics recursively apply existing sensitive-key and text rules
+before nested serialization. Traversal and array indexes are bounded, cycles and unsafe accessors
+are redacted, and serialization failure never falls back to raw object text.
+Existing event shape and bounded storage remain local diagnostic evidence.
 
 ## Primary data flow
 
@@ -64,6 +148,10 @@ acceptance, delivery, settlement, or operational authority.
 - **Operational seam:** accepted commercial work is referenced by Staffing,
   Inventory, BEO, workflow, and event-operation modules; no consumer rewrites
   the accepted commercial record.
+- **Inventory evidence seam:** tenant/role/revision-fenced functions verify raw
+  movement, receipt, allocation, recipe, and dependency records, then return
+  bounded summaries or review digests to named surfaces. The client cannot
+  upgrade those reads into a count, valuation, reservation, or publication.
 - **Evidence seam:** exporter and reconciler consume evidence without credentials,
   network access, writes, or authority to fix findings.
 
@@ -130,6 +218,10 @@ Provider configuration or a successful health probe never proves a user outcome.
   drift remain distinct and produce different operator instructions.
 - Stale downstream projections identify their exact basis, owner, and recovery
   action rather than mutating the accepted source.
+- Inventory trace and recipe-dependency failures stay local to the selected
+  ingredient or draft. Foreign/malformed IDs, cursor drift, stale fences,
+  incomplete pages, non-reconciling totals, and changed dependency evidence
+  fail closed without clearing unrelated successful workspace state.
 - Analytics failure must not block the commercial workflow, but business
   authority remains closed and observable.
 - Exporter or reconciler failure cannot mutate production records or establish a

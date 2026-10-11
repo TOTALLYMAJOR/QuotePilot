@@ -1,6 +1,151 @@
 # Project Status
 
-Last updated: 2026-09-24 22:00:00 CDT
+Last updated: 2026-10-10 21:06:24 CDT
+
+## Progressive performance and operability — local candidate (October 10, 2026)
+
+The dirty `release/v0.20.0-open-work` checkout at indexed HEAD
+`7b4a3ddf26ff7a51e19e834713d8705e3e52aad4` now defers public film and optional
+workspace code, publishes independent route data, bounds/deduplicates reads,
+and records route-start, usable-core, and supplemental-complete separately.
+The same candidate adds the declared layout/accessibility refinements, exact
+commercial-consequence navigation and safe return, bounded Inventory
+traceability, and multi-line receiving that keeps one existing request and
+receipt identity per line. Ambient and compatibility shells share the same
+recoverable loading boundary.
+
+The current Ambient bundle passes at 4,964,683 bytes against the unchanged
+4,968,757-byte exception ceiling. Focused browser checks cover selected
+390/768/1440 geometry and public media behavior; the Firestore emulator rules
+suite passes 96 tests. The route-performance gate is repeatable, but Inventory
+and quote review remain uncalibrated because this local production profile has
+no authorized Inventory or catalog fixture. UAT v5 now fails closed unless one
+exact hosted candidate supplies distinct administrator, sales, customer, and
+cross-tenant results, but no such hosted run occurred here. This is local,
+uncommitted evidence: no push, deployment, production behavior, human
+acceptance, or outcome improvement is claimed.
+
+## Inventory traceability and dependency review — local candidate (October 10, 2026)
+
+The dirty working candidate adds an administrator-only, on-disclosure trace for
+one ingredient's verified movement summaries and reconciled exact event
+commitments. Movement reads use bounded stable compound cursors and preserve
+successful workspace evidence when one trace or later page fails. The Library
+recipe editor separately requires a bounded affected-menu review for the exact
+draft before publication. Browser and direct population paths pass only the
+server-issued digest, and the server rechecks the dependency evidence inside
+the write transaction.
+
+This state is source/local only. Focused runtime, client, component, and
+population-script tests exercise tenant/revision fences, equal-time pagination,
+malformed evidence, local retry/focus, stale responses, commitment totals, and
+dependency drift. The disposable demo-project Firebase emulator acceptance also
+passes the reviewed recipe publication and later dependent cost update through
+real callable and Firestore transactions. The composite movement-history index
+exists in `firestore.indexes.json` but has not been deployed or read back.
+Authenticated hosted use, assistive-technology and human review, physical
+Inventory, production behavior, baseline/outcome evidence, commit, push, and
+deployment remain open.
+
+## Safety and loading tranche — local candidate (October 10, 2026)
+
+The working candidate adds recursive diagnostic sanitization, deferred staff
+and quote-builder code, demand-loaded Client 360 proposal histories, and
+independently settling Now/Reporting reads. The detailed source behavior is in
+[System Architecture](docs/SYSTEM_ARCHITECTURE.md#loading-and-diagnostic-boundaries).
+This work does not change pricing, Inventory, approval, or provider authority.
+
+Validation remains local to source HEAD
+`7b4a3ddf26ff7a51e19e834713d8705e3e52aad4` plus preserved working changes.
+Environment, capability-surfacing, product-intelligence, and project-state checks
+pass. Both Ambient and compatibility production builds pass. The isolated demo-project Firestore emulator
+rules suite passes all 96 tests with a 60-second setup timeout and a 15-second
+per-test timeout; the emulator exits cleanly. These are local rules assertions,
+not hosted or production authorization proof. The final full unit run passes
+504 files and 6,026 tests; three files and 100 tests are skipped. This supersedes
+the earlier run's corrected eager-import assertion. A sandbox-restricted run
+was stopped after CLI subprocess tests hit EPERM; the complete rerun with
+required subprocess permissions exits successfully. The 17 JSX transform
+regressions are included in this final full-suite count.
+
+Completion planner `recordedAt`: `2026-10-10T20:20:11.453Z`, using the same task
+and eight-path scope as the start record. This records the local handoff, not a
+green release gate. `GRAPH_COVERAGE_BLOCKED` limits complete graph impact claims
+for partial/stale edited paths; the owner-authorized source fallback, focused
+tests, builds, and local browser checks supply the bounded implementation proof.
+
+The production manifest's static homepage JavaScript closure decreased from
+398,186 to 195,893 raw bytes, and the WorkspaceRoute closure decreased from
+1,699,300 to 878,073 bytes. Neither final closure includes the quote builder.
+These are artifact dependency sizes, not measured load times. The follow-up
+removed the full Ambient projection dependency from the compatibility quote
+workspace, preserving displayed identity and guest count through its smaller
+event presentation. Compatibility JavaScript decreased by 218,954 raw bytes,
+from 3,729,880 to 3,510,926, passing its unchanged 3,652,845-byte ceiling.
+The subsequent production-only classic JSX transform resolves the Ambient
+overrun. Under the same CI flag matrix, Ambient decreases from 4,987,091 to
+4,835,913 raw JavaScript bytes (151,178 fewer); compatibility totals 3,356,057.
+Both profiles pass their unchanged aggregate ceilings, and their largest chunk
+remains 385,181 bytes. Development and test builds retain automatic JSX and
+its diagnostics. No budget exception was expanded. The final Ambient homepage
+static JavaScript closure is 189,763 bytes; it excludes workspace and builder
+code. The WorkspaceRoute static JavaScript closure is 871,110 bytes and still
+excludes quote composition. These are emitted artifact sizes, not timing gains.
+
+Local Chromium checks rendered the homepage and sign-in page at 1440 and 390
+pixels without page overflow or unexpected browser errors, and neither requested
+the App, ProposalComposer, or WizardSteps chunks. Fixture workspace checks
+rendered Now, quote composition, Client 360, and Reporting. Client 360 also fit
+768 pixels; keyboard history navigation retained focus as versions appeared.
+After a deliberately failed WizardSteps import, **Try again** recovered the
+builder with both edited draft values retained. These checks do not measure
+Core Web Vitals or prove hosted authentication. The shared catalog settings gate
+remains ahead of route feature eligibility.
+
+The follow-up fixes both scanners to skip Git-confirmed deletions during
+content reads while retaining deletion-related documentation obligations and
+failing on other read errors or missing canonical documents. Eight isolated
+scanner regressions pass; the unrelated `.claude/agents/slice-implementer.md`
+deletion is preserved. The maintainer quick runner, documentation governance,
+and product-intelligence checks now pass. Three focused quote-workspace suites
+pass all 55 tests, including 20 parity cases for the reduced summary.
+A local Chromium quote fixture also renders its identity, 175 guests, and
+$19,475 total at 1440, 768, and 390 pixels without page-level horizontal
+overflow or browser errors; the 390-pixel capture was visually inspected.
+Follow-up completion planner `recordedAt`: `2026-10-10T21:28:42.904Z`.
+That earlier handoff retained the then-failing Ambient budget; the production
+JSX follow-up above now passes both bundle budgets. Full release qualification
+still requires separate release evidence.
+
+The JSX follow-up adds 17 passing transform checks using the actual Vite
+configuration: element keys/refs, children, fragments, default props, spread
+precedence and evaluation order, plus retained development/test automatic JSX.
+Production homepage/sign-in checks preserve the lazy request boundary. A
+missing-Firebase production fixture correctly remains blocked by Library
+recovery. A separate local-fallback fixture, explicitly enabled only in its
+scratch build, renders Now, quote composition, populated Living Opportunity,
+and Reporting at 390/768/1440 without page overflow or browser errors. Guided
+builder input retains focus and the entered guest count across resize. This
+is local compiler/UI evidence, not hosted authentication or tenant authorization.
+
+The final local Lighthouse comparison ran sequentially after the unit/build
+workload completed. Both baseline and final artifacts pass unchanged assertions
+with performance score 86 and zero measured Total Blocking Time. Final LCP is
+3,475.77 ms and CLS is 0.05136; baseline LCP is 3,504.05 ms and CLS is 0.04652.
+The earlier concurrent-workload run failed (score 43, TBT 6,874.70 ms), so its
+resource-contended result is retained but is not the final qualification run.
+Single local runs establish neither a causal timing improvement nor hosted CWV.
+Final production JSX planner `recordedAt`: `2026-10-10T22:13:07.797Z`.
+Environment/maintainer, both production builds and bundle guards, full unit,
+documentation governance, product-intelligence, project-state, and whitespace
+checks pass locally. Changed implementation is limited to `vite.config.js` and
+its new transform regression test; canonical architecture/status/changelog
+record the evidence. The candidate remains uncommitted and undeployed.
+
+Browser timing, hosted authenticated journeys,
+production deployment, human acceptance, and measured catering outcomes remain
+separate, unclaimed proof classes. Existing deployment receipts below do not
+cover this unreleased tranche.
 
 ## Current evidence boundary
 

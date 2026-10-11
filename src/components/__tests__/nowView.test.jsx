@@ -52,6 +52,9 @@ describe("NowView", () => {
       <NowView snapshot={snapshotFixture()} nowDate={NOW_DATE} />
     );
     expect(markup).toContain("Nothing needs you right now.");
+    expect(markup.match(/Nothing needs you right now\./g)).toHaveLength(1);
+    expect(markup).not.toContain("Your deck is clear");
+    expect(markup).not.toContain("Nothing needs an immediate decision");
     expect(markup).toContain("No accepted or booked events in the next 7 days.");
     expect(markup).toContain("No payments awaiting action.");
   });
@@ -105,4 +108,14 @@ describe("NowView", () => {
     expect(markup).toContain('role="alert"');
     expect(markup).toContain("Snapshot failed.");
   });
+});
+
+
+test("does not call a pending attention read clear while history is already available", () => {
+  const html = renderToStaticMarkup(<NowView snapshot={snapshotFixture({ loading: true, reads: {
+    attention: { status: "loading" }, history: { status: "success" }, unreadReplies: { status: "loading" }
+  } })} nowDate={NOW_DATE} />);
+  expect(html).toContain("Checking attention");
+  expect(html).not.toContain("Your deck is clear");
+  expect(html).toContain("No accepted or booked events in the next 7 days");
 });

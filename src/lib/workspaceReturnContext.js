@@ -8,12 +8,21 @@ const RETURNABLE_ROUTE_IDS = new Set([
   "home",
   "quote-list",
   "quote-detail",
+  "quote-edit",
   "customer-list",
   "customer-detail",
   "catalog",
   "clear-deck"
 ]);
-const DESTINATION_ROUTE_IDS = new Set(["quote-detail", "customer-detail", "catalog", "workflow"]);
+const DESTINATION_ROUTE_IDS = new Set([
+  "quote-list",
+  "quote-detail",
+  "customer-detail",
+  "operations",
+  "inventory",
+  "catalog",
+  "workflow"
+]);
 const WORKFLOW_ATTENTION_TYPES = new Set([
   "approval",
   "change_request",
@@ -39,7 +48,8 @@ const FOCUS_KINDS = new Set([
   "library-action",
   "library-disclosure",
   "quick-updates",
-  "decision-action"
+  "decision-action",
+  "commercial-consequence"
 ]);
 const SURFACE_IDS = new Set([
   "living-opportunity",
@@ -47,7 +57,8 @@ const SURFACE_IDS = new Set([
   "ambient-library",
   "library-editor",
   "decision-resolution",
-  "commercial-priority"
+  "commercial-priority",
+  "commercial-consequence"
 ]);
 const ALLOWED_ROUTE_PAIRS = new Set([
   "home:workflow",
@@ -57,7 +68,11 @@ const ALLOWED_ROUTE_PAIRS = new Set([
   "customer-detail:quote-detail",
   "quote-detail:catalog",
   "catalog:catalog",
-  "clear-deck:workflow"
+  "clear-deck:workflow",
+  "quote-edit:quote-list",
+  "quote-edit:quote-detail",
+  "quote-edit:operations",
+  "quote-edit:inventory"
 ]);
 const SURFACE_ROUTE_PAIRS = Object.freeze({
   "living-opportunity": new Set(["quote-list:quote-detail", "customer-detail:quote-detail"]),
@@ -65,7 +80,20 @@ const SURFACE_ROUTE_PAIRS = Object.freeze({
   "ambient-library": new Set(["quote-detail:catalog"]),
   "library-editor": new Set(["catalog:catalog"]),
   "decision-resolution": new Set(["clear-deck:workflow"]),
-  "commercial-priority": new Set(["home:workflow", "quote-list:workflow"])
+  "commercial-priority": new Set(["home:workflow", "quote-list:workflow"]),
+  "commercial-consequence": new Set([
+    "quote-edit:quote-list",
+    "quote-edit:quote-detail",
+    "quote-edit:operations",
+    "quote-edit:inventory"
+  ])
+});
+const COMMERCIAL_CONSEQUENCE_DESTINATIONS = Object.freeze({
+  proposal: "quote-list",
+  kitchen_beo: "quote-list",
+  staffing_requirement: "quote-detail",
+  production_plan: "operations",
+  inventory_ingredient: "inventory"
 });
 const runtimeStoreByWindow = new WeakMap();
 
@@ -245,6 +273,8 @@ function normalizePathname(routeId, value) {
     || /(?:@|%40)/iu.test(pathname)
   ) return "";
   if (routeId === "quote-list") return pathname === "/app/quotes" ? pathname : "";
+  if (routeId === "operations") return pathname === "/app/operations" ? pathname : "";
+  if (routeId === "inventory") return pathname === "/app/inventory" ? pathname : "";
   if (routeId === "home") return pathname === "/app" ? pathname : "";
   if (routeId === "customer-list") return pathname === "/app/customers" ? pathname : "";
   if (routeId === "catalog") return pathname === "/app/catalog" ? pathname : "";
@@ -252,6 +282,9 @@ function normalizePathname(routeId, value) {
   if (routeId === "workflow") return pathname === "/app/workflow" ? pathname : "";
   if (routeId === "quote-detail") {
     return /^\/app\/quotes\/(?!new(?:\/|$))[^/]+$/u.test(pathname) ? pathname : "";
+  }
+  if (routeId === "quote-edit") {
+    return /^\/app\/quotes\/(?!new(?:\/|$))[^/]+\/edit$/u.test(pathname) ? pathname : "";
   }
   if (routeId === "customer-detail") {
     return /^\/app\/customers\/[^/]+$/u.test(pathname) ? pathname : "";
@@ -337,6 +370,16 @@ function routeObjectId(pathname) {
   }
 }
 
+function quoteEditObjectId(pathname) {
+  const segments = String(pathname || "").split("/").filter(Boolean);
+  if (segments.at(-1) !== "edit") return "";
+  try {
+    return decodeURIComponent(segments.at(-2) || "");
+  } catch {
+    return "";
+  }
+}
+
 function viewMatchesOriginQuery(origin, view) {
   const params = new URLSearchParams(String(origin.search || "").replace(/^\?/u, ""));
   if (origin.routeId === "quote-list") {
@@ -412,6 +455,25 @@ function transitionMatchesView({ origin, destination, surfaceId, view, destinati
     }
     return focus.kind === "opportunity-action"
       && focus.actionId === `review-opportunity-workflow:${quoteId}:${requestId}`;
+  }
+  if (surfaceId === "commercial-consequence") {
+    const quoteId = quoteEditObjectId(origin.pathname);
+    const actionPrefix = "review-commercial-consequence:";
+    const actionKind = focus.actionId?.startsWith(actionPrefix)
+      ? focus.actionId.slice(actionPrefix.length)
+      : "";
+    const expectedDestinationRouteId = COMMERCIAL_CONSEQUENCE_DESTINATIONS[actionKind] || "";
+    const destinationQuoteId = destination.routeId === "quote-detail"
+      ? routeObjectId(destination.pathname)
+      : quoteId;
+    return Boolean(
+      quoteId
+      && focus.kind === "commercial-consequence"
+      && focus.objectId === quoteId
+      && expectedDestinationRouteId === destination.routeId
+      && destinationQuoteId === quoteId
+      && focus.controlId
+    );
   }
   return false;
 }

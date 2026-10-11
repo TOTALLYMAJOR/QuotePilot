@@ -1,6 +1,6 @@
 # Orchestration Runbook
 
-Last updated: 2026-09-19 13:09:29 CDT
+Last updated: 2026-10-10 19:54:09 CDT
 
 ## Purpose
 Operational usage guide for orchestration lanes, CI behavior, and release evidence expectations.
@@ -17,6 +17,21 @@ Machine-readable runner handoff:
 npm run plan:task -- --task "Review Firestore role authority" \
   --files firestore.rules,src/lib/authClient.js --json
 ```
+
+Named enhancements must exist in `docs/enhancement-impact-manifest.json`:
+```bash
+node scripts/check-enhancement-impact-contract.mjs
+npm run plan:task -- --task "Implement enhancement 97" \
+  --enhancement 97 \
+  --files scripts/task-orchestration-plan.mjs,docs/enhancement-impact-manifest.json
+```
+
+The declaration supplies affected routes, authority identifiers, and runnable
+tests. A presentation-only item must use `authorities: []`; if its bounded file
+set crosses a registered pricing, commercial-quote, or Inventory authority
+path, planning fails and the authority work must be separated or truthfully
+reclassified. Exact IDs in task text are detected automatically;
+`--enhancement` is the unambiguous runner form.
 
 The output recommends a model and reasoning effort, but the external runner
 must apply that selection before task execution. In a dirty worktree, always

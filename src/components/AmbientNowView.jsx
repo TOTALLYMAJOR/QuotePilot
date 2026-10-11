@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import StaffEvidenceRail from "./StaffEvidenceRail";
 import WorkspaceRecoveryState from "./WorkspaceRecoveryState";
 import { useWorkspaceRouteHeadingFocus } from "../hooks/useWorkspaceRouteHeadingFocus";
+import { WorkspaceSectionLoading } from "./WorkspaceSurfaceBoundary";
 import { useWorkspaceReturnContextAdapter } from "../context/WorkspaceNavigationContext";
 import {
   buildMoneyRows,
@@ -14,6 +15,7 @@ import {
   formatNowReceiptAge
 } from "./nowPresentation";
 import { buildAmbientNowBriefing } from "../lib/ambientNowBriefing";
+import { markRouteStage } from "../lib/routePerformance";
 import { getWorkflowAttentionFocusId } from "../lib/quoteWorkflow";
 import { classifyQuoteStatus } from "../lib/statusSemantics";
 import {
@@ -438,6 +440,38 @@ export default function AmbientNowView({
     truncated: false,
     truncationKnown: false
   };
+  const reportedStagesRef = useRef(new Set());
+  const readStates = Object.values(state.reads || {});
+  const usableCoreReady = Boolean(
+    state.attentionSummary
+    || state.quotes?.length
+    || readStates.some((read) => ["success", "error"].includes(read?.status))
+    || (!state.loading && !state.error)
+  );
+  const supplementalSettled = readStates.length
+    ? readStates.every((read) => ["success", "error", "unavailable"].includes(read?.status))
+    : !state.loading;
+  const stageOutcome = state.error
+    ? "error"
+    : readStates.some((read) => ["error", "unavailable"].includes(read?.status)) || state.partial || state.stale
+      ? "partial"
+      : "ready";
+
+  useEffect(() => {
+    reportedStagesRef.current.clear();
+  }, [organizationId]);
+
+  useEffect(() => {
+    if (!usableCoreReady || reportedStagesRef.current.has("usable-core")) return;
+    reportedStagesRef.current.add("usable-core");
+    markRouteStage({ routeId: "now", stage: "usable-core", outcome: stageOutcome });
+  }, [organizationId, stageOutcome, usableCoreReady]);
+
+  useEffect(() => {
+    if (!supplementalSettled || reportedStagesRef.current.has("supplemental-complete")) return;
+    reportedStagesRef.current.add("supplemental-complete");
+    markRouteStage({ routeId: "now", stage: "supplemental-complete", outcome: stageOutcome });
+  }, [organizationId, stageOutcome, supplementalSettled]);
   const surfaceRef = useRef(null);
   const headingRef = useWorkspaceRouteHeadingFocus(true);
   const acknowledgementRef = useRef(null);
@@ -767,7 +801,7 @@ export default function AmbientNowView({
           <span className="ambient-now__breadcrumb-prefix">Now <span aria-hidden="true">/</span></span>
           <time dateTime={nowISO}>{fullDateLabel}</time>
         </p>
-        <h2
+        <h1
           ref={headingRef}
           id="now-heading"
           className="workspace-route-heading"
@@ -775,7 +809,7 @@ export default function AmbientNowView({
           data-testid="now-daily-brief"
         >
           {decisionSummary.headline}
-        </h2>
+        </h1>
         <p className="ambient-now__intro">
           {decisionSummary.supporting || "The current view is ready for review."}
         </p>
@@ -820,7 +854,11 @@ export default function AmbientNowView({
       )}
 
       {!unavailable && <div className="ambient-now__decision-grid">
-        <section className="ambient-now__priorities" aria-labelledby="ambient-now-priorities-title">
+        <section
+          className="ambient-now__priorities"
+          aria-labelledby="ambient-now-priorities-title"
+          data-caught-up={priorityRows.length === 0 ? (trulyCaughtUp ? "true" : "false") : undefined}
+        >
           <div className="ambient-now__section-heading">
             <p className="eyebrow">Needs you</p>
             {priorityRows.length > 0 && (
@@ -837,7 +875,7 @@ export default function AmbientNowView({
             )}
             <h3
               id="ambient-now-priorities-title"
-              className={priorityRows.length > 0
+              className={priorityRows.length > 0 || trulyCaughtUp
                 ? "sr-only ambient-now__return-anchor"
                 : "ambient-now__return-anchor"}
               tabIndex={-1}
@@ -845,7 +883,7 @@ export default function AmbientNowView({
               {priorityRows.length > 0
                 ? "Priority updated. Review what needs your attention now."
                 : trulyCaughtUp
-                  ? "A quieter moment"
+                  ? "Needs you"
                   : "This view needs a little more context"}
             </h3>
             {briefing.overflowCount > 0 && (
@@ -856,7 +894,11 @@ export default function AmbientNowView({
           </div>
 
           {state.loading && !state.attentionSummary && (
-            <p className="ambient-now__loading" role="status">Gathering the latest workspace information...</p>
+            <WorkspaceSectionLoading
+              className="ambient-now__loading"
+              label="Gathering the latest workspace information..."
+              rows={3}
+            />
           )}
 
           {!state.loading && priorityRows.length > 0 && (
@@ -878,20 +920,17 @@ export default function AmbientNowView({
             </ol>
           )}
 
-          {!state.loading && priorityRows.length === 0 && (
+          {!state.loading && priorityRows.length === 0 && !trulyCaughtUp && (
             <div
-              className={`ambient-now__caught-up${trulyCaughtUp ? " ambient-now__caught-up--healthy" : ""}`}
-              data-caught-up={trulyCaughtUp ? "true" : "false"}
+              className="ambient-now__caught-up"
             >
-              <span aria-hidden="true">{trulyCaughtUp ? "✓" : "○"}</span>
+              <span aria-hidden="true">○</span>
               <div>
-                <h4>{trulyCaughtUp ? "You are caught up on the work tracked here." : "This view cannot call you caught up yet."}</h4>
+                <h4>This view cannot call you caught up yet.</h4>
                 <p>
-                  {trulyCaughtUp
-                    ? "Nothing tracked in this view currently needs you."
-                    : moneyRows.length > 0 && briefing.caughtUp.eligible
-                      ? "No Workflow item in this view needs attention, but recorded payment steps remain below."
-                      : incompleteViewCopy(briefing)}
+                  {moneyRows.length > 0 && briefing.caughtUp.eligible
+                    ? "No Workflow item in this view needs attention, but recorded payment steps remain below."
+                    : incompleteViewCopy(briefing)}
                 </p>
               </div>
             </div>

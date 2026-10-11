@@ -24,9 +24,14 @@ describe("operational workspace presentations", () => {
   test.each([
     ["schedule", EventScheduleView, EventScheduleModal, "event-schedule-title"],
     ["reporting", ReportingDashboardView, ReportingDashboardModal, "reporting-dashboard-title"]
-  ])("renders %s as an embedded region while preserving its modal wrapper", (name, View, Modal, titleId) => {
+  ])("renders %s as an embedded route while preserving its modal wrapper", (name, View, Modal, titleId) => {
     const embedded = renderToStaticMarkup(<View open onClose={() => {}} organizationId="org-a" />);
-    expect(embedded).toContain('role="region"');
+    if (name === "schedule") {
+      expect(embedded).toContain('<main class="container workspace-route-main embedded-workspace-route"');
+      expect(embedded).toContain(`<h1 id="${titleId}"`);
+    } else {
+      expect(embedded).toContain('role="region"');
+    }
     expect(embedded).toContain("embedded-workspace-route");
     expect(embedded).toContain("workspace-route-card");
     expect(embedded).toContain(`aria-labelledby="${titleId}"`);

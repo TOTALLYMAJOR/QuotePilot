@@ -1,6 +1,6 @@
 # Ingredient Inventory and Menu-Costing Authority
 
-Last updated: 2026-09-13 01:37:10 CDT
+Last updated: 2026-10-10 20:18:18 CDT
 
 Status: Accepted scope correction; corrected Phases 2 through 8 are merged in
 the v0.18 source line, the Inventory backend is deployed and exact-tenant
@@ -170,6 +170,29 @@ silently replace that state. Consequently, an unrelated cost revision never
 blocks a valid physical receipt whose cost observation is being retained only
 as evidence.
 
+## Bounded ingredient traceability
+
+The administrator workspace may request movement history and current event
+commitments for one exact ingredient only after its disclosure opens. The
+authority binds the organization, ingredient revision, stock revision, and
+allocation fence before returning role-safe verified summaries. It never sends
+raw ledger rows to the browser.
+
+Movement history is ordered by `recordedAtISO DESC` and document ID `DESC`,
+with at most 25 records per page. The server echoes an exact compound cursor
+and explicit completeness/page metadata, so equal-time records neither repeat
+nor disappear. A malformed or foreign identity, stale fence, tampered movement
+or receipt, or non-reconciling commitment total fails closed. Commitment rows
+name their exact event plan and requirement revision and must sum to the
+allocation projection total. None of this evidence establishes a physical
+count, valuation method, procurement state, or whole-event readiness.
+
+The React disclosure owns state per ingredient. Late responses cannot populate
+a different ingredient, successful pages remain visible if a later page or
+sibling read fails, and retry remains local with focus preserved. This read
+path introduces no write, reservation, release, allocation, or consumption
+authority.
+
 ## Versioned recipes and pure costing
 
 A recipe revision belongs to one existing menu item and records:
@@ -184,6 +207,16 @@ A recipe revision belongs to one existing menu item and records:
 Publishing creates an immutable revision and advances only the menu item’s
 recipe head. Invalid references, unsupported conversions, missing yields, and
 missing cost evidence remain explicit.
+
+Before publication, the server reviews the exact draft against the current
+catalog revision, current recipe head, bounded reverse-dependency documents,
+and affected menu identities. It returns a role-safe complete review plus a
+digest; the browser focuses the affected-menu summary and may publish only the
+unchanged draft with that digest. Publication recomputes the evidence inside
+the transaction. Scope drift, a draft edit, a changed revision/dependency, an
+incomplete review, or more than the supported bounded menu set fails closed.
+The digest is review evidence, not a customer, production, procurement, or
+pricing approval.
 
 Recipe costing is a pure deterministic calculation. It accepts the exact recipe
 revision, normalized ingredient quantities, and pinned cost observations. It
@@ -522,6 +555,12 @@ import core creates 130 additional creative menu items under one replay-stable
 batch receipt, and Inventory commands create five locations, 132 ingredients,
 their separate opening/cost evidence, and at most 200 current recipe
 projections under individual replay-stable receipts.
+
+Every recipe publication in that operation first calls the existing Inventory
+workspace authority for the exact dependency preflight and validates the
+returned tenant, menu identity, catalog revision, recipe revision, completeness,
+and digest before submitting the command. The script does not derive or
+fabricate the digest. A stale or malformed review stops the apply.
 
 The fixture remains below the 200-definition workspace and 200-menu-projection
 bounds. Its stock and supplier-labelled costs are synthetic founder-pilot

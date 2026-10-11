@@ -1,10 +1,90 @@
 # Changelog
 
-Last updated: 2026-09-24 22:00:00 CDT
+Last updated: 2026-10-10 21:35:47 CDT
 
 All notable project changes are documented in this file.
 
 ## Unreleased — Current candidate refinements
+
+- Replace decorative one-sided status accents in Living Opportunity and
+  Operations with restrained hairlines, full-state borders, and subtle state
+  washes while preserving exact stale, attention, conflict, and selected-day
+  meaning. Retain the attendance alert rail, calendar-event color bar, and
+  reduced-motion-safe drag landing feedback as narrowly documented design
+  exceptions. This is local source and lint evidence, not hosted or human visual
+  acceptance.
+
+- Deliver the local QuotePilot progressive-performance and operability tranche:
+  public video sources attach only after an explicit action and respect motion/
+  data preferences; public, sign-in, workspace, and quote-workflow code/styles
+  have narrower boundaries; authenticated reads publish independently, page or
+  coalesce within exact principal scope, and expose route-stage marks. The
+  workspace adds responsive navigation/field geometry, route identities,
+  focus-safe disclosures, visible disabled reasons, exact commercial-consequence
+  handoffs, bounded Inventory traces, and sequential multi-line receiving over
+  the existing singular receipt authority. Release UAT v5 now requires
+  exact-candidate hosted admin, sales, customer, and cross-tenant evidence and
+  rejects local fixtures, emulators, and auth bypass. Local focused, browser,
+  build, rules, governance, and bundle checks support these bounded claims; the
+  current Ambient bundle is 4,964,683 bytes, 4,074 below the unchanged exception
+  ceiling. Inventory physical count, tenant-wide shortage projection, inbound
+  supply authority, valuation policy, complete authenticated route calibration,
+  hosted role qualification, deployment, and human acceptance remain open.
+
+- Add administrator-only, on-disclosure ingredient traceability with stable
+  bounded movement pages, verified receipt summaries, exact event-plan
+  commitments, local partial/error recovery, and focus-preserving retry. Add
+  an exact recipe-dependency review before Library or direct fixture
+  publication; the unchanged command must carry the server-issued digest and
+  is transactionally rechecked. Focused source checks cover scope, revision,
+  cursor, reconciliation, stale-response, and recovery boundaries; a disposable
+  Firebase-emulator run passes the repaired direct recipe and cost preflights.
+  This is an unreleased local candidate: the matching Firestore index is not deployed,
+  and no hosted, production, human, accessibility, physical-count, valuation,
+  procurement, readiness, or outcome proof is claimed.
+
+- Compile production JSX through React 18 createElement/Fragment bindings to
+  reduce emitted boilerplate, preserving automatic JSX for development/tests.
+  Ambient saves 151,178 raw JavaScript bytes against the matching CI-flag
+  baseline; both Ambient and compatibility now pass unchanged bundle budgets.
+  Differential tests cover key/ref/children, defaults, and spread evaluation
+  semantics. No feature, authority, visual direction, or runtime-speed change
+  is claimed.
+
+- Skip Git-confirmed deleted files during secret/document content scans while
+  retaining deletion governance, missing-canonical-document checks, and genuine
+  read failures. Eight scanner regression cases pass locally.
+- Reduce compatibility quote-workspace dependencies to its displayed event
+  identity and guest summary. The production artifact sheds 218,954 raw
+  JavaScript bytes and passes its existing budget; 55 focused tests preserve
+  display behavior. That slice left Ambient 18,394 bytes above its unchanged
+  budget; the production JSX follow-up above resolves that excess.
+  These are local artifact and test results, not measured loading-time gains.
+
+- Harden nested diagnostic-context redaction before serialization, including
+  arrays and sparse indexes, circular values, excessive nesting, accessors, and failed serializers.
+  Preserve the existing bounded event shape without adding a dependency.
+- Defer the staff application until authentication resolves, load quote-builder
+  presentation on entry through recoverable boundaries with per-import retries, and separate public
+  assets from manually grouped workspace modules. Existing portal precedence,
+  missing-configuration recovery, tenant and role checks remain authoritative.
+  Catalog settings retain their existing workspace-wide loading gate because
+  route eligibility and feature controls depend on that authority.
+- Load Client 360 proposal histories only when opened, with at most four active
+  history requests, exact-scope disposal, and per-history retry. Private email
+  controls settle separately from histories. Publish Now and Reporting reads
+  independently while keeping unfinished, unavailable, and empty states distinct.
+  These are unreleased local source changes; timing gains, hosted behavior,
+  production, accessibility, human acceptance, and outcomes need separate proof.
+
+- Expand the dedicated local accessibility lane from a contrast-only axe check
+  to the WCAG 2.0, 2.1, and 2.2 A/AA rules supported by axe, while retaining
+  the existing desktop/mobile text-size, target-size, overflow, and font-loading
+  checks. The expanded scan found and repaired the phone-width quote step rail,
+  which is now a named, keyboard-focusable scroll region in both current and
+  legacy shells. Add `npm run test:accessibility` as the focused entry point.
+  This is local automated evidence only; assistive-technology and human testing
+  remain required.
 
 - Reconcile current state, capability, performance, product-intelligence, and
   operator documentation to QPR-005 source head
