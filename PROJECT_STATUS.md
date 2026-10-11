@@ -1,6 +1,87 @@
 # Project Status
 
-Last updated: 2026-10-10 21:06:24 CDT
+Last updated: 2026-10-11 04:13:28 CDT
+
+## Browser and route-budget qualification — local work (October 11, 2026)
+
+The `release/v0.20.0-open-work` checkout is at committed HEAD
+`216431a256d31c585be97be719e1fabbeec68d93` plus the current uncommitted browser
+and measurement repairs. Component fixtures now explicitly load workspace CSS;
+responsive Inventory tests cover the existing phone cards and wider tables.
+Ambient geometry has its own flag profile and dependency cache, while quote
+tests wait for the actual onboarding/catalog state rather than an early header.
+
+The route runner is being qualified against an isolated demo Auth/Firestore
+tenant, real Inventory-generated projections, and three secret-free read-only
+Functions handlers. Invalid or unavailable routes cannot produce proposed
+ceilings. The first post-repair Now and Clients visits passed; the failing
+Inventory arrival exposed a missing Inventory entry in the catalog/settings
+read allow-list. Owner-authorized bounded source inspection established the
+readiness cycle; the one-line repair preserves tenant and role gates and passes
+45 focused tests. The next calibration exposed a denied 201-record ingredient
+query against the existing 200-record read bound. The client now displays 199
+records plus one lookahead within that bound, preserving pagination; 140 focused
+client/component/runtime tests pass. Rules are unchanged. The harness also
+rejects recorded browser errors or unexpected external requests after final UI
+assertions (ten focused checks pass, including rejection of profiled diagnostic
+samples from budget aggregation). A diagnostic browser run stopped after
+50 passes and three failures: mobile stepper clipping and two save-flow tests
+sharing a menu-selection race. The three reproduced failures now pass focused
+browser verification: the rail recenters after lazy loading, and test helpers
+wait for committed step changes. A retained 390 px screenshot confirms the
+active step and pricing remain visible.
+
+The next full browser run passed 89 scenarios, skipped 314 profile-gated cases,
+and exposed one remaining Workflow → Edit quote focus race. App and LegacyApp
+now retain the request until the matching, hydrated, visible editor attaches;
+stale requests and scheduled frames are cancelled. The unchanged focused browser
+assertion passes (1/1), and independent bounded source review found no blocking
+defect. The next two-worker full run passed 88 scenarios and skipped 314; all
+four quote repairs passed, but two other tests sampled lazy-loading surfaces
+too early. Accessibility now waits for the existing visible task panel before
+auditing, and typography waits for the actual Now heading before reading styles.
+The original accessibility and typography assertions remain intact. The fresh
+full regression run passes: 90 passed, 314 profile-gated skips, zero failures,
+two workers, and no retries (11.5 minutes). All six reproduced failures are
+covered by that green run.
+
+The fresh five-run calibration passed 20/20 browser scenarios. All 20 samples,
+profile/build identity, and independently checked p75-plus-10% ceilings are
+retained in `docs/performance/route-performance-calibration.json`; the reviewed
+ceilings are adopted in `docs/performance/route-performance-budget.json`.
+Independent three-run verification used the identical build hash and passed all
+12 browser scenarios, but the budget result is **FAIL**: Now, Clients and every
+byte ceiling pass; Inventory core/supplemental medians are 2,994.8/2,994.9 ms
+against 2,155/2,155 ms, and quote review is 2,488.5/2,489.3 ms against
+2,462/2,464 ms. The failed verification is retained alongside calibration; no
+ceiling was raised. Shared-host load was elevated, but that does not establish
+the cause or excuse the gate. Route durations exclude document/bootstrap time;
+full document-to-core calibration p75 is 5.388–6.650 seconds across the routes.
+One diagnostic-only Inventory trace observed 753 ms before its chunk request,
+267 ms downloading it, and 814 ms from download completion to usable core.
+CPU pressure was present, but no code hotspot or cause of the failed median
+was established. Its 1,834 ms route-to-core result is excluded from qualification.
+Fresh full units pass (6,255 passed, 100 skipped), as do the compatibility build
+and its unchanged bundle ceiling (3,477,038 aggregate JavaScript bytes).
+The Ambient build also passes at 4,964,850 bytes against the unchanged
+4,968,757-byte ceiling. The standard homepage Lighthouse gate passes locally
+(performance 93, LCP 2.012 s, CLS 0.0173, TBT 276.741 ms); 136 truthloop tests
+and all ten route-gate tests pass.
+Branch-wide documentation governance against `origin/main...HEAD` fails on
+14 previously committed documents whose timestamps were not advanced; those
+files are unchanged by this repair. Working-tree governance against `HEAD`
+passes separately and does not erase that branch-wide failure.
+The predeclared final three-run check of the focus-repaired candidate passes
+all 12 visits and all route-byte/core/supplemental ceilings without changing
+the budget. Core medians are Now 498.2 ms, Clients 662.5 ms, Inventory 1,083.2 ms,
+and quote review 1,689 ms. Receipt `XiQcPO` is retained under
+`candidateVerifications` alongside the earlier failed `2oWf32` check, not in
+place of it. This establishes local timing qualification for that measured
+candidate; it does not explain the earlier variance or establish a causal
+improvement. The branch-wide documentation gate remains a release blocker.
+Previous source checkpoints below are historical, not this run's results.
+No release, push, deployment, hosted-role acceptance, physical stock, or product
+outcome is established by this work.
 
 ## Progressive performance and operability — local candidate (October 10, 2026)
 
@@ -14,7 +95,7 @@ traceability, and multi-line receiving that keeps one existing request and
 receipt identity per line. Ambient and compatibility shells share the same
 recoverable loading boundary.
 
-The current Ambient bundle passes at 4,964,683 bytes against the unchanged
+The October 10 Ambient bundle passed at 4,964,683 bytes against the unchanged
 4,968,757-byte exception ceiling. Focused browser checks cover selected
 390/768/1440 geometry and public media behavior; the Firestore emulator rules
 suite passes 96 tests. The route-performance gate is repeatable, but Inventory

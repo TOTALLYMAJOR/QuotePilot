@@ -13,6 +13,7 @@ export default defineConfig({
   forbidOnly: true,
   workers: 1,
   retries: 0,
+  maxFailures: 1,
   repeatEach: process.env.ROUTE_PERF_CALIBRATE === "true" ? 5 : 3,
   timeout: 45_000,
   expect: { timeout: 15_000 },

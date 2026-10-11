@@ -1,6 +1,6 @@
 # Performance Guardrails
 
-Last updated: 2026-10-10 21:06:24 CDT
+Last updated: 2026-10-11 04:13:28 CDT
 
 ## Objectives
 Keep delivery speed high while protecting end-user experience and predictable performance.
@@ -250,7 +250,7 @@ completion separately. `npm run test:perf:routes` checks the aggregation and
 fail-closed budget rules; either browser command accepts `-- --list` to inspect
 the exact test matrix without a build or browser run.
 
-The fixed profile is `ambient-local-staff-v1`: Chromium, 1440 x 900, DPR 1,
+The fixed profile is `ambient-emulator-staff-v2`: Chromium, 1440 x 900, DPR 1,
 4x simulated CPU slowdown, 40 ms latency, 200,000 bytes/s download and 93,750
 bytes/s upload, cold contexts with cache disabled, reduced motion, fixed
 2026-10-10 wall-clock date and deterministic random seed. These are declared
@@ -267,56 +267,144 @@ Performance and native timers remain intact: Playwright 1.58.2's fixed-time
 clock also replaces Performance and cannot supply native mark/resource entries
 for this measurement contract.
 
-Route bytes are encoded resource bodies initiated from document arrival through
-the matched supplemental-complete mark, plus the document body. They include
-the shared shell as well as route assets; they are not incremental warm-route
-bytes or total raw emitted bundle bytes. The two stage durations start at the
+Route bytes are same-origin encoded resource bodies completed by the matched
+supplemental-complete mark, plus the document body. They include the shared
+shell and route assets, but exclude unfinished requests, cross-origin emulator
+traffic and headers. They are not total wire bytes, incremental warm-route
+bytes or raw emitted bundle bytes. The two stage durations start at the
 application's actual `markRouteStage` route-start mark, so shell/bootstrap time
 before that mark is recorded separately as `documentToRouteStartMs`. Only a
 matched navigation with usable-core outcome `ready` can qualify. Supplemental
-`partial` remains explicit in the receipt; errors, unavailable stages, missing
+`partial` remains explicit in the receipt; browser errors or unexpected external
+origins retained after final UI assertions, unavailable stages, missing
 marks, failed tests, missing runs, or uncalibrated budgets fail closed. No
 test-created performance marks are permitted.
 
-This profile uses the existing synthetic admin session and local quote data.
-It does not prove Firebase authentication, persistence, hosted timing,
-production timing, accessibility, visual acceptance, or physical-device
-performance. It covers the Ambient graph only. The existing authenticated
-Inventory success fixture lives inside
-`e2e/inventory-workspace-responsive.spec.js` and requires the Firebase emulator
-tenant-authority profile; the local fallback cannot qualify Inventory. Until a
-successful authorized fixture is available to this gate, Inventory calibration
-is BLOCKED and the command exits nonzero. This command is available for CI use
-but is not yet wired as a required CI job.
+The disposable fixture rejects every project/host combination except
+`demo-qp-routeperf`, Auth `127.0.0.1:9498`, and Firestore `127.0.0.1:8488` before
+writing. It seeds one administrator, organization, Library, customer and quote.
+Inventory projections are generated through the existing authority runtime's
+location, ingredient and opening-balance commands, not injected by browser code.
+The browser signs in through the real Auth emulator and completes the actual
+"Explore the workspace" prompt before the measured cold document reload; the
+organization-scoped session choice is restored by the application, not injected
+by the test. The application reads tenant roles and data through Firestore
+rules. No production auth bypass or local catalog fallback is enabled.
+Functions on `127.0.0.1:5998` exposes only the real staff-authorized
+`getRevenueAutopilotOperations`, `getDecisionDebtSnapshot`, and
+`getRevenueAutopilotCustomerControls` read handlers. Its temporary source copies
+tracked JS/CJS and explicitly named package/catalog JSON only; no local dotenv
+or secret file is copied, and child environments exclude inherited credentials.
+An empty per-run Firebase CLI configuration and an explicitly nonexistent ADC
+path prevent discovery of the operator's saved login or Google credentials;
+the operator's home directory and credential files are not changed.
+No write endpoint, schedule, or Firestore trigger is exported by that wrapper.
+The browser blocks all other callable paths before transmission, including
+bootstrap writes, preserving the application's existing read-only role fallback.
+Other unexpected external requests are also blocked and fail the scenario.
 
-Quote review also requires the organization Library in the production
-transform. `useCatalogData` permits local catalog fallback only in a development
-transform; setting its fallback flag or seeding a local catalog does not grant
-production Library availability. This Firebase-free profile therefore cannot
-qualify quote review either. No development transform or invented catalog or
-Inventory authority may be substituted to make calibration pass. Ambient Now
-reports real bounded-read readiness once per organization/mount, including
-partial/error/stale outcomes; canonical `clients` is accepted by the same route
+This covers local emulator authentication and the Ambient production transform,
+not hosted authentication/timing, provider behavior, production timing,
+accessibility, visual acceptance, physical-device performance or physical stock.
+The command is available for CI use but not yet a required CI job. Ambient Now
+reports real bounded-read readiness once per organization/mount. A fresh
+successful attention or history read establishes usable core independently of
+the order or outcome of sibling reads. Pending/error-only reads do not establish
+usable core; retained stale content remains partial, and supplemental completion
+retains partial/error/unavailable outcomes. This is telemetry correctness, not
+event-wide operational readiness. Canonical `clients` is accepted by the same route
 mark allow-list as its customer-detail alias.
 
-`docs/performance/route-performance-budget.json` starts uncalibrated with no
-ceilings. A fully successful five-run calibration emits an ignored
+`docs/performance/route-performance-budget.json` retains the reviewed October 11
+five-run calibration. A fully successful new calibration emits an ignored
 `output/playwright/quotepilot-route-performance-*/budget-proposal.json` with
 nearest-rank p75 plus 10% headroom, rounded up to integer bytes/milliseconds.
 Review the measured receipt before replacing the budget; the command never
 changes committed ceilings automatically. The check rejects a ceiling that
-does not equal its recorded p75 + 10% calculation. Any ceiling increase requires
-a new successful measured calibration, retained receipt, and review. Existing
+does not equal its recorded p75 + 10% calculation. This arithmetic/profile check
+does not authenticate the calibration receipt; comparing the retained five runs
+with the proposed p75 values remains a mandatory review step. Any ceiling increase
+requires a new successful measured calibration, retained receipt, and review. Existing
 bundle and CWV budgets remain independent.
 
-The October 10 integrated dirty-worktree snapshot passes the unchanged Ambient
-exception at 4,964,683 total JavaScript bytes versus 4,968,757 allowed (4,074
-bytes headroom); its largest chunk is 385,181 bytes versus 445,422 allowed.
-This narrow artifact margin is not a request to raise the ceiling. Now and
-Clients have repeatable route-stage measurements, while Inventory and quote
-review remain deliberately uncalibrated until authorized production-profile
-fixtures exist. Those blocked scenarios must remain failures rather than being
-replaced with local fallback authority.
+The October 11 calibration at HEAD
+`216431a256d31c585be97be719e1fabbeec68d93` plus dirty repairs passed all 20
+scenarios. Its build hash, fixed profile, all samples, diagnostics and exact
+p75/ceiling arithmetic are retained in
+[`route-performance-calibration.json`](performance/route-performance-calibration.json).
+The source receipt is `output/playwright/quotepilot-route-performance-sYfMr3/receipt.json`.
+All core/supplemental outcomes were `ready`; no browser errors or unexpected
+external origins were recorded. Independent review recomputed every ceiling.
+
+| Route | Encoded-body ceiling (bytes) | Route-start to core ceiling (ms) | Route-start to supplemental ceiling (ms) |
+| --- | ---: | ---: | ---: |
+| Now | 707,096 | 703 | 1,027 |
+| Clients | 745,114 | 1,257 | 1,498 |
+| Inventory | 698,850 | 2,155 | 2,155 |
+| Quote review | 794,701 | 2,462 | 2,464 |
+
+These are not full cold-page-load durations. The same five samples yield
+document-to-core p75s of 5.388, 5.657, 6.143 and 6.650 seconds respectively;
+document/bootstrap time remains visible in each sample and is not hidden by the
+shorter route-stage timings. The independent three-run check used the same build
+hash and passed all 12 browser scenarios, but its budget result is **FAIL**.
+Now, Clients and all byte ceilings pass. Inventory core/supplemental medians
+are 2,994.8/2,994.9 ms against 2,155/2,155 ms; quote review is 2,488.5/2,489.3 ms
+against 2,462/2,464 ms. The complete failed check is retained under
+`threeRunVerification` with its source receipt `2oWf32`. Shared-host load was
+elevated, but causal attribution is unproven. No ceiling was changed to absorb
+the failure; that check did not qualify the candidate.
+
+The predeclared final three-run batch `XiQcPO`, after the focus repair and green
+full browser suite, passes all twelve visits and every unchanged ceiling.
+Its production build SHA is
+`027c8e5ab9c0159e8f52b3a5d0e5dcac938836db32667045d1952584255521e6`.
+The compact receipt retains all twelve samples under `candidateVerifications`,
+plus the raw receipt SHA and unchanged comparison-budget SHA. The original
+failed `threeRunVerification` remains unchanged. This is one successful local
+qualification of the new candidate, not evidence that the focus repair caused
+the timing difference or that shared-host variability has been eliminated.
+
+| Route | Median encoded-body bytes | Median route-start to core (ms) | Median route-start to supplemental (ms) |
+| --- | ---: | ---: | ---: |
+| Now | 642,482 | 498.2 | 638.0 |
+| Clients | 654,333 | 662.5 | 740.4 |
+| Inventory | 635,470 | 1,083.2 | 1,085.4 |
+| Quote review | 720,150 | 1,689.0 | 1,690.0 |
+
+For diagnosis only, the direct Playwright child accepts
+`ROUTE_PERF_DIAGNOSTIC=1` to record CDP CPU samples and path-only request timing
+beside each repeat-indexed sample. The normal calibration/check launcher does
+not forward this optional variable; the diagnostic requires a separate isolated
+launcher with the same fixture/profile, not the standard budget command.
+It does not retain
+headers, payloads, or URL query strings. Profiled samples carry
+`status: diagnostic-only`; both calibration and check aggregation reject them.
+The retained local Inventory capture at
+`/tmp/quotepilot-route-inventory-diagnostic-aQu9jj` observed 753 ms from
+route-start to Inventory chunk discovery, 266.5 ms downloading it, and 814.1 ms
+from download completion to usable core. Its 1,833.7 ms route-to-core result is
+not a qualification run. System-wide CPU pressure overlapped the trace, but
+neither an isolated Inventory computation hotspot nor the cause of the earlier
+failed median was established. A profiled fast visit cannot replace that failure.
+
+Earlier failed receipts remain failures: `NQd0MA` exposed missing Inventory
+route-local settings readiness, `WpcZfs` exposed a 201-record ingredient query
+against the existing 200-record authorization bound, and `q4OlZz` exposed a
+test warm-up race with onboarding. No ceilings came from those runs. Bounded
+owner-authorized App/rules inspection supported the repairs. Inventory now
+displays 199 records with one lookahead, preserving pagination without changing
+rules, permissions or fallback authority. The aggregate JavaScript exception
+remains 4,968,757 bytes; route calibration does not alter bundle or CWV ceilings.
+
+The later focus-repaired candidate passes the compatibility bundle check at
+3,477,038 bytes and the Ambient check at 4,964,850 bytes (3,907 bytes below its
+unchanged exception ceiling). Its standard local homepage Lighthouse run at
+`2026-10-11T08:55:51.182Z` passes: performance 93, LCP 2,012.2345 ms, CLS
+0.0172919, and TBT 276.741 ms. These static-profile checks do not qualify the
+authenticated route medians. Branch-wide documentation governance separately
+fails on 14 pre-existing timestamp debts; a passing working-tree-only check
+does not establish release readiness.
 
 ## Exception Workflow
 If a change needs temporary threshold relaxation or major dependency upgrade:

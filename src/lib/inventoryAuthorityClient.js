@@ -3159,6 +3159,8 @@ export function subscribeToInventoryIngredientProjections(input = {}) {
   if (typeof input.onData !== "function") throw clientError("invalid-argument", "Inventory projection listener requires onData.");
   const scope = { organizationId: access.organizationId };
   const cursor = ingredientPageCursor(input.cursor);
+  // Reserve lookahead within the existing 200-document authorized query bound.
+  const pageSize = INVENTORY_INGREDIENT_PROJECTION_LIMIT - 1;
   let active = true;
   let workspaceUnsubscribe = null;
   let ingredientsUnsubscribe = null;
@@ -3194,7 +3196,7 @@ export function subscribeToInventoryIngredientProjections(input = {}) {
     orderBy(documentId(), "asc")
   ];
   if (cursor) ingredientQueryParts.push(startAfter(cursor.nameSortKey, cursor.ingredientId));
-  ingredientQueryParts.push(limit(INVENTORY_INGREDIENT_PROJECTION_LIMIT + 1));
+  ingredientQueryParts.push(limit(INVENTORY_INGREDIENT_PROJECTION_LIMIT));
   const ingredientQuery = query(...ingredientQueryParts);
   try {
     workspaceUnsubscribe = onSnapshot(workspaceRef, { includeMetadataChanges: true }, (snapshot) => {
@@ -3217,7 +3219,7 @@ export function subscribeToInventoryIngredientProjections(input = {}) {
     ingredientsUnsubscribe = onSnapshot(ingredientQuery, { includeMetadataChanges: true }, (snapshot) => {
       if (!active) return;
       try {
-        if (!Array.isArray(snapshot?.docs) || snapshot.docs.length > INVENTORY_INGREDIENT_PROJECTION_LIMIT + 1) {
+        if (!Array.isArray(snapshot?.docs) || snapshot.docs.length > INVENTORY_INGREDIENT_PROJECTION_LIMIT) {
           throw clientError("data-loss", "Ingredient projection query exceeded its bounded contract.");
         }
         const received = snapshot.docs.map((entry) => normalizeInventoryIngredientProjection(entry.data(), scope.organizationId, entry.id));
@@ -3228,8 +3230,8 @@ export function subscribeToInventoryIngredientProjections(input = {}) {
         )) || new Set(received.map((entry) => entry.ingredientId)).size !== received.length) {
           throw clientError("data-loss", "Ingredient projection query is not a stable ordered set.");
         }
-        const hasNext = received.length > INVENTORY_INGREDIENT_PROJECTION_LIMIT;
-        const ingredients = received.slice(0, INVENTORY_INGREDIENT_PROJECTION_LIMIT);
+        const hasNext = received.length > pageSize;
+        const ingredients = received.slice(0, pageSize);
         const finalIngredient = ingredients.at(-1) || null;
         const metadata = snapshot?.metadata || {};
         state.sources.ingredients = {

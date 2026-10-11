@@ -6,7 +6,7 @@ export const ROUTES = Object.freeze([
 ]);
 
 export const PROFILE = Object.freeze({
-  id: "ambient-local-staff-v1",
+  id: "ambient-emulator-staff-v2",
   browser: "chromium",
   viewport: { width: 1440, height: 900 },
   deviceScaleFactor: 1,
@@ -18,7 +18,7 @@ export const PROFILE = Object.freeze({
   fonts: "google-font-services-blocked-system-fallback",
   timezone: "America/Chicago",
   nowISO: "2026-10-10T12:00:00.000Z",
-  fixture: "synthetic-admin-local-quotes-no-firebase-v1",
+  fixture: "isolated-auth-firestore-readers-tenant-admin-authority-projections-v2",
   build: "production-ambient"
 });
 
@@ -41,8 +41,10 @@ export function installRouteFixture({ quote, nowISO }) {
   let seed = 17;
   Math.random = () => { seed = (seed * 48271) % 2147483647; return seed / 2147483647; };
   localStorage.setItem("qp.workspaceSoundsEnabled", "false");
-  localStorage.setItem("quoteWizard.quotes", JSON.stringify([quote]));
-  localStorage.setItem("quoteWizard.quoteHistory", "[]");
+  if (quote) {
+    localStorage.setItem("quoteWizard.quotes", JSON.stringify([quote]));
+    localStorage.setItem("quoteWizard.quoteHistory", "[]");
+  }
 }
 
 export function percentile(values, fraction) {
@@ -53,13 +55,15 @@ export function percentile(values, fraction) {
   return sorted[Math.ceil(sorted.length * fraction) - 1];
 }
 
-export function summarizeRoutes(samples, { calibrate = false, budget } = {}) {
+export function summarizeRoutes(samples, { calibrate = false, budget, runnerStatus = 0 } = {}) {
   const requiredRuns = calibrate ? 5 : 3;
   const routes = {};
   for (const route of ROUTES) {
     const rows = samples.filter((sample) => sample.routeId === route.id);
     const runIds = new Set(rows.map((row) => row.run));
     const invalid = rows.some((row) => row.status !== "measured"
+      || !Array.isArray(row.pageErrors) || row.pageErrors.length > 0
+      || !Array.isArray(row.externalOrigins) || row.externalOrigins.length > 0
       || row.coreOutcome !== "ready"
       || !["ready", "partial"].includes(row.supplementalOutcome)
       || !/^n[0-9a-z]+$/.test(row.navigationId || "")
@@ -96,5 +100,5 @@ export function summarizeRoutes(samples, { calibrate = false, budget } = {}) {
     const failures = METRICS.filter((metric) => measured[metric] > ceilings[metric]);
     routes[route.id] = { status: failures.length ? "FAIL" : "PASS", median: measured, ceilings, failures, runs: rows };
   }
-  return { status: Object.values(routes).every((route) => route.status === (calibrate ? "CALIBRATED" : "PASS")) ? "PASS" : "FAIL", routes };
+  return { status: runnerStatus === 0 && Object.values(routes).every((route) => route.status === (calibrate ? "CALIBRATED" : "PASS")) ? "PASS" : "FAIL", routes };
 }

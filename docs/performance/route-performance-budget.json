@@ -1,8 +1,60 @@
 {
   "schemaVersion": 1,
-  "profileId": "ambient-local-staff-v1",
-  "calibration": null,
-  "routes": {},
-  "status": "uncalibrated",
-  "reason": "No successful four-route production-preview calibration yet. Inventory requires existing tenant-authorized Firebase fixture data; quote review requires production Library availability. Development-only local catalog fallback is not production authority. No default or raised ceilings are permitted."
+  "profileId": "ambient-emulator-staff-v2",
+  "calibration": {
+    "recordedAt": "2026-10-11T08:03:55.267Z",
+    "buildSha256": "d04543456f3d536210f71cbe286ad6d49fc28bc2753d6fa2a159186709c00166",
+    "runCount": 5,
+    "receipt": "docs/performance/route-performance-calibration.json"
+  },
+  "routes": {
+    "now": {
+      "p75": {
+        "routeBytes": 642814,
+        "usableCoreMs": 638.6000000238419,
+        "supplementalCompleteMs": 933.5
+      },
+      "ceilings": {
+        "routeBytes": 707096,
+        "usableCoreMs": 703,
+        "supplementalCompleteMs": 1027
+      }
+    },
+    "clients": {
+      "p75": {
+        "routeBytes": 677376,
+        "usableCoreMs": 1141.8999999761581,
+        "supplementalCompleteMs": 1361.699999988079
+      },
+      "ceilings": {
+        "routeBytes": 745114,
+        "usableCoreMs": 1257,
+        "supplementalCompleteMs": 1498
+      }
+    },
+    "inventory": {
+      "p75": {
+        "routeBytes": 635318,
+        "usableCoreMs": 1958.8999999761581,
+        "supplementalCompleteMs": 1959
+      },
+      "ceilings": {
+        "routeBytes": 698850,
+        "usableCoreMs": 2155,
+        "supplementalCompleteMs": 2155
+      }
+    },
+    "quote-review": {
+      "p75": {
+        "routeBytes": 722455,
+        "usableCoreMs": 2238.100000023842,
+        "supplementalCompleteMs": 2239.5
+      },
+      "ceilings": {
+        "routeBytes": 794701,
+        "usableCoreMs": 2462,
+        "supplementalCompleteMs": 2464
+      }
+    }
+  }
 }

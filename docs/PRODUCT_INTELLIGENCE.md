@@ -1,6 +1,6 @@
 # QuotePilot Product Intelligence System
 
-Last updated: 2026-10-10 21:35:47 CDT
+Last updated: 2026-10-11 04:13:23 CDT
 
 ## Purpose
 
@@ -84,6 +84,86 @@ catering staff can reach usable work sooner, preserve context while inspecting
 dependent evidence, and recover individual receiving failures without replaying
 successful stock receipts. The release-evidence gate should also prevent local
 fixtures from being mistaken for representative hosted role qualification.
+The local route diagnostic uses a guarded disposable Auth/Firestore tenant and
+authority-generated synthetic Inventory projections. Its readiness stages and
+same-origin asset-body bytes are engineering measurements; they do not provide
+a before/after human-work baseline or establish real stock correctness.
+The October 11 repair distinguishes a fresh usable Now section from unfinished
+or failed sibling reads, and preserves failed-run receipts as failures. A
+one-line Inventory route eligibility fix restores its required settings read;
+199 displayed rows plus one lookahead keep pagination within the unchanged
+200-record authorization bound. Evidence includes 140 focused Inventory tests,
+63 Now readiness/marker tests, and 10/10 route-gate tests, including exclusion
+of diagnostic-only measurements from qualification. Three reproduced quote
+browser failures were repaired: first-lazy-step mobile clipping and two save
+flows affected by the same test-helper transition race. Their focused rerun
+passes all three original scenarios.
+
+The next integrated browser run records 89 passed, 314 skipped, and one focus
+failure on Workflow → Edit quote. The current and legacy app shells now keep
+a quote-bound, one-shot focus request until the exact hydrated editor is
+visible, including after a lazy reveal, while preserving Ambient field intent.
+The unchanged portal decision-center regression passes 1/1 in 37.0 seconds
+after that repair. This focused result does not convert the earlier integrated
+failure into a full-suite pass. The subsequent full browser run records 88
+passed, 314 skipped, and two new readiness races before accessibility and
+typography sampling; all four repaired quote scenarios pass. Only the two
+test waits were changed to await their exact targets, with downstream
+assertions unchanged. The fresh full suite now passes: 90 passed, 314 skipped,
+zero failed in 11.5 minutes with two workers and zero retries, recorded in
+`/tmp/quotepilot-browser-repair-ready.json`. It covers all four quote repairs
+and both readiness fixes; the earlier failed receipts remain part of the
+validation chronology.
+
+Fresh full-unit validation passes 6,255 tests with 100 skipped, across 523
+passing files and three skipped files, in 171.37 seconds. Compatibility and
+Ambient builds pass in 49.13 and 59.64 seconds respectively. Compatibility
+bundle bytes are 3,477,038 against a 3,652,845-byte ceiling; Ambient bytes are
+4,964,850 against the unchanged 4,968,757-byte ceiling. The standard homepage
+CWV command passes, and Truth Loop passes 136 tests. These independent local
+checks do not make the original release wrapper pass: its branch-wide
+`DOC_GOVERNANCE_DIFF=origin/main...HEAD` check fails timestamp advancement for
+14 already-committed documents whose working-tree copies are confirmed clean.
+The separate HEAD-relative working-tree governance check passes but does not
+erase that branch-wide failure.
+
+Five-run calibration `sYfMr3` passes 20/20 browser scenarios. Its adopted ceilings
+are `ceil(nearest-rank p75 of five samples × 1.10)`, in integer milliseconds or
+bytes, recorded in [the calibration receipt](performance/route-performance-calibration.json).
+Independent three-run verification `2oWf32` uses the same build SHA
+`d04543456f3d536210f71cbe286ad6d49fc28bc2753d6fa2a159186709c00166`.
+All 12 browser scenarios pass, but the performance gate **fails**: Now, Clients,
+and every route-byte ceiling pass; Inventory usable-core is 2994.8 ms against
+2155 ms, and quote-review is 2488.5 ms against 2462 ms. Both routes also exceed
+their supplemental ceilings. Successful route rendering does not erase those
+budget failures. Diagnostic `aQu9jj` records 1.834 seconds but is excluded from
+qualification; it neither supersedes `2oWf32` nor establishes a new performance
+claim.
+
+The predeclared single three-run final-candidate verification `XiQcPO` passes
+12/12 browser scenarios in 1.6 minutes and every median ceiling. Its build SHA
+is `027c8e5ab9c0159e8f52b3a5d0e5dcac938836db32667045d1952584255521e6`;
+the budget remains unchanged at SHA-256
+`8796586087699e7170c5b3e8b7fb2cec6b44af405bc2bd33e26df158cf009c16`.
+
+| Route | Median asset-body bytes | Median usable-core (ms) | Median supplemental (ms) |
+|---|---:|---:|---:|
+| Now | 642,482 | 498.2 | 638 |
+| Clients | 654,333 | 662.5 | 740.4 |
+| Inventory | 635,470 | 1,083.2 | 1,085.4 |
+| Quote review | 720,150 | 1,689 | 1,690 |
+
+The full raw receipt is
+`output/playwright/quotepilot-route-performance-XiQcPO/receipt.json`; all 12
+compact samples are retained in `candidateVerifications[0]` of
+[the tracked calibration receipt](performance/route-performance-calibration.json).
+The original five-run p75 calibration and failed `2oWf32` receipt remain
+unchanged. These runs do not establish that the focus fix caused the timing
+difference. Local performance is qualified against the declared budget; the
+14 branch-wide documentation timestamp debts remain the only observed release
+gate blocker in this validation. These are local production-preview
+measurements, not release approval, hosted qualification, production exposure,
+human acceptance, or outcomes.
 The same candidate now removes decorative one-sided accents from opportunity and
 schedule state surfaces while retaining state meaning through calm hairlines,
 full-state borders, and subtle washes; human comprehension remains unmeasured.

@@ -1,6 +1,6 @@
 # User Manual
 
-Last updated: 2026-10-10 21:06:24 CDT
+Last updated: 2026-10-11 04:13:28 CDT
 
 ## Purpose
 This guide explains day-to-day usage of QuotePilot for staff users and admins.
@@ -1737,10 +1737,13 @@ valuation policy.
 
 This source-candidate slice supports at most 200 location definitions and 200
 ingredient definitions per organization. The shared server transaction fence
-rejects record 201, and a projection at its bound is labeled **Partial**. That
-temporary limit must be replaced by cursor-based navigation before larger
-catalogs are activated; the browser never silently treats a truncated list as
-complete.
+rejects record 201. Definition capacity is separate from browser pagination:
+the ingredient projection list displays up to 199 rows and reserves one
+lookahead record within each authorized 200-record query. Moving to the next page follows
+the last displayed ingredient, so the lookahead row is retained on the next
+page. A remaining page is explicit; the browser never silently treats a
+truncated list as complete. This pagination repair does not lift server
+definition limits.
 
 Event Preflight and the selected Operations event now reuse the same exact
 realtime plan and execution reads. They show **Physical stock**, **Menu cost**,
@@ -4067,3 +4070,31 @@ outreach policy is invented or published during activation. The global scheduler
 receives no tenant scope and stays disabled, and the outbound-send gate stays
 off. Other tenants cannot use these scoped authorities. Existing explicit
 operator email actions retain their normal authorization and confirmations.
+
+## Developer-only route performance fixture
+
+This local developer/operator process adds no customer workspace entry or hosted
+access. Use `npm run test:perf:routes` for fixture and aggregation unit checks;
+`npm run calibrate:perf:routes` and `npm run check:perf:routes` follow the
+[Performance Guardrails](PERFORMANCE_GUARDRAILS.md) calibration and qualification
+policy. Calibration produces evidence for review and does not automatically edit
+the committed budget. The October 11 calibration passed all 20 scenarios and
+its reviewed ceilings are retained. The first independent check passed all 12
+browser scenarios but failed Inventory and quote-review timing ceilings. The
+final focus-repaired candidate passes all twelve visits and every unchanged
+ceiling; earlier failures remain retained. This is local timing qualification,
+not release approval: branch-wide documentation governance remains blocked.
+A working route is not itself a passing performance budget.
+
+The fixture refuses writes unless the project is `demo-qp-routeperf`, Auth is at
+`127.0.0.1:9498`, and Firestore is at `127.0.0.1:8488`. It uses real administrator
+sign-in and synthetic catalog, customer, quote/version and Inventory records.
+Native Inventory commands produce an opening-stock projection; the quantity is
+test data, not a physical count or stock promise.
+
+The runner removes inherited credentials and excludes dotenv/secret files from
+its temporary Functions source. Only three existing read handlers are exposed on
+the local Functions emulator; other browser callables are blocked and unavailable
+providers remain visible as unavailable. A successful local run establishes no
+hosted access, provider delivery, customer outcome or human acceptance. The shared
+seeder boundary is governed by [Version Control](VERSION_CONTROL.md#time-bound-browser-fixtures).

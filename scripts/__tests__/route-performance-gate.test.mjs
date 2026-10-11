@@ -3,6 +3,42 @@ import { test } from "node:test";
 import { runInNewContext } from "node:vm";
 import { PROFILE, ROUTES, installRouteFixture, percentile, summarizeRoutes } from "../route-performance-metrics.mjs";
 
+test("route fixture drops inherited credentials and only exposes the three read handlers", async () => {
+  const { isolatedToolEnvironment, isIsolatedFunctionSource, READ_ONLY_FUNCTIONS } = await import("../route-performance-fixture.mjs");
+  assert.deepEqual(isolatedToolEnvironment({ PATH: "/bin", HOME: "/tmp/test-user", STRIPE_SECRET_KEY: "do-not-copy", GOOGLE_APPLICATION_CREDENTIALS: "/private/key", VITE_FIREBASE_PROJECT_ID: "live", DEBUG: "release" }, "/tmp/route-fixture"), {
+    PATH: "/bin", HOME: "/tmp/test-user", DEBUG: "",
+    XDG_CONFIG_HOME: "/tmp/route-fixture/config", CLOUDSDK_CONFIG: "/tmp/route-fixture/gcloud",
+    GOOGLE_APPLICATION_CREDENTIALS: "/tmp/route-fixture/credentials-disabled.json",
+    FIREBASE_CLI_DISABLE_AUTOUPDATE: "true"
+  });
+  assert.throws(() => isolatedToolEnvironment({}), /run directory/i);
+  assert.deepEqual(READ_ONLY_FUNCTIONS, ["getRevenueAutopilotOperations", "getDecisionDebtSnapshot", "getRevenueAutopilotCustomerControls"]);
+  assert.equal(isIsolatedFunctionSource("functions/index.js"), true);
+  assert.equal(isIsolatedFunctionSource("functions/package.json"), true);
+  assert.equal(isIsolatedFunctionSource("functions/commercialDependencyGraphCore.cjs"), true);
+  assert.equal(isIsolatedFunctionSource("functions/data/starterCatalogPacks.json"), true);
+  for (const file of ["functions/.env.tonicatering", "functions/.secret.local", "functions/key.json", "functions/node_modules/a.js", "functions/../private.js", "outside.js", "functions/debug.log"]) {
+    assert.equal(isIsolatedFunctionSource(file), false, file);
+  }
+});
+
+test("route fixture refuses any non-isolated emulator destination before writes", async () => {
+  const { assertRouteFixtureScope } = await import("../route-performance-fixture.mjs");
+  const safe = {
+    GCLOUD_PROJECT: "demo-qp-routeperf",
+    FIREBASE_AUTH_EMULATOR_HOST: "127.0.0.1:9498",
+    FIRESTORE_EMULATOR_HOST: "127.0.0.1:8488"
+  };
+  assert.doesNotThrow(() => assertRouteFixtureScope(safe));
+  for (const override of [
+    { GCLOUD_PROJECT: "tonicatering" },
+    { GCLOUD_PROJECT: "demo-other-work" },
+    { FIREBASE_AUTH_EMULATOR_HOST: "" },
+    { FIRESTORE_EMULATOR_HOST: "firestore.googleapis.com:443" },
+    { FIRESTORE_EMULATOR_HOST: "127.0.0.1:8383" }
+  ]) assert.throws(() => assertRouteFixtureScope({ ...safe, ...override }), /isolated/i);
+});
+
 test("fixed fixture changes Date/random/data without replacing native Performance or timers", () => {
   const nativePerformance = { mark() {}, getEntriesByType() { return ["native-entry"]; } };
   const nativeTimer = () => {};
@@ -29,6 +65,7 @@ test("fixed fixture changes Date/random/data without replacing native Performanc
 
 const samples = (runs) => ROUTES.flatMap(({ id }) => Array.from({ length: runs }, (_, run) => ({
   routeId: id, run, status: "measured", navigationId: "n1", coreOutcome: "ready", supplementalOutcome: "ready",
+  pageErrors: [], externalOrigins: [],
   routeBytes: (run + 1) * 100, usableCoreMs: run + 1.2, supplementalCompleteMs: (run + 1) * 10
 })));
 const calibratedBudget = () => {
@@ -74,7 +111,7 @@ test("missing, duplicate, nonfinite, unordered or unsuccessful samples block cal
   }
 });
 
-test("uncalibrated, mismatched-profile and unmeasured ceiling increases fail closed", () => {
+test("uncalibrated, mismatched-profile and arithmetically inconsistent ceilings fail closed", () => {
   assert.equal(summarizeRoutes(samples(3), { budget: {} }).routes.now.status, "BLOCKED");
   const budget = calibratedBudget();
   budget.profileId = "compatibility";
@@ -82,4 +119,29 @@ test("uncalibrated, mismatched-profile and unmeasured ceiling increases fail clo
   budget.profileId = PROFILE.id;
   budget.routes.now.ceilings.routeBytes += 1;
   assert.equal(summarizeRoutes(samples(3), { budget }).routes.now.status, "BLOCKED");
+});
+
+test("a failed browser runner cannot produce a passing receipt from otherwise valid samples", () => {
+  assert.equal(summarizeRoutes(samples(5), { calibrate: true, runnerStatus: 1 }).status, "FAIL");
+  assert.equal(summarizeRoutes(samples(3), { budget: calibratedBudget(), runnerStatus: 1 }).status, "FAIL");
+});
+
+test("late browser errors, external requests, or absent diagnostics block both modes", () => {
+  for (const key of ["pageErrors", "externalOrigins"]) {
+    for (const diagnostic of [["unexpected browser event"], undefined]) {
+      for (const calibrate of [true, false]) {
+        const rows = samples(calibrate ? 5 : 3);
+        rows[0][key] = diagnostic;
+        assert.equal(summarizeRoutes(rows, { calibrate, budget: calibratedBudget() }).status, "FAIL");
+      }
+    }
+  }
+});
+
+test("profiled diagnostic arrivals cannot qualify or calibrate route budgets", () => {
+  for (const calibrate of [true, false]) {
+    const rows = samples(calibrate ? 5 : 3);
+    rows[0].status = "diagnostic-only";
+    assert.equal(summarizeRoutes(rows, { calibrate, budget: calibratedBudget() }).status, "FAIL");
+  }
 });

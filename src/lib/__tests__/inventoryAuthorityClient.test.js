@@ -1374,7 +1374,7 @@ describe("inventory projection validation and listeners", () => {
     expect(mocks.collection).toHaveBeenCalledWith(mocks.db, "organizations", ORGANIZATION_ID, "inventoryIngredientProjections");
     expect(mocks.orderBy).toHaveBeenCalledWith("nameSortKey", "asc");
     expect(mocks.orderBy).toHaveBeenCalledWith({ kind: "documentId" }, "asc");
-    expect(mocks.limit).toHaveBeenCalledWith(INVENTORY_INGREDIENT_PROJECTION_LIMIT + 1);
+    expect(mocks.limit).toHaveBeenCalledWith(200);
     expect(registrations).toHaveLength(2);
     expect(registrations.every((entry) => entry.options.includeMetadataChanges === true)).toBe(true);
 
@@ -1397,6 +1397,100 @@ describe("inventory projection validation and listeners", () => {
     expect(unsubscribes[1]).toHaveBeenCalledOnce();
     registrations[1].onNext({ docs: [], metadata: { fromCache: false, hasPendingWrites: false } });
     expect(onData).toHaveBeenCalledTimes(countBeforeUnsubscribe);
+  });
+
+  test("keeps lookahead inside the 200-document query bound without dropping the next ingredient", () => {
+    const registrations = [];
+    mocks.onSnapshot.mockImplementation((reference, options, onNext, onError) => {
+      registrations.push({ onNext, onError });
+      return vi.fn();
+    });
+    const onData = vi.fn();
+    const onError = vi.fn();
+    const documents = Array.from({ length: 200 }, (_, index) => {
+      const ingredientId = `ingredient-${String(index).padStart(3, "0")}`;
+      return { id: ingredientId, data: () => ingredientProjection({ ingredientId }) };
+    });
+    const metadata = { fromCache: false, hasPendingWrites: false };
+    const unsubscribe = subscribeToInventoryIngredientProjections({ ...ADMIN_SCOPE, onData, onError });
+    registrations[0].onNext({ id: "current", exists: () => true, data: () => workspaceProjection(), metadata });
+    registrations[1].onNext({ docs: documents, metadata });
+
+    const firstPage = onData.mock.calls.at(-1)[0];
+    expect(firstPage).toMatchObject({
+      freshness: "current",
+      bounded: true,
+      page: {
+        size: 199, hasPrevious: false, hasNext: true,
+        nextCursor: { nameSortKey: "chicken", ingredientId: "ingredient-198" }
+      }
+    });
+    expect(firstPage.ingredients.at(-1).ingredientId).toBe("ingredient-198");
+    expect(firstPage.ingredients.some(({ ingredientId }) => ingredientId === "ingredient-199")).toBe(false);
+    unsubscribe();
+
+    subscribeToInventoryIngredientProjections({ ...ADMIN_SCOPE, cursor: firstPage.page.nextCursor, onData, onError });
+    expect(mocks.startAfter).toHaveBeenLastCalledWith("chicken", "ingredient-198");
+    registrations[2].onNext({ id: "current", exists: () => true, data: () => workspaceProjection(), metadata });
+    registrations[3].onNext({ docs: [documents[199]], metadata });
+
+    const lastPage = onData.mock.calls.at(-1)[0];
+    expect(lastPage).toMatchObject({
+      freshness: "current",
+      ingredients: [{ ingredientId: "ingredient-199" }],
+      page: { size: 1, hasPrevious: true, hasNext: false, nextCursor: null }
+    });
+    expect([...firstPage.ingredients, ...lastPage.ingredients]).toHaveLength(200);
+    expect(onError).not.toHaveBeenCalled();
+  });
+
+  test.each([0, 198, 199])("does not invent a next page when all %i ingredients fit without lookahead", (count) => {
+    const registrations = [];
+    mocks.onSnapshot.mockImplementation((reference, options, onNext) => {
+      registrations.push(onNext);
+      return vi.fn();
+    });
+    const onData = vi.fn();
+    const onError = vi.fn();
+    subscribeToInventoryIngredientProjections({ ...ADMIN_SCOPE, onData, onError });
+    const metadata = { fromCache: false, hasPendingWrites: false };
+    registrations[0]({ id: "current", exists: () => true, data: () => workspaceProjection(), metadata });
+    registrations[1]({
+      docs: Array.from({ length: count }, (_, index) => {
+        const ingredientId = `ingredient-${String(index).padStart(3, "0")}`;
+        return { id: ingredientId, data: () => ingredientProjection({ ingredientId }) };
+      }),
+      metadata
+    });
+    expect(onData.mock.calls.at(-1)[0]).toMatchObject({
+      freshness: "current", bounded: false,
+      page: { size: count, hasPrevious: false, hasNext: false, nextCursor: null }
+    });
+    expect(onError).not.toHaveBeenCalled();
+  });
+
+  test("rejects a snapshot exceeding the authorized 200-document ingredient read bound", () => {
+    const registrations = [];
+    mocks.onSnapshot.mockImplementation((reference, options, onNext) => {
+      registrations.push(onNext);
+      return vi.fn();
+    });
+    const onData = vi.fn();
+    const onError = vi.fn();
+    subscribeToInventoryIngredientProjections({ ...ADMIN_SCOPE, onData, onError });
+    const metadata = { fromCache: false, hasPendingWrites: false };
+    registrations[0]({ id: "current", exists: () => true, data: () => workspaceProjection(), metadata });
+    registrations[1]({
+      docs: Array.from({ length: 201 }, (_, index) => {
+        const ingredientId = `ingredient-${String(index).padStart(3, "0")}`;
+        return { id: ingredientId, data: () => ingredientProjection({ ingredientId }) };
+      }),
+      metadata
+    });
+    expect(onError).toHaveBeenCalledWith(expect.objectContaining({
+      source: "ingredients", model: expect.objectContaining({ freshness: "unavailable" })
+    }));
+    expect(onData.mock.calls.at(-1)[0].freshness).not.toBe("current");
   });
 
   test("uses a stable compound cursor for later ingredient pages", () => {

@@ -39,9 +39,12 @@ async function fillRequiredQuoteFields(page, {
 }
 
 async function advanceToSaveButton(page, saveButtonLabel) {
+  const currentStepLabel = page.locator('.stepper-item[aria-current="step"] .step-copy em');
   for (let step = 0; step < 6; step += 1) {
+    await expect(currentStepLabel).toBeVisible();
+    const previousStepLabel = await currentStepLabel.innerText();
     const firstMenuChoice = page.locator(
-      ".wizard-panel .menu-library input[type='checkbox']:not(:checked)"
+      ".wizard-panel .menu-library input[type='checkbox']"
     ).first();
     if (await firstMenuChoice.count()) {
       await firstMenuChoice.check();
@@ -71,6 +74,9 @@ async function advanceToSaveButton(page, saveButtonLabel) {
       break;
     }
     await nextButton.click();
+    // A click can resolve before React commits the next step. Do not inspect
+    // outgoing controls while their replacement is still being rendered.
+    await expect(currentStepLabel).not.toHaveText(previousStepLabel);
   }
   throw new Error(`Unable to reach save button: ${saveButtonLabel}`);
 }
@@ -135,6 +141,22 @@ async function openOperationsItem(page, name) {
   await page.getByRole("menuitem", { name }).click();
 }
 
+async function enterLocalWorkspace(page) {
+  const eventType = page.getByRole("combobox", { name: /^Event type\b/ });
+  await expect(eventType).toBeVisible({ timeout: 45_000 });
+  await expect.poll(() => eventType.locator("option").count()).toBeGreaterThan(1);
+}
+
+async function navigateLocalWorkspace(page, action, target) {
+  await action();
+  // The legacy quote builder is available before catalog setup. Other staff
+  // destinations ask the operator to explicitly continue exploring first.
+  const setup = page.getByRole("button", { name: "Explore the workspace" });
+  await expect(target.or(setup)).toBeVisible();
+  if (await setup.isVisible()) await setup.click();
+  await expect(target).toBeVisible();
+}
+
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => {
     localStorage.clear();
@@ -142,14 +164,15 @@ test.beforeEach(async ({ page }) => {
   });
   page.on("dialog", (dialog) => dialog.accept());
   await page.goto("/app");
-  await expect(page.getByRole("button", { name: /New quote/i })).toBeVisible();
+  await enterLocalWorkspace(page);
 });
 
 test("empty Workflow leads directly into the first quote", async ({ page }) => {
-  await page.getByRole("button", { name: /Workflow/i }).click();
-  await expect(page.getByRole("heading", {
+  const emptyHeading = page.getByRole("heading", {
     name: "Create the first quote to begin follow-up"
-  })).toBeVisible();
+  });
+  await navigateLocalWorkspace(page,
+    () => page.getByRole("button", { name: /Workflow/i }).click(), emptyHeading);
   await expect(page.getByText(/QuotePilot will carry the saved quote, proposal readiness, decisions, and follow-ups/i)).toBeVisible();
 
   await page.getByRole("button", { name: "Start a quote" }).click();
@@ -169,7 +192,9 @@ test("operator workspaces load only when first opened and stay mounted after clo
 
   expect(await modalResourceNames()).toEqual([]);
 
-  await page.getByRole("button", { name: "Workflow" }).click();
+  await navigateLocalWorkspace(page,
+    () => page.getByRole("button", { name: "Workflow" }).click(),
+    page.getByRole("heading", { name: "Workflow" }));
   await expect(page.getByRole("heading", { name: "Workflow" })).toBeVisible();
   await expect.poll(modalResourceNames).toEqual([
     expect.stringMatching(/SalesWorkflowModal(?:-[^/?]+\.js|\.jsx)/)
@@ -280,8 +305,9 @@ test("Quotes loads once, then searches and counts the tenant result locally", as
     ]));
   });
 
-  await page.getByRole("button", { name: "Quotes", exact: true }).click();
   const dialog = page.getByRole("dialog", { name: "Quotes" });
+  await navigateLocalWorkspace(page,
+    () => page.getByRole("button", { name: "Quotes", exact: true }).click(), dialog);
   await expect(dialog.locator(".history-skeleton-row")).toHaveCount(3);
   await expect(dialog.getByText("Showing 2 of 2 quotes")).toBeVisible();
   await expect(dialog.getByText("Jan 5, 2027")).toBeVisible();
@@ -384,6 +410,7 @@ test("menu loading and empty states lead admins to the selected Catalog Admin me
     };
   });
   await page.reload();
+  await enterLocalWorkspace(page);
   await fillRequiredQuoteFields(page, { guests: 54, eventName: "Menu State Test", venue: "Menu Hall" });
   const selectedEventTypeId = await page.getByRole("combobox", { name: /^Event type\b/ }).inputValue();
   const selectedEventType = await page.getByRole("combobox", { name: /^Event type\b/ }).locator("option:checked").textContent();
@@ -441,6 +468,7 @@ test("a menu item stages immediately without activating the current quote", asyn
     };
   });
   await page.reload();
+  await enterLocalWorkspace(page);
   await fillRequiredQuoteFields(page, {
     guests: 55,
     eventName: "Staged Menu Change",
@@ -493,6 +521,7 @@ test("menu retry repeats the selected event request without clearing selections"
     };
   });
   await page.reload();
+  await enterLocalWorkspace(page);
   await fillRequiredQuoteFields(page, { guests: 56, eventName: "Menu Retry Test", venue: "Retry Hall" });
   await page.getByRole("button", { name: /^Next:/ }).click();
   const chicken = page.getByRole("checkbox", { name: /Herb Chicken/i });

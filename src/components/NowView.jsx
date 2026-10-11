@@ -14,7 +14,7 @@ import {
   describeNowEmptyState
 } from "./nowPresentation";
 import { classifyQuoteStatus } from "../lib/statusSemantics";
-import { markRouteStage } from "../lib/routePerformance";
+import { getNowRoutePerformanceOutcomes, markRouteStage } from "../lib/routePerformance";
 import { WorkspaceSectionLoading } from "./WorkspaceSurfaceBoundary";
 import {
   formatWorkspaceDate,
@@ -48,33 +48,19 @@ export default function NowView({
     truncated: false
   };
   const reportedStagesRef = useRef(new Set());
-  const readStates = Object.values(state.reads || {});
-  const usableCoreReady = Boolean(
-    state.attentionSummary
-    || state.quotes?.length
-    || readStates.some((read) => ["success", "error"].includes(read?.status))
-    || (!state.loading && !state.error)
-  );
-  const supplementalSettled = readStates.length
-    ? readStates.every((read) => ["success", "error", "unavailable"].includes(read?.status))
-    : !state.loading;
-  const stageOutcome = state.error
-    ? "error"
-    : readStates.some((read) => ["error", "unavailable"].includes(read?.status)) || state.partial
-      ? "partial"
-      : "ready";
+  const { core: coreOutcome, supplemental: supplementalOutcome } = getNowRoutePerformanceOutcomes(state);
 
   useEffect(() => {
-    if (!usableCoreReady || reportedStagesRef.current.has("usable-core")) return;
+    if (!coreOutcome || reportedStagesRef.current.has("usable-core")) return;
     reportedStagesRef.current.add("usable-core");
-    markRouteStage({ routeId: "now", stage: "usable-core", outcome: stageOutcome });
-  }, [stageOutcome, usableCoreReady]);
+    markRouteStage({ routeId: "now", stage: "usable-core", outcome: coreOutcome });
+  }, [coreOutcome]);
 
   useEffect(() => {
-    if (!supplementalSettled || reportedStagesRef.current.has("supplemental-complete")) return;
+    if (!supplementalOutcome || reportedStagesRef.current.has("supplemental-complete")) return;
     reportedStagesRef.current.add("supplemental-complete");
-    markRouteStage({ routeId: "now", stage: "supplemental-complete", outcome: stageOutcome });
-  }, [stageOutcome, supplementalSettled]);
+    markRouteStage({ routeId: "now", stage: "supplemental-complete", outcome: supplementalOutcome });
+  }, [supplementalOutcome]);
   const historyLoading = state.reads?.history?.status === "loading"
     || (state.loading && !["success", "error"].includes(state.reads?.history?.status));
   const historyError = state.reads?.history?.error || (!state.reads && state.error);

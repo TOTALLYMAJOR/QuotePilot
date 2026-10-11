@@ -1,6 +1,6 @@
 # QuotePilot by MBMApps
 
-Last updated: 2026-09-24 22:00:00 CDT
+Last updated: 2026-10-11 04:13:28 CDT
 
 QuotePilot is a multi-tenant catering commercial-operations system that turns
 changing customer intent into an explainable commercial commitment, current
@@ -861,7 +861,27 @@ npm run check:docs:governance
 npm run check:capability-surfaces
 npm run check:perf:bundle
 npm run check:perf:cwv
+npm run test:perf:routes
+npm run calibrate:perf:routes
+npm run check:perf:routes
 ```
+
+The route-performance commands build an isolated production preview and use a
+disposable `demo-qp-routeperf` Auth/Firestore tenant with three read-only Functions
+emulator handlers (Firebase CLI and Java 21+ required). The temporary Functions
+source excludes local environment/secret files and all write endpoint exports.
+Per-run CLI configuration and fail-closed ADC discovery keep saved credentials
+out of the emulator process without changing the operator's credential files.
+Calibration collects five runs per route and proposes p75 plus 10% ceilings;
+the check evaluates three-run medians. Neither command deploys or changes
+committed budgets automatically. See [Performance Guardrails](docs/PERFORMANCE_GUARDRAILS.md)
+for the fixed profile, measured-byte boundary, and local-only evidence limits.
+The retained October 11 calibration passed 20 scenarios. Its first independent
+check passed all 12 browser scenarios but failed Inventory and quote-review
+timing ceilings. The final focus-repaired candidate passes all twelve visits
+and every unchanged ceiling; both receipts remain retained. Local route timing
+is qualified for that candidate, but branch-wide documentation governance still
+blocks release on 14 pre-existing timestamp debts. This is not hosted proof.
 
 `test:customer-centered-authority:emulator` is the reproducible Firebase
 Functions/Firestore trace for customer-centered mutation authority, including

@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "catalogVersion": 95,
+  "catalogVersion": 96,
   "contracts": [
     {
       "id": "bounded-security-operations-audit",
@@ -9922,6 +9922,61 @@
       ],
       "headlessReason": "Developer-only launchers and synthetic fixture seeders are restricted to disposable demo projects and loopback Auth/Firestore/Functions. Fresh local setup creates named taxonomy before native pricing confirmation, then staff sign-in/display fixtures and native-planned synthetic acceptance/booking after verifying current catalog authority and preserving version, pricing and payment. The shared Firebase browser seed separately requires a demo project plus loopback Auth and Firestore before creating its active portal fixture. There is no hosted seed or tenant activation mode.",
       "safeOutcome": "Operators rehearse existing user surfaces locally with explicit synthetic evidence, normal role checks and providers disabled. Native acceptance and coordination fixtures are never customer or provider proof."
+    },
+    {
+      "id": "route-performance-emulator-fixture",
+      "reviewRevision": 1,
+      "status": "active",
+      "deliveryType": "headless",
+      "capabilityKind": "developer_infrastructure",
+      "audiences": [
+        "developers",
+        "operators"
+      ],
+      "summary": "A guarded local route-performance runner provisions disposable emulator fixtures, uses real administrator sign-in and native Inventory projection generation, and measures existing staff routes without changing application or callable authority.",
+      "backendPaths": [
+        "scripts/route-performance-fixture.mjs",
+        "scripts/route-performance-gate.mjs"
+      ],
+      "backendExports": [],
+      "affectedBackendExports": [],
+      "frontendPaths": [],
+      "entryPointLocators": [],
+      "testPaths": [
+        "scripts/__tests__/route-performance-gate.test.mjs"
+      ],
+      "testLocators": [
+        {
+          "path": "scripts/__tests__/route-performance-gate.test.mjs",
+          "locator": "route fixture refuses any non-isolated emulator destination before writes"
+        },
+        {
+          "path": "scripts/__tests__/route-performance-gate.test.mjs",
+          "locator": "route fixture drops inherited credentials and only exposes the three read handlers"
+        }
+      ],
+      "documentationPaths": [
+        "docs/FEATURE_MATRIX.md",
+        "docs/USER_MANUAL.md",
+        "docs/VERSION_CONTROL.md",
+        "docs/PERFORMANCE_GUARDRAILS.md"
+      ],
+      "documentationLocators": [
+        {
+          "path": "docs/FEATURE_MATRIX.md",
+          "locator": "## Isolated Route Performance Fixture"
+        },
+        {
+          "path": "docs/USER_MANUAL.md",
+          "locator": "## Developer-only route performance fixture"
+        },
+        {
+          "path": "docs/VERSION_CONTROL.md",
+          "locator": "## Time-bound browser fixtures"
+        }
+      ],
+      "headlessReason": "This developer-only process has no customer UI entry or hosted mode. Before any write, seeding requires GCLOUD_PROJECT=demo-qp-routeperf, Auth at 127.0.0.1:9498 and Firestore at 127.0.0.1:8488. The runner removes inherited credentials and builds temporary Functions source from tracked JS/CJS and explicit package/catalog JSON, excluding dotenv and secret files. Its Functions emulator on port 5998 exposes only the existing getRevenueAutopilotOperations, getDecisionDebtSnapshot and getRevenueAutopilotCustomerControls read handlers; other browser callables are blocked and unavailable providers remain explicit.",
+      "safeOutcome": "Developers receive local route timing and readiness evidence from synthetic records behind ordinary administrator authentication. Fixture isolation tests do not establish calibrated budgets, hosted access, provider behavior, physical stock, customer outcomes or human acceptance; route-performance qualification requires successful calibration and check receipts."
     },
     {
       "id": "ingredient-inventory-workspace",

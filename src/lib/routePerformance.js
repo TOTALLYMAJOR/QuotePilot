@@ -51,6 +51,37 @@ export function routePerformanceSnapshot() {
   return window.__QUOTE_PILOT_ROUTE_PERFORMANCE__.map((entry) => ({ ...entry }));
 }
 
+export function getNowRoutePerformanceOutcomes(state = {}) {
+  const reads = Object.values(state.reads || {});
+  const primary = [state.reads?.attention, state.reads?.history].filter(Boolean);
+  const succeeded = (read) => read?.status === "success";
+  const failed = (read) => read?.status === "error";
+  const degraded = (read) => failed(read) || read?.status === "unavailable";
+  const settled = (read) => succeeded(read) || degraded(read);
+  const supplementalSettled = reads.length ? reads.every(settled) : !state.loading;
+  const fallbackOutcome = state.error ? "error" : state.stale || state.partial ? "partial" : "ready";
+
+  // A synthesized summary may exist before any primary read succeeds. Pending
+  // or failed siblings affect completion, not a successful section's usability.
+  const core = state.stale
+    ? "partial"
+    : primary.some(succeeded)
+      ? "ready"
+      : primary.length && primary.every(settled)
+        ? primary.some(failed) ? "error" : "unavailable"
+        : !reads.length && (!state.loading || state.attentionSummary || state.quotes?.length)
+          ? fallbackOutcome
+          : null;
+  const supplemental = !supplementalSettled
+    ? null
+    : !reads.length
+      ? fallbackOutcome
+      : state.stale || reads.some(succeeded)
+        ? state.stale || state.partial || state.error || reads.some(degraded) ? "partial" : "ready"
+        : state.error || reads.some(failed) ? "error" : "unavailable";
+  return { core, supplemental };
+}
+
 export function markRouteStage({ routeId, navigationId = "", stage, outcome = "ready" } = {}) {
   const route = normalizedRouteId(routeId);
   const normalizedStage = String(stage || "").trim();

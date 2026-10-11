@@ -738,7 +738,10 @@ function LegacyAppCore({
   const commercialArrivalContext = commercialArrivalHandoff?.contract || null;
   const [commercialArrivalResolution, setCommercialArrivalResolution] = useState(null);
   const wizardRef = useRef(null);
+  const quoteEditFocusFrameRef = useRef(0);
+  const [quoteEditFocusRequest, setQuoteEditFocusRequest] = useState(null);
   const stepperRef = useRef(null);
+  const stepperCenterFrameRef = useRef(0);
   const mobilePricingToggleRef = useRef(null);
   const historyTriggerRef = useRef(null);
   const workflowTriggerRef = useRef(null);
@@ -844,38 +847,44 @@ function LegacyAppCore({
     setDynamicMenuRetryToken((token) => token + 1);
   }, [catalog.acceptCatalogMutation]);
 
+  const centerCurrentStep = useCallback(() => {
+    if (typeof window === "undefined" || typeof window.matchMedia !== "function") return;
+    if (!window.matchMedia("(max-width: 640px)").matches) return;
+    window.cancelAnimationFrame(stepperCenterFrameRef.current);
+    stepperCenterFrameRef.current = window.requestAnimationFrame(() => {
+      const stepper = stepperRef.current;
+      const currentStep = stepper?.querySelector('[aria-current="step"]');
+      if (!stepper || !currentStep) return;
+      const railRect = stepper.getBoundingClientRect();
+      const stepRect = currentStep.getBoundingClientRect();
+      stepper.scrollTo({
+        left: Math.max(
+          0,
+          stepper.scrollLeft
+            + (stepRect.left - railRect.left)
+            - ((railRect.width - stepRect.width) / 2)
+        ),
+        behavior: "auto"
+      });
+    });
+  }, []);
+
+  const attachStepperRef = useCallback((element) => {
+    stepperRef.current = element;
+    // A newly loaded step can reveal this rail after the parent effect ran.
+    if (element) centerCurrentStep();
+  }, [centerCurrentStep]);
+
   useEffect(() => {
     setMobilePricingOpen(false);
     if (typeof window === "undefined" || typeof window.matchMedia !== "function") return undefined;
-    let frame = 0;
-    const centerCurrentStep = () => {
-      if (!window.matchMedia("(max-width: 640px)").matches) return;
-      window.cancelAnimationFrame(frame);
-      frame = window.requestAnimationFrame(() => {
-        const stepper = stepperRef.current;
-        const currentStep = stepper?.querySelector('[aria-current="step"]');
-        if (!stepper || !currentStep) return;
-        const railRect = stepper.getBoundingClientRect();
-        const stepRect = currentStep.getBoundingClientRect();
-        stepper.scrollTo({
-          left: Math.max(
-            0,
-            stepper.scrollLeft
-              + (stepRect.left - railRect.left)
-              - ((railRect.width - stepRect.width) / 2)
-          ),
-          behavior: "auto"
-        });
-      });
-    };
-
     centerCurrentStep();
     window.addEventListener("resize", centerCurrentStep);
     return () => {
-      window.cancelAnimationFrame(frame);
+      window.cancelAnimationFrame(stepperCenterFrameRef.current);
       window.removeEventListener("resize", centerCurrentStep);
     };
-  }, [step]);
+  }, [step, centerCurrentStep]);
 
   useEffect(() => {
     if (!mobilePricingOpen || typeof window === "undefined") return undefined;
@@ -1519,6 +1528,41 @@ function LegacyAppCore({
     : "";
   const quoteEditReady = Boolean(quoteEditRouteId && editingQuote.id === quoteEditRouteId);
   const isEditingQuote = quoteEditReady;
+  useEffect(() => {
+    setQuoteEditFocusRequest((request) => (
+      request && request.quoteId !== quoteEditRouteId ? null : request
+    ));
+  }, [quoteEditRouteId]);
+  const attachWizardRef = useCallback((element) => {
+    window.cancelAnimationFrame(quoteEditFocusFrameRef.current);
+    quoteEditFocusFrameRef.current = 0;
+    wizardRef.current = element;
+    if (
+      !element
+      || !quoteBuilderActive
+      || !quoteEditReady
+      || quoteEditFocusRequest?.quoteId !== quoteEditRouteId
+    ) return;
+    // A lazy step can reveal after the edit route commits. Focus that reveal,
+    // not the hidden editor left behind while the quote is being hydrated.
+    quoteEditFocusFrameRef.current = window.requestAnimationFrame(() => {
+      quoteEditFocusFrameRef.current = 0;
+      if (
+        wizardRef.current !== element
+        || !element.isConnected
+        || element.hidden
+        || element.closest("[inert]")
+        || !element.getClientRects().length
+      ) return;
+      element.scrollIntoView({ behavior: "smooth", block: "start" });
+      element.focus({ preventScroll: true });
+      if (document.activeElement === element) {
+        setQuoteEditFocusRequest((request) => (
+          request === quoteEditFocusRequest ? null : request
+        ));
+      }
+    });
+  }, [quoteBuilderActive, quoteEditFocusRequest, quoteEditReady, quoteEditRouteId]);
   const commercialReturnCancelRef = useRef(null);
   const captureCommercialConsequenceOrigin = useCallback((hint = {}) => ({
     routeId: WORKSPACE_ROUTE_IDS.QUOTE_EDIT,
@@ -3321,6 +3365,7 @@ function LegacyAppCore({
   };
 
   const handleEditQuote = async (quote, { navigateToRoute = true } = {}) => {
+    setQuoteEditFocusRequest(null);
     if (!quote?.id) return;
     if (
       navigateToRoute
@@ -3470,8 +3515,7 @@ function LegacyAppCore({
         ? `Rebook review required for ${quote.quoteNumber || quote.id}: choose a current-or-future event date, review the copied scope, then save. Delivery remains blocked until that trusted edit succeeds.`
         : `Editing ${quote.quoteNumber || quote.id}. Save will update this quote and keep a version snapshot.`
     });
-    wizardRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-    window.requestAnimationFrame(() => wizardRef.current?.focus({ preventScroll: true }));
+    setQuoteEditFocusRequest({ quoteId: String(quote.id) });
   };
 
   const handleCreateCustomerRebook = async (reviewedAction, { mode = "create" } = {}) => {
@@ -5034,7 +5078,7 @@ function LegacyAppCore({
       <Suspense fallback={<div className="qp-route-loading" role="status">Loading quote builder...</div>}>
       <main
         className={proposalComposerActive ? "container pc-shell" : "container wizard-grid"}
-        ref={wizardRef}
+        ref={attachWizardRef}
         tabIndex={-1}
         hidden={!quoteBuilderActive || Boolean(quoteEditRouteId && !quoteEditReady)}
         aria-hidden={!quoteBuilderActive || Boolean(quoteEditRouteId && !quoteEditReady)}
@@ -5117,7 +5161,7 @@ function LegacyAppCore({
           <ol
             aria-label="Quote creation steps"
             className="stepper"
-            ref={stepperRef}
+            ref={attachStepperRef}
             tabIndex={0}
           >
             {stepperModel.map((stepMeta) => {

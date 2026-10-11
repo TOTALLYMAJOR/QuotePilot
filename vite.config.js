@@ -89,6 +89,8 @@ export default defineConfig(({ command, mode }) => {
     : fileURLToPath(new URL("./src/lib/commercialChangePersistedEffectsDisabled.js", import.meta.url));
   return ({
   envDir: ".",
+  // Concurrent Ambient and compatibility servers resolve different module graphs.
+  cacheDir: ambientGraphEnabled ? "node_modules/.vite-ambient" : "node_modules/.vite",
   publicDir: "public",
   plugins: [react({ jsxRuntime: compactProductionJsx ? "classic" : "automatic" })],
   esbuild: compactProductionJsx ? {

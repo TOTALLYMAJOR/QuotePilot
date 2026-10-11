@@ -1,10 +1,43 @@
 # Changelog
 
-Last updated: 2026-10-10 21:35:47 CDT
+Last updated: 2026-10-11 04:13:28 CDT
 
 All notable project changes are documented in this file.
 
 ## Unreleased — Current candidate refinements
+
+- Repair local browser qualification fixtures after the public/workspace split:
+  component harnesses explicitly load workspace styles, quote smoke setup waits
+  for catalog-backed controls, and geometry uses its required Ambient profile.
+  Isolate Ambient and compatibility Vite dependency caches. Preserve native
+  phone focus and the existing phone-card/tablet-table Inventory presentation.
+  Recenter the existing mobile stepper when lazy loading reattaches its rail;
+  save-flow tests wait for committed step changes before selecting controls.
+  Workflow → Edit quote now hands focus to the matching ready, visible editor
+  after lazy reveal, with stale-request and scheduled-frame cleanup.
+  Accessibility and typography browser fixtures wait for their actual task
+  surfaces before inspecting them; their assertions are unchanged. The fresh
+  full browser suite passes 90 scenarios with 314 profile-gated skips and zero
+  retries; 6,255 unit tests pass with 100 skips.
+  The route-performance lane now uses guarded disposable Auth/Firestore data,
+  real emulator sign-in, authority-generated Inventory projections, and three
+  secret-free read-only Functions handlers. Now reports fresh usable core
+  independently of unfinished or failed sibling reads; supplemental outcomes
+  retain degradation. Inventory cold arrivals now request the tenant settings
+  needed for eligibility, and ingredient pages reserve one lookahead record
+  inside the existing 200-record read bound. Failed browser runners or retained
+  browser errors cannot leave a passing receipt or generate a budget proposal.
+  Optional path-only network/CPU diagnostics are marked diagnostic-only and
+  rejected by calibration and qualification aggregation.
+  Retain all 20 successful calibration samples and reviewed p75-plus-10%
+  ceilings. The independent same-build check passes all 12 browser scenarios,
+  but Inventory and quote-review timing medians exceed their ceilings; retain
+  the failed receipt without raising budgets. The final focus-repaired candidate
+  passes all twelve visits and every unchanged ceiling; preserve both receipts.
+  Compatibility and Ambient bundles pass, with Ambient at 4,964,850 bytes
+  against its unchanged 4,968,757-byte ceiling; homepage Lighthouse also passes.
+  Branch-wide documentation governance remains blocked on 14 pre-existing
+  timestamp debts. This is local qualification, not hosted acceptance or a release.
 
 - Replace decorative one-sided status accents in Living Opportunity and
   Operations with restrained hairlines, full-state borders, and subtle state
@@ -28,7 +61,7 @@ All notable project changes are documented in this file.
   build, rules, governance, and bundle checks support these bounded claims; the
   current Ambient bundle is 4,964,683 bytes, 4,074 below the unchanged exception
   ceiling. Inventory physical count, tenant-wide shortage projection, inbound
-  supply authority, valuation policy, complete authenticated route calibration,
+  supply authority, valuation policy, passing authenticated route qualification,
   hosted role qualification, deployment, and human acceptance remain open.
 
 - Add administrator-only, on-disclosure ingredient traceability with stable

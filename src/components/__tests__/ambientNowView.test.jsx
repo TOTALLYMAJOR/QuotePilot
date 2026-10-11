@@ -9,7 +9,10 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 const navigationMocks = vi.hoisted(() => ({ adapter: null }));
 const performanceMocks = vi.hoisted(() => ({ markRouteStage: vi.fn() }));
 
-vi.mock("../../lib/routePerformance", () => performanceMocks);
+vi.mock("../../lib/routePerformance", async (importOriginal) => ({
+  ...await importOriginal(),
+  ...performanceMocks
+}));
 
 vi.mock("../../context/WorkspaceNavigationContext", () => ({
   useWorkspaceReturnContextAdapter: (adapter) => {
@@ -111,7 +114,7 @@ describe("AmbientNowView", () => {
       attention: { status: "loading" }, history: { status: "loading" }
     } }) });
     expect(performanceMocks.markRouteStage).not.toHaveBeenCalled();
-    mount({ snapshot: snapshot({ loading: true, reads: {
+    mount({ snapshot: snapshot({ loading: true, partial: true, reads: {
       attention: { status: "success" }, history: { status: "loading" }
     } }) });
     expect(performanceMocks.markRouteStage.mock.calls).toEqual([[{
@@ -125,6 +128,43 @@ describe("AmbientNowView", () => {
     ]);
   });
 
+  test("does not mark failed-first or supplemental-only reads as usable core", () => {
+    mount({ snapshot: snapshot({ loading: true, error: "Attention failed", loadedAt: 0, reads: {
+      attention: { status: "error", error: "Attention failed" },
+      history: { status: "loading" }, unreadReplies: { status: "success" }
+    } }) });
+    expect(performanceMocks.markRouteStage).not.toHaveBeenCalled();
+  });
+
+  test("keeps usable primary evidence ready when a supplemental read fails", () => {
+    mount({ snapshot: snapshot({ error: "Replies failed", partial: true, reads: {
+      attention: { status: "success" }, history: { status: "success" },
+      unreadReplies: { status: "error", error: "Replies failed" }
+    } }) });
+    expect(performanceMocks.markRouteStage.mock.calls).toEqual([
+      [{ routeId: "now", stage: "usable-core", outcome: "ready" }],
+      [{ routeId: "now", stage: "supplemental-complete", outcome: "partial" }]
+    ]);
+  });
+
+  test.each([["history", "attention"], ["attention", "history"]])(
+    "keeps core ready when %s fails before %s succeeds", (failedRead, successfulRead) => {
+      mount({ snapshot: snapshot({ loading: true, error: "Primary read failed", loadedAt: 0, reads: {
+        [failedRead]: { status: "error" }, [successfulRead]: { status: "loading" },
+        unreadReplies: { status: "loading" }
+      } }) });
+      expect(performanceMocks.markRouteStage).not.toHaveBeenCalled();
+      mount({ snapshot: snapshot({ error: "Primary read failed", partial: true, loadedAt: 0, reads: {
+        [failedRead]: { status: "error" }, [successfulRead]: { status: "success" },
+        unreadReplies: { status: "success" }
+      } }) });
+      expect(performanceMocks.markRouteStage.mock.calls).toEqual([
+        [{ routeId: "now", stage: "usable-core", outcome: "ready" }],
+        [{ routeId: "now", stage: "supplemental-complete", outcome: "partial" }]
+      ]);
+    }
+  );
+
   test.each(["loading", "pending"])("does not call unresolved %s reads supplemental completion", (status) => {
     mount({ snapshot: snapshot({ reads: { attention: { status: "success" }, history: { status } } }) });
     expect(performanceMocks.markRouteStage).toHaveBeenCalledTimes(1);
@@ -132,14 +172,14 @@ describe("AmbientNowView", () => {
   });
 
   test.each([
-    [{ error: "Read failed", reads: { attention: { status: "error" } } }, "error"],
-    [{ partial: true, reads: { attention: { status: "success" }, history: { status: "unavailable" } } }, "partial"],
-    [{ stale: true }, "partial"]
-  ])("labels failed or degraded evidence without fabricating ready", (overrides, outcome) => {
+    [{ error: "Read failed", reads: { attention: { status: "error" } } }, "error", "error"],
+    [{ partial: true, reads: { attention: { status: "success" }, history: { status: "unavailable" } } }, "ready", "partial"],
+    [{ stale: true }, "partial", "partial"]
+  ])("labels each stage by its own available evidence", (overrides, core, supplemental) => {
     mount({ snapshot: snapshot(overrides) });
     expect(performanceMocks.markRouteStage.mock.calls).toEqual([
-      [{ routeId: "now", stage: "usable-core", outcome }],
-      [{ routeId: "now", stage: "supplemental-complete", outcome }]
+      [{ routeId: "now", stage: "usable-core", outcome: core }],
+      [{ routeId: "now", stage: "supplemental-complete", outcome: supplemental }]
     ]);
   });
 

@@ -6,6 +6,9 @@ const VIEWPORTS = [
   { width: 768, height: 900 },
   { width: 1440, height: 1000 }
 ];
+const EVIDENCE_COLUMNS = [
+  "Ingredient", "Physical on hand", "Committed", "Available to allocate", "Cost evidence", "Location", "Purchase packs"
+];
 const INVENTORY_ROUTE_ENABLED = ["1", "true", "yes", "on"].includes(
   String(process.env.VITE_INVENTORY_AUTHORITY_ENABLED || "").trim().toLowerCase()
 ) && ["1", "true", "yes", "on"].includes(
@@ -154,13 +157,22 @@ test.beforeAll(async () => {
 });
 
 async function mountInventoryWorkspace(page) {
+  const pageErrors = [];
+  page.on("pageerror", (error) => pageErrors.push(error.message));
+  page.on("console", (message) => {
+    if (message.type() === "error") {
+      pageErrors.push(message.text());
+      console.error(`Inventory browser: ${message.text()}`);
+    }
+  });
   await page.goto("/");
   await page.evaluate(async (projection) => {
     document.body.innerHTML = '<div id="inventory-responsive-harness"></div>';
     const [{ default: React }, ReactDomClient, { InventoryWorkspaceView }] = await Promise.all([
       import("/@id/react"),
       import("/@id/react-dom/client"),
-      import("/src/components/InventoryWorkspace.jsx")
+      import("/src/components/InventoryWorkspace.jsx"),
+      import("/src/styles.css")
     ]);
     const createRoot = ReactDomClient.createRoot || ReactDomClient.default.createRoot;
     const emptyAttempt = { state: "ready", error: "", requestId: "", receipt: null, confirmation: null };
@@ -190,19 +202,78 @@ async function mountInventoryWorkspace(page) {
     );
   }, model);
   await expect(page.getByRole("heading", { name: "Stock and cost by ingredient" })).toBeVisible();
+  await expect(page.locator("vite-error-overlay")).toHaveCount(0);
+  return pageErrors;
 }
 
-test("keeps all seven Inventory evidence columns reachable without page overflow", async ({ page }) => {
-  for (const viewport of VIEWPORTS) {
-    await page.setViewportSize(viewport);
-    await mountInventoryWorkspace(page);
+async function expectNoPageOverflow(page) {
+  const layout = await page.evaluate(() => ({
+    bodyWidth: document.documentElement.scrollWidth,
+    viewportWidth: document.documentElement.clientWidth,
+    escapedElements: [...document.querySelectorAll("main *")].filter((element) => {
+      const bounds = element.getBoundingClientRect();
+      return bounds.width > 0 && bounds.right > document.documentElement.clientWidth + 1
+        && !element.closest(".inventory-evidence-table-wrap");
+    }).map((element) => ({
+      tag: element.tagName,
+      className: element.className,
+      right: element.getBoundingClientRect().right
+    }))
+  }));
+  expect(layout.bodyWidth, JSON.stringify(layout)).toBeLessThanOrEqual(layout.viewportWidth + 1);
+}
 
-    const region = page.getByRole("region", { name: "Ingredient evidence table" });
+for (const viewport of VIEWPORTS) {
+  test(`keeps all seven Inventory evidence axes reachable at ${viewport.width}px without page overflow`, async ({ page }, testInfo) => {
+    await page.setViewportSize(viewport);
+    const pageErrors = await mountInventoryWorkspace(page);
+    await page.screenshot({ path: testInfo.outputPath("inventory-initial.png"), fullPage: true });
+    await expectNoPageOverflow(page);
+
+    const region = page.getByRole("region", { name: "Ingredient evidence table", includeHidden: true });
     const instruction = page.getByText("Scroll horizontally to review all seven evidence columns.");
+    const cards = page.getByRole("list", { name: "Ingredient evidence cards", includeHidden: true });
+    if (viewport.width <= 640) {
+      await expect(region).toBeHidden();
+      await expect(instruction).toBeHidden();
+      await expect(cards).toBeVisible();
+      const card = cards.locator('[data-inventory-phone-row="chicken"]');
+      const disclosure = card.locator(":scope > details > summary");
+      await expect(disclosure).toContainText("Chicken");
+      await expect(disclosure).toContainText("Protein");
+      await expect(disclosure).toContainText("15 lb");
+      await disclosure.focus();
+      await page.keyboard.press("Enter");
+      await expect(card.locator(":scope > details")).toHaveAttribute("open", "");
+      for (const [axis, value] of [
+        ["Physical on hand", "40 lb"],
+        ["Committed", "25 lb"],
+        ["Available to allocate", "15 lb"],
+        ["Cost evidence", "Cost not recorded"],
+        ["Location", "Main kitchen"],
+        ["Purchase packs", "1 declared"]
+      ]) {
+        const evidence = card.locator("dl > div").filter({ has: page.getByText(axis, { exact: true }) });
+        await expect(evidence.locator("dt")).toBeVisible();
+        await expect(evidence).toContainText(value);
+      }
+      await expect(card.getByText("40 − 25 = 15 lb", { exact: true })).toBeVisible();
+      const packs = card.getByText("Show purchase-pack conversions", { exact: true });
+      await packs.focus();
+      await page.keyboard.press("Enter");
+      await expect(card.getByText("1 40 lb case = 40 lb", { exact: true })).toBeVisible();
+      await expectNoPageOverflow(page);
+      expect(pageErrors).toEqual([]);
+      await page.screenshot({ path: testInfo.outputPath("inventory-expanded.png"), fullPage: true });
+      return;
+    }
+
+    await expect(cards).toBeHidden();
+    await expect(region).toBeVisible();
     await expect(region.locator("caption")).toHaveText(
       "Ingredient on-hand, committed, available-to-allocate, and independent purchase-cost evidence"
     );
-    await expect(region.locator('th[scope="col"]')).toHaveCount(7);
+    await expect(region.locator('th[scope="col"]')).toHaveText(EVIDENCE_COLUMNS);
 
     const layout = await region.evaluate((element) => ({
       bodyWidth: document.documentElement.scrollWidth,
@@ -243,32 +314,54 @@ test("keeps all seven Inventory evidence columns reachable without page overflow
       });
       expect(finalColumnBounds.headerLeft).toBeGreaterThanOrEqual(finalColumnBounds.regionLeft - 1);
       expect(finalColumnBounds.headerRight).toBeLessThanOrEqual(finalColumnBounds.regionRight + 1);
+      const packs = region.getByText("Show 1 purchase pack", { exact: true });
+      await packs.focus();
+      await page.keyboard.press("Enter");
+      await expect(region.getByRole("list", { name: "Declared purchase packs for Chicken" })).toContainText("1 case-40lb = 40 lb");
     } else {
-      await expect(instruction).toBeHidden();
+      await expect(instruction).toBeVisible();
     }
-  }
-});
+    await expectNoPageOverflow(page);
+    expect(pageErrors).toEqual([]);
+    await page.screenshot({ path: testInfo.outputPath("inventory-scrolled.png"), fullPage: true });
+  });
 
-test("keeps the Inventory scroll region visibly focused in forced colors", async ({ page }) => {
-  await page.setViewportSize({ width: 390, height: 844 });
-  await page.emulateMedia({ forcedColors: "active" });
-  await mountInventoryWorkspace(page);
+  test(`keeps the visible Inventory evidence control focused in forced colors at ${viewport.width}px`, async ({ page }, testInfo) => {
+    await page.setViewportSize(viewport);
+    await page.emulateMedia({ forcedColors: "active" });
+    const pageErrors = await mountInventoryWorkspace(page);
 
-  const region = page.getByRole("region", { name: "Ingredient evidence table" });
-  await region.focus();
-  await expect(region).toBeFocused();
-  expect(await page.evaluate(() => matchMedia("(forced-colors: active)").matches)).toBe(true);
-  await expect(region).toHaveCSS("outline-style", "solid");
-  await expect(region).toHaveCSS("outline-width", "3px");
-  await expect(region).toHaveCSS("border-top-style", "solid");
-  await expect(region).toHaveCSS("border-top-width", "1px");
-  expect(await region.evaluate((element) => {
-    const styles = getComputedStyle(element);
-    return [styles.outlineColor, styles.borderTopColor].every((color) => (
-      color !== "transparent" && color !== "rgba(0, 0, 0, 0)"
-    ));
-  })).toBe(true);
-});
+    const region = viewport.width <= 640
+      ? page.getByRole("list", { name: "Ingredient evidence cards" }).locator('[data-inventory-phone-row="chicken"] > details > summary')
+      : page.getByRole("region", { name: "Ingredient evidence table" });
+    await expect(region).toBeVisible();
+    await region.focus();
+    await expect(region).toBeFocused();
+    expect(await page.evaluate(() => matchMedia("(forced-colors: active)").matches)).toBe(true);
+    if (viewport.width > 640) {
+      await expect(region).toHaveCSS("outline-style", "solid");
+      await expect(region).toHaveCSS("outline-width", "3px");
+      await expect(region).toHaveCSS("border-top-style", "solid");
+      await expect(region).toHaveCSS("border-top-width", "1px");
+    } else {
+      await expect(region).not.toHaveCSS("outline-style", "none");
+      expect(await region.evaluate((element) => parseFloat(getComputedStyle(element).outlineWidth)))
+        .toBeGreaterThanOrEqual(1);
+      await page.keyboard.press("Enter");
+      await expect(region.locator("..")).toHaveAttribute("open", "");
+      await expect(region).toBeFocused();
+      await expectNoPageOverflow(page);
+    }
+    expect(await region.evaluate((element) => {
+      const styles = getComputedStyle(element);
+      return [styles.outlineColor, styles.borderTopColor].every((color) => (
+        color !== "transparent" && color !== "rgba(0, 0, 0, 0)"
+      ));
+    })).toBe(true);
+    expect(pageErrors).toEqual([]);
+    await page.screenshot({ path: testInfo.outputPath("inventory-forced-colors.png"), fullPage: true });
+  });
+}
 
 test("keeps the real Inventory route closed without tenant authority", async ({ page }) => {
   test.skip(
@@ -294,7 +387,7 @@ test("keeps the real Inventory route closed without tenant authority", async ({ 
   await expect(page.locator('[data-capability-id="inventory-workspace"]')).toHaveCount(0);
 });
 
-test("renders the seven-axis table through the authenticated tenant-enabled Inventory route", async ({ page }) => {
+test("renders evidence cards and the seven-axis table through the authenticated tenant-enabled Inventory route", async ({ page }) => {
   test.skip(!FIREBASE_ROUTE_ACCEPTANCE, "Requires the Firebase emulator tenant-authority profile.");
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/app");
@@ -310,9 +403,16 @@ test("renders the seven-axis table through the authenticated tenant-enabled Inve
   await page.goto("/app/inventory");
   await expect(page).toHaveURL(/\/app\/inventory$/u);
   await expect(page.getByRole("heading", { name: "Inventory", exact: true })).toBeVisible({ timeout: 45_000 });
+  const cards = page.getByRole("list", { name: "Ingredient evidence cards" });
+  await expect(cards).toBeVisible({ timeout: 45_000 });
+  const card = cards.locator('[data-inventory-phone-row="chicken"]');
+  await card.locator(":scope > details > summary").click();
+  await expect(card.locator("dt")).toHaveText(EVIDENCE_COLUMNS.slice(1));
+  await expectNoPageOverflow(page);
+  await page.setViewportSize({ width: 768, height: 900 });
   const region = page.getByRole("region", { name: "Ingredient evidence table" });
   await expect(region).toBeVisible({ timeout: 45_000 });
-  await expect(region.locator('th[scope="col"]')).toHaveCount(7);
+  await expect(region.locator('th[scope="col"]')).toHaveText(EVIDENCE_COLUMNS);
   await expect(page.getByText("Scroll horizontally to review all seven evidence columns.")).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth))
     .toBeLessThanOrEqual(1);

@@ -1618,7 +1618,10 @@ export default function App({
     });
   }, [navigateAmbientTaskHandoff]);
   const wizardRef = useRef(null);
+  const quoteEditFocusFrameRef = useRef(0);
+  const [quoteEditFocusRequest, setQuoteEditFocusRequest] = useState(null);
   const stepperRef = useRef(null);
+  const stepperCenterFrameRef = useRef(0);
   const mobilePricingToggleRef = useRef(null);
   const historyTriggerRef = useRef(null);
   const workflowTriggerRef = useRef(null);
@@ -1664,6 +1667,7 @@ export default function App({
       WORKSPACE_ROUTE_IDS.QUOTE_EDIT,
       WORKSPACE_ROUTE_IDS.QUOTE_DETAIL,
       WORKSPACE_ROUTE_IDS.CATALOG,
+      WORKSPACE_ROUTE_IDS.INVENTORY,
       WORKSPACE_ROUTE_IDS.IMPORTS
     ].includes(browserRoute.routeId)
     || (!CUSTOMER_CENTERED_WORKSPACE_ENABLED && browserRoute.routeId === WORKSPACE_ROUTE_IDS.HOME);
@@ -1720,38 +1724,44 @@ export default function App({
     setDynamicMenuRetryToken((token) => token + 1);
   }, [catalog.acceptCatalogMutation]);
 
+  const centerCurrentStep = useCallback(() => {
+    if (typeof window === "undefined" || typeof window.matchMedia !== "function") return;
+    if (!window.matchMedia("(max-width: 640px)").matches) return;
+    window.cancelAnimationFrame(stepperCenterFrameRef.current);
+    stepperCenterFrameRef.current = window.requestAnimationFrame(() => {
+      const stepper = stepperRef.current;
+      const currentStep = stepper?.querySelector('[aria-current="step"]');
+      if (!stepper || !currentStep) return;
+      const railRect = stepper.getBoundingClientRect();
+      const stepRect = currentStep.getBoundingClientRect();
+      stepper.scrollTo({
+        left: Math.max(
+          0,
+          stepper.scrollLeft
+            + (stepRect.left - railRect.left)
+            - ((railRect.width - stepRect.width) / 2)
+        ),
+        behavior: "auto"
+      });
+    });
+  }, []);
+
+  const attachStepperRef = useCallback((element) => {
+    stepperRef.current = element;
+    // A newly loaded step can reveal this rail after the parent effect ran.
+    if (element) centerCurrentStep();
+  }, [centerCurrentStep]);
+
   useEffect(() => {
     setMobilePricingOpen(false);
     if (typeof window === "undefined" || typeof window.matchMedia !== "function") return undefined;
-    let frame = 0;
-    const centerCurrentStep = () => {
-      if (!window.matchMedia("(max-width: 640px)").matches) return;
-      window.cancelAnimationFrame(frame);
-      frame = window.requestAnimationFrame(() => {
-        const stepper = stepperRef.current;
-        const currentStep = stepper?.querySelector('[aria-current="step"]');
-        if (!stepper || !currentStep) return;
-        const railRect = stepper.getBoundingClientRect();
-        const stepRect = currentStep.getBoundingClientRect();
-        stepper.scrollTo({
-          left: Math.max(
-            0,
-            stepper.scrollLeft
-              + (stepRect.left - railRect.left)
-              - ((railRect.width - stepRect.width) / 2)
-          ),
-          behavior: "auto"
-        });
-      });
-    };
-
     centerCurrentStep();
     window.addEventListener("resize", centerCurrentStep);
     return () => {
-      window.cancelAnimationFrame(frame);
+      window.cancelAnimationFrame(stepperCenterFrameRef.current);
       window.removeEventListener("resize", centerCurrentStep);
     };
-  }, [step]);
+  }, [step, centerCurrentStep]);
 
   useEffect(() => {
     if (!mobilePricingOpen || typeof window === "undefined") return undefined;
@@ -2996,6 +3006,46 @@ export default function App({
     : "";
   const quoteEditReady = Boolean(quoteEditRouteId && editingQuote.id === quoteEditRouteId);
   const isEditingQuote = quoteEditReady;
+  useEffect(() => {
+    setQuoteEditFocusRequest((request) => (
+      request && request.quoteId !== quoteEditRouteId ? null : request
+    ));
+  }, [quoteEditRouteId]);
+  const attachWizardRef = useCallback((element) => {
+    window.cancelAnimationFrame(quoteEditFocusFrameRef.current);
+    quoteEditFocusFrameRef.current = 0;
+    wizardRef.current = element;
+    if (
+      !element
+      || !quoteBuilderActive
+      || !quoteEditReady
+      || quoteEditFocusRequest?.quoteId !== quoteEditRouteId
+    ) return;
+    // A lazy step can reveal after the edit route commits. Focus that reveal,
+    // not the hidden editor left behind while the quote is being hydrated.
+    quoteEditFocusFrameRef.current = window.requestAnimationFrame(() => {
+      quoteEditFocusFrameRef.current = 0;
+      if (
+        wizardRef.current !== element
+        || !element.isConnected
+        || element.hidden
+        || element.closest("[inert]")
+        || !element.getClientRects().length
+      ) return;
+      const exactField = quoteEditFocusRequest.focusField
+        ? element.querySelector(`[data-ambient-field="${quoteEditFocusRequest.focusField}"]`)
+        : null;
+      const target = exactField || element;
+      element.scrollIntoView({ behavior: "smooth", block: "start" });
+      target.focus({ preventScroll: true });
+      exactField?.scrollIntoView({ behavior: "smooth", block: "center" });
+      if (document.activeElement === target) {
+        setQuoteEditFocusRequest((request) => (
+          request === quoteEditFocusRequest ? null : request
+        ));
+      }
+    });
+  }, [quoteBuilderActive, quoteEditFocusRequest, quoteEditReady, quoteEditRouteId]);
   const commercialReturnCancelRef = useRef(null);
   const captureCommercialConsequenceOrigin = useCallback((hint = {}) => ({
     routeId: WORKSPACE_ROUTE_IDS.QUOTE_EDIT,
@@ -5920,6 +5970,7 @@ export default function App({
     ambientArrival = null
   ) => {
     const arrivalContext = AMBIENT_UI_ENABLED ? ambientArrival : null;
+    setQuoteEditFocusRequest(null);
     if (!quote?.id) {
       if (!AMBIENT_UI_ENABLED) return;
       return {
@@ -6040,14 +6091,7 @@ export default function App({
         : `Editing ${quote.quoteNumber || quote.id}. Save will update this quote and keep a version snapshot.`
     });
     const ambientFocusField = draftRuntime.ambientDraftIntent?.focusField || "";
-    wizardRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-    window.requestAnimationFrame(() => {
-      const exactField = ambientFocusField
-        ? wizardRef.current?.querySelector(`[data-ambient-field="${ambientFocusField}"]`)
-        : null;
-      (exactField || wizardRef.current)?.focus({ preventScroll: true });
-      exactField?.scrollIntoView({ behavior: "smooth", block: "center" });
-    });
+    setQuoteEditFocusRequest({ quoteId: String(quote.id), focusField: ambientFocusField });
     return AMBIENT_UI_ENABLED ? {
       status: "opened",
       focusField: ambientFocusField,
@@ -7955,7 +7999,7 @@ export default function App({
       <Suspense fallback={<div className="qp-route-loading" role="status">Loading quote builder...</div>}>
       <main
         className={proposalComposerActive ? "container pc-shell" : "container wizard-grid"}
-        ref={wizardRef}
+        ref={attachWizardRef}
         tabIndex={-1}
         hidden={!quoteBuilderActive || Boolean(quoteEditRouteId && !quoteEditReady)}
         aria-hidden={!quoteBuilderActive || Boolean(quoteEditRouteId && !quoteEditReady)}
@@ -8100,7 +8144,7 @@ export default function App({
           <ol
             aria-label="Quote creation steps"
             className="stepper"
-            ref={stepperRef}
+            ref={attachStepperRef}
             tabIndex={0}
           >
             {stepperModel.map((stepMeta) => {

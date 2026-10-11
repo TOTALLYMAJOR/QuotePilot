@@ -1,6 +1,6 @@
 # Feature Matrix
 
-Last updated: 2026-10-10 21:06:24 CDT
+Last updated: 2026-10-11 04:13:28 CDT
 
 This matrix maps the master feature checklist to current implementation and source locations.
 It is an inventory and chronology index, not the canonical detailed history or
@@ -817,6 +817,32 @@ explicit expiry fixtures remain fixed. This is local rehearsal infrastructure
 and establishes no hosted tenant activation, real customer action or human
 acceptance. Setup and stop instructions live in
 [README](../README.md#local-tenant-workflow-rehearsal).
+
+## Isolated Route Performance Fixture
+
+`scripts/route-performance-fixture.mjs` and the guarded
+`scripts/route-performance-gate.mjs` runner are developer infrastructure with no
+customer entry point or application/callable authority change. They use real
+administrator authentication against the fixed `demo-qp-routeperf` project and
+loopback Auth/Firestore emulators. Synthetic catalog, customer and quote/version
+records support existing staff routes; native Inventory commands generate the
+fixture's opening-stock projection. This is not evidence of physical stock.
+Cold Inventory arrivals now load the tenant settings needed for eligibility.
+Its existing administrator-only ingredient reader displays 199 records plus
+one lookahead within the unchanged 200-record query bound, preserving stable
+cursors and explicit remaining pages without expanding permissions.
+
+Inherited credentials and secret files are excluded. The temporary Functions
+emulator exposes only three existing read handlers; other browser callables are
+blocked and provider unavailability remains explicit. Fixture isolation tests
+provide local evidence only. Five-run calibration passed 20 scenarios and its
+reviewed ceilings are retained. The first independent verification fails
+Inventory and quote-review timing ceilings despite twelve working scenarios.
+The final focus-repaired candidate passes all twelve visits and every unchanged
+ceiling; both receipts are retained. This local qualification does not clear the
+separate branch-wide documentation governance blocker or prove hosted behavior.
+The commands, receipts, measurement profile and
+budget policy belong to [Performance Guardrails](PERFORMANCE_GUARDRAILS.md).
 
 ## Tenant-scoped workflow runtime
 

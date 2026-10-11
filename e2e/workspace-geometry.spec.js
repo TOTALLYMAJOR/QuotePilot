@@ -5,6 +5,10 @@ import { writeFile } from "node:fs/promises";
 
 // Local development staff fixture only. These checks do not qualify hosted
 // authentication, real-device keyboards, native browser zoom, or visual taste.
+// Cold Vite transforms need a bounded startup allowance; geometry is not a
+// route-performance measurement and retains the normal post-ready assertions.
+const WORKSPACE_STARTUP_TIMEOUT = 120_000;
+test.setTimeout(150_000);
 test.use({ deviceScaleFactor: 1, reducedMotion: "reduce", colorScheme: "light" });
 test.beforeEach(async ({ page }) => {
   await page.emulateMedia({ reducedMotion: "reduce", colorScheme: "light" });
@@ -21,9 +25,9 @@ const profiles = [
 
 async function arrive(page, path = "/app") {
   await page.route(/^https:\/\/fonts\.(?:googleapis|gstatic)\.com\//, (route) => route.abort());
-  await page.goto(path);
+  await page.goto(path, { timeout: WORKSPACE_STARTUP_TIMEOUT });
   const setup = page.getByRole("button", { name: "Explore the workspace" });
-  await expect(setup.or(page.locator(".site-header"))).toBeVisible({ timeout: 45_000 });
+  await expect(setup.or(page.locator(".site-header"))).toBeVisible({ timeout: WORKSPACE_STARTUP_TIMEOUT });
   if (await setup.isVisible()) await setup.click();
   await expect(page.locator('[data-ambient-navigation="orientation"]')).toBeVisible();
   await expect(page).toHaveURL(new RegExp(`${path.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`));
@@ -115,7 +119,7 @@ test("200%-equivalent reflow retains tablet navigation and task width", async ({
   // reflow simulation, deliberately not a claim of native browser UI zoom.
   await page.setViewportSize({ width: 720, height: 450 });
   await arrive(page, "/app/customers");
-  await expect(page.getByRole("heading", { name: "Clients", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Your first client story starts here", exact: true })).toBeVisible();
   const nav = page.getByRole("navigation", { name: "Primary workspace" });
   await expect(nav.getByRole("button", { name: "Clients", exact: true })).toHaveAttribute("aria-current", "page");
   for (const name of destinations) await expect(nav.getByRole("button", { name, exact: true })).toBeVisible();
@@ -165,6 +169,8 @@ test("workspace tools keyboard dismissal restores the surviving trigger", async 
 test("secondary operational headings share typography without changing brand type", async ({ page, request, browser }, testInfo) => {
   await page.setViewportSize({ width: 768, height: 900 });
   await arrive(page);
+  // Shell navigation can be ready while the actual Now route is still loading.
+  await expect(page.locator(".now-surface h3:not(.sr-only)").first()).toBeVisible();
   const computed = await page.evaluate(() => {
     const styles = (element) => {
       const value = getComputedStyle(element);

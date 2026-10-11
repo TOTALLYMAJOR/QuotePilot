@@ -19,12 +19,13 @@ for (const width of [390, 768, 1440]) {
         static now() { return ActualDate.parse("2026-10-11T12:00:00.000Z"); }
       };
     });
-    await page.goto("/app");
+    await page.goto("/");
     const css = readFileSync("src/styles.css", "utf8");
     const served = await request.get("/src/styles.css?direct");
     expect(served.ok()).toBe(true);
     expect(await served.text()).toContain(css.trim());
     await page.evaluate(async () => {
+      await import("/src/styles.css");
       const [{ default: React }, { default: ReactDOM }, { InventoryWorkspaceView }, { QuoteVersionComparisonPresentation }] = await Promise.all([
         import("/node_modules/.vite/deps/react.js"),
         import("/node_modules/.vite/deps/react-dom_client.js"),
