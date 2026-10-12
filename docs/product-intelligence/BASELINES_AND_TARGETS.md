@@ -15,6 +15,7 @@ A cohort with **fewer than 50 eligible observations is informational only**;
 supplier, pricing, margin, staffing, quantity or tolerance policy from baseline
 history. An owner must assess comparable evidence and explicitly adopt, revise,
 stop or investigate in the release ledger.
+
 ## Current baseline status
 
 QuotePilot does not yet have a trustworthy production baseline for product
