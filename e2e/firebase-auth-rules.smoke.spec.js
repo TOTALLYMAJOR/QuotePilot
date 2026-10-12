@@ -105,7 +105,7 @@ test("firebase auth and firestore rules load the organization catalog", async ({
     await workspaceTools.getByRole("button", { name: "Close workspace and tools" }).click();
   } else {
     await accountButton.click();
-    const accountMenu = page.getByRole("menu", { name: "Account" });
+    const accountMenu = page.getByRole("menu", { name: "Account", exact: true });
     await expect(accountMenu).toContainText(STAFF_EMAIL);
     await expect(accountMenu).toContainText("admin");
     await accountButton.click();
