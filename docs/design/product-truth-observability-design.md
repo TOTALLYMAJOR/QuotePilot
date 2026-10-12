@@ -1,6 +1,6 @@
 # Product Truth Observability Design Document
 
-Last updated: 2026-08-28 17:25:14 CDT
+Last updated: 2026-10-12 01:52:37 CDT
 
 ## Overview
 
