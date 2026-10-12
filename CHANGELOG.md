@@ -1,10 +1,20 @@
 # Changelog
 
-Last updated: 2026-10-11 19:05:04 CDT
+Last updated: 2026-10-11 20:45:43 CDT
 
 All notable project changes are documented in this file.
 
 ## Unreleased — Current candidate refinements
+
+- Restore Firebase browser smoke entry through the native **Explore the
+  workspace** onboarding action before **New quote**. Bind that tab-scoped
+  choice to its exact tenant before allowing the workspace to render, so a
+  principal switch cannot briefly inherit another tenant's setup bypass or
+  previously loaded catalog projection.
+  Authentication and authoritative-pricing fixtures retain their tenant,
+  receipt, pricing, and portal assertions; post-invalidation onboarding is
+  checked in a fresh tab because same-tab reload intentionally restores the
+  documented session choice.
 
 - Label the disposable route-performance emulator password as an explicit
   non-secret test placeholder so the existing secret scan can qualify the

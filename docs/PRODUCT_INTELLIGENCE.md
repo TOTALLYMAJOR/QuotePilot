@@ -1,6 +1,6 @@
 # QuotePilot Product Intelligence System
 
-Last updated: 2026-10-11 04:13:23 CDT
+Last updated: 2026-10-11 20:45:43 CDT
 
 ## Purpose
 
@@ -34,6 +34,18 @@ separate so strength in one area cannot hide failure in another.
 | 7 | [Quality / Reliability Guardrails](product-intelligence/QUALITY_GUARDRAILS.md) | Could apparent growth hide a broken or unsafe product? | Furnished from existing authority and quality gates. |
 | 8 | [Release / Experiment Ledger](product-intelligence/RELEASE_EXPERIMENT_LEDGER.md) | What changed that might explain a result? | Furnished with historical seeds and a prospective decision protocol. |
 | 9 | [Layered Evaluation Manifest](product-intelligence/evaluation-manifest.json) | Which independent evaluation dimensions, thresholds, evidence classes, and owner decisions govern a candidate? | Versioned manifest and local receipt runner implemented; human, hosted, provider, production, and outcome evaluations remain unclaimed until separately recorded. |
+
+## Tenant-scoped setup-entry hypothesis
+
+`LED-021` records the unreleased authentication and setup-entry repair. An
+organization-scoped staff session now waits for current catalog evidence before
+rendering any workspace route, and tab-scoped setup bypass state is accepted
+only for its exact organization. This should reduce incorrect setup paths and
+cross-tenant workspace flashes during account changes without changing catalog,
+pricing, receipt, or portal authority. Focused hook coverage plus disposable
+Firebase-emulator browser journeys are local evidence only; hosted behavior,
+production identity changes, human acceptance, timing impact, and catering
+outcomes remain unobserved.
 
 ## Safety and loading hypothesis
 

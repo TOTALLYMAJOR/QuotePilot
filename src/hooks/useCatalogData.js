@@ -671,10 +671,19 @@ export function useCatalogData({ enabled = true, organizationId = "", principalI
   const baseCatalog = enabled && !firebaseReady && !ALLOW_LOCAL_CATALOG_FALLBACK
     ? blockedCatalog()
     : defaultCatalog();
+  const initialSource = enabled
+    ? firebaseReady
+      ? "firebase"
+      : ALLOW_LOCAL_CATALOG_FALLBACK
+        ? "local-defaults"
+        : "firebase-required"
+    : "auth-required";
+  const reloadScopeKey = `${enabled ? "enabled" : "disabled"}:${resolveOrganizationId(organizationId, "")}`;
   const [state, setState] = useState(() => ({
+    scopeKey: reloadScopeKey,
     loading: enabled,
     saving: false,
-    source: enabled ? (firebaseReady ? "firebase" : ALLOW_LOCAL_CATALOG_FALLBACK ? "local-defaults" : "firebase-required") : "auth-required",
+    source: initialSource,
     error: "",
     observedAtISO: "",
     requiresFirebase: enabled && !firebaseReady && !ALLOW_LOCAL_CATALOG_FALLBACK,
@@ -692,7 +701,6 @@ export function useCatalogData({ enabled = true, organizationId = "", principalI
   if (reloadCoordinatorRef.current === null) {
     reloadCoordinatorRef.current = createCatalogReloadCoordinator();
   }
-  const reloadScopeKey = `${enabled ? "enabled" : "disabled"}:${resolveOrganizationId(organizationId, "")}`;
   const reloadScopeRef = useRef(reloadScopeKey);
 
   useEffect(() => {
@@ -708,6 +716,21 @@ export function useCatalogData({ enabled = true, organizationId = "", principalI
     if (previousScopeKey === reloadScopeKey) return;
     reloadCoordinatorRef.current.cancelScope(previousScopeKey);
     reloadScopeRef.current = reloadScopeKey;
+    setState((prev) => ({
+      ...prev,
+      scopeKey: reloadScopeKey,
+      loading: enabled,
+      saving: false,
+      source: initialSource,
+      error: "",
+      observedAtISO: "",
+      requiresFirebase: enabled && !firebaseReady && !ALLOW_LOCAL_CATALOG_FALLBACK,
+      serverFingerprints: null,
+      complete: false,
+      collectionStats: null,
+      eventTypes: deriveEventTypesFromSettings(baseCatalog.settings),
+      ...baseCatalog
+    }));
   }, [reloadScopeKey]);
 
   useEffect(() => {
@@ -1260,8 +1283,26 @@ export function useCatalogData({ enabled = true, organizationId = "", principalI
     return normalizeMenuSectionsFromEvent(categories, items);
   }, [organizationId]);
 
+  const visibleState = state.scopeKey === reloadScopeKey
+    ? state
+    : {
+        ...state,
+        scopeKey: reloadScopeKey,
+        loading: enabled,
+        saving: false,
+        source: initialSource,
+        error: "",
+        observedAtISO: "",
+        requiresFirebase: enabled && !firebaseReady && !ALLOW_LOCAL_CATALOG_FALLBACK,
+        serverFingerprints: null,
+        complete: false,
+        collectionStats: null,
+        eventTypes: deriveEventTypesFromSettings(baseCatalog.settings),
+        ...baseCatalog
+      };
+
   return {
-    ...state,
+    ...visibleState,
     reload,
     acceptCatalogMutation,
     saveCatalog,

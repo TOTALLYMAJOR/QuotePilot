@@ -784,7 +784,8 @@ function LegacyAppCore({
     && authSession.platformAdmin
     && !String(authSession.organizationId || "").trim()
   );
-  const catalogReadRequired = adminOpen
+  const catalogReadRequired = authSession.isStaff
+    || adminOpen
     || importStudioOpen
     || [
       WORKSPACE_ROUTE_IDS.QUOTE_NEW,
@@ -957,6 +958,7 @@ function LegacyAppCore({
   const [scheduleOpen, setScheduleOpen] = useState(false);
   const [integrationsOpen, setIntegrationsOpen] = useState(false);
   const [skipCatalogSetup, setSkipCatalogSetup] = useState(false);
+  const [skipCatalogSetupKey, setSkipCatalogSetupKey] = useState("");
   const [diagnosticsOpen, setDiagnosticsOpen] = useState(false);
   const [historyTarget, setHistoryTarget] = useState({ quoteId: "", reason: "" });
   const [dashboardOpen, setDashboardOpen] = useState(false);
@@ -3793,6 +3795,7 @@ function LegacyAppCore({
   useEffect(() => {
     if (typeof window === "undefined" || !catalogSetupBypassKey) {
       setSkipCatalogSetup(false);
+      setSkipCatalogSetupKey("");
       return;
     }
     try {
@@ -3800,10 +3803,12 @@ function LegacyAppCore({
     } catch {
       setSkipCatalogSetup(false);
     }
+    setSkipCatalogSetupKey(catalogSetupBypassKey);
   }, [catalogSetupBypassKey]);
   const setCatalogBypassState = useCallback((bypass) => {
     const nextBypass = Boolean(bypass);
     setSkipCatalogSetup(nextBypass);
+    setSkipCatalogSetupKey(catalogSetupBypassKey);
     if (typeof window === "undefined" || !catalogSetupBypassKey) return;
     try {
       if (nextBypass) {
@@ -4021,7 +4026,9 @@ function LegacyAppCore({
     );
   }
 
-  const shouldSuppressSetupGate = skipCatalogSetup || importStudioOpen;
+  const shouldSuppressSetupGate = (
+    skipCatalogSetupKey === catalogSetupBypassKey && skipCatalogSetup
+  ) || importStudioOpen;
   if (!catalogSetupComplete && !shouldSuppressSetupGate) {
     return (
       <div className="app-shell app-shell-neutral" style={appThemeVars}>

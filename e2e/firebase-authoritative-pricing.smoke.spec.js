@@ -6,14 +6,18 @@ const STAFF_PASSWORD = process.env.E2E_FIREBASE_PASSWORD || "Passw0rd!";
 async function signInAsStaff(page) {
   await page.goto("/app");
   const signInHeading = page.getByRole("heading", { name: "Staff Sign In" });
-  const quoteButton = page.getByRole("button", { name: "New Quote" }).first();
-  await expect(signInHeading.or(quoteButton)).toBeVisible({ timeout: 45_000 });
+  const quoteButton = page.getByRole("button", { name: "New quote", exact: true });
+  const exploreButton = page.getByRole("button", { name: "Explore the workspace", exact: true });
+  await expect(signInHeading.or(exploreButton).or(quoteButton)).toBeVisible({ timeout: 45_000 });
   if (await signInHeading.isVisible()) {
     await expect(signInHeading).toBeVisible();
     await page.getByLabel(/^Email$/i).fill(STAFF_EMAIL);
     await page.getByLabel(/^Password$/i).fill(STAFF_PASSWORD);
     await page.locator(".auth-actions").getByRole("button", { name: "Sign In" }).click();
   }
+  // Complete the native onboarding entry before opening the quote workflow.
+  await expect(exploreButton.or(quoteButton)).toBeVisible({ timeout: 45_000 });
+  if (await exploreButton.isVisible()) await exploreButton.click();
   await expect(quoteButton).toBeVisible({ timeout: 45_000 });
   await quoteButton.click();
   const guidedMode = page.getByRole("button", { name: "Guided mode" });
@@ -289,8 +293,13 @@ test("managed menu removal reopens pricing and rejects a stale catalog revision"
   expect(mutation.staleError.code).toMatch(/aborted/i);
   expect(mutation.staleError.message).toMatch(/catalog revision changed/i);
 
-  await page.reload();
-  await expect(page.getByRole("heading", { name: "Bring Your Catalog to Life" }))
-    .toBeVisible({ timeout: 45_000 });
-  await expect(page.getByRole("button", { name: "New Quote" })).toHaveCount(0);
+  const freshPage = await page.context().newPage();
+  try {
+    await freshPage.goto("/app");
+    await expect(freshPage.getByRole("heading", { name: "Bring Your Catalog to Life" }))
+      .toBeVisible({ timeout: 45_000 });
+    await expect(freshPage.getByRole("button", { name: "New quote", exact: true })).toHaveCount(0);
+  } finally {
+    await freshPage.close();
+  }
 });
