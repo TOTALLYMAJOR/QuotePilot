@@ -1,6 +1,6 @@
 # Capability / Functional Map
 
-Last updated: 2026-10-10 21:06:24 CDT
+Last updated: 2026-10-11 22:51:19 CDT
 
 ## Quote-to-Confidence extension
 
@@ -43,7 +43,7 @@ does not imply hosted, provider, production, human, adoption, or outcome proof.
 | `CAP-08` | Reconcile accepted promise, operational evidence, payment, cost, payout, and contribution without giving the reconciler write authority. | Find revenue leakage and explain commercial exceptions. | `OUT-05` | Read-only Commercial Truth Loop implemented in source/local evidence. | Derivable from exported bundles; production outcome observation remains unproven. |
 | `CAP-09` | Close an event with separately recorded actual attendance and corrections. | Preserve planned, contracted, and actual truth for closeout and learning. | `OUT-05`, `OUT-06` | Bounded authority and local acceptance exist; production use remains open. | Partial: receipts are defined; adoption and closeout latency are not measured. |
 | `CAP-10` | Review customer history, current opportunities, conversations, evidence, and safe rebooking context. | Turn completed work into a stronger relationship without cloning obsolete commitments. | `OUT-06` | Customer 360, commercial timeline, search, and rebook foundations exist. | Missing: relationship reuse, rebook conversion, and retention outcomes are not centrally observed. |
-| `CAP-11` | See bounded commercial and interaction measures with denominators, freshness, source, and truncation. | Make management decisions without mistaking incomplete data for truth. | All | Reporting dashboard and product analytics summaries are implemented. | Implemented for the current bounded measures; broader outcome coverage is incomplete. |
+| `CAP-11` | See bounded commercial and interaction measures with denominators, freshness, source, and truncation. | Make management decisions without mistaking incomplete data for truth. | All | Reporting dashboard and product analytics summaries are implemented, with independent loading and retained-stale recovery covered by capability review revision 5. | Implemented for the current bounded measures; broader outcome coverage is incomplete. |
 | `CAP-12` | Operate inside tenant, role, privacy, audit, release, and evidence boundaries. | Trust that business control is not gained by weakening security or provenance. | All | Strong source/CI governance and bounded production evidence exist. | Structural and release signals exist; usage and human trust outcomes remain mostly unknown. |
 
 ## October 10 local loading and privacy refinement

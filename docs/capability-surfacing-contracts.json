@@ -2878,7 +2878,7 @@
     },
     {
       "id": "bounded-commercial-reporting",
-      "reviewRevision": 4,
+      "reviewRevision": 5,
       "status": "active",
       "deliveryType": "user_relevant",
       "capabilityKind": "read_surface",
