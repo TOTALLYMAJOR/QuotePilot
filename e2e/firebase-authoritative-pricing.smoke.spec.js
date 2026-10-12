@@ -58,10 +58,9 @@ async function fillRequiredQuoteFields(page) {
 }
 
 async function advanceToSave(page, saveLabel = "Save draft") {
-  for (let i = 0; i < 6; i += 1) {
+  for (let i = 0; i < 8; i += 1) {
     const saveButton = page.getByRole("button", { name: saveLabel });
-    if (await saveButton.count()) {
-      await expect(saveButton).toBeVisible();
+    if (await saveButton.isVisible()) {
       await saveButton.click();
       return;
     }
@@ -73,9 +72,17 @@ async function advanceToSave(page, saveLabel = "Save draft") {
       if (!(await firstMenuItem.isChecked())) await firstMenuItem.check();
     }
 
-    const nextButton = page.getByRole("button", { name: /^Next:/ });
+    const nextButton = page.getByRole("button", { name: /^Next:/ }).first();
     if (!(await nextButton.count())) break;
+    await expect(nextButton).toBeVisible();
+    const priorNextLabel = (await nextButton.innerText()).trim();
     await nextButton.click();
+    await expect.poll(async () => {
+      if (await saveButton.isVisible()) return true;
+      const followingNext = page.getByRole("button", { name: /^Next:/ }).first();
+      if (!(await followingNext.isVisible())) return false;
+      return (await followingNext.innerText()).trim() !== priorNextLabel;
+    }, { timeout: 45_000 }).toBe(true);
   }
 
   throw new Error(`Unable to reach ${saveLabel}`);
@@ -88,13 +95,19 @@ test("owner saves an authoritative quote and disabled delivery cannot activate i
   await advanceToSave(page, "Save draft");
 
   await expect(page).toHaveURL(/\/app\/quotes\/(?!new(?:$|\?))[^/?]+(?:\?.*)?$/, { timeout: 45_000 });
-  await expect(page.getByRole("region", { name: "Quote event workspace" })).toBeVisible({ timeout: 45_000 });
+  await expectAnyVisible([
+    page.getByRole("region", { name: "Quote event workspace" }),
+    page.getByRole("region", { name: "Authoritative Pricing E2E" })
+  ]);
   await expect(
     page.getByRole("heading", { name: /Authoritative Pricing E2E/ })
   ).toBeVisible();
   const quoteId = decodeURIComponent(new URL(page.url()).pathname.split("/").filter(Boolean).at(-1));
   expect(quoteId).toBeTruthy();
-  await expect(page.getByRole("button", { name: "Review proposal & activity" })).toBeVisible();
+  await expectAnyVisible([
+    page.getByRole("button", { name: "Review proposal & activity" }),
+    page.getByRole("button", { name: "Review & send" })
+  ]);
   await expect(page.getByRole("button", { name: "Send quote email" })).toHaveCount(0);
 
   const customerProjection = await page.evaluate(async () => {

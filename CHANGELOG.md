@@ -1,10 +1,18 @@
 # Changelog
 
-Last updated: 2026-10-11 21:12:26 CDT
+Last updated: 2026-10-11 22:17:00 CDT
 
 All notable project changes are documented in this file.
 
 ## Unreleased — Current candidate refinements
+
+- Make Firebase journey qualification follow the active workspace presentation
+  without weakening its authority checks. Wizard advancement now waits for an
+  observed step transition before issuing another action; saved-quote evidence
+  accepts the exact compatibility or Ambient workspace surface; and auth/rules
+  assertions locate the same seeded quote and account controls in either
+  supported shell. This repairs CI timing and presentation assumptions while
+  preserving exact tenant, quote, pricing, delivery, and scope-leak checks.
 
 - Stabilize native onboarding browser qualification without changing product
   authority: readiness waits accept the independently valid sign-in,

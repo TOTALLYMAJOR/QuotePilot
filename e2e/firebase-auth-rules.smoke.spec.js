@@ -91,10 +91,21 @@ async function signInAsStaff(page) {
 
 test("firebase auth and firestore rules load the organization catalog", async ({ page }) => {
   await signInAsStaff(page);
-  await page.getByRole("button", { name: "Account" }).click();
-  const accountMenu = page.getByRole("menu", { name: "Account" });
-  await expect(accountMenu).toContainText(STAFF_EMAIL);
-  await expect(accountMenu).toContainText("admin");
+  const workspaceAndToolsButton = page.getByRole("button", {
+    name: "Workspace and tools",
+    exact: true
+  });
+  const accountButton = page.getByRole("button", { name: "Account", exact: true });
+  await expectAnyVisible([workspaceAndToolsButton, accountButton]);
+  if (await workspaceAndToolsButton.isVisible()) {
+    await workspaceAndToolsButton.click();
+  } else {
+    await accountButton.click();
+  }
+  const workspaceTools = page.getByRole("dialog", { name: "Workspace & tools" });
+  await expect(workspaceTools).toContainText(STAFF_EMAIL);
+  await expect(workspaceTools).toContainText("admin");
+  await workspaceTools.getByRole("button", { name: "Close workspace and tools" }).click();
   await expect(page.getByRole("combobox", { name: /^Event type\b/ }).locator("option")).toHaveCount(5);
 });
 
@@ -107,14 +118,19 @@ test("switching authenticated principals destroys the prior tenant workspace sta
   expect(await eventType.inputValue()).not.toBe("");
 
   await page.goto("/app/quotes");
-  const quotesDialog = page.getByRole("region", { name: "Quotes" });
-  const quoteRow = quotesDialog.locator('tr[data-quote-id="conversation-e2e-quote"]');
-  await expect(quoteRow).toContainText(CONVERSATION_QUOTE_NUMBER, { timeout: 45_000 });
-  page.once("dialog", (dialog) => dialog.accept());
-  await quoteRow.getByRole("button", { name: "Edit" }).click();
+  const opportunitiesRegion = page.getByRole("region", { name: "Every event, with its next move." });
+  const quoteOpportunity = opportunitiesRegion.locator(
+    `[data-opportunity-id="${CONVERSATION_QUOTE_ID}"]`
+  );
+  const quoteHistoryRegion = page.getByRole("region", { name: "Quotes" });
+  const quoteHistoryRow = quoteHistoryRegion
+    .getByRole("row")
+    .filter({ hasText: CONVERSATION_QUOTE_NUMBER });
+  await expectAnyVisible([quoteOpportunity, quoteHistoryRow]);
+  await page.goto(`/app/quotes/${CONVERSATION_QUOTE_ID}/edit`);
   await expect(page).toHaveURL(new RegExp(`/app/quotes/${CONVERSATION_QUOTE_ID}/edit$`));
   await page.goto("/app/quotes");
-  await expect(quotesDialog).toBeVisible();
+  await expectAnyVisible([opportunitiesRegion, quoteHistoryRegion]);
 
   await page.evaluate(async () => {
     const { signOutCurrentUser } = await import("/src/lib/authClient.js");
@@ -122,6 +138,7 @@ test("switching authenticated principals destroys the prior tenant workspace sta
   });
   await expect(page.getByRole("heading", { name: "Staff Sign In" })).toBeVisible({ timeout: 45_000 });
   await expect(opportunitiesRegion).toHaveCount(0);
+  await expect(quoteHistoryRegion).toHaveCount(0);
 
   await page.evaluate(() => {
     window.__quotePilotScopeLeakFrames = [];
