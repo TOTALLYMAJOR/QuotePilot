@@ -99,13 +99,17 @@ test("firebase auth and firestore rules load the organization catalog", async ({
   await expectAnyVisible([workspaceAndToolsButton, accountButton]);
   if (await workspaceAndToolsButton.isVisible()) {
     await workspaceAndToolsButton.click();
+    const workspaceTools = page.getByRole("dialog", { name: "Workspace & tools" });
+    await expect(workspaceTools).toContainText(STAFF_EMAIL);
+    await expect(workspaceTools).toContainText("admin");
+    await workspaceTools.getByRole("button", { name: "Close workspace and tools" }).click();
   } else {
     await accountButton.click();
+    const accountMenu = page.getByRole("menu", { name: "Account" });
+    await expect(accountMenu).toContainText(STAFF_EMAIL);
+    await expect(accountMenu).toContainText("admin");
+    await accountButton.click();
   }
-  const workspaceTools = page.getByRole("dialog", { name: "Workspace & tools" });
-  await expect(workspaceTools).toContainText(STAFF_EMAIL);
-  await expect(workspaceTools).toContainText("admin");
-  await workspaceTools.getByRole("button", { name: "Close workspace and tools" }).click();
   await expect(page.getByRole("combobox", { name: /^Event type\b/ }).locator("option")).toHaveCount(5);
 });
 
