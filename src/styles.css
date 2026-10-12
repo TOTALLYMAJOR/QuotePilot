@@ -7041,6 +7041,11 @@ hr {
     display: none;
   }
 
+  .inventory-ledger-disclosure[open] .inventory-evidence-table-wrap,
+  .inventory-ledger-disclosure[open] .inventory-table-instruction {
+    display: block;
+  }
+
   .inventory-phone-list {
     display: grid;
     gap: var(--space-3);

@@ -1378,7 +1378,8 @@ function IngredientEvidenceTable({
         aria-describedby="inventory-list-description inventory-table-instruction"
         tabIndex="0"
       >
-        <table aria-describedby="inventory-list-description inventory-table-instruction">          <caption className="sr-only">Ingredient on-hand, committed, available-to-allocate, and independent purchase-cost evidence</caption>
+        <table aria-describedby="inventory-list-description inventory-table-instruction">
+          <caption className="sr-only">Ingredient on-hand, committed, available-to-allocate, and independent purchase-cost evidence</caption>
           <thead>
             <tr><th className="inventory-ingredient-identity" scope="col">Ingredient</th><th scope="col">Physical on hand</th><th scope="col">Committed</th><th scope="col">Available to allocate</th><th scope="col">Cost evidence</th><th scope="col">Location</th><th scope="col">Purchase packs</th></tr>
           </thead>
@@ -1444,7 +1445,8 @@ function IngredientEvidenceTable({
                     <td data-inventory-axis="cost">
                       {costText(ingredient)}
                       {ingredient.cost?.observedAtISO && <span className="source-note">Cost observed {displayInstant(ingredient.cost.observedAtISO)} · {ingredient.cost.sourceLabel || "Source not recorded"}</span>}
-                    </td>                    <td>{ingredient.locationName || ingredient.locationId || "No location evidence"}</td>
+                    </td>
+                    <td>{ingredient.locationName || ingredient.locationId || "No location evidence"}</td>
                     <td>
                       {packs.length ? (
                         <details className="inventory-pack-list">
