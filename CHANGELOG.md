@@ -1,10 +1,18 @@
 # Changelog
 
-Last updated: 2026-10-11 20:45:43 CDT
+Last updated: 2026-10-11 21:12:26 CDT
 
 All notable project changes are documented in this file.
 
 ## Unreleased — Current candidate refinements
+
+- Stabilize native onboarding browser qualification without changing product
+  authority: readiness waits accept the independently valid sign-in,
+  onboarding, or workspace surfaces without a strict-locator collision; quote
+  setup selects its required menu item before advancing; and the role-permission
+  journey keeps a stable checkbox identity after selection. The focused
+  authoritative-pricing, Firebase authentication/rules, and role-permission
+  journeys pass locally; protected exact-SHA qualification remains separate.
 
 - Restore Firebase browser smoke entry through the native **Explore the
   workspace** onboarding action before **New quote**. Bind that tab-scoped

@@ -55,13 +55,18 @@ async function getPasswordResetCodes(request) {
     : [];
 }
 
+async function expectAnyVisible(locators, timeout = 45_000) {
+  await expect.poll(async () => {
+    const visibility = await Promise.all(locators.map((locator) => locator.isVisible()));
+    return visibility.some(Boolean);
+  }, { timeout }).toBe(true);
+}
+
 async function enterStaffWorkspace(page) {
   const exploreButton = page.getByRole("button", { name: "Explore the workspace", exact: true });
-  const quoteButton = page
-    .getByRole("banner")
-    .getByRole("button", { name: "New quote", exact: true });
+  const quoteButton = page.getByRole("button", { name: "New quote", exact: true }).first();
   // Fresh sign-ins may require the native onboarding entry again.
-  await expect(exploreButton.or(quoteButton)).toBeVisible({ timeout: 45_000 });
+  await expectAnyVisible([exploreButton, quoteButton]);
   if (await exploreButton.isVisible()) await exploreButton.click();
   await expect(quoteButton).toBeVisible({ timeout: 45_000 });
   return quoteButton;
@@ -70,11 +75,9 @@ async function enterStaffWorkspace(page) {
 async function signInAsStaff(page) {
   await page.goto("/app");
   const signInHeading = page.getByRole("heading", { name: "Staff Sign In" });
-  const quoteButton = page
-    .getByRole("banner")
-    .getByRole("button", { name: "New quote", exact: true });
+  const quoteButton = page.getByRole("button", { name: "New quote", exact: true }).first();
   const exploreButton = page.getByRole("button", { name: "Explore the workspace", exact: true });
-  await expect(signInHeading.or(exploreButton).or(quoteButton)).toBeVisible({ timeout: 45_000 });
+  await expectAnyVisible([signInHeading, exploreButton, quoteButton]);
   if (await signInHeading.isVisible()) {
     await expect(signInHeading).toBeVisible();
     await page.getByLabel(/^Email$/i).fill(STAFF_EMAIL);
