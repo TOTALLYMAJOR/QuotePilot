@@ -164,6 +164,10 @@ export default function CommandCenterHome({
     quotes: [],
     truncated: false
   };
+  const historyLoading = state.reads?.history?.status === "loading"
+    || (state.loading && !["success", "error"].includes(state.reads?.history?.status));
+  const historyError = state.reads?.history?.error || (!state.reads && state.error);
+  const attentionLoading = state.loading;
   const attentionItems = state.attentionSummary?.items || [];
   const visibleAttentionItems = attentionItems.slice(0, ATTENTION_ROW_LIMIT);
   const attentionOverflow = attentionItems.length - visibleAttentionItems.length;
@@ -245,6 +249,11 @@ export default function CommandCenterHome({
       />
 
       {state.error && <p className="error-note" role="alert">{state.error}</p>}
+      {Object.entries(state.reads || {}).filter(([read, result]) => read !== "history" && result.status === "error").map(([read]) => (
+        <button key={read} type="button" className="ghost" onClick={() => onRefresh?.({ force: true, read })}>
+          Retry {read === "unreadReplies" ? "customer replies" : read === "decisionDebt" ? "pending decisions" : "attention"}
+        </button>
+      ))}
 
       <div className="command-center-grid">
         <div
@@ -252,7 +261,7 @@ export default function CommandCenterHome({
           data-capability-id="cwf-12-central-attention"
         >
           <h3>Needs your attention</h3>
-          {state.loading && !state.attentionSummary && (
+          {attentionLoading && !hasAnyAttention && (
             <p className="source-note">Loading attention items...</p>
           )}
           {!state.loading && !hasAnyAttention && !state.error && (
@@ -320,8 +329,16 @@ export default function CommandCenterHome({
         <div className="command-center-rail">
           <div className="command-center-rail-section">
             <h3>Next {UPCOMING_WINDOW_DAYS} days</h3>
-            {state.loading && !hasAnyEvents && <p className="source-note">Loading events...</p>}
-            {!state.loading && !hasAnyEvents && !state.error && (
+            {historyError && (
+              <div>
+                <p className="warning-note" role="alert">Events and payment steps are unavailable. Any retained records may be stale.</p>
+                <button type="button" className="ghost" disabled={historyLoading} onClick={() => onRefresh?.({ force: true, read: "history" })}>
+                  Retry events and payments
+                </button>
+              </div>
+            )}
+            {historyLoading && !hasAnyEvents && <p className="source-note">Loading events...</p>}
+            {!historyLoading && !hasAnyEvents && !historyError && (
               <p className="source-note">No accepted or booked events in the next {UPCOMING_WINDOW_DAYS} days.</p>
             )}
             {hasAnyEvents && (
@@ -354,7 +371,8 @@ export default function CommandCenterHome({
 
           <div className="command-center-rail-section">
             <h3>Money at a glance</h3>
-            {!state.loading && !moneyRows.length && !state.error && (
+            {historyLoading && !moneyRows.length && <p role="status">Loading payment steps…</p>}
+            {!historyLoading && !moneyRows.length && !historyError && (
               <p className="source-note">No payments awaiting action. Requests become available after a proposal is accepted.</p>
             )}
             {moneyRows.length > 0 && (

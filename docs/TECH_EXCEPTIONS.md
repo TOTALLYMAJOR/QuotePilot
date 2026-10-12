@@ -1,7 +1,6 @@
 # Technology Exceptions
 
 Last updated: 2026-09-17 14:01:00 CDT
-
 Use this log when a change intentionally departs from stable-first policy or requires temporary governance/performance exception handling.
 
 ## Record Template
@@ -83,8 +82,7 @@ Use this log when a change intentionally departs from stable-first policy or req
   artifacts while compatibility's largest-chunk ceiling remains unchanged.
   The remaining increase is the reviewed role-safe host
   integration for the five separately gated workflows; there is no
-  discretionary headroom. The Proposal
-  Composer quote-builder candidate (measured 2,943,941 local compatibility bytes, largest chunk
+  discretionary headroom. The Proposal  Composer quote-builder candidate (measured 2,943,941 local compatibility bytes, largest chunk
   unchanged), the first Live planning and Staff People presentation slice
   (measured 2,963,542 compatibility bytes, largest chunk unchanged), and the
   shared shell and Now visual-system pass (measured 2,964,327 compatibility
@@ -240,8 +238,7 @@ Use this log when a change intentionally departs from stable-first policy or req
   implementations are compile-gated or lazy. Compatibility's largest emitted
   chunk remains 385,181 bytes; Ambient's current largest chunk is 446,541
   bytes, 1,100 bytes above the v0.20.0 ceiling. These exact residuals are the
-  reviewed integration cost, not a general allowance.
-- Rollback plan: Revert the quote-builder decision-flow slice and its exact
+  reviewed integration cost, not a general allowance.- Rollback plan: Revert the quote-builder decision-flow slice and its exact
   recalibration, then revert Pingram if needed; or revert Team access and its role/App Check adapters
   with the earlier recalibration. The two manual chunks, graph-aware checker,
   CI matrix, prior compatibility ceiling, and clean-main baseline remain

@@ -14,9 +14,11 @@ import {
 } from "../lib/catalogSetupDraftService";
 import {
   buildImportPreview,
+  buildMenuItemsCsvTemplate,
   detectImportType,
   getImportTypeDefinition,
   IMPORT_TYPES,
+  MENU_ITEMS_CSV_TEMPLATE_FILENAME,
   parseCsvSource,
   suggestFieldMapping,
   validateFieldMapping
@@ -29,6 +31,7 @@ import AdaptiveChoiceField from "./AdaptiveChoiceField";
 const MAX_CSV_FILE_BYTES = 5 * 1024 * 1024;
 const MAX_PDF_FILE_BYTES = 12 * 1024 * 1024;
 export const IMPORT_REVIEW_PAGE_SIZE = 50;
+const MENU_ITEMS_CSV_TEMPLATE_HREF = `data:text/csv;charset=utf-8,${encodeURIComponent(buildMenuItemsCsvTemplate())}`;
 
 const WORKBENCH_STEPS = Object.freeze([
   ["source", "Choose source"],
@@ -337,6 +340,44 @@ export function ImportMutationStatus({ presentation, showPassive = false }) {
   );
 }
 
+export function catalogImportReviewTarget(receipt = {}) {
+  const importType = String(receipt?.importType || "").trim();
+  const importBatchId = String(receipt?.importBatchId || "").trim();
+  if (importType !== "menuItems" || !importBatchId) return receipt;
+  const acceptedChanges = Array.isArray(receipt?.mutationReceipt?.changes)
+    ? receipt.mutationReceipt.changes
+    : [];
+  const candidates = acceptedChanges
+    .filter((change) => (
+      String(change?.collection || "").trim() === "menuItems"
+      && String(change?.recordId || "").trim()
+      && String(change?.payload?.eventTypeId || "").trim()
+      && String(change?.payload?.categoryId || "").trim()
+      && String(change?.provenance?.kind || "").trim() === "catalog_import"
+      && String(change?.provenance?.importBatchId || "").trim() === importBatchId
+      && String(change?.provenance?.importType || "").trim() === "menuItems"
+      && ["csv", "pdf"].includes(String(change?.provenance?.sourceKind || "").trim())
+      && String(change?.provenance?.sourceFileName || "").trim()
+      && Number.isInteger(Number(change?.provenance?.sourceRowNumber))
+      && Number(change.provenance.sourceRowNumber) > 0
+    ))
+    .sort((left, right) => Number(left.provenance.sourceRowNumber) - Number(right.provenance.sourceRowNumber));
+  const change = candidates[0];
+  if (!change) return receipt;
+  const recordId = String(change.recordId).trim();
+  const sourceRowNumber = Number(change.provenance.sourceRowNumber);
+  return {
+    ...receipt,
+    sectionId: "menu",
+    recordId,
+    eventTypeId: String(change.payload.eventTypeId).trim(),
+    categoryId: String(change.payload.categoryId).trim(),
+    sourceRowNumber,
+    importProvenance: { ...change.provenance },
+    requestId: `catalog-import:${importBatchId}:${recordId}:${sourceRowNumber}`
+  };
+}
+
 export function ImportStudioView({
   open,
   onClose,
@@ -350,11 +391,23 @@ export function ImportStudioView({
   onReload,
   onReviewCatalog,
   onImported,
-  returnFocusRef = null
+  returnFocusRef = null,
+  initialImportType = "customers",
+  arrivalSource = ""
 }) {
   const embedded = presentation === "embedded";
+  const resolvedInitialImportType = IMPORT_TYPES.some(({ id }) => id === initialImportType)
+    ? initialImportType
+    : "customers";
+  const resolvedArrivalSource = arrivalSource === "library-first-quote"
+    ? arrivalSource
+    : "";
+  const RootElement = embedded ? "main" : "div";
+  const TitleElement = embedded ? "h1" : "h2";
+  const OrientationTitleElement = embedded ? "h2" : "h3";
   const fileInputRef = useRef(null);
   const fileReadGenerationRef = useRef(0);
+  const menuSectionLoadGenerationRef = useRef(0);
   const [dragActive, setDragActive] = useState(false);
   const [sourceKind, setSourceKind] = useState("");
   const [sourceDetails, setSourceDetails] = useState(null);
@@ -362,7 +415,7 @@ export function ImportStudioView({
   const [fileName, setFileName] = useState("");
   const [headers, setHeaders] = useState([]);
   const [sourceRows, setSourceRows] = useState([]);
-  const [importType, setImportType] = useState("customers");
+  const [importType, setImportType] = useState(resolvedInitialImportType);
   const [mapping, setMapping] = useState({});
   const [constantValues, setConstantValues] = useState({});
   const [excludedRows, setExcludedRows] = useState(() => new Set());
@@ -377,40 +430,61 @@ export function ImportStudioView({
   const [mutationOperation, setMutationOperation] = useState("import");
   const [recoverySourceState, setRecoverySourceState] = useState("idle");
   const [recoveryMutationError, setRecoveryMutationError] = useState("");
+  const [loadedMenuContext, setLoadedMenuContext] = useState({
+    eventTypeId: "",
+    sections: [],
+    state: "idle",
+    error: ""
+  });
 
   const definition = getImportTypeDefinition(importType);
+  const selectedConstantEventTypeId = mapping.eventType
+    ? ""
+    : String(constantValues.eventType || "").trim();
+  const resolvedCatalogContext = useMemo(() => ({
+    ...catalogContext,
+    menuSections: [
+      ...(Array.isArray(catalogContext?.menuSections) ? catalogContext.menuSections : []),
+      ...(Array.isArray(loadedMenuContext.sections) ? loadedMenuContext.sections : [])
+    ]
+  }), [catalogContext, loadedMenuContext.sections]);
   const allRelationshipChoices = useMemo(() => ({
-    eventType: (Array.isArray(catalogContext?.eventTypes) ? catalogContext.eventTypes : [])
+    eventType: (Array.isArray(resolvedCatalogContext?.eventTypes) ? resolvedCatalogContext.eventTypes : [])
       .map((entry) => ({ value: String(entry?.id || "").trim(), label: String(entry?.name || entry?.id || "").trim() }))
       .filter((entry) => entry.value && entry.label),
     category: [
-      ...(Array.isArray(catalogContext?.categories) ? catalogContext.categories : []),
-      ...(Array.isArray(catalogContext?.menuSections) ? catalogContext.menuSections : [])
+      ...(Array.isArray(resolvedCatalogContext?.categories) ? resolvedCatalogContext.categories : []),
+      ...(Array.isArray(resolvedCatalogContext?.menuSections) ? resolvedCatalogContext.menuSections : [])
     ]
       .map((entry) => ({
         value: String(entry?.id || entry?.categoryId || "").trim(),
         label: String(entry?.name || entry?.id || "").trim(),
-        eventTypeId: String(entry?.eventTypeId || catalogContext?.eventTypeId || "").trim()
+        eventTypeId: String(entry?.eventTypeId || resolvedCatalogContext?.eventTypeId || "").trim()
       }))
       .filter((entry, index, values) => entry.value && entry.label && values.findIndex((candidate) => candidate.value === entry.value) === index)
-  }), [catalogContext]);
+  }), [resolvedCatalogContext]);
   const relationshipChoices = useMemo(() => {
-    const selectedEventTypeId = mapping.eventType ? "" : String(constantValues.eventType || "").trim();
     return {
       eventType: allRelationshipChoices.eventType,
-      category: selectedEventTypeId
-        ? allRelationshipChoices.category.filter((entry) => entry.eventTypeId === selectedEventTypeId)
+      category: selectedConstantEventTypeId
+        ? allRelationshipChoices.category.filter((entry) => entry.eventTypeId === selectedConstantEventTypeId)
         : allRelationshipChoices.category
     };
-  }, [allRelationshipChoices, constantValues.eventType, mapping.eventType]);
+  }, [allRelationshipChoices, selectedConstantEventTypeId]);
   const mappingDiagnostics = useMemo(() => validateFieldMapping(mapping), [mapping]);
   const unmappedHeaders = useMemo(() => {
     const mapped = new Set(Object.values(mapping).filter(Boolean));
     return headers.filter((header) => !mapped.has(header));
   }, [headers, mapping]);
   const previewRows = useMemo(
-    () => buildImportPreview({ rows: sourceRows, mapping, constants: constantValues, importType, catalogContext }),
-    [sourceRows, mapping, constantValues, importType, catalogContext]
+    () => buildImportPreview({
+      rows: sourceRows,
+      mapping,
+      constants: constantValues,
+      importType,
+      catalogContext: resolvedCatalogContext
+    }),
+    [sourceRows, mapping, constantValues, importType, resolvedCatalogContext]
   );
   const readyRows = useMemo(
     () => previewRows.filter((row) => row.ready && !excludedRows.has(row.rowNumber)),
@@ -477,6 +551,59 @@ export function ImportStudioView({
         : !preflightCurrent);
 
   useEffect(() => {
+    if (!open || fileName || pendingImportBatchId || busy || mutationPhase !== "idle") return;
+    setImportType(resolvedInitialImportType);
+  }, [busy, fileName, mutationPhase, open, pendingImportBatchId, resolvedInitialImportType]);
+
+  useEffect(() => {
+    const loadMenuByEvent = catalogContext?.loadMenuByEvent;
+    const generation = menuSectionLoadGenerationRef.current + 1;
+    menuSectionLoadGenerationRef.current = generation;
+    if (
+      !open
+      || importType !== "menuItems"
+      || !selectedConstantEventTypeId
+      || typeof loadMenuByEvent !== "function"
+    ) {
+      setLoadedMenuContext({ eventTypeId: "", sections: [], state: "idle", error: "" });
+      return undefined;
+    }
+
+    let alive = true;
+    setLoadedMenuContext({
+      eventTypeId: selectedConstantEventTypeId,
+      sections: [],
+      state: "loading",
+      error: ""
+    });
+    Promise.resolve(loadMenuByEvent(selectedConstantEventTypeId))
+      .then((sections) => {
+        if (!alive || menuSectionLoadGenerationRef.current !== generation) return;
+        setLoadedMenuContext({
+          eventTypeId: selectedConstantEventTypeId,
+          sections: (Array.isArray(sections) ? sections : []).map((section) => ({
+            ...section,
+            eventTypeId: selectedConstantEventTypeId
+          })),
+          state: "loaded",
+          error: ""
+        });
+      })
+      .catch((loadError) => {
+        if (!alive || menuSectionLoadGenerationRef.current !== generation) return;
+        setLoadedMenuContext({
+          eventTypeId: selectedConstantEventTypeId,
+          sections: [],
+          state: "error",
+          error: loadError?.message || "Failed to load menu sections for the selected event type."
+        });
+      });
+    return () => {
+      alive = false;
+    };
+  }, [catalogContext?.loadMenuByEvent, catalogRevision, importType, open, selectedConstantEventTypeId]);
+
+  useEffect(() => {
     setConstantValues((current) => {
       let changed = false;
       const next = { ...current };
@@ -517,7 +644,7 @@ export function ImportStudioView({
     setFileName("");
     setHeaders([]);
     setSourceRows([]);
-    setImportType("customers");
+    setImportType(resolvedInitialImportType);
     setMapping({});
     setConstantValues({});
     setExcludedRows(new Set());
@@ -623,7 +750,10 @@ export function ImportStudioView({
           : "The CSV needs a header row and at least one data row.");
         return;
       }
-      const detectedType = parsed.detectedImportType || detectImportType(parsed.headers);
+      const inferredType = parsed.detectedImportType || detectImportType(parsed.headers);
+      const detectedType = resolvedArrivalSource === "library-first-quote"
+        ? resolvedInitialImportType
+        : inferredType;
       if (nextSourceKind === "pdf" && detectedType === "customers") {
         setError("PDF customer imports are intentionally unavailable. Export customer data as CSV so identity fields remain explicit.");
         return;
@@ -784,7 +914,9 @@ export function ImportStudioView({
             organizationId,
             importType,
             rows: readyRows,
-            importBatchId
+            importBatchId,
+            sourceKind,
+            sourceFileName: fileName
           })
         : await preflightCustomerImport({
             organizationId,
@@ -837,7 +969,15 @@ export function ImportStudioView({
       const importBatchId = pendingImportBatchId || preflight.importBatchId;
       if (!pendingImportBatchId) setPendingImportBatchId(importBatchId);
       const result = catalogImport
-        ? await stageCatalogImportDraft({ organizationId, importType, rows: readyRows, importBatchId, preflight })
+        ? await stageCatalogImportDraft({
+            organizationId,
+            importType,
+            rows: readyRows,
+            importBatchId,
+            preflight,
+            sourceKind,
+            sourceFileName: fileName
+          })
         : await createCustomerImportSession({
             organizationId,
             organizationName,
@@ -938,20 +1078,22 @@ export function ImportStudioView({
   };
 
   return (
-    <div
+    <RootElement
       ref={dialogRef}
       className={embedded ? "container workspace-route-main embedded-workspace-route" : "modal-overlay"}
+      data-import-arrival={resolvedArrivalSource || undefined}
+      data-import-type={importType}
       data-layout-overlap-allowed={embedded ? undefined : "true"}
-      role={embedded ? "region" : "dialog"}
+      role={embedded ? undefined : "dialog"}
       aria-modal={embedded ? undefined : "true"}
       aria-labelledby="import-studio-title"
       tabIndex={-1}
     >
       <div className={`modal-card import-studio-card${embedded ? " workspace-route-card" : ""}`}>
-        <header className="modal-head import-studio-head">
+        <div className="modal-head import-studio-head">
           <div>
             <p className="import-studio-kicker">Import Workbench · Bring your business with you</p>
-            <h2 id="import-studio-title">Import Studio</h2>
+            <TitleElement id="import-studio-title">Import Studio</TitleElement>
             <p>Inspect, resolve, preflight, and import customer or catalog sources without guessing what changed.</p>
           </div>
           <button
@@ -964,7 +1106,7 @@ export function ImportStudioView({
           >
             {embedded ? "Back to Home" : "Close"}
           </button>
-        </header>
+        </div>
 
         <div className="import-destination-lock" aria-label="Locked import destination">
           <span>Adding only to</span>
@@ -973,7 +1115,30 @@ export function ImportStudioView({
           <small>Uploaded files cannot change this destination.</small>
         </div>
 
-        <nav className="import-workbench-steps" aria-label="Import Workbench progress">
+        {resolvedArrivalSource === "library-first-quote" && (
+          <section className="import-source-inspection import-source-orientation" aria-labelledby="menu-import-orientation-title">
+            <div>
+              <p className="import-drop-eyebrow">Library · Offers and menu</p>
+              <OrientationTitleElement id="menu-import-orientation-title">Start with your real menu</OrientationTitleElement>
+              <p>
+                Add your existing menu-item rows, then inspect every relationship, customer price,
+                and recorded item cost before the server preflight.
+              </p>
+            </div>
+            <a
+              className="ghost compact"
+              href={MENU_ITEMS_CSV_TEMPLATE_HREF}
+              download={MENU_ITEMS_CSV_TEMPLATE_FILENAME}
+            >
+              Download {MENU_ITEMS_CSV_TEMPLATE_FILENAME}
+            </a>
+            <small>
+              Use existing Event Type and Menu Section names. Downloading or filling this template does not import, save, or publish anything.
+            </small>
+          </section>
+        )}
+
+        <nav className="import-workbench-steps" aria-label="Import Workbench progress" tabIndex={0}>
           <ol>
             {WORKBENCH_STEPS.map(([id, label], index) => (
               <li
@@ -1010,6 +1175,7 @@ export function ImportStudioView({
               ref={fileInputRef}
               className="visually-hidden"
               type="file"
+              aria-label="Choose CSV or PDF source"
               accept=".csv,text/csv,.pdf,application/pdf"
               onChange={(event) => loadFile(event.target.files?.[0])}
             />
@@ -1134,7 +1300,26 @@ export function ImportStudioView({
                         {headers.map((header) => <option key={header} value={header}>{header}</option>)}
                       </select>
                     </label>
-                    {["eventType", "category"].includes(field) && !mapping[field] && (
+                    {field === "category"
+                      && !mapping[field]
+                      && selectedConstantEventTypeId
+                      && loadedMenuContext.eventTypeId === selectedConstantEventTypeId
+                      && loadedMenuContext.state === "loading" ? (
+                        <div className="adaptive-choice-field" role="status">
+                          <span className="adaptive-choice-field__label">
+                            Apply one category to every row
+                          </span>
+                          <span>Loading published menu sections…</span>
+                        </div>
+                      ) : null}
+                    {["eventType", "category"].includes(field)
+                      && !mapping[field]
+                      && !(
+                        field === "category"
+                        && selectedConstantEventTypeId
+                        && loadedMenuContext.eventTypeId === selectedConstantEventTypeId
+                        && loadedMenuContext.state === "loading"
+                      ) && (
                       <AdaptiveChoiceField
                         label={`Apply one ${fieldLabel(field).toLowerCase()} to every row`}
                         options={relationshipChoices[field]}
@@ -1148,7 +1333,11 @@ export function ImportStudioView({
                         }}
                         placeholder={`Choose ${fieldLabel(field).toLowerCase()}`}
                         emptyState="blocked"
-                        emptyReason={`No active ${field === "eventType" ? "event types" : "menu sections"} are available for relationship matching.`}
+                        emptyReason={field === "category"
+                          && loadedMenuContext.eventTypeId === selectedConstantEventTypeId
+                          && loadedMenuContext.state === "error"
+                          ? `Published menu sections could not be loaded. ${loadedMenuContext.error}`
+                          : `No active ${field === "eventType" ? "event types" : "menu sections"} are available for relationship matching.`}
                         recoveryAction={mayReleaseNoWriteCatalogRecovery
                           ? {
                               label: "Release no-write attempt and review catalog",
@@ -1474,7 +1663,12 @@ export function ImportStudioView({
                 </button>
               )}
               {["staged", "published"].includes(receipt.status) && typeof onReviewCatalog === "function" && (
-                <button type="button" className="cta" onClick={() => onReviewCatalog(receipt)}>
+                <button
+                  type="button"
+                  className="cta"
+                  data-catalog-review-record-id={catalogImportReviewTarget(receipt).recordId || ""}
+                  onClick={() => onReviewCatalog(catalogImportReviewTarget(receipt))}
+                >
                   {receipt.status === "published" ? "Review active catalog" : "Review catalog draft"}
                 </button>
               )}
@@ -1514,7 +1708,7 @@ export function ImportStudioView({
           </section>
         )}
       </div>
-    </div>
+    </RootElement>
   );
 }
 

@@ -1,8 +1,7 @@
 {
   "id": "workspace-convergence-ambient-strangler-2026-08-13",
   "status": "active",
-  "recordedAt": "2026-09-17",
-  "baselineGeneratedAt": "2026-08-07",
+  "recordedAt": "2026-09-24",  "baselineGeneratedAt": "2026-08-07",
   "baselineMetrics": {
     "totalJsBytes": 1997365,
     "largestJsChunkBytes": 387929
@@ -10,15 +9,13 @@
   "profiles": {
     "compatibility": {
       "maxMetrics": {
-        "totalJsBytes": 3657606,
-        "largestJsChunkBytes": 399665
+        "totalJsBytes": 3652845,        "largestJsChunkBytes": 399665
       }
     },
     "ambient-production": {
       "maxMetrics": {
-        "totalJsBytes": 4963155,
-        "largestJsChunkBytes": 446541
-      }
+        "totalJsBytes": 4968757,
+        "largestJsChunkBytes": 445422      }
     }
   }
 }

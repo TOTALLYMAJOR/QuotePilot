@@ -51,6 +51,13 @@ const CALM_LANGUAGE_RULES = Object.freeze([
     paths: Object.freeze(["src/components/QuoteDecisionDebtPanel.jsx"])
   }),
   Object.freeze({
+    phrase: "decision debt",
+    paths: Object.freeze([
+      "src/components/AmbientLivingOpportunity.jsx",
+      "src/components/StaffEvidenceRail.jsx"
+    ])
+  }),
+  Object.freeze({
     phrase: "a recorded decision debt item",
     paths: Object.freeze(["src/lib/workspaceArrivalContract.js"])
   }),

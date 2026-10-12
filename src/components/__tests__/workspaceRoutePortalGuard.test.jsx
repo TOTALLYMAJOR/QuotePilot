@@ -73,8 +73,8 @@ function workspaceNavigation() {
   };
 }
 
-function renderRoute(session = authSession) {
-  act(() => {
+async function renderRoute(session = authSession) {
+  await act(async () => {
     root.render(<ScopedWorkspaceRoute tenantContext={tenantContext} authSession={session} />);
   });
 }
@@ -128,6 +128,7 @@ function RouteFeedbackProbe() {
 }
 
 beforeEach(() => {
+  vi.stubEnv("VITE_AMBIENT_UI_ENABLED", "false");
   window.history.replaceState({}, "", "/app/catalog");
   container = document.createElement("div");
   document.body.appendChild(container);
@@ -145,10 +146,23 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe("workspace customer-portal transition guard", () => {
-  test("keeps the authenticated scope mounted until App accepts portal navigation", () => {
+describe("workspace customer-portal transition guard", async () => {
+  test("keeps the application unmounted while authentication resolves", async () => {
+    await renderRoute({ ...authSession, loading: true });
+    expect(container.querySelector('[data-testid="workspace-app"]')).toBeNull();
+    expect(container.textContent).toContain("Getting your QuotePilot workspace ready");
+  });
+
+  test("renders sign-in without mounting the application for an anonymous session", async () => {
+    await renderRoute({ ...authSession, user: null, error: "Firebase Auth is unavailable. Check env config." });
+    expect(container.textContent).toContain("Staff Sign In");
+    expect(container.textContent).toContain("Firebase Auth is unavailable");
+    expect(container.querySelector('[data-testid="workspace-app"]')).toBeNull();
+  });
+
+  test("keeps the authenticated scope mounted until App accepts portal navigation", async () => {
     mocks.feedbackComponent = RouteFeedbackProbe;
-    renderRoute();
+    await renderRoute();
     expect(container.querySelector('[data-testid="route-feedback-probe"]').dataset.available)
       .toBe("true");
     expect(container.querySelectorAll('[data-testid="workspace-action-feedback-announcer"]'))
@@ -161,7 +175,7 @@ describe("workspace customer-portal transition guard", () => {
       state: null
     };
 
-    renderRoute();
+    await renderRoute();
 
     expect(mocks.appProps.portalRouteAllowed).toBe(false);
     expect(mocks.appProps.committedPortalToken).toBe("");
@@ -180,7 +194,7 @@ describe("workspace customer-portal transition guard", () => {
       .toHaveLength(0);
   });
 
-  test("preserves direct portal-token precedence on the initial mount", () => {
+  test("preserves direct portal-token precedence on the initial mount", async () => {
     mocks.feedbackComponent = RouteFeedbackProbe;
     mocks.navigation = {
       route: { surface: "portal", routeId: "portal", portalToken: "direct-token" },
@@ -190,7 +204,7 @@ describe("workspace customer-portal transition guard", () => {
     };
     const confirm = vi.spyOn(window, "confirm");
 
-    renderRoute();
+    await renderRoute();
 
     expect(confirm).not.toHaveBeenCalled();
     expect(mocks.navigation.replace).not.toHaveBeenCalled();
@@ -202,14 +216,14 @@ describe("workspace customer-portal transition guard", () => {
       .toHaveLength(0);
   });
 
-  test("requires a new commit before changing from one portal token to another", () => {
+  test("requires a new commit before changing from one portal token to another", async () => {
     mocks.navigation = {
       route: { surface: "portal", routeId: "portal", portalToken: "portal-a" },
       location: { pathname: "/app", search: "?portal=portal-a", hash: "", state: null },
       navigate: vi.fn(),
       replace: vi.fn()
     };
-    renderRoute();
+    await renderRoute();
     expect(mocks.appProps.portalRouteAllowed).toBe(true);
 
     mocks.navigation.route = { surface: "portal", routeId: "portal", portalToken: "portal-b" };
@@ -219,14 +233,14 @@ describe("workspace customer-portal transition guard", () => {
       hash: "",
       state: null
     };
-    renderRoute();
+    await renderRoute();
 
     expect(mocks.appProps.portalRouteAllowed).toBe(false);
     expect(mocks.appProps.committedPortalToken).toBe("portal-a");
   });
 });
 
-describe("canonical quote workspace authority", () => {
+describe("canonical quote workspace authority", async () => {
   test("dismisses terminal feedback from the compatibility workspace with its exact revision", async () => {
     vi.stubEnv("VITE_AMBIENT_UI_ENABLED", "true");
     mocks.feedbackComponent = RouteFeedbackProbe;
@@ -237,7 +251,7 @@ describe("canonical quote workspace authority", () => {
       navigate: vi.fn(),
       replace: vi.fn()
     };
-    renderRoute();
+    await renderRoute();
     act(() => container.querySelector('[data-testid="begin-route-feedback"]').click());
     act(() => container.querySelector('[data-testid="complete-route-feedback"]').click());
     expect(container.querySelector('[data-testid="route-feedback-probe"]').dataset.phase)
@@ -255,7 +269,7 @@ describe("canonical quote workspace authority", () => {
       navigate: vi.fn(),
       replace: vi.fn()
     };
-    renderRoute();
+    await renderRoute();
     await act(async () => Promise.resolve());
 
     const dismiss = Array.from(container.querySelectorAll(
@@ -278,7 +292,7 @@ describe("canonical quote workspace authority", () => {
       navigate: vi.fn(),
       replace: vi.fn()
     };
-    renderRoute();
+    await renderRoute();
     expect(container.querySelector('[data-testid="workspace-app"]')).not.toBeNull();
     act(() => container.querySelector('[data-testid="begin-route-feedback"]').click());
     const activeAttempt = container.querySelector('[data-testid="route-feedback-probe"]')
@@ -321,7 +335,7 @@ describe("canonical quote workspace authority", () => {
         navigate: vi.fn(),
         replace: vi.fn()
       };
-      renderRoute();
+      await renderRoute();
       await act(async () => Promise.resolve());
 
       const compatibilityWorkspace = container.querySelector(
@@ -352,7 +366,7 @@ describe("canonical quote workspace authority", () => {
         navigate: vi.fn(),
         replace: vi.fn()
       };
-      renderRoute();
+      await renderRoute();
       await act(async () => Promise.resolve());
 
       const ambientWorkspace = container.querySelector('[data-testid="workspace-app"]');
@@ -375,28 +389,27 @@ describe("canonical quote workspace authority", () => {
     }
   });
 
-  test("removes prior staff feedback while auth is unresolved even when identity is retained", () => {
+  test("removes prior staff feedback while auth is unresolved even when identity is retained", async () => {
     mocks.feedbackComponent = RouteFeedbackProbe;
     window.history.replaceState({}, "", "/app/quote-workspace");
-    renderRoute();
+    await renderRoute();
     act(() => container.querySelector('[data-testid="begin-route-feedback"]').click());
     expect(container.querySelector('[data-testid="route-feedback-probe"]').dataset.count).toBe("1");
     expect(container.querySelectorAll('[data-testid="workspace-action-feedback-announcer"]'))
       .toHaveLength(1);
 
-    renderRoute({ ...authSession, loading: true });
+    await renderRoute({ ...authSession, loading: true });
 
-    expect(container.querySelector('[data-testid="workspace-app"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="workspace-app"]')).toBeNull();
     expect(container.querySelector('[data-testid="quote-workspace-mock"]')).toBeNull();
-    expect(container.querySelector('[data-testid="route-feedback-probe"]').dataset.available)
-      .toBe("false");
+    expect(container.querySelector('[data-testid="route-feedback-probe"]')).toBeNull();
     expect(container.querySelectorAll('[data-testid="workspace-action-feedback-announcer"]'))
       .toHaveLength(0);
   });
 
-  test("keeps customer workspace routes outside the staff feedback provider", () => {
+  test("keeps customer workspace routes outside the staff feedback provider", async () => {
     mocks.feedbackComponent = RouteFeedbackProbe;
-    renderRoute({ ...authSession, role: "customer" });
+    await renderRoute({ ...authSession, role: "customer" });
 
     expect(container.querySelector('[data-testid="workspace-app"]')).not.toBeNull();
     expect(container.querySelector('[data-testid="route-feedback-probe"]').dataset.available)
@@ -407,9 +420,9 @@ describe("canonical quote workspace authority", () => {
       .toHaveLength(0);
   });
 
-  test("denies non-staff principals without mounting the quote workspace", () => {
+  test("denies non-staff principals without mounting the quote workspace", async () => {
     window.history.replaceState({}, "", "/app/quote-workspace");
-    renderRoute({ ...authSession, role: "customer" });
+    await renderRoute({ ...authSession, role: "customer" });
 
     expect(container.querySelector('[data-testid="quote-workspace-role-boundary"]')).not.toBeNull();
     expect(container.textContent).toContain("Staff access required");
@@ -420,7 +433,7 @@ describe("canonical quote workspace authority", () => {
 
   test("keeps the former concept path as an authenticated compatibility alias", async () => {
     window.history.replaceState({}, "", "/app/quote-workspace-concept");
-    renderRoute();
+    await renderRoute();
     await act(async () => Promise.resolve());
 
     expect(container.querySelector('[data-testid="quote-workspace-mock"]')).not.toBeNull();
@@ -436,7 +449,7 @@ describe("canonical quote workspace authority", () => {
       replace: vi.fn()
     };
 
-    renderRoute();
+    await renderRoute();
     await act(async () => Promise.resolve());
 
     expect(container.querySelector('[data-testid="quote-workspace-mock"]')).not.toBeNull();
@@ -444,7 +457,7 @@ describe("canonical quote workspace authority", () => {
     expect(container.querySelector('[data-testid="workspace-app"]')).toBeNull();
   });
 
-  test("keeps an exact quote route in the approved Ambient opportunity workspace", () => {
+  test("keeps an exact quote route in the approved Ambient opportunity workspace", async () => {
     vi.stubEnv("VITE_AMBIENT_UI_ENABLED", "true");
     window.history.replaceState({}, "", "/app/quotes/quote-101");
     mocks.navigation = {
@@ -454,13 +467,13 @@ describe("canonical quote workspace authority", () => {
       replace: vi.fn()
     };
 
-    renderRoute();
+    await renderRoute();
 
     expect(container.querySelector('[data-testid="workspace-app"]')).not.toBeNull();
     expect(container.querySelector('[data-testid="quote-workspace-mock"]')).toBeNull();
   });
 
-  test("preserves the explicit quote-administration fallback", () => {
+  test("preserves the explicit quote-administration fallback", async () => {
     window.history.replaceState({}, "", "/app/quotes/quote-101?view=administration");
     mocks.navigation = {
       route: { surface: "workspace", routeId: "quote-detail", params: { quoteId: "quote-101" } },
@@ -474,13 +487,13 @@ describe("canonical quote workspace authority", () => {
       replace: vi.fn()
     };
 
-    renderRoute();
+    await renderRoute();
 
     expect(container.querySelector('[data-testid="workspace-app"]')).not.toBeNull();
     expect(container.querySelector('[data-testid="quote-workspace-mock"]')).toBeNull();
   });
 
-  test("preserves exact governed administration arrivals", () => {
+  test("preserves exact governed administration arrivals", async () => {
     window.history.replaceState({}, "", "/app/quotes/quote-101");
     mocks.navigation = {
       route: { surface: "workspace", routeId: "quote-detail", params: { quoteId: "quote-101" } },
@@ -494,7 +507,7 @@ describe("canonical quote workspace authority", () => {
       replace: vi.fn()
     };
 
-    renderRoute();
+    await renderRoute();
 
     expect(container.querySelector('[data-testid="workspace-app"]')).not.toBeNull();
     expect(container.querySelector('[data-testid="quote-workspace-mock"]')).toBeNull();

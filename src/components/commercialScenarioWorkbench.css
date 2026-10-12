@@ -799,7 +799,6 @@
   font-size: .78rem;
   line-height: 1.5;
 }
-
 .csw-menu-basis {
   margin: 0.85rem 0 0;
   padding-top: 0.1rem;
@@ -1260,7 +1259,6 @@
     font-weight: 720;
     text-transform: uppercase;
   }
-
   .csw-comparison-mobile {
     display: grid;
     border-top: 1px solid var(--csw-line);

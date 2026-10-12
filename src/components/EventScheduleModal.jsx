@@ -10,7 +10,7 @@ import {
   parseTimeToMinutes
 } from "../lib/quoteWorkflow";
 import {
-  getQuoteHistory,
+  getEventScheduleQuotes,
   updateQuoteBookingAssignment,
   updateQuoteKitchenCheckpoints,
   updateQuoteProductionChecklist
@@ -33,7 +33,7 @@ import EventIngredientOperationsSummary from "./EventIngredientOperationsSummary
 import GoogleCalendarIntegrationPanel from "./GoogleCalendarIntegrationPanel";
 import "./scheduleMotion.css";
 
-export const EVENT_SCHEDULE_QUOTE_LIMIT = 500;
+export const EVENT_SCHEDULE_QUOTE_LIMIT = 100;
 
 const STATUS_SET = new Set(["accepted", "booked"]);
 const WEEKDAY_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -83,6 +83,18 @@ function startOfWeek(date) {
 
 function endOfWeek(date) {
   return addDays(startOfWeek(date), 6);
+}
+
+export function getScheduleVisibleInterval({ anchorIso, viewMode = "month" } = {}) {
+  const anchorDate = parseIsoDate(anchorIso);
+  if (!anchorDate) return null;
+  const start = viewMode === "week"
+    ? startOfWeek(anchorDate)
+    : startOfWeek(startOfMonth(anchorDate));
+  const end = viewMode === "week"
+    ? endOfWeek(anchorDate)
+    : endOfWeek(endOfMonth(anchorDate));
+  return { startDate: toIsoDate(start), endDate: toIsoDate(end) };
 }
 
 function sameMonth(a, b) {
@@ -927,6 +939,7 @@ export function EventScheduleView({
   staffLeads = [],
   capacityLimit = 400,
   currentUserEmail = "",
+  principalId = "",
   arrivalContext = null,
   onArrivalResolution = null,
   onOpenOpportunity = null,
@@ -940,6 +953,7 @@ export function EventScheduleView({
   const operationsMode = String(surfaceTitle || "").trim().toLowerCase() === "operations";
   const todayIso = toIsoDate(new Date());
   const routeHeadingRef = useRef(null);
+  const productionDisclosureRef = useRef(null);
   const loadGenerationRef = useRef(0);
   const arrivalReportRef = useRef("");
   const [state, setState] = useState({
@@ -968,7 +982,11 @@ export function EventScheduleView({
     && arrivalContext?.surfaceId === "schedule"
     && arrivalContext?.destination === "schedule"
     && arrivalContext?.focusConsumerState === "supported"
-    && ["review_event_schedule", "review_schedule_conflict"].includes(arrivalContext?.intentId)
+    && [
+      "review_event_schedule",
+      "review_schedule_conflict",
+      "review_production_consequence"
+    ].includes(arrivalContext?.intentId)
     && String(arrivalFocus.quoteId || "").trim()
   );
   const unsupportedScheduleArrival = Boolean(
@@ -981,7 +999,9 @@ export function EventScheduleView({
         arrivalContext.intentId,
         arrivalContext.object?.type,
         arrivalContext.object?.id,
-        arrivalFocus.quoteId
+        arrivalFocus.quoteId,
+        arrivalFocus.sourceRevisionId,
+        arrivalFocus.proposedRevisionId
       ].filter(Boolean).join(":")
     : "";
 
@@ -1029,9 +1049,13 @@ export function EventScheduleView({
         }
     ));
     try {
-      const result = await getQuoteHistory({
+      const interval = getScheduleVisibleInterval({ anchorIso, viewMode });
+      if (!interval) throw new Error("The visible schedule interval is invalid.");
+      const result = await getEventScheduleQuotes({
         organizationId: readOrganizationId,
-        limitCount: EVENT_SCHEDULE_QUOTE_LIMIT
+        principalId,
+        ...interval,
+        pageSize: EVENT_SCHEDULE_QUOTE_LIMIT
       });
       if (loadGenerationRef.current !== generation) return;
       setState({
@@ -1040,7 +1064,10 @@ export function EventScheduleView({
         source: result.source,
         quotes: result.quotes,
         stale: result.stale === true,
-        truncated: result.truncated === true,
+        truncated: result.complete !== true,
+        complete: result.complete === true,
+        interval: result.interval,
+        pageCount: result.pageCount,
         organizationId: readOrganizationId
       });
     } catch (err) {
@@ -1062,7 +1089,7 @@ export function EventScheduleView({
     return () => {
       loadGenerationRef.current += 1;
     };
-  }, [open, organizationId]);
+  }, [anchorIso, open, organizationId, principalId, viewMode]);
 
   // Backstop clear so the one-shot drop-settle / lane-glow classes always
   // come off and a repeat drop can re-fire them.
@@ -1212,6 +1239,25 @@ export function EventScheduleView({
         return undefined;
       }
     }
+    if (arrivalContext.intentId === "review_production_consequence") {
+      const requestedRevisionId = String(arrivalFocus.sourceRevisionId || "").trim();
+      if (
+        arrivalContext.object?.type !== "production-plan"
+        || String(arrivalContext.object?.id || "").trim() !== quoteId
+        || !requestedRevisionId
+        || requestedRevisionId !== exactEvent.activeRevisionId
+        || !String(arrivalFocus.proposedRevisionId || "").trim()
+      ) {
+        reportArrivalResolution({
+          status: "recovery",
+          code: "production_revision_mismatch",
+          reason: "The requested Production plan does not match this exact saved quote revision.",
+          consequence: "No neighboring event or different revision was substituted and no checklist changed.",
+          nextResolution: "Return to the commercial change review, refresh its evidence, and choose the current Production consequence."
+        });
+        return undefined;
+      }
+    }
     if (selectedIso !== exactEvent.date || selectedEventId !== quoteId) {
       setSelectedIso(exactEvent.date);
       setAnchorIso(exactEvent.date);
@@ -1220,16 +1266,22 @@ export function EventScheduleView({
       return undefined;
     }
 
-    const target = Array.from(
-      dialogRef.current?.querySelectorAll("[data-schedule-event-id]") || []
-    ).find((element) => element.dataset.scheduleEventId === quoteId);
+    const productionArrival = arrivalContext.intentId === "review_production_consequence";
+    const productionDisclosure = productionArrival ? productionDisclosureRef.current : null;
+    if (productionDisclosure && !productionDisclosure.open) productionDisclosure.open = true;
+    const target = productionArrival
+      ? productionDisclosure?.querySelector("summary")
+      : Array.from(
+          dialogRef.current?.querySelectorAll("[data-schedule-event-id]") || []
+        ).find((element) => element.dataset.scheduleEventId === quoteId);
     target?.scrollIntoView?.({ behavior: "smooth", block: "start" });
     target?.focus({ preventScroll: true });
     if (target && document.activeElement === target) {
       reportArrivalResolution({
         status: "resolved",
         itemId: quoteId,
-        eventDate: exactEvent.date
+        eventDate: exactEvent.date,
+        ...(productionArrival ? { target: "production" } : {})
       });
     } else {
       reportArrivalResolution({
@@ -1244,6 +1296,8 @@ export function EventScheduleView({
   }, [
     arrivalContext?.intentId,
     arrivalFocus.quoteId,
+    arrivalFocus.sourceRevisionId,
+    arrivalFocus.proposedRevisionId,
     exactArrivalActive,
     organizationId,
     reasonsById,
@@ -1749,11 +1803,14 @@ export function EventScheduleView({
 
   if (!open) return null;
 
+  const SurfaceRoot = embedded ? "main" : "div";
+  const SurfaceHeading = embedded ? "h1" : "h2";
+
   return (
-    <div
+    <SurfaceRoot
       className={embedded ? "container workspace-route-main embedded-workspace-route" : "modal-overlay"}
       data-layout-overlap-allowed={embedded ? undefined : "true"}
-      role={embedded ? "region" : "dialog"}
+      role={embedded ? undefined : "dialog"}
       aria-modal={embedded ? undefined : "true"}
       aria-labelledby="event-schedule-title"
       data-operations-mode={operationsMode ? "calendar-first" : undefined}
@@ -1768,13 +1825,13 @@ export function EventScheduleView({
         <header className="modal-head schedule-page-head">
           <div>
             {surfaceEyebrow ? <p className="eyebrow">{surfaceEyebrow}</p> : null}
-            <h2
+            <SurfaceHeading
               id="event-schedule-title"
               ref={routeHeadingRef}
               tabIndex={embedded ? -1 : undefined}
             >
               {surfaceTitle}
-            </h2>
+            </SurfaceHeading>
             <p className="schedule-page-intro">Plan accepted and booked events from one shared calendar.</p>
           </div>
           <div className="schedule-page-actions">
@@ -2233,7 +2290,12 @@ export function EventScheduleView({
                     </div>
                   </details>
 
-                  <details className="schedule-operational-disclosure">
+                  <details
+                    ref={productionDisclosureRef}
+                    className="schedule-operational-disclosure"
+                    data-commercial-consequence-target="production"
+                    data-quote-id={selectedEvent.id}
+                  >
                     <summary>
                       <span>Production</span>
                       <small>{selectedEvent.productionChecklist.completed}/{selectedEvent.productionChecklist.total} complete</small>
@@ -2466,7 +2528,7 @@ export function EventScheduleView({
           </div>
         </details>
       </div>
-    </div>
+    </SurfaceRoot>
   );
 }
 

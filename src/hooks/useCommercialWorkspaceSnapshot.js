@@ -58,6 +58,7 @@ function emptySnapshot({ loading = false } = {}) {
 }
 
 function settledReadState(result) {
+  if (result.status === "pending") return loadingReadState();
   if (result.status === "fulfilled") {
     return {
       status: "success",
@@ -211,7 +212,7 @@ export function buildCommercialSnapshotResult({
     && decisionDebtResult.value?.bounds?.known === true;
 
   return {
-    loading: false,
+    loading: readResults.some((result) => result.status === "pending"),
     error: errors.join(" "),
     source: retainCompleteSnapshot ? current.source : source,
     reads: {
@@ -268,8 +269,10 @@ export function useCommercialWorkspaceSnapshot({
   const generationRef = useRef(createSnapshotRequestGeneration());
   const loadedAtRef = useRef(0);
   const scopeRef = useRef("");
+  const retryReadRef = useRef(null);
 
-  const refresh = useCallback(({ force = false } = {}) => {
+  const refresh = useCallback(({ force = false, read = "" } = {}) => {
+    if (read && retryReadRef.current?.(read)) return;
     if (!force && loadedAtRef.current > 0 && Date.now() - loadedAtRef.current < REFRESH_TTL_MS) {
       return;
     }
@@ -301,43 +304,60 @@ export function useCommercialWorkspaceSnapshot({
             decisionDebt: includeDecisionDebt ? loadingReadState() : emptyReadState()
           },
           partial: false,
-          stale: false
+          stale: Number(current.loadedAt) > 0
         });
-    Promise.allSettled([
-      getWorkflowAttentionSnapshot({ organizationId: normalizedOrganizationId }),
-      includeHistory
+    const results = Array.from({ length: 4 }, () => ({ status: "pending" }));
+    const requests = [
+      () => getWorkflowAttentionSnapshot({ organizationId: normalizedOrganizationId }),
+      () => includeHistory
         ? getQuoteHistory({
             organizationId: normalizedOrganizationId,
             limitCount: COMMAND_CENTER_HISTORY_LIMIT
           })
         : Promise.resolve({ source: "", quotes: [], truncated: false }),
-      includeRevenueAttention
+      () => includeRevenueAttention
         ? readUnreadReplyAttention(normalizedOrganizationId)
         : Promise.resolve(emptyUnreadReplyRead()),
-      includeDecisionDebt
+      () => includeDecisionDebt
         ? readDecisionDebtAttention(normalizedOrganizationId)
         : Promise.resolve(emptyDecisionDebtRead())
-    ]).then(([attentionResult, historyResult, unreadReplyResult, decisionDebtResult]) => {
-      if (!generationRef.current.isCurrent(generation)) return;
-      const nowMs = Date.now();
-      setState((current) => {
-        const next = buildCommercialSnapshotResult({
-          current,
-          attentionResult,
-          historyResult,
-          unreadReplyResult,
-          decisionDebtResult,
-          includeDecisionDebt,
-          tenantTimeZone,
-          nowMs
+
+    ];
+    const readGenerations = [0, 0, 0, 0];
+    const runRead = (index) => {
+      const readGeneration = ++readGenerations[index];
+      const publish = (result) => {
+        if (!generationRef.current.isCurrent(generation) || readGeneration !== readGenerations[index]) return;
+        results[index] = result;
+        const [attentionResult, historyResult, unreadReplyResult, decisionDebtResult] = results;
+        setState((current) => {
+          if (!generationRef.current.isCurrent(generation) || readGeneration !== readGenerations[index]) return current;
+          const next = buildCommercialSnapshotResult({
+            current, attentionResult, historyResult, unreadReplyResult, decisionDebtResult,
+            includeDecisionDebt, tenantTimeZone, nowMs: Date.now()
+          });
+          if (!next.loading && next.loadedAt > 0) loadedAtRef.current = next.loadedAt;
+          return next;
         });
-        if (next.loadedAt > 0) loadedAtRef.current = next.loadedAt;
-        return next;
-      });
-    });
+      };
+      publish({ status: "pending" });
+      Promise.resolve().then(requests[index]).then(
+        (value) => publish({ status: "fulfilled", value }),
+        (reason) => publish({ status: "rejected", reason })
+      );
+    };
+    const retryRead = (read) => {
+      const index = ["attention", "history", "unreadReplies", "decisionDebt"].indexOf(read);
+      if (index < 0 || !generationRef.current.isCurrent(generation)) return false;
+      runRead(index);
+      return true;
+    };
+    retryReadRef.current = retryRead;
+    requests.forEach((_request, index) => runRead(index));
 
     return () => {
       generationRef.current.begin();
+      if (retryReadRef.current === retryRead) retryReadRef.current = null;
     };
   }, [
     enabled,
@@ -380,5 +400,5 @@ export function useCommercialWorkspaceSnapshot({
     };
   }, [enabled, normalizedOrganizationId, refresh]);
 
-  return { ...state, refresh };
+  return { ...(scopeRef.current === normalizedOrganizationId ? state : emptySnapshot({ loading: enabled })), refresh };
 }

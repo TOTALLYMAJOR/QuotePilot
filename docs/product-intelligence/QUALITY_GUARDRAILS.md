@@ -15,7 +15,6 @@ or conversion contents automatically. An applied observation requires both the
 existing exact publication receipt and explicit operator confirmation; no click,
 route change, recommendation or test fixture may substitute. Incompatible
 receipt categories and event-bound receiving remain blocked by integration.
-
 ## Purpose
 
 Success metrics are valid only while these guardrails hold. A growth or speed

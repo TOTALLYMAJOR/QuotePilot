@@ -39,7 +39,7 @@ function contractOutcome(reads = {}, { retained = false } = {}) {
       ["quote history", history],
       ["unread customer-reply Attention", unreadReplies],
       ...(reads?.decisionDebt
-        ? [["Decision Debt", readStatus(reads, "decisionDebt")]]
+        ? [["pending decision review", readStatus(reads, "decisionDebt")]]
         : [])
     ];
     if (definitions.every(([, status]) => status === "success")) {
@@ -230,7 +230,7 @@ export default function StaffEvidenceRail({
   historyLimit = 200,
   title = "Staff read context",
   headingLevel = 3,
-  readContract = "Tenant-scoped Workflow Attention quote read, unread customer-reply Attention projection, optional Decision Debt projection, plus the latest 200 staff quote records",
+  readContract = "Tenant-scoped Workflow Attention quote read, unread customer-reply Attention projection, optional pending-decision review, plus the latest 200 staff quote records",
   presentation = "standard"
 }) {
   const model = buildStaffEvidenceRailModel({
@@ -260,7 +260,7 @@ export default function StaffEvidenceRail({
       readContract={readContract}
       presentation={presentation}
       outcome={contractOutcome(reads, { retained: model.state === "stale" })}
-      boundsNote={`Quote history is capped at the latest ${historyLimit} records, unread customer-reply Attention at 50 records, and any requested Decision Debt read at its server bound; open Quotes or Workflow for the authoritative records.`}
+      boundsNote={`Quote history is capped at the latest ${historyLimit} records, unread customer-reply Attention at 50 records, and any requested pending-decision read at its server bound; open Quotes or Workflow for the authoritative records.`}
     />
   );
 }

@@ -5,6 +5,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, test, vi } from "vitest";
 import CommercialChangeImpactPanel, {
   buildCommercialChangeImpactPanelState,
+  commercialAffectedArtifactDestination,
   groupCommercialConsequences
 } from "../CommercialChangeImpactPanel";
 import { COMMERCIAL_CHANGE_IMPACT_BOUNDARY } from "../../lib/commercialChangeImpact";
@@ -230,17 +231,39 @@ describe("CommercialChangeImpactPanel", () => {
           requiredDeltaMicros: 5_000_000,
           shortageDeltaMicros: 2_000_000,
           changed: true,
-          proposedAfter: { availabilityState: "shortage" }
+          before: {
+            ingredientName: "Chicken",
+            requiredQuantityMicros: 10_000_000,
+            shortageQuantityMicros: 0
+          },
+          proposedAfter: {
+            ingredientName: "Chicken",
+            requiredQuantityMicros: 15_000_000,
+            shortageQuantityMicros: 2_000_000,
+            availabilityState: "shortage",
+            contributions: [{ selectionId: "dinner", menuItemId: "chicken-alfredo", recipeRevisionId: "recipe-3" }]
+          }
         }]
       }
     };
-    const markup = renderPanel({ model: emptySimulation(), inventoryConsequences });
+    const markup = renderPanel({
+      model: emptySimulation(),
+      inventoryConsequences,
+      onOpenAffectedArtifact: vi.fn()
+    });
     expect(markup).toContain('data-capability-state="empty"');
     expect(markup).toContain('data-commercial-inventory-consequence="current"');
     expect(markup).toContain('data-authority="read-only-advisory"');
     expect(markup).toContain("Food cost and stock impact");
     expect(markup).toContain("+$15.00");
-    expect(markup).toContain("Requirement +5 lb · Shortage +2 lb");
+    expect(markup).toContain("Requirement 10 lb → 15 lb · delta +5 lb");
+    expect(markup).toContain('data-affected-artifact-action="inventory_ingredient"');
+    expect(markup).toContain('id="commercial-change-artifact-inventory-chicken"');
+    expect(markup).toContain("Review Chicken in Inventory");
+    expect(markup).toContain("Shortage 0 lb → 2 lb");
+    expect(markup).toContain("New shortage");
+    expect(markup).toContain("Contributing menu selections");
+    expect(markup).toContain("chicken-alfredo");
     expect(markup).toContain("does not reserve ingredients");
     expect(markup).not.toContain("Apply this exact change");
   });
@@ -251,11 +274,13 @@ describe("CommercialChangeImpactPanel", () => {
       inventoryConsequences: {
         state: "stale",
         cost: { state: "unavailable" },
-        availability: { state: "unavailable", ingredients: [] }
+        availability: { state: "unavailable", ingredients: [] },
+        issues: ["scenario_fingerprint_changed"]
       }
     });
     expect(unavailable).toContain('data-commercial-inventory-consequence="stale"');
     expect(unavailable).toMatch(/cached, pending, stale, or mismatched evidence is never shown as current/i);
+    expect(unavailable).toMatch(/guest count or another scenario input changed/i);
     expect(unavailable).not.toContain("Projected ingredient cost</h5>");
 
     const incomplete = renderPanel({
@@ -273,6 +298,34 @@ describe("CommercialChangeImpactPanel", () => {
     });
     expect(incomplete).toMatch(/unknown cost is not treated as zero/i);
     expect(incomplete).toMatch(/No ingredient requirement or shortage change/i);
+  });
+
+  test("does not turn unknown shortage quantities into zero", () => {
+    const markup = renderPanel({
+      model: emptySimulation(),
+      inventoryConsequences: {
+        state: "current",
+        expected: { quoteId: "q", savedQuoteRevisionId: "v", scenarioFingerprint: "f" },
+        provenance: {
+          before: { eventRequirementRevisionId: "rb", requirementRevision: 1, requirementDigest: "a", projectionDigest: "b", sourceFingerprint: "s" },
+          proposedAfter: { eventRequirementRevisionId: "ra", requirementDigest: "c", projectionDigest: "d", sourceFingerprint: "s" }
+        },
+        cost: { state: "incomplete", before: {}, proposedAfter: {} },
+        availability: {
+          state: "changed",
+          ingredients: [{
+            ingredientId: "salt",
+            baseUnitId: "lb",
+            requiredDeltaMicros: 1_000_000,
+            changed: true,
+            before: { ingredientName: "Salt", requiredQuantityMicros: 1_000_000, shortageQuantityMicros: null },
+            proposedAfter: { ingredientName: "Salt", requiredQuantityMicros: 2_000_000, shortageQuantityMicros: null }
+          }]
+        }
+      }
+    });
+    expect(markup).toContain("Shortage Unknown → Unknown");
+    expect(markup).not.toContain("Shortage 0 lb → 0 lb");
   });
 
   test("inventory evidence cannot alter the commercial apply fence", () => {
@@ -323,6 +376,221 @@ describe("CommercialChangeImpactPanel", () => {
     expect(markup).toContain('data-consequence-domain="staffing"');
     expect(markup).toContain('data-consequence-domain="production"');
     expect(markup).toContain("Where this proposal changes the work");
+  });
+
+  test("gives Inventory an explicit consequence domain", () => {
+    expect(groupCommercialConsequences([
+      { id: "output.ingredient_shortage", advisoryClass: "REVIEW" }
+    ])).toEqual([{
+      id: "inventory",
+      label: "Inventory",
+      items: [expect.objectContaining({ id: "output.ingredient_shortage" })]
+    }]);
+  });
+
+  test("labels unknown consequence domains as not evaluated", () => {
+    expect(groupCommercialConsequences([
+      { id: "output.unclassified_work", advisoryClass: "REVIEW" }
+    ])).toEqual([{
+      id: "other",
+      label: "Not evaluated domain",
+      items: [expect.objectContaining({ id: "output.unclassified_work" })]
+    }]);
+  });
+
+  test("leads with a compact revision-safe decision summary", () => {
+    const markup = renderPanel({
+      model: simulation(),
+      scopeCurrent: true,
+      inventoryConsequences: {
+        state: "not_evaluated",
+        cost: { state: "unavailable" },
+        availability: { state: "unavailable", ingredients: [] },
+        issues: ["scenario_preview_missing"]
+      }
+    });
+    const summaryIndex = markup.indexOf('data-commercial-decision-summary="true"');
+    expect(summaryIndex).toBeGreaterThan(-1);
+    expect(summaryIndex).toBeLessThan(markup.indexOf("Price change"));
+    expect(markup).toContain("+$4,440.00");
+    expect(markup).toContain("Saved revision");
+    expect(markup).toContain("v0014");
+    expect(markup).toContain("Proposed preview");
+    expect(markup).toContain("preview-v0015");
+    expect(markup).toContain("Customer-current accepted");
+    expect(markup).toContain("Not evaluated");
+  });
+
+  test("recovers the accepted revision identity from preserved customer-acceptance evidence", () => {
+    const markup = renderPanel({
+      model: simulation(),
+      commitment: {
+        preservedEvidence: [{
+          kind: "customer_acceptance",
+          label: "Customer acceptance",
+          detail: "Accepted before this amendment.",
+          revisionId: "v0013",
+          recordedAtISO: "2026-10-01T12:00:00.000Z"
+        }]
+      }
+    });
+    expect(markup).toMatch(/Customer-current accepted[\s\S]*v0013/u);
+  });
+
+  test("uses canonical apply outcome identities and replaces the pre-apply next action after commit", () => {
+    const markup = renderPanel({
+      model: simulation(),
+      scopeCurrent: true,
+      mutationState: "receipt",
+      mutationKind: "apply",
+      applyResult: {
+        applyReceiptId: `ccp_${"a".repeat(48)}`,
+        authorityState: "enforced"
+      },
+      applyOutcome: {
+        state: "committed",
+        outcomeReceiptId: `ccor_${"b".repeat(48)}`,
+        newRevisionId: "v0015",
+        appliedRevisionIsActive: true,
+        sourceChanged: true
+      },
+      appliedQuote: {
+        quoteId: "quote-henderson-picnic",
+        activeVersionId: "v0015"
+      }
+    });
+    expect(markup).toContain("Applied revision");
+    expect(markup).toContain("v0015");
+    expect(markup).toContain("Review the recorded revision and complete the receipt-backed follow-up work.");
+    expect(markup).not.toContain("Apply the reviewed change when the operator is ready.");
+  });
+
+  test("separates price, ingredient cost, and margin without inventing a margin change", () => {
+    const model = simulation();
+    const unifiedReview = buildUnifiedCommercialConsequenceReview({
+      model,
+      margin: { available: true, marginPct: 0.4, note: "Recorded proposed costs." },
+      catalogRevision: 4
+    });
+    const consequence = (cost) => ({
+      state: "current",
+      cost,
+      availability: { state: "unchanged", ingredients: [] },
+      provenance: {
+        before: { eventRequirementRevisionId: "before", requirementRevision: 1, requirementDigest: "a", projectionDigest: "b", sourceFingerprint: "c" },
+        proposedAfter: { eventRequirementRevisionId: "after", requirementDigest: "d", projectionDigest: "e", sourceFingerprint: "f" }
+      },
+      expected: { quoteId: "quote-henderson-picnic", savedQuoteRevisionId: "v0014" }
+    });
+    const incomplete = renderPanel({
+      model,
+      unifiedReview,
+      inventoryConsequences: consequence({ state: "incomplete", before: {}, proposedAfter: {} })
+    });
+    expect(incomplete).toContain('data-commercial-comparison="price"');
+    expect(incomplete).toContain('data-commercial-comparison="ingredient-cost"');
+    expect(incomplete).toContain('data-commercial-comparison="margin"');
+    expect(incomplete).toMatch(/Ingredient cost[\s\S]*Unknown — incomplete cost evidence/u);
+    expect(incomplete).toMatch(/Margin evidence[\s\S]*Not evaluated — complete ingredient cost evidence is required/u);
+    expect(incomplete).toContain("Incomplete cost evidence cannot produce an apparently exact margin change");
+
+    const complete = renderPanel({
+      model,
+      unifiedReview,
+      inventoryConsequences: consequence({
+        state: "changed",
+        currency: "USD",
+        before: { projectedCostMinor: 8000 },
+        proposedAfter: { projectedCostMinor: 9500 }
+      })
+    });
+    expect(complete).toMatch(/Ingredient cost[\s\S]*\$80\.00 → \$95\.00/u);
+    expect(complete).toContain("40.0% projected margin");
+    expect(complete).toContain("No before/after margin change is asserted");
+  });
+
+  test("names affected artifact currentness and source, including explicit Inventory state", () => {
+    const markup = renderPanel({
+      model: simulation(),
+      inventoryConsequences: {
+        state: "stale",
+        cost: { state: "unavailable" },
+        availability: { state: "unavailable", ingredients: [] },
+        issues: ["scenario_fingerprint_changed"]
+      }
+    });
+    expect(markup).toContain('data-affected-artifact="output.staffing_requirement"');
+    expect(markup).toContain('data-affected-artifact="artifact.beo"');
+    expect(markup).toContain('data-affected-artifact="inventory.projection"');
+    expect(markup).toContain("Requires review");
+    expect(markup).toContain("Becomes out of date when applied");
+    expect(markup).toContain("Not current · Evidence changed");
+    expect(markup).toContain("Dependency graph commercial-dependency-graph-v1 · version 1");
+    expect(markup).toContain("Exact Inventory scenario preview");
+  });
+
+  test("exposes only exact affected-object destinations and preserves a stable return-focus identity", () => {
+    expect(commercialAffectedArtifactDestination("artifact.kitchen_beo")).toEqual({
+      kind: "kitchen_beo",
+      label: "Review Kitchen BEO"
+    });
+    expect(commercialAffectedArtifactDestination("output.plan.staffing_requirement")).toEqual({
+      kind: "staffing_requirement",
+      label: "Review staffing"
+    });
+    expect(commercialAffectedArtifactDestination("artifact.contract")).toEqual({
+      kind: "proposal",
+      label: "Review proposal"
+    });
+    expect(commercialAffectedArtifactDestination("output.unknown")).toBeNull();
+
+    const markup = renderPanel({
+      model: simulation({
+        impact: {
+          rootNodeIds: ["fact.guest_count"],
+          dependentNodes: [
+            { id: "artifact.kitchen_beo", advisoryClass: "STALE" },
+            { id: "output.plan.staffing_requirement", advisoryClass: "REVIEW" },
+            { id: "artifact.contract", advisoryClass: "STALE" },
+            { id: "output.unknown", advisoryClass: "REVIEW" }
+          ],
+          counts: { total: 4, review: 2, stale: 2 }
+        }
+      }),
+      onOpenAffectedArtifact: vi.fn()
+    });
+
+    expect(markup).toContain('data-affected-artifact-action="kitchen_beo"');
+    expect(markup).toContain('data-affected-artifact-action="staffing_requirement"');
+    expect(markup).toContain('data-affected-artifact-action="proposal"');
+    expect(markup).toContain('id="commercial-change-artifact-artifact-kitchen-beo"');
+    expect(markup).not.toContain('data-affected-artifact-action="output.unknown"');
+  });
+
+  test("provides a customer-safe amendment projection from public facts and price only", () => {
+    const markup = renderPanel({
+      model: simulation({
+        factDiffs: [
+          { nodeId: "fact.event.guest_count", before: 125, proposedAfter: 175 },
+          { nodeId: "fact.staffing.counts", before: 8, proposedAfter: 12 },
+          { nodeId: "fact.operations.staff_lead", before: "staff-1", proposedAfter: "staff-2" }
+        ]
+      })
+    });
+    expect(markup).toContain('data-customer-safe-amendment-summary="projected"');
+    expect(markup).toContain("Customer-safe amendment summary");
+    expect(markup).toContain("$12,480.00 → $16,920.00");
+    expect(markup).toContain("Internal operating evidence is excluded");
+
+    const customerSafeSection = markup.match(
+      /<section[^>]+data-customer-safe-amendment-summary="projected"[\s\S]*?<\/section>/u
+    )?.[0] || "";
+    expect(customerSafeSection).toContain("Event guest count");
+    expect(customerSafeSection).not.toContain("Staffing");
+    expect(customerSafeSection).not.toContain("staff-1");
+    expect(customerSafeSection).not.toContain("staff-2");
+    expect(customerSafeSection).not.toContain("Margin");
+    expect(customerSafeSection).not.toContain("Inventory");
   });
 
   test("exposes exact source, graph, revision, authority, and bound provenance", () => {
@@ -636,7 +904,7 @@ describe("published commercial approval review", () => {
     const html = renderToStaticMarkup(<CommercialChangeImpactPanel model={model} unifiedReview={unifiedReview} authorityState="enforced" authorizationRequired={false} scopeCurrent onApply={() => {}} onApplyAllConsequences={() => {}} onApplySelectedConsequences={() => {}} onKeepQuotedPlan={() => {}} />);
     expect(html).toContain('data-capability-id="unified-commercial-consequence-review"');
     expect(html).toContain("Keep quoted plan");
-    expect(html).toContain("Apply all");
+    expect(html).toContain("Stage all in form");
     expect(html).toContain("Apply reviewed guest count");
     expect(html).toContain("This exact response remains proposed");
     expect(APP_SOURCE).toContain("form: candidateForm,");
@@ -669,6 +937,8 @@ test("keeps guest-count apply consequences visible while approval provenance is 
   const html = renderToStaticMarkup(<CommercialChangeImpactPanel model={model} />);
   const withoutDisclosures = html.replace(/<details[\s\S]*?<\/details>/g, "");
   expect(withoutDisclosures).toContain("Submitted guest count: 175");
+  expect(withoutDisclosures).toContain("Published policy version 2");
+  expect(withoutDisclosures).toContain("administrator review at $0.00 or more");
   expect(withoutDisclosures).toContain("creates a new draft quote revision and clears current acceptance");
   expect(withoutDisclosures).toContain("separate customer acceptance");
   expect(withoutDisclosures).toContain("no payment is charged");

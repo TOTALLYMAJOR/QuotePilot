@@ -1,6 +1,9 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
 
+// Cold Vite/lazy-route startup is fixture setup, not a production performance claim.
+const WORKSPACE_STARTUP_TIMEOUT = 120_000;
+
 const VIEWPORTS = [
   { width: 1440, height: 900 },
   { width: 390, height: 844 }
@@ -15,13 +18,18 @@ test.beforeEach(async ({ page }) => {
 
 for (const viewport of VIEWPORTS) {
   test(`workspace meets contrast and text-floor checks at ${viewport.width}px`, async ({ page }) => {
+    test.setTimeout(150_000);
     await page.setViewportSize(viewport);
     await page.goto("/app");
+    // Audit the rendered task surface, not the header or its lazy-route loader.
+    await expect(
+      page.locator(".command-center:visible, .wizard-panel:visible").first()
+    ).toBeVisible({ timeout: WORKSPACE_STARTUP_TIMEOUT });
     await expect(page.getByRole("button", { name: /New quote/i }).first()).toBeVisible();
 
     const results = await new AxeBuilder({ page })
       .include(".app-shell")
-      .withRules(["color-contrast"])
+      .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"])
       .analyze();
     expect(results.violations).toEqual([]);
 
@@ -48,9 +56,6 @@ for (const viewport of VIEWPORTS) {
     ));
     expect(undersizedText).toEqual([]);
 
-    await expect(
-      page.locator(".command-center:visible, .wizard-panel:visible").first()
-    ).toBeVisible();
     const isCommandCenterHome = await page.locator(".command-center").isVisible();
     const actionTargetSelector = isCommandCenterHome
       ? ".command-center .cta:visible, .command-center .ghost:visible"

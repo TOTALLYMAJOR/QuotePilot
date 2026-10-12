@@ -1,4 +1,5 @@
 import { Children, Fragment, cloneElement, isValidElement } from "react";
+import DisabledActionReason from "./DisabledActionReason";
 
 const GROUP_ORDER = Object.freeze([
   "quote",
@@ -70,6 +71,7 @@ export default function ConfiguredQuoteActionRail({
   const evidence = items.filter((item) => (
     actionProp(item, "data-quote-action-kind") === "evidence"
   ));
+  const visibleDisabledReasons = new Map();
   const actionItems = items
     .filter((item) => actionProp(item, "data-quote-action-kind") !== "evidence")
     .map((item) => {
@@ -77,14 +79,21 @@ export default function ConfiguredQuoteActionRail({
       const descriptor = actionId ? actions?.[actionId] : null;
       if (!actionId || !descriptor?.visible || !isValidElement(item)) return null;
       const enabled = descriptor.enabled === true && item.props?.disabled !== true;
+      const delegatesDisabledReason = Object.prototype.hasOwnProperty.call(
+        item.props || {},
+        "disabledReason"
+      );
+      if (!enabled && descriptor.disabledReason && !delegatesDisabledReason) {
+        visibleDisabledReasons.set(actionId, descriptor.disabledReason);
+      }
       return cloneElement(item, {
         disabled: !enabled,
         "aria-disabled": !enabled || undefined,
         "data-quote-action-state": enabled ? "enabled" : "blocked",
         title: enabled
           ? descriptor.consequence || item.props?.title
-          : descriptor.disabledReason || item.props?.title,
-        ...(Object.prototype.hasOwnProperty.call(item.props || {}, "disabledReason")
+          : undefined,
+        ...(delegatesDisabledReason
           ? { disabledReason: enabled ? "" : descriptor.disabledReason }
           : {})
       });
@@ -102,6 +111,21 @@ export default function ConfiguredQuoteActionRail({
     primaryAction?.visible
     && primaryItems.length === 0
   );
+  const renderActionItem = (item) => {
+    const actionId = String(actionProp(item, "data-quote-action-id") || "").trim();
+    const reason = visibleDisabledReasons.get(actionId) || "";
+    if (!reason) return item;
+    return (
+      <DisabledActionReason
+        key={actionId}
+        id={`configured-quote-action-${actionId}-disabled-reason`}
+        reason={reason}
+        grouped
+      >
+        {item}
+      </DisabledActionReason>
+    );
+  };
 
   return (
     <div
@@ -118,7 +142,7 @@ export default function ConfiguredQuoteActionRail({
 
       {primaryItems.length > 0 && (
         <div className="configured-quote-primary-action" aria-label="Recommended next action">
-          {primaryItems}
+          {primaryItems.map(renderActionItem)}
         </div>
       )}
 
@@ -134,10 +158,15 @@ export default function ConfiguredQuoteActionRail({
           <summary>More</summary>
           <div className="configured-quote-more-groups">
             {secondaryGroups.map((group) => (
-              <section className="configured-quote-action-group" key={group.id}>
+              <section
+                className="configured-quote-action-group"
+                key={group.id}
+                data-quote-action-group-container={group.id}
+                tabIndex={-1}
+              >
                 <strong>{group.label}</strong>
                 <div className="row-actions">
-                  {group.items}
+                          {group.items.map(renderActionItem)}
                 </div>
               </section>
             ))}

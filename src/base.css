@@ -1,0 +1,61 @@
+:root {
+  --font-editorial: "Bodoni Moda", "Georgia", serif;
+  --font-display: "Manrope", "Segoe UI", sans-serif;
+  --font-ui: "Manrope", "Segoe UI", sans-serif;
+  --space-1: 0.35rem;
+  --space-2: 0.55rem;
+  --space-3: 0.8rem;
+  --space-4: 1rem;
+  --space-5: 1.35rem;
+  --space-6: 1.75rem;
+  --radius-sm: 8px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --tone-gold-1: #e6ddcb;
+  --tone-gold-2: #a4761f;
+  --tone-gold-3: #8d611a;
+  --tone-ink-1: #1f2023;
+  --tone-ink-2: #3b3d42;
+  --tone-ink-3: #5f6268;
+  --tone-cream-1: #fbfbfa;
+  --tone-cream-2: #f4f4f2;
+  --tone-cream-3: #ebebe7;
+  --tone-success: #165a34;
+  --tone-danger: #a82222;
+  --shadow-panel: 0 1px 2px rgba(20, 21, 24, 0.05), 0 8px 24px -18px rgba(20, 21, 24, 0.28);
+  --shadow-soft: 0 1px 2px rgba(20, 21, 24, 0.05), 0 6px 16px -14px rgba(20, 21, 24, 0.22);
+  --shadow-elevated: 0 1px 3px rgba(20, 21, 24, 0.07), 0 16px 40px -24px rgba(20, 21, 24, 0.35);
+  font-family: var(--font-ui);
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  min-height: 100vh;
+  margin: 0;
+  color: var(--tone-ink-1);
+  background: #f6f6f4;
+  line-height: 1.5;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  line-height: 1.2;
+}
+
+.qp-route-loading {
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  color: #e8e8e8;
+  background: #050505;
+  font-family: var(--font-ui);
+}

@@ -227,6 +227,31 @@ afterEach(() => {
 });
 
 describe("Import Workbench flow", () => {
+  test("keeps Library menu intent across a sticky reopen and ambiguous real-source headers", async () => {
+    mount();
+    expect(container.querySelector("[data-import-type]")?.dataset.importType).toBe("customers");
+
+    mount({ open: false });
+    mount({
+      open: true,
+      initialImportType: "menuItems",
+      arrivalSource: "library-first-quote",
+      catalogContext: {
+        eventTypes: [{ id: "wedding", name: "Wedding" }],
+        menuSections: [{ id: "entrees", name: "Entrees", eventTypeId: "wedding" }]
+      }
+    });
+    await settle();
+    await settle();
+
+    expect(container.querySelector("[data-import-type]")?.dataset.importType).toBe("menuItems");
+    await uploadCsv("Item,Price\nHerb chicken,18\n", "real-menu.csv");
+
+    expect(labeledSelect("Change record type")?.value).toBe("menuItems");
+    expect(mappingSelect("Name")?.value).toBe("Item");
+    expect(mappingSelect("Price")?.value).toBe("Price");
+  });
+
   test("makes every inferred source row reachable through explicit review pages", async () => {
     const rows = Array.from({ length: 51 }, (_, index) => (
       `Customer ${index + 1},customer-${index + 1}@example.test`
@@ -458,6 +483,106 @@ describe("Import Workbench flow", () => {
       status: "staged",
       importType: "eventTypes",
       importBatchId: "catalog_batch_001"
+    }));
+  });
+
+  test("hands the first receipt-bound menu item to exact catalog review", async () => {
+    const onReviewCatalog = vi.fn();
+    catalogDraftService.stageCatalogImportDraft.mockResolvedValueOnce({
+      ok: true,
+      status: "staged",
+      importType: "menuItems",
+      importBatchId: "catalog_batch_001",
+      stagedCount: 2,
+      skippedCount: 0,
+      mutationReceipt: { changes: [
+        {
+          collection: "menuItems",
+          recordId: "menu-later",
+          payload: { eventTypeId: "evt-1", categoryId: "cat-1" },
+          provenance: { kind: "catalog_import", importBatchId: "catalog_batch_001", importType: "menuItems", sourceKind: "csv", sourceFileName: "menu-items.csv", sourceRowNumber: 3 }
+        },
+        {
+          collection: "menuItems",
+          recordId: "menu-first",
+          payload: { eventTypeId: "evt-1", categoryId: "cat-1" },
+          provenance: { kind: "catalog_import", importBatchId: "catalog_batch_001", importType: "menuItems", sourceKind: "csv", sourceFileName: "menu-items.csv", sourceRowNumber: 2 }
+        }
+      ] }
+    });
+    await prepareMenuItemRelationships({
+      eventTypes: [{ id: "evt-1", name: "Dinner" }],
+      categories: [{ id: "cat-1", eventTypeId: "evt-1", name: "Entrees" }]
+    }, { onReviewCatalog });
+
+    await click(button("Run server preflight"));
+    await click(container.querySelector(".import-studio-foot .cta"));
+    await click(button("Review catalog draft"));
+
+    expect(onReviewCatalog).toHaveBeenCalledWith(expect.objectContaining({
+      sectionId: "menu",
+      recordId: "menu-first",
+      eventTypeId: "evt-1",
+      categoryId: "cat-1",
+      importBatchId: "catalog_batch_001",
+      sourceRowNumber: 2,
+      importProvenance: expect.objectContaining({
+        kind: "catalog_import",
+        importType: "menuItems",
+        sourceKind: "csv",
+        sourceFileName: "menu-items.csv"
+      }),
+      requestId: "catalog-import:catalog_batch_001:menu-first:2"
+    }));
+  });
+
+  test("falls back to menu review when no receipt change belongs to the accepted batch", async () => {
+    const onReviewCatalog = vi.fn();
+    catalogDraftService.stageCatalogImportDraft.mockResolvedValueOnce({
+      ok: true,
+      status: "staged",
+      importType: "menuItems",
+      importBatchId: "catalog_batch_001",
+      stagedCount: 1,
+      skippedCount: 0,
+      mutationReceipt: { changes: [{
+        collection: "menuItems",
+        recordId: "menu-other-batch",
+        payload: { eventTypeId: "evt-1", categoryId: "cat-1" },
+        provenance: { kind: "catalog_import", importBatchId: "another_batch", importType: "menuItems", sourceKind: "csv", sourceFileName: "menu-items.csv", sourceRowNumber: 2 }
+      }] }
+    });
+    await prepareMenuItemRelationships({
+      eventTypes: [{ id: "evt-1", name: "Dinner" }],
+      categories: [{ id: "cat-1", eventTypeId: "evt-1", name: "Entrees" }]
+    }, { onReviewCatalog });
+
+    await click(button("Run server preflight"));
+    await click(container.querySelector(".import-studio-foot .cta"));
+    await click(button("Review catalog draft"));
+
+    expect(onReviewCatalog).toHaveBeenCalledWith(expect.objectContaining({
+      importType: "menuItems",
+      importBatchId: "catalog_batch_001"
+    }));
+    expect(onReviewCatalog.mock.calls[0][0]).not.toHaveProperty("recordId");
+  });
+
+  test("binds the inspected catalog source descriptor to preflight and stage requests", async () => {
+    mount();
+    await uploadCsv("Name,Active\nWedding,yes\n", "operator-menu-source.csv");
+    await choose(labeledSelect("Change record type"), "eventTypes");
+
+    await click(button("Run server preflight"));
+    expect(catalogDraftService.preflightCatalogImportDraft).toHaveBeenCalledWith(expect.objectContaining({
+      sourceKind: "csv",
+      sourceFileName: "operator-menu-source.csv"
+    }));
+
+    await click(container.querySelector(".import-studio-foot .cta"));
+    expect(catalogDraftService.stageCatalogImportDraft).toHaveBeenCalledWith(expect.objectContaining({
+      sourceKind: "csv",
+      sourceFileName: "operator-menu-source.csv"
     }));
   });
 
@@ -704,6 +829,76 @@ describe("Import Workbench flow", () => {
 
     await click(eventType.querySelector("button"));
     expect(onReviewCatalog).toHaveBeenCalledWith({ importType: "menuItems" });
+  });
+
+  test("loads published menu sections for the auto-selected import event type", async () => {
+    const loadMenuByEvent = vi.fn().mockResolvedValue([
+      { id: "entrees", name: "Entrees", items: [] }
+    ]);
+    await prepareMenuItemRelationships({
+      eventTypes: [{ id: "wedding", name: "Wedding" }],
+      loadMenuByEvent
+    });
+    await settle();
+
+    expect(loadMenuByEvent).toHaveBeenCalledWith("wedding");
+    const category = choiceField("Apply one category to every row");
+    expect(category?.dataset.adaptiveChoiceMode).toBe("single");
+    expect(category.querySelector('[data-adaptive-choice-value="entrees"]')?.textContent)
+      .toContain("Entrees");
+    expect(metric("Included + ready")).toBe("1");
+    expect(metric("Included blockers")).toBe("0");
+  });
+
+  test("keeps a published-menu load failure distinct from an empty catalog", async () => {
+    const loadMenuByEvent = vi.fn().mockRejectedValue(new Error("menu read denied"));
+    await prepareMenuItemRelationships({
+      eventTypes: [{ id: "wedding", name: "Wedding" }],
+      loadMenuByEvent
+    });
+    await settle();
+    await settle();
+
+    const category = choiceField("Apply one category to every row");
+    expect(category?.dataset.adaptiveChoiceMode).toBe("empty");
+    expect(category.textContent).toContain("Published menu sections could not be loaded");
+    expect(category.textContent).toContain("menu read denied");
+    expect(category.textContent).not.toContain("No active menu sections");
+    expect(metric("Included blockers")).toBe("1");
+  });
+
+  test("ignores a late menu-section response after the selected event type changes", async () => {
+    const pending = new Map();
+    const loadMenuByEvent = vi.fn((eventTypeId) => new Promise((resolve) => {
+      pending.set(eventTypeId, resolve);
+    }));
+    await prepareMenuItemRelationships({
+      eventTypes: [
+        { id: "wedding", name: "Wedding" },
+        { id: "corporate", name: "Corporate" }
+      ],
+      loadMenuByEvent
+    });
+    const eventType = choiceField("Apply one event type to every row");
+    await choose(eventType.querySelector("select"), "wedding");
+    await choose(eventType.querySelector("select"), "corporate");
+
+    await act(async () => {
+      pending.get("corporate")([{ id: "boxed", name: "Boxed meals", items: [] }]);
+      await Promise.resolve();
+    });
+    await settle();
+    await act(async () => {
+      pending.get("wedding")([{ id: "entrees", name: "Entrees", items: [] }]);
+      await Promise.resolve();
+    });
+    await settle();
+
+    const category = choiceField("Apply one category to every row");
+    expect(category.querySelector('[data-adaptive-choice-value="boxed"]')?.textContent)
+      .toContain("Boxed meals");
+    expect(category.textContent).not.toContain("Entrees");
+    expect(eventType.querySelector("select").value).toBe("corporate");
   });
 
   test("shows one constant relationship choice as static context and applies it automatically", async () => {

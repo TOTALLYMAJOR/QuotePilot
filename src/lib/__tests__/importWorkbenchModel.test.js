@@ -2,9 +2,15 @@ import { describe, expect, test } from "vitest";
 
 import {
   IMPORT_TYPES,
+  MENU_ITEMS_CSV_TEMPLATE_FILENAME,
+  MENU_ITEMS_CSV_TEMPLATE_HEADERS,
+  buildMenuItemsCsvTemplate,
   buildImportPreview,
+  detectImportType,
   getImportTypeDefinition,
-  parseCsvSource
+  parseCsvSource,
+  resolveImportStudioRouteIntent,
+  suggestFieldMapping
 } from "../importWorkbenchModel";
 import { normalizeFieldState } from "../fieldState";
 
@@ -17,6 +23,44 @@ function sourceRow(values, rowNumber = 2) {
 }
 
 describe("Import Workbench CSV inspection", () => {
+  test("builds a deterministic header-only menu template that maps without hidden identifiers", () => {
+    const template = buildMenuItemsCsvTemplate();
+    const parsed = parseCsvSource(template);
+
+    expect(MENU_ITEMS_CSV_TEMPLATE_FILENAME).toBe("quotepilot-menu-items-template.csv");
+    expect(MENU_ITEMS_CSV_TEMPLATE_HEADERS).toEqual([
+      "Menu Item",
+      "Event Type",
+      "Menu Section",
+      "Customer Price",
+      "Recorded Item Cost",
+      "Pricing Type",
+      "Active"
+    ]);
+    expect(template).toBe(`${MENU_ITEMS_CSV_TEMPLATE_HEADERS.join(",")}\r\n`);
+    expect(parsed.headers).toEqual(MENU_ITEMS_CSV_TEMPLATE_HEADERS);
+    expect(parsed.rows).toEqual([]);
+    expect(detectImportType(parsed.headers)).toBe("menuItems");
+    expect(suggestFieldMapping(parsed.headers, "menuItems")).toEqual({
+      name: "Menu Item",
+      eventType: "Event Type",
+      category: "Menu Section",
+      price: "Customer Price",
+      cost: "Recorded Item Cost",
+      pricingType: "Pricing Type",
+      active: "Active"
+    });
+  });
+
+  test("accepts only the complete Library menu route-intent pair", () => {
+    expect(resolveImportStudioRouteIntent("?source=library-first-quote&importType=menuItems"))
+      .toEqual({ initialImportType: "menuItems", arrivalSource: "library-first-quote" });
+    expect(resolveImportStudioRouteIntent("?source=library-first-quote&importType=customers"))
+      .toEqual({ initialImportType: "customers", arrivalSource: "" });
+    expect(resolveImportStudioRouteIntent("?importType=menuItems"))
+      .toEqual({ initialImportType: "customers", arrivalSource: "" });
+  });
+
   test("detects alternate delimiters and preserves duplicate headers as separate review fields", () => {
     const parsed = parseCsvSource([
       "\uFEFFName;Price;price",

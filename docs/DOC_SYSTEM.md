@@ -1,7 +1,6 @@
 # Documentation System
 
-Last updated: 2026-09-17 11:54:34 CDT
-
+Last updated: 2026-10-10 19:54:09 CDT
 ## Purpose
 Synchronous composition surfaces may use `presentation_surface` contracts with
 an explicit `surfaceId` and bounded `surfaceStates`. Every claimed state test must
@@ -17,9 +16,29 @@ This repository uses a layered canonical documentation model.
 Each major topic has one source of truth. Other docs should link to that source instead of duplicating content.
 
 ## Canonical Documents
-- `README.md`: product overview, architecture snapshot, setup, testing commands, and deployment entry points.
+- `README.md`: repository entry point, concise product orientation, setup,
+  testing commands, and deployment entry points.
+- `docs/DOCUMENTATION_MAP.md`: index of the eight system-level product
+  authorities and the five independent meanings of finished.
+- `docs/PROJECT_CHARTER.md`: product problem, actors, outcomes, scope,
+  constraints, success policy, release boundary, and decision rights.
+- `docs/PRODUCT_REQUIREMENTS.md`: system-level workflows, functional and
+  non-functional requirements, priorities, edge cases, and core release boundary.
+- `docs/SYSTEM_ARCHITECTURE.md`: current system context, module responsibilities,
+  seams, data flows, dependencies, trust boundaries, deployment, and failure behavior.
+- `docs/ACCEPTANCE_STANDARD.md`: project-wide Definition of Done, evidence
+  classes, failure scenarios, and core product release gate.
+- `docs/adr/README.md`: canonical architecture-decision index and ADR lifecycle;
+  individual ADRs retain authority for their decisions.
+- `docs/DATA_INTERFACE_CONTRACTS.md`: contract and schema ownership index,
+  interface rules, state-machine ownership, errors, and versioning policy.
+- `docs/RISK_ASSUMPTION_REGISTER.md`: cross-cutting product, technical,
+  security, dependency, evidence, and execution risks and assumptions.
 - `PROJECT_STATUS.md`: current operational state only (health, active risks, next actions).
 - `DEV_TASKS.md`: prioritized backlog only (open work, grouped by priority).
+- `docs/agents/issue-tracker.md`: GitHub issue execution conventions. GitHub
+  issue mirrors remain subordinate to `DEV_TASKS.md` and must not become a
+  competing roadmap authority.
 - `CHANGELOG.md`: historical record of shipped/merged changes.
 - `PROJECT_STATE.md`: human-readable reconciliation entry point and the single
   next proof event; it links to, rather than replaces, the authorities above.
@@ -46,13 +65,41 @@ Each major topic has one source of truth. Other docs should link to that source 
   semantics, priority, accessibility, provenance, and 0/1/many choice contract.
 - `docs/field-state-surface-contracts.json`: explicit registry of product
   surfaces and executable tests adopting the field-state contract.
-- `docs/PRODUCT_INTELLIGENCE.md` and `docs/product-intelligence/`: canonical
+- `docs/enhancement-impact-contract.schema.json` and
+  `docs/enhancement-impact-manifest.json`: executable change-impact contract
+  requiring named enhancements to declare affected routes, authorities, and
+  tests before implementation. Presentation-only entries declare
+  `authorities: []` and may not cross registered authority-owned paths.- `docs/PRODUCT_INTELLIGENCE.md` and `docs/product-intelligence/`: canonical
   product outcome, capability, metric, instrumentation, baseline/target,
   journey/funnel, guardrail, and release/experiment traceability. These files
   measure product value without replacing feature, runtime, release, or human
   evidence authorities.
-
+- `docs/product-intelligence/evaluation-manifest.json`: versioned independent
+  evaluation dimensions, governed-ID links, thresholds, evidence classes, and
+  owner-decision state. `npm run eval:layered` emits ignored immutable local
+  receipts; neither the manifest nor a receipt creates a blended score or
+  upgrades local evidence into CI, hosted, provider, production, human, or
+  outcome proof.
+- `.codex/hooks.json` and `.codex/hooks/codebase_memory_guard.py`: repository-
+  local lifecycle enforcement for the graph-first retrieval protocol. The hook
+  blocks supported local source-read and edit routes until the ordered
+  Codebase Memory project, index, and coverage preflight has completed; the
+  human-readable authority remains `AGENTS.md` and `docs/AGENT_GOVERNANCE.md`.
 ## Update Triggers
+- Product purpose, target user, outcome, scope, constraint, or release-boundary
+  changes: update `docs/PROJECT_CHARTER.md` and affected subordinate authorities.
+- System workflow, functional/non-functional requirement, priority, edge case,
+  or MVP changes: update `docs/PRODUCT_REQUIREMENTS.md`.
+- Module responsibility, data flow, external dependency, trust boundary,
+  deployment topology, or failure behavior changes: update
+  `docs/SYSTEM_ARCHITECTURE.md` and create or supersede an ADR when required.
+- Definition of Done, proof-class, release gate, security/privacy expectation,
+  or required failure scenario changes: update `docs/ACCEPTANCE_STANDARD.md`.
+- Schema, interface, event, state-machine, error, versioning, or data ownership
+  changes: update the owning executable contract and
+  `docs/DATA_INTERFACE_CONTRACTS.md` when routing or ownership changes.
+- Cross-cutting risk, high-impact assumption, mitigation, or validation-plan
+  changes: update `docs/RISK_ASSUMPTION_REGISTER.md`.
 - Code or behavior changes: update `CHANGELOG.md`.
 - Current-state/risk/near-term execution changes: update `PROJECT_STATUS.md`.
 - Roadmap priority changes: update `DEV_TASKS.md`.
@@ -75,7 +122,9 @@ Each major topic has one source of truth. Other docs should link to that source 
   save/publish state, or field-level failure/recovery changes: update the field-
   state surface registry and its exact tests; change the field-state contract
   itself only when the governing vocabulary or semantics change.
-- Product outcome, actor/job, capability-to-value mapping, success metric,
+- Named enhancement scope, route impact, authority impact, or required-test
+  changes: update `docs/enhancement-impact-manifest.json`; change its schema
+  only when the declaration vocabulary or validation semantics change.- Product outcome, actor/job, capability-to-value mapping, success metric,
   measurement source, target, journey, product guardrail, or causal release/
   experiment decision changes: update the owning artifact under
   `docs/product-intelligence/` and its index when navigation or authority moves.
@@ -101,7 +150,7 @@ diff validation use the same baseline semantics.
 |---|---|---|
 | code | `src/`, `functions/`, `e2e/`, `truthloop/`, `evidence/`, runtime behavior files | `CHANGELOG.md` |
 | backend capability | `functions/`, rules/indexes, data/provider clients, realtime authority hooks, mutation/backfill source | `docs/capability-surfacing-contracts.json`, `docs/FEATURE_MATRIX.md`, and `docs/USER_MANUAL.md`, or a narrowly classified tested headless contract |
-| process | `.github/`, `scripts/`, `.codex/skills/`, contributor/agent policy files | one of `README.md`, `CONTRIBUTING.md`, `docs/VERSION_CONTROL.md`, `docs/DOC_SYSTEM.md` |
+| process | `.github/`, `scripts/`, `.codex/hooks.json`, `.codex/hooks/`, `.codex/skills/`, contributor/agent policy files | one of `README.md`, `CONTRIBUTING.md`, `docs/VERSION_CONTROL.md`, `docs/DOC_SYSTEM.md` |
 | deploy | `Dockerfile`, `docker-compose.yml`, `docker/*`, deploy workflows/config | one of `README.md`, `docs/LAUNCH_RUNBOOK.md`, `docs/VERSION_CONTROL.md`, `docs/DOC_SYSTEM.md` |
 | backlog | roadmap/backlog/task artifacts | `DEV_TASKS.md` |
 | product intelligence | user-visible product source, capability authority, analytics implementation, or product-intelligence artifact | `docs/PRODUCT_INTELLIGENCE.md` plus the affected artifact and `docs/product-intelligence/RELEASE_EXPERIMENT_LEDGER.md` according to `npm run check:product-intelligence` |
@@ -160,6 +209,13 @@ for operator review.
 ## Data Ownership Matrix
 | Topic | Canonical Doc | Notes |
 |---|---|---|
+| Product purpose, target users, scope, constraints, and release boundary | `docs/PROJECT_CHARTER.md` | Product targets remain proposed until their explicit owner-acceptance record exists. |
+| System-level product requirements and MVP priorities | `docs/PRODUCT_REQUIREMENTS.md` | Feature PRDs extend but do not replace or weaken the system boundary. |
+| System architecture, seams, trust boundaries, topology, and failure behavior | `docs/SYSTEM_ARCHITECTURE.md` | Domain ADRs and executable contracts retain authority for their detailed invariants. |
+| Definition of Done and acceptance evidence classes | `docs/ACCEPTANCE_STANDARD.md` | Requirement acceptance and the standing quality bar are both required. |
+| Architecture decision discovery and lifecycle | `docs/adr/README.md` | Individual ADRs remain authoritative; `docs/project/DECISIONS.md` is index-only. |
+| Data/interface contract ownership and versioning | `docs/DATA_INTERFACE_CONTRACTS.md` | Schemas remain in their executable canonical files; this document routes ownership. |
+| Cross-cutting risks and assumptions | `docs/RISK_ASSUMPTION_REGISTER.md` | Operational truth remains in `PROJECT_STATUS.md`; work remains in `DEV_TASKS.md`. |
 | Runtime stack versions (React/Vite/Firebase) | `README.md` | Other docs must not restate versions unless they directly link back. |
 | Current delivery health and risk posture | `PROJECT_STATUS.md` | Includes what is working now and current blockers. |
 | Priority backlog and sequencing | `DEV_TASKS.md` | Open items only; no progress narrative. |
@@ -183,6 +239,7 @@ for operator review.
 | Pricing policy, v1/v2 semantics, exact money, waterfalls, and payment amount provenance | `docs/PRICING_CONSTITUTION.md` | Historical v1 receipts stay immutable; v2 behavior changes require Golden Corpus and differential evidence. |
 | Ingredient inventory, recorded purchase cost, versioned recipes, menu/event demand and food cost, consumable availability, allocation, consumption, and projections | `docs/INVENTORY_AUTHORITY_ADR.md` | Inventory owns ingredient stock/cost evidence and bounded operational consequences; Library owns recipe editing against the existing menu catalog, commercial revisions remain historical authority, menu cost and stock promise remain independent rails, and overall event readiness stays separate. |
 | Execution/domain classification, model tier, dependency reads, domain-reference routing, doc obligations, and validation mapping | `docs/task-orchestration-contracts.json` | Policy rationale lives in `docs/AGENT_GOVERNANCE.md`; commands live in the orchestration runbook. Domain references remain advisory, and the external runner owns actual model switching. |
+| Named enhancement route, authority, and test declarations | `docs/enhancement-impact-manifest.json` and `docs/enhancement-impact-contract.schema.json` | `plan:task` resolves exact named item IDs and fails closed on missing declarations or undeclared registered authority-path crossings. Presentation-only entries must use `authorities: []`. |
 | Catering-domain agent reconsideration | `.codex/skills/catering-domain-intelligence/SKILL.md` | The skill owns the provisional-action reconsideration workflow and progressively disclosed expertise references. It does not own QuotePilot runtime, product policy, or human acceptance. |
 | Launch runbook details | `docs/LAUNCH_RUNBOOK.md` | `GO_LIVE_OPTION1.md` points here. |
 | Staff/admin operating guide | `docs/USER_MANUAL.md` | Task-oriented usage instructions; avoids release/process policy duplication. |
@@ -231,6 +288,13 @@ only measured outcome evidence establishes catering value.
 
 ## Security Scan Note
 Documentation secret scanning blocks real token-like values and allows explicit placeholder values such as `<your_secret_here>`.
+
+Content scanners omit only worktree deletions confirmed by Git; staged new
+files remain in the tracked scan, and unreadable files still fail rather than
+being silently ignored. Deleted paths remain in documentation change-impact
+mapping, including committed CI diffs. Deleting a required canonical document
+still fails the documentation gate. This permits removal of obsolete files
+without restoring them merely to satisfy a content scan.
 
 ## No-Orphan-Capability Gate
 

@@ -278,7 +278,7 @@ function attendancePresentation(read) {
     tone = "coral";
   } else if (state.decisionDebt?.state === "due_or_overdue") {
     timingLabel = `Final count due ${attendanceDate(state.decisionDebt.lockDate) || "now"}`;
-    timingDetail = "This exact Decision Debt item is due or overdue and remains unresolved.";
+    timingDetail = "This final-count decision remains due or overdue.";
     tone = "coral";
   } else if (state.decisionDebt?.state === "scheduled") {
     timingLabel = `Final count due ${attendanceDate(state.decisionDebt.lockDate)}`;
@@ -571,6 +571,7 @@ const AmbientLivingOpportunity = forwardRef(function AmbientLivingOpportunity({
   const activeGuestInspectRef = useRef(null);
   const staffingInspectRef = useRef(null);
   const staffingContextTriggerRef = useRef(null);
+  const staffingArrivalTargetRef = useRef(null);
   const pricingInspectRef = useRef(null);
   const moneyInspectRef = useRef(null);
   const conversationInspectRef = useRef(null);
@@ -721,19 +722,31 @@ const AmbientLivingOpportunity = forwardRef(function AmbientLivingOpportunity({
       arrivalContext.intentId,
       arrivalContext.object?.type,
       arrivalContext.object?.id,
-      arrivalContext.focus?.quoteId
+      arrivalContext.focus?.quoteId,
+      arrivalContext.focus?.sourceRevisionId,
+      arrivalContext.focus?.proposedRevisionId
     ].filter(Boolean).join(":");
     if (!arrivalKey || handledArrivalRef.current === arrivalKey) return undefined;
 
     const exactQuoteId = String(model.identity.quoteId || "").trim();
     const activeOrganizationId = String(ambientContext?.organizationId || "").trim();
     const recordedOrganizationId = String(quote?.organizationId || "").trim();
+    const staffingArrival = arrivalContext.intentId === "review_staffing_consequence";
+    const activeRevisionId = String(
+      quote?.activeVersionId || quote?.versionMeta?.versionId || ""
+    ).trim();
     const exactArrival = arrivalContext.destination === "opportunity"
       && arrivalContext.surfaceId === "living-opportunity"
       && arrivalContext.focusConsumerState === "supported"
-      && arrivalContext.object?.type === "opportunity"
+      && arrivalContext.object?.type === (staffingArrival ? "staffing-plan" : "opportunity")
       && String(arrivalContext.object?.id || "").trim() === exactQuoteId
       && String(arrivalContext.focus?.quoteId || "").trim() === exactQuoteId
+      && (!staffingArrival || (
+        OPERATIONAL_STAFFING_UI_ENABLED
+        && activeRevisionId
+        && String(arrivalContext.focus?.sourceRevisionId || "").trim() === activeRevisionId
+        && String(arrivalContext.focus?.proposedRevisionId || "").trim()
+      ))
       && (!recordedOrganizationId || recordedOrganizationId === activeOrganizationId);
 
     if (!exactArrival) {
@@ -747,13 +760,37 @@ const AmbientLivingOpportunity = forwardRef(function AmbientLivingOpportunity({
       return undefined;
     }
 
-    const frame = window.requestAnimationFrame(() => {
-      const target = rootRef.current;
+    if (staffingArrival) {
+      staffingContextTriggerRef.current = rootRef.current;
+      setGuestOpen(false);
+      setStaffingOpen(true);
+      setPricingOpen(false);
+      setMoneyOpen(false);
+      setConversationOpen(false);
+      setProposalOpen(false);
+      setPackageOpen(false);
+      setMenuOpen(false);
+      setSelectionOpen(false);
+      setPilotOpen(false);
+      setEventLogisticsOpenKind(null);
+    }
+
+    let frame = 0;
+    let attempt = 0;
+    const resolveFocus = () => {
+      const target = staffingArrival ? staffingArrivalTargetRef.current : rootRef.current;
       if (!target || target.dataset.quoteId !== exactQuoteId) {
+        attempt += 1;
+        if (staffingArrival && attempt < 30) {
+          frame = window.requestAnimationFrame(resolveFocus);
+          return;
+        }
         handledArrivalRef.current = arrivalKey;
         onArrivalResolution({
           status: "recovery",
-          reason: "The exact Living Opportunity could not receive focus.",
+          reason: staffingArrival
+            ? "The exact revision's Operational Staffing plan could not receive focus."
+            : "The exact Living Opportunity could not receive focus.",
           consequence: "No alternate opportunity was selected and no record changed.",
           nextResolution: "Keep this record open and retry its exact opportunity action."
         });
@@ -762,8 +799,12 @@ const AmbientLivingOpportunity = forwardRef(function AmbientLivingOpportunity({
       target.focus({ preventScroll: true });
       target.scrollIntoView?.({ block: "nearest", inline: "nearest" });
       handledArrivalRef.current = arrivalKey;
-      onArrivalResolution({ status: "resolved" });
-    });
+      onArrivalResolution({
+        status: "resolved",
+        ...(staffingArrival ? { target: "staffing" } : {})
+      });
+    };
+    frame = window.requestAnimationFrame(resolveFocus);
     return () => window.cancelAnimationFrame(frame);
   }, [ambientContext?.organizationId, arrivalContext, model.identity.quoteId, onArrivalResolution, quote?.organizationId]);
 
@@ -3012,6 +3053,15 @@ const AmbientLivingOpportunity = forwardRef(function AmbientLivingOpportunity({
 
   const interactionHealth = interactionObservation?.monitor || EMPTY_INTERACTION_HEALTH;
   const selectionScenarioCount = Object.keys(selectionScenario).length;
+  const currentRevisionId = String(
+    quote?.activeVersionId || quote?.versionMeta?.versionId || quote?.updatedAtISO || ""
+  ).trim();
+  const hasUnsavedOpportunityPreview = Boolean(
+    scenarioGuestCount !== recordedGuestCount
+    || staffingScenario
+    || selectionScenarioCount > 0
+    || pricingPreviewState.preview
+  );
   const activeEventLogisticsObject = EVENT_LOGISTICS_KINDS.includes(eventLogisticsOpenKind)
     ? model.eventLogisticsObjects[eventLogisticsOpenKind]
     : null;
@@ -3308,6 +3358,18 @@ const AmbientLivingOpportunity = forwardRef(function AmbientLivingOpportunity({
           <span aria-hidden="true">/</span>
           <strong>{model.identity.eventName}</strong>
         </div>
+        <p
+          className="ambient-opportunity-context-summary"
+          data-opportunity-draft-state={hasUnsavedOpportunityPreview ? "unsaved_preview" : "saved"}
+          aria-label="Current saved quote context"
+        >
+          <span>{model.identity.quoteNumber}</span>
+          <span>
+            Current saved revision{" "}
+            <code>{currentRevisionId || "not recorded"}</code>
+          </span>
+          <strong>{hasUnsavedOpportunityPreview ? "Unsaved preview" : "Saved quote"}</strong>
+        </p>
         {quickUpdatesAvailable && (
           <button
             ref={quickUpdatesDesktopTriggerRef}
@@ -5030,6 +5092,12 @@ const AmbientLivingOpportunity = forwardRef(function AmbientLivingOpportunity({
             This is advisory staffing guidance. It does not prove staff availability, assignments, attendance, or operational readiness.
           </p>
           {OPERATIONAL_STAFFING_UI_ENABLED && OperationalStaffingPanel && (
+            <div
+              ref={staffingArrivalTargetRef}
+              tabIndex={-1}
+              data-commercial-consequence-target="staffing"
+              data-quote-id={model.identity.quoteId}
+            >
             <Suspense fallback={(
               <section
                 className="ambient-operational-staffing-loading"
@@ -5049,6 +5117,7 @@ const AmbientLivingOpportunity = forwardRef(function AmbientLivingOpportunity({
                 available={OPERATIONAL_STAFFING_UI_ENABLED}
               />
             </Suspense>
+            </div>
           )}
         </div>
       </ContextSurface>

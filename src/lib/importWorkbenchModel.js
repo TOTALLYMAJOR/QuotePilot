@@ -8,6 +8,31 @@ const DEFINITIONS = Object.freeze({
   menuItems: { label: "Menu items", collection: "menuItems", fields: ["name", "eventType", "category", "price", "cost", "pricingType", "active"], required: ["name", "eventTypeId", "categoryId", "price"], sourceKinds: ["csv", "pdf"] }
 });
 
+export const MENU_ITEMS_CSV_TEMPLATE_FILENAME = "quotepilot-menu-items-template.csv";
+export const MENU_ITEMS_CSV_TEMPLATE_HEADERS = Object.freeze([
+  "Menu Item",
+  "Event Type",
+  "Menu Section",
+  "Customer Price",
+  "Recorded Item Cost",
+  "Pricing Type",
+  "Active"
+]);
+
+export function buildMenuItemsCsvTemplate() {
+  return `${MENU_ITEMS_CSV_TEMPLATE_HEADERS.join(",")}\r\n`;
+}
+
+export function resolveImportStudioRouteIntent(search = "") {
+  const parameters = new URLSearchParams(String(search || ""));
+  const libraryMenuImport = parameters.get("source") === "library-first-quote"
+    && parameters.get("importType") === "menuItems";
+  return {
+    initialImportType: libraryMenuImport ? "menuItems" : "customers",
+    arrivalSource: libraryMenuImport ? "library-first-quote" : ""
+  };
+}
+
 const ALIASES = Object.freeze({
   name: ["name", "customer", "customer name", "client", "client name", "item", "item name", "package", "package name", "menu item"],
   email: ["email", "email address", "customer email", "client email"],
@@ -15,9 +40,9 @@ const ALIASES = Object.freeze({
   company: ["company", "organization", "business", "client organization"],
   notes: ["notes", "note", "comments"],
   ppp: ["ppp", "price per person", "per person price", "rate per person"],
-  price: ["price", "rate", "amount", "sale price", "unit price"],
+  price: ["price", "rate", "amount", "sale price", "unit price", "customer price"],
   costPpp: ["cost per person", "food cost per person", "cost ppp", "costppp"],
-  cost: ["cost", "unit cost", "item cost", "food cost"],
+  cost: ["cost", "unit cost", "item cost", "food cost", "recorded item cost"],
   type: ["type", "pricing type", "rate type"],
   pricingType: ["pricing type", "price type", "billing type", "rate type"],
   qtyPerGuests: ["qty per guests", "quantity per guests", "guests per unit", "guest ratio"],

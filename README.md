@@ -1,10 +1,20 @@
 # QuotePilot by MBMApps
 
-Last updated: 2026-09-13 19:09:08 CDT
+Last updated: 2026-10-11 04:13:28 CDT
 
-Multi-tenant catering quote application built with React, Vite, Firebase, and jsPDF.
+QuotePilot is a multi-tenant catering commercial-operations system that turns
+changing customer intent into an explainable commercial commitment, current
+operational work, and defensible closeout without rewriting authoritative history.
 
 ## Quick Links
+- Product documentation map: [docs/DOCUMENTATION_MAP.md](docs/DOCUMENTATION_MAP.md)
+- Project charter: [docs/PROJECT_CHARTER.md](docs/PROJECT_CHARTER.md)
+- System-level PRD: [docs/PRODUCT_REQUIREMENTS.md](docs/PRODUCT_REQUIREMENTS.md)
+- System architecture: [docs/SYSTEM_ARCHITECTURE.md](docs/SYSTEM_ARCHITECTURE.md)
+- Acceptance standard: [docs/ACCEPTANCE_STANDARD.md](docs/ACCEPTANCE_STANDARD.md)
+- Data and interface contracts: [docs/DATA_INTERFACE_CONTRACTS.md](docs/DATA_INTERFACE_CONTRACTS.md)
+- Risk and assumption register: [docs/RISK_ASSUMPTION_REGISTER.md](docs/RISK_ASSUMPTION_REGISTER.md)
+- Architecture decision index: [docs/adr/README.md](docs/adr/README.md)
 - Canonical project state: [PROJECT_STATE.md](PROJECT_STATE.md)
 - Executive state: [docs/project/EXECUTIVE_STATE.md](docs/project/EXECUTIVE_STATE.md)
 - Live app: https://quotepilot.mbmapps.com
@@ -146,7 +156,24 @@ evidence paths, freshness, blocker references, and the single next proof event.
   choices from first-class event templates and opening each exact section or
   template inside the existing guarded editor. It adds no catalog read, save,
   pricing, revision, or role authority; browser-local evidence stays labeled as
-  local and the flag-off Catalog Admin remains the rollback path.
+  local and the flag-off Catalog Admin remains the rollback path. The Library's
+  first-quote menu action opens a menu-oriented Import Studio URL and offers a
+  header-only `quotepilot-menu-items-template.csv`; download and inspection do
+  not import, save, publish, establish cost evidence, or establish Inventory
+  readiness. When a reviewed catalog source is staged, QuotePilot binds
+  sanitized operator-declared file, source-kind, batch, type, and row context
+  into its shared-draft receipt and retains that provenance through publication;
+  the filename is context supplied by the operator, not provider attestation.
+  After a menu import, **Review catalog draft** opens the first exact accepted
+  receipt row in Menu review. It never guesses a record: an absent, stale, or
+  mismatched target produces recovery, and non-admin roles do not receive the
+  editor. Recorded cost is shown as operator-declared import context, not as a
+  recipe-derived cost or Inventory fact.
+  `npm run test:e2e:firebase:first-quote-activation` runs the disposable local
+  connected acceptance lane from starter publication through exact imported-row
+  review, a later catalog publication, and one server-authoritative saved quote.
+  It does not send or accept a proposal, book work, take payment, establish
+  recipe/physical-Inventory truth, or prove hosted or production behavior.
 - `/app/integrations` and `/app/diagnostics`: temporary-flagged embedded
   operational workspaces with their existing role and feature gates.
 - `/app/home`: compatibility path that replaces to `/app`.
@@ -822,6 +849,8 @@ npm run test:e2e:ambient-release-gate
 npm run test:e2e:firebase
 npm run test:e2e:firebase:authoritative
 npm run test:e2e:firebase:starter-onboarding
+npm run test:e2e:firebase:first-quote-activation
+npm run test:e2e:firebase:guided-inquiry
 npm run build
 npm run test:truthloop
 npm run check:secrets
@@ -832,7 +861,27 @@ npm run check:docs:governance
 npm run check:capability-surfaces
 npm run check:perf:bundle
 npm run check:perf:cwv
+npm run test:perf:routes
+npm run calibrate:perf:routes
+npm run check:perf:routes
 ```
+
+The route-performance commands build an isolated production preview and use a
+disposable `demo-qp-routeperf` Auth/Firestore tenant with three read-only Functions
+emulator handlers (Firebase CLI and Java 21+ required). The temporary Functions
+source excludes local environment/secret files and all write endpoint exports.
+Per-run CLI configuration and fail-closed ADC discovery keep saved credentials
+out of the emulator process without changing the operator's credential files.
+Calibration collects five runs per route and proposes p75 plus 10% ceilings;
+the check evaluates three-run medians. Neither command deploys or changes
+committed budgets automatically. See [Performance Guardrails](docs/PERFORMANCE_GUARDRAILS.md)
+for the fixed profile, measured-byte boundary, and local-only evidence limits.
+The retained October 11 calibration passed 20 scenarios. Its first independent
+check passed all 12 browser scenarios but failed Inventory and quote-review
+timing ceilings. The final focus-repaired candidate passes all twelve visits
+and every unchanged ceiling; both receipts remain retained. Local route timing
+is qualified for that candidate, but branch-wide documentation governance still
+blocks release on 14 pre-existing timestamp debts. This is not hosted proof.
 
 `test:customer-centered-authority:emulator` is the reproducible Firebase
 Functions/Firestore trace for customer-centered mutation authority, including
@@ -1039,6 +1088,28 @@ instruction if that browser is unavailable.
   - Proves the owner can choose a starter pack, see the populated menu, approve
     and save pricing, and reach `New Quote` only after the server records the
     exact current-revision confirmation receipt.
+  - Enables the governed Ambient and customer-centered workspace profiles so
+    the same lane also exercises the Library continuation into the existing
+    unsaved quote draft; navigation is not treated as a saved quote.
+- `npm run test:e2e:firebase:first-quote-activation`
+  - Starts with an authenticated owner, an empty quote history, and disposable
+    Auth, Firestore, and Functions emulators.
+  - Proves starter publication, routed menu import with current-section
+    discovery, exact receipt-bound shared-draft review, a later active catalog
+    revision, and one server-authoritative saved quote/version containing the
+    exact imported selection snapshot.
+  - Does not send or accept a proposal, book work, take payment, establish
+    recipe or physical-Inventory truth, or prove hosted/production behavior.
+- `npm run test:e2e:firebase:guided-inquiry`
+  - Starts disposable Auth, Firestore, and Functions emulators with two tenant
+    principals and an authoritative catalog, then exercises the callable
+    Inquiry lifecycle through publish, public submit/recovery, quota rejection,
+    acknowledgement, conversion preview, and atomic quote-draft conversion.
+  - Proves cross-tenant denial, exact publication pinning, idempotent recovery,
+    stale and paused rejection, quota rejection without inquiry authority
+    artifacts, and one authoritative artifact set under a concurrent duplicate.
+    It is local emulator evidence; hosted Turnstile, provider delivery,
+    production data, accessibility, human acceptance, and outcomes remain open.
 - `npm run test:operational-staffing:emulator`
   - Runs the operational-staffing authority matrix against disposable Auth,
     Firestore, and Functions emulators only.

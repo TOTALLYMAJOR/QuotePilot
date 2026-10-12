@@ -1,6 +1,6 @@
 # User Journey and Funnel Model
 
-Last updated: 2026-09-17 10:51:24 CDT
+Last updated: 2026-09-20 03:05:35 CDT
 
 ## Five Quote-to-Confidence journeys
 
@@ -14,7 +14,6 @@ Last updated: 2026-09-17 10:51:24 CDT
 
 Responsive local fixtures exercise desktop, 768px and 390px presentations.
 Browser mocks are explicit and are not hosted Firebase, customer or provider proof.
-
 Status: mixed evidence. Product touchpoints and authority boundaries are
 repository-grounded. Emotional states, switching triggers, and perceived value
 remain hypotheses until interviews, observed work, or product telemetry support
@@ -84,6 +83,34 @@ branches, and sometimes ends appropriately at any stage.
 | Execution → closeout | Event completion evidence | Payment, attendance, cost, and reconciliation evidence | Unknown provider outcome, missing actuals, unexplained discrepancy | Partial. |
 | Closeout → relationship reuse | Governed completed engagement | Safe origin-linked rebook or retained relationship evidence | Copied obsolete authority or lost provenance | Not centrally observable. |
 
+## Journey verification ledger
+
+A checked **map** box means the journey stage is linked to current QuotePilot
+touchpoints, authority boundaries, measures, and failure conditions. It does
+not mean the journey has passed local, hosted, human, or outcome acceptance.
+Those proof boxes close independently and only from evidence in that class.
+
+The canonical acceptance criteria and dependency order live in the `QPI-*`
+delivery packets in [`DEV_TASKS.md`](../../DEV_TASKS.md). The packet column is a
+journey-to-backlog binding, not evidence that a packet or journey is complete.
+
+| Journey | Stage | Active initiative packet | Authority/source map | Local or CI proof | Human proof | Outcome proof | Next proof event |
+|---|---|---|---:|---:|---:|---:|---|
+| `JRN-01` | Discover and evaluate | `QPI-03`, `QPI-08` | [x] | [ ] | [ ] | [ ] | Observe owner-operators evaluating the current public promise and setup burden. |
+| `JRN-02` | Provision and configure | `QPI-01`, `QPI-02` | [x] | [ ] | [ ] | [ ] | Run first-setup and realistic import/menu-costing acceptance from operator source material. |
+| `JRN-03` | Capture intent | `QPI-02`, `QPI-03`, `QPI-09` | [x] | [ ] | [ ] | [ ] | Prove a governed inquiry or staff intake retains origin through opportunity conversion. |
+| `JRN-04` | Build and price | `QPI-01`, `QPI-02`, `QPI-09` | [x] | [ ] | [ ] | [ ] | Exercise first authoritative priced-draft creation with blockers, recovery, and exact readback. |
+| `JRN-05` | Present and decide | `QPI-03`, `QPI-04` | [x] | [ ] | [ ] | [ ] | Prove current issuance, provider result, portal view, and customer decision as separate receipts. |
+| `JRN-06` | Govern change | `QPI-01`, `QPI-05`, `QPI-09` | [x] | [ ] | [ ] | [ ] | Exercise one accepted-work amendment through consequence review and downstream invalidation. |
+| `JRN-07` | Plan delivery | `QPI-01`, `QPI-05`, `QPI-06` | [x] | [ ] | [ ] | [ ] | Observe Staffing, Inventory, production, and BEO owners working from the exact accepted basis. |
+| `JRN-08` | Execute and recover | `QPI-01`, `QPI-07`, `QPI-09` | [x] | [ ] | [ ] | [ ] | Run an event-day ambiguity and recovery scenario without losing event or revision context. |
+| `JRN-09` | Collect and close | `QPI-04`, `QPI-07` | [x] | [ ] | [ ] | [ ] | Reconcile payment, attendance, cost, payout, and missing evidence for one governed engagement. |
+| `JRN-10` | Retain and rebook | `QPI-08` | [x] | [ ] | [ ] | [ ] | Complete a provenance-preserving rebook that excludes obsolete authority. |
+| `JRN-11` | Advocate | `QPI-08` | [x] | [ ] | [ ] | [ ] | Collect repeat-use and referral evidence after multiple controlled events. |
+
+Work should select the smallest affected `JRN-*` stage and its `CAP-*`
+requirements before implementation. Updating a checkbox requires a linkable
+receipt or observation; prose confidence is not completion evidence.
 ## Critical moments
 
 - **Aha moment:** first server-authoritative priced draft saved from real event

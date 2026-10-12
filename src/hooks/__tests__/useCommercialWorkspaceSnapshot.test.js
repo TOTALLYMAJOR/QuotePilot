@@ -432,3 +432,18 @@ describe("buildCommercialSnapshotResult", () => {
     });
   });
 });
+
+
+test("publishes available history while attention remains explicitly loading", () => {
+  const result = buildCommercialSnapshotResult({
+    attentionResult: { status: "pending" },
+    historyResult: { status: "fulfilled", value: { source: "firebase", quotes: [{ id: "ready-quote" }], truncated: false } },
+    unreadReplyResult: { status: "pending" }
+  });
+  expect(result.quotes).toEqual([{ id: "ready-quote" }]);
+  expect(result.loading).toBe(true);
+  expect(result.reads.attention.status).toBe("loading");
+  expect(result.reads.history.status).toBe("success");
+  expect(result.error).toBe("");
+  expect(result.loadedAt).toBe(0);
+});

@@ -82,7 +82,7 @@ function resolveDiffRange() {
 
 function changedFilesFromRange(range) {
   if (!range) return [];
-  const output = run(`git diff --name-only --diff-filter=ACMR ${range}`);
+  const output = run(`git diff --name-only --diff-filter=ACMRD ${range}`);
   if (!output) return [];
   return output
     .split(/\r?\n/)
@@ -223,9 +223,13 @@ function checkVersionClaims(errors) {
 }
 
 function checkSecretPatterns(errors) {
-  const trackedMarkdown = run("git ls-files '*.md'")
-    .split(/\r?\n/)
+  const deleted = new Set(run("git ls-files --deleted -z").split("\0").filter(Boolean));
+  const trackedMarkdown = run("git ls-files -z '*.md'")
+    .split("\0")
     .filter(Boolean)
+    // Content scanning skips only Git-confirmed worktree deletions. They stay
+    // in changedFiles so deletion still triggers documentation obligations.
+    .filter((file) => !deleted.has(file))
     .filter((file) => !file.startsWith("node_modules/"));
 
   const patterns = [
@@ -395,7 +399,10 @@ function governedMarkdownFiles() {
 function checkDocumentationTimestamps(changedFiles, errors) {
   for (const file of governedMarkdownFiles()) {
     const filePath = path.join(ROOT, file);
-    if (!fs.existsSync(filePath)) continue;
+    if (!fs.existsSync(filePath)) {
+      errors.push(`${file}: required documentation is missing.`);
+      continue;
+    }
 
     const current = fs.readFileSync(filePath, "utf8");
     if (!DOCUMENT_TIMESTAMP_PATTERN.test(current)) {

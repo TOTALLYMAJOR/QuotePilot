@@ -122,6 +122,7 @@ describe("AmbientCustomerDirectoryView", () => {
       cursor: ""
     }]);
     expect(mocks.hostProps.searchDraft).toBe("");
+    expect(mocks.hostProps.appliedSearch).toBe("");
     expect(mocks.hostProps.cursorHistoryLength).toBe(0);
     expect(mocks.adapter.capture().transient).toEqual({
       searchDraft: "",
@@ -164,5 +165,18 @@ describe("AmbientCustomerDirectoryView", () => {
 
     expect(mocks.hostProps.directoryFilter).toBe("linked");
     expect(mocks.navigation.replace).not.toHaveBeenCalled();
+  });
+
+  test("passes only the applied tab-local search into the bounded result summary", async () => {
+    await renderDirectory();
+
+    act(() => mocks.hostProps.onSearchDraftChange("Maya"));
+    expect(mocks.hostProps.appliedSearch).toBe("");
+    act(() => mocks.hostProps.onApplySearch({ preventDefault: vi.fn() }));
+    await act(async () => {
+      await new Promise((resolve) => window.setTimeout(resolve, 0));
+    });
+
+    expect(mocks.hostProps.appliedSearch).toBe("Maya");
   });
 });

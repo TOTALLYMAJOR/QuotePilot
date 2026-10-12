@@ -283,6 +283,32 @@ async function applyCommand(runtime, organizationId, kind, identity, command) {
   }, {});
 }
 
+export async function reviewRecipeCommandDependencies({
+  runtime,
+  organizationId,
+  command,
+  context = {}
+}) {
+  const { dependencyPreflightDigest: _priorDigest, ...draft } = command || {};
+  const review = await runtime.getInventoryWorkspace({
+    schemaVersion: 2,
+    organizationId,
+    recipeDependencyPreflight: draft
+  }, context);
+  const digest = String(review?.dependencyPreflightDigest || "").trim();
+  if (
+    review?.organizationId !== organizationId
+    || review?.menuItemId !== draft.menuItemId
+    || review?.reviewedCatalogRevision !== draft.expectedCatalogRevision
+    || review?.reviewedRecipeRevision !== draft.expectedRecipeRevision
+    || review?.complete !== true
+    || !/^[a-f0-9]{64}$/u.test(digest)
+  ) {
+    throw new PopulationError("Recipe dependency review did not match the requested scope or revision fences.");
+  }
+  return Object.freeze({ ...draft, dependencyPreflightDigest: digest });
+}
+
 async function ensureLocations({ runtime, organizationId, state }) {
   const byId = new Map(state.locations.docs.map((snapshot) => [snapshot.id, snapshot.data() || {}]));
   for (const location of REALISTIC_LOCATIONS) {
@@ -575,7 +601,7 @@ async function ensureRecipes({ runtime, db, organizationId, ingredientIdByKey })
   const existingHeads = new Map(state.recipeHeads.docs.map((snapshot) => [snapshot.id, snapshot.data() || {}]));
   for (const menuItem of selectRecipeCandidates(state.menuItems)) {
     if (existingHeads.has(menuItem.id)) continue;
-    await applyCommand(runtime, organizationId, "recipe", `${catalogRevision}:${menuItem.id}`, {
+    const command = {
       kind: "publish_menu_recipe",
       menuItemId: menuItem.id,
       expectedCatalogRevision: catalogRevision,
@@ -583,7 +609,19 @@ async function ensureRecipes({ runtime, db, organizationId, ingredientIdByKey })
       outputYield: "1",
       outputUnitId: "each",
       lines: buildRecipeLines(menuItem, ingredientIdByKey)
+    };
+    const reviewedCommand = await reviewRecipeCommandDependencies({
+      runtime,
+      organizationId,
+      command
     });
+    await applyCommand(
+      runtime,
+      organizationId,
+      "recipe",
+      `${catalogRevision}:${menuItem.id}`,
+      reviewedCommand
+    );
   }
 }
 

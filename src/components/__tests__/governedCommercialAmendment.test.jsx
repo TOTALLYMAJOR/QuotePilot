@@ -320,6 +320,10 @@ describe("Governed Commercial Amendment Experience", () => {
     expect(receipt.textContent).toContain("Provider-accepted delivery");
     expect(receipt.textContent).toContain("Staffing requirement");
     expect(receipt.textContent).toContain("Kitchen beo");
+    expect(receipt.querySelector('[data-receipt-follow-up="revision-recorded"]')?.getAttribute("data-follow-up-state")).toBe("complete");
+    expect(receipt.querySelector('[data-receipt-follow-up="dependency-state"]')?.getAttribute("data-follow-up-state")).toBe("remaining");
+    expect(receipt.textContent).toContain("2 of 2 named dependency items remain open");
+    expect(receipt.querySelector('[data-receipt-follow-up="review-updated-quote"]')?.getAttribute("data-follow-up-state")).toBe("next");
     act(() => [...receipt.querySelectorAll("button")].find((button) => button.textContent === "Review updated quote").click());
     expect(onOpenAppliedQuote).toHaveBeenCalledTimes(1);
   });

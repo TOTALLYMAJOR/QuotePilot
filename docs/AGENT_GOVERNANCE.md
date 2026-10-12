@@ -1,7 +1,6 @@
 # Agent Governance
 
-Last updated: 2026-09-17 02:53:24 CDT
-
+Last updated: 2026-10-10 19:54:09 CDT
 ## Scope
 This document defines governance for repository-managed agent and skill assets under `.codex/skills/`.
 
@@ -15,8 +14,26 @@ This document defines governance for repository-managed agent and skill assets u
 - Skill definitions: `.codex/skills/*/SKILL.md`
 - Agent interface metadata: `.codex/skills/*/agents/openai.yaml`
 - Skill references/scripts: `.codex/skills/*/references/`, `.codex/skills/*/scripts/`
+- Repository lifecycle hooks: `.codex/hooks.json`
+- Graph-retrieval enforcement: `.codex/hooks/codebase_memory_guard.py`
 - Index only: `docs/SKILLS.md`
 
+## Graph-First Retrieval Enforcement
+
+The repository hook requires each Codex session to complete the ordered
+Codebase Memory preflight—`list_projects`, `index_status` for `quoteflow`, then
+`check_index_coverage` for at least one material path or scope—before supported
+local tool routes may read repository source or apply edits. The hook resets on
+new or cleared sessions, preserves state across resume and compaction, and
+re-injects the `GRAPH_COVERAGE_BLOCKED` rule at session start.
+
+Before preflight completion, `apply_patch` and common direct source readers such
+as `rg`, `grep`, `find`, `sed`, `cat`, `head`, `tail`, and source-bearing Git
+inspection commands are denied for repository paths. Bootstrap reads of
+external skill instructions remain available. This is defense in depth around
+the canonical `AGENTS.md` protocol, not a completeness guarantee: Codex
+documents that some specialized or hosted tool paths can bypass normal hook
+routing, and modified hooks require explicit trust review before execution.
 ## External Engineering Skill Configuration
 
 Repository-local configuration consumed by externally installed engineering
@@ -51,14 +68,16 @@ and is not a repository deployment.
   - `npm run lane:release`
 - Governance controls:
   - `npm run plan:task -- --task "<work>" --files <path,...>`
+  - `node scripts/check-enhancement-impact-contract.mjs`
   - `npm run evidence:task -- --task "<work>" --phase complete ...`
   - `npm run evidence:index`
   - `npm run status:product`
   - `npm run check:product-drift`
   - `npm run check:product-intelligence`
-  - `npm run check:docs:governance`
+  - `npm run eval:layered -- --dry-run`  - `npm run check:docs:governance`
   - `npm run check:perf:bundle`
   - `npm run check:perf:cwv`
+  - `node --test scripts/__tests__/codebase-memory-hook.test.mjs`
 
 ## Ownership and Review
 - Repository owner (`@TOTALLYMAJOR`) approves skill behavior changes.
@@ -110,6 +129,12 @@ release/experiment ledger to move together. The planner always emits
 `npm run check:product-intelligence`; the gate validates the canonical graph
 and change-impact mappings before `lane:core` may pass.
 
+The versioned Product Intelligence evaluation manifest is also a required
+canonical input. `npm run eval:layered` executes its automated dimensions and
+writes an ignored candidate-bound local receipt; `--dry-run` validates the
+manifest and governed IDs without executing checks. Results remain independent
+by dimension and evidence class. The runner emits no composite score and grants
+no promotion authority.
 For applicable work, the required reasoning order is: reconstruct the user
 objective, inspect repository authority and implementation, form a provisional
 action, retrieve the smallest domain slice, reconcile it, then classify the
@@ -132,6 +157,16 @@ Every planner result includes `lifecycle.phase` and an exact ISO-8601 UTC
 `lifecycle.recordedAt`. Use `plan` before work, `update` for a material status
 checkpoint, and `complete` for the final report. Completion reports must carry
 the emitted `recordedAt`; do not substitute an approximate conversational time.
+
+Tasks naming an enhancement or item number are fail-closed against
+`docs/enhancement-impact-manifest.json`. Each registered item declares its
+affected routes, authority identifiers, and runnable tests. The planner checks
+its explicit file set against the manifest's registered authority paths and
+adds the declared tests to the task packet. Presentation-only work must
+explicitly declare `authorities: []`; touching a pricing, commercial-quote, or
+Inventory authority path requires a separate non-presentation declaration.
+This is source-level change-scope evidence, not semantic completeness, CI,
+hosted, production, or human-acceptance proof.
 
 To minimize tokens, read only `dependencies.readFirst` plus task-owned files,
 execute `taskGraph` in dependency order, and run the narrowest relevant check

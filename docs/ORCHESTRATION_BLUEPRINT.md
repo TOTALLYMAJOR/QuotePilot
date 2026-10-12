@@ -1,7 +1,6 @@
 # Cloud + Local Orchestration Blueprint
 
-Last updated: 2026-09-17 02:01:13 CDT
-
+Last updated: 2026-10-10 19:54:09 CDT
 ## Goal
 Accelerate delivery while preserving production safety by using:
 - Fast local preflight and scoped validation loops.
@@ -66,7 +65,9 @@ Each PR declares:
 - `product_intelligence`: required catering actor/job/improvement, governed
   outcome or metric IDs, guardrails, evidence need, and ledger entry; or an
   explicit `not_applicable` rationale for mechanical work
-
+- for each named enhancement, `routes`, `authorities`, and `tests` from
+  `docs/enhancement-impact-manifest.json`; presentation-only work uses the
+  literal empty authority list and cannot include a registered authority path
 Before implementation, `npm run plan:task` may derive the same decision inputs
 from a bounded task description and explicit path set. Its canonical policy is
 `docs/task-orchestration-contracts.json`; the result adds a model tier,
@@ -74,6 +75,13 @@ reasoning effort, read/update dependencies, ordered validations, and a task
 graph. The external runner—not repository code—owns the actual model switch.
 Every plan also carries an exact UTC lifecycle timestamp. The `complete` phase
 is the authoritative time included in the final task report.
+
+The planner extracts exact enhancement/item IDs from bounded task text or
+accepts `--enhancement <id>`. Missing declarations fail before a packet is
+emitted. Registered pricing, commercial-quote, Inventory, and orchestration
+paths also fail when the declaration omits their authority identifier. The
+manifest checker proves declaration shape and explicit path mapping only; it
+does not prove that the authority map is semantically exhaustive.
 
 Schema-v2 packets preserve the execution profile and add an orthogonal
 `domainClassification`. When applicable, the packet names the smallest
@@ -88,6 +96,12 @@ the Product Intelligence index, the release/experiment ledger, and
 `npm run check:product-intelligence`. Mechanical work may be marked
 `not_applicable` only with a rationale; it may not invent a catering benefit.
 
+The layered evaluation manifest composes existing unit, browser, analytics,
+Truth Loop, and Steward checks without creating another test framework.
+`npm run eval:layered` records each authority, AI, journey, recovery, telemetry,
+operator, and accessibility dimension separately in an ignored immutable local
+receipt. A failed blocking dimension cannot be averaged away; manual and higher
+evidence classes stay `not_run` until their own proof is recorded.
 ## Token-Efficient Task Planning
 - Pass explicit paths in a dirty worktree so unrelated changes do not raise the
   risk/model tier or widen dependency reads.

@@ -117,7 +117,7 @@
   }
 
   .schedule-agenda-day[aria-current="date"] {
-    border-left: 3px solid var(--tone-gold-3, #8d611a);
+    box-shadow: inset 0 0 0 1px var(--tone-gold-3, #8d611a);
     background: color-mix(in srgb, var(--tone-gold-3, #8d611a) 8%, transparent);
   }
 
@@ -338,8 +338,7 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--space-4);
-  border: 1px solid var(--tone-cream-3);
-  border-left: 3px solid var(--tone-danger);
+  border: 1px solid color-mix(in srgb, var(--tone-danger) 34%, var(--tone-cream-3));
   border-radius: var(--radius-md);
   background: #fff;
   padding: var(--space-2) var(--space-3);
@@ -630,7 +629,6 @@
 .operations-workspace .schedule-week-unplaced-event.has-conflict,
 .operations-workspace .schedule-week-unplaced-event.has-capacity {
   border-color: color-mix(in srgb, var(--tone-danger) 48%, var(--tone-cream-3));
-  border-left: 3px solid var(--tone-danger);
   background: color-mix(in srgb, var(--tone-danger) 5%, #fff);
 }
 
@@ -908,7 +906,6 @@
   display: grid;
   gap: var(--space-3);
   border: 1px solid color-mix(in srgb, var(--tone-danger) 30%, var(--tone-cream-3));
-  border-left: 3px solid var(--tone-danger);
   border-radius: var(--radius-md);
   background: color-mix(in srgb, var(--tone-danger) 4%, #fff);
   padding: var(--space-3);

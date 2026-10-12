@@ -1,5 +1,5 @@
 import { createRequire } from "node:module";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   buildRecipeLines,
   CREATIVE_MENU_ITEMS,
@@ -10,13 +10,70 @@ import {
 } from "../../../scripts/realistic-catering-population-data.mjs";
 import {
   parsePopulationArgs,
-  planRecipeBackedMenuCostSeed
+  planRecipeBackedMenuCostSeed,
+  reviewRecipeCommandDependencies
 } from "../../../scripts/populate-ragnakok-inventory.mjs";
 
 const require = createRequire(import.meta.url);
 const { createRecipeRevision } = require("../../../functions/inventoryRecipeCore.cjs");
 
 describe("realistic catering population fixture", () => {
+  it("obtains the exact authority-reviewed dependency digest before recipe publication", async () => {
+    const command = {
+      kind: "publish_menu_recipe",
+      menuItemId: "menu-alfredo",
+      expectedCatalogRevision: 9,
+      expectedRecipeRevision: 4,
+      outputYield: "10",
+      outputUnitId: "portion",
+      lines: [{
+        lineId: "line-chicken",
+        ingredientId: "chicken",
+        quantity: "2",
+        unitKind: "standard",
+        unitId: "lb",
+        quantityBasis: "as_purchased",
+        usableYield: null
+      }]
+    };
+    const getInventoryWorkspace = vi.fn(async () => ({
+      organizationId: "mm05366-sandbox",
+      menuItemId: "menu-alfredo",
+      reviewedCatalogRevision: 9,
+      reviewedRecipeRevision: 4,
+      complete: true,
+      dependencyPreflightDigest: "a".repeat(64)
+    }));
+
+    await expect(reviewRecipeCommandDependencies({
+      runtime: { getInventoryWorkspace },
+      organizationId: "mm05366-sandbox",
+      command
+    })).resolves.toEqual({
+      ...command,
+      dependencyPreflightDigest: "a".repeat(64)
+    });
+    expect(getInventoryWorkspace).toHaveBeenCalledWith({
+      schemaVersion: 2,
+      organizationId: "mm05366-sandbox",
+      recipeDependencyPreflight: command
+    }, {});
+
+    getInventoryWorkspace.mockResolvedValueOnce({
+      organizationId: "another-tenant",
+      menuItemId: "menu-alfredo",
+      reviewedCatalogRevision: 9,
+      reviewedRecipeRevision: 4,
+      complete: true,
+      dependencyPreflightDigest: "b".repeat(64)
+    });
+    await expect(reviewRecipeCommandDependencies({
+      runtime: { getInventoryWorkspace },
+      organizationId: "mm05366-sandbox",
+      command
+    })).rejects.toThrow(/scope or revision fences/u);
+  });
+
   it("is dry-run-first and restricts apply to exact projects, tenant, and confirmation", () => {
     expect(parsePopulationArgs([
       "--project", "tonicatering", "--organization", "mm05366-sandbox"

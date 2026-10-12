@@ -5,7 +5,7 @@ import {
   buildQuoteEditPath,
   buildQuotePath
 } from "../lib/workspaceRoutes";
-import { buildAmbientLivingOpportunityPresentation } from "./ambientLivingOpportunityPresentation";
+import { buildEventWorkspacePresentation } from "./eventWorkspacePresentation";
 import ProductBrandLockup from "./ProductBrandLockup";
 import QuoteWorkspaceActivityDrawer from "./QuoteWorkspaceActivityDrawer";
 import StewardWorkbench from "./StewardWorkbench";
@@ -29,6 +29,34 @@ const TABS = Object.freeze(["Event", "Menu", "Services", "Pricing", "Proposal", 
 
 function text(value) {
   return value == null ? "" : String(value).trim();
+}
+
+// This workspace displays saved identity and guest count only. Reuse the same
+// presentation source without constructing unused Ambient actions and objects.
+export function buildQuoteWorkspaceSummary(quote, { source = "" } = {}) {
+  if (!quote) return null;
+  try {
+    const model = buildEventWorkspacePresentation(quote, { source });
+    if (!model.quoteId) return null;
+    const guests = Number(quote.event?.guests);
+    return {
+      identity: {
+        quoteId: model.quoteId,
+        quoteNumber: model.quoteNumber,
+        eventName: model.eventName,
+        customerName: model.customerName,
+        venue: model.venue,
+        date: model.eventDate,
+        time: model.eventTime,
+        total: model.total,
+        sourceLabel: model.sourceLabel,
+        status: model.status
+      },
+      guestObject: { currentGuestCount: Number.isFinite(guests) && guests > 0 ? Math.round(guests) : 0 }
+    };
+  } catch {
+    return null;
+  }
 }
 
 function valueAt(object, path) {
@@ -287,18 +315,9 @@ export default function QuoteWorkspaceConceptPage({ authSession, tenantContext, 
     }
     return quotes[0] || null;
   }, [requestedQuoteId, snapshot.quotes]);
-  const presentation = useMemo(() => {
-    if (!selectedQuote) return null;
-    try {
-      return buildAmbientLivingOpportunityPresentation(selectedQuote, {
-        source: snapshot.source,
-        sourceFreshness: snapshot.stale ? "stale" : "fresh",
-        role: authSession?.role || tenantContext?.role || "non_staff"
-      });
-    } catch {
-      return null;
-    }
-  }, [authSession?.role, selectedQuote, snapshot.source, snapshot.stale, tenantContext?.role]);
+  const presentation = useMemo(() => buildQuoteWorkspaceSummary(selectedQuote, {
+    source: snapshot.source
+  }), [selectedQuote, snapshot.source]);
 
   const returnToQuotes = () => {
     if (typeof onExit === "function") {

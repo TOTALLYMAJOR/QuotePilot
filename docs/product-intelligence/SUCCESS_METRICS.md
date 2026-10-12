@@ -20,7 +20,6 @@ are persisted. Quote IDs, proposal IDs, source references, quantities, money,
 customer fields and rationale never enter event dimensions. These signals use
 the existing analytics session; absent sessions or failed telemetry yield missing
 observations, never invented counts. No product outcome baseline is yet collected.
-
 ## Measurement rules
 
 - Every rate states its numerator, denominator, eligibility rules, window, and

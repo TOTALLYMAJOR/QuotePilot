@@ -233,6 +233,7 @@ export default function InventoryRecipeEditor({
   expectedCatalogRevision = 0,
   ingredientSourceState = "unavailable",
   publishEligibility = { allowed: false, reason: "Recipe publication is unavailable." },
+  onPreviewDependencies,
   onPublish,
   onReconcile,
   onReset,
@@ -245,8 +246,11 @@ export default function InventoryRecipeEditor({
   const baselineFingerprint = useMemo(() => fingerprint(baseline), [baseline]);
   const [draft, setDraft] = useState(baseline);
   const [operation, setOperation] = useState({ state: "idle", message: "" });
+  const [dependencyReview, setDependencyReview] = useState({ state: "idle", message: "" });
   const [baselineConflict, setBaselineConflict] = useState(false);
   const previousBaselineRef = useRef({ menuItemId, fingerprint: baselineFingerprint });
+  const dependencyReviewRequestRef = useRef(0);
+  const dependencyReviewFocusRef = useRef(null);
 
   useEffect(() => {
     const previous = previousBaselineRef.current;
@@ -277,14 +281,17 @@ export default function InventoryRecipeEditor({
     setBaselineConflict(false);
   }, [baseline, baselineConflict, operation.state]);
 
-  const dirty = fingerprint(draft) !== baselineFingerprint;
+  const draftFingerprint = fingerprint(draft);
+  const dirty = draftFingerprint !== baselineFingerprint;
   const recipeSourceCurrent = recipeSourceState === "current";
-  const busy = operation.state === "pending" || operation.state === "uncertain" || operation.state === "reconciliation";
+  const reviewBusy = dependencyReview.state === "loading";
+  const busy = reviewBusy || operation.state === "pending" || operation.state === "uncertain" || operation.state === "reconciliation";
   const outcomeLocked = operation.state === "pending"
     || operation.state === "committed"
     || operation.state === "uncertain"
     || operation.state === "reconciliation"
     || (operation.state === "rejected" && Boolean(operation.attempt))
+    || reviewBusy
     || !recipeSourceCurrent
     || baselineConflict;
   const navigationLocked = dirty
@@ -296,11 +303,20 @@ export default function InventoryRecipeEditor({
     onInteractionStateChange?.({ dirty, busy, locked: navigationLocked });
   }, [busy, dirty, navigationLocked, onInteractionStateChange]);
   useEffect(() => () => onInteractionStateChange?.({ dirty: false, busy: false, locked: false }), [onInteractionStateChange]);
+  useEffect(() => {
+    dependencyReviewRequestRef.current += 1;
+    setDependencyReview({ state: "idle", message: "" });
+  }, [draftFingerprint, expectedCatalogRevision, menuItemId]);
+  useEffect(() => {
+    if (!["ready", "error", "stale"].includes(dependencyReview.state)) return;
+    dependencyReviewFocusRef.current?.focus();
+  }, [dependencyReview.state]);
 
   const knownIngredientIds = useMemo(() => new Set(availableIngredients.map((item) => item.ingredientId)), [availableIngredients]);
   const issues = validateDraft(draft, knownIngredientIds);
   const sourceCurrent = ingredientSourceState === "current";
   const allowed = publishEligibility?.allowed === true
+    && typeof onPreviewDependencies === "function"
     && typeof onPublish === "function"
     && sourceCurrent
     && recipeSourceCurrent
@@ -313,6 +329,8 @@ export default function InventoryRecipeEditor({
     ? "Reconnect current ingredient projections before publishing a recipe. Retained or pending data cannot authorize this change."
     : !publishEligibility?.allowed
       ? text(publishEligibility?.reason) || "Save and confirm this menu item before publishing its recipe."
+      : typeof onPreviewDependencies !== "function"
+        ? "Affected-menu review is not connected in this workspace."
       : typeof onPublish !== "function"
         ? "Recipe publication is not connected in this workspace."
         : issues[0] || "";
@@ -338,34 +356,68 @@ export default function InventoryRecipeEditor({
     }));
   };
 
+  const commandForDraft = () => ({
+    kind: "publish_menu_recipe",
+    menuItemId,
+    expectedCatalogRevision,
+    expectedRecipeRevision: draft.expectedRecipeRevision,
+    outputYield: text(draft.yield.quantity),
+    outputUnitId: text(draft.yield.unit),
+    lines: draft.ingredients.map((line) => ({
+      lineId: text(line.lineId),
+      ingredientId: text(line.ingredientId),
+      quantity: text(line.quantity),
+      unitKind: line.unitKind,
+      ...(line.unitKind === "ingredient_pack"
+        ? { packConversionRevisionId: text(line.packConversionRevisionId) }
+        : { unitId: text(line.unitId) }),
+      quantityBasis: line.quantityBasis,
+      usableYield: line.quantityBasis === "usable" && text(line.usableYield) ? text(line.usableYield) : null
+    }))
+  });
+
   const submit = async (event) => {
     event.preventDefault();
     if (!allowed || issues.length || busy) return;
+    const command = commandForDraft();
+    if (dependencyReview.state !== "ready" || dependencyReview.draftFingerprint !== draftFingerprint) {
+      const requestId = dependencyReviewRequestRef.current + 1;
+      dependencyReviewRequestRef.current = requestId;
+      setDependencyReview({ state: "loading", message: "Reviewing affected menu items…" });
+      try {
+        const result = await onPreviewDependencies(command);
+        if (dependencyReviewRequestRef.current !== requestId) return;
+        setDependencyReview({
+          state: "ready",
+          message: "Affected menu scope reviewed. Confirm this exact recipe revision to publish.",
+          evidence: result,
+          draftFingerprint
+        });
+      } catch (error) {
+        if (dependencyReviewRequestRef.current !== requestId) return;
+        setDependencyReview({
+          state: "error",
+          message: text(error?.message) || "Affected menu items are unavailable. Retry this review before publishing."
+        });
+      }
+      return;
+    }
     setOperation({ state: "pending", message: "Publishing this exact recipe revision…" });
     try {
       const result = await onPublish({
-        kind: "publish_menu_recipe",
-        menuItemId,
-        expectedCatalogRevision,
-        expectedRecipeRevision: draft.expectedRecipeRevision,
-        outputYield: text(draft.yield.quantity),
-        outputUnitId: text(draft.yield.unit),
-        lines: draft.ingredients.map((line) => ({
-          lineId: text(line.lineId),
-          ingredientId: text(line.ingredientId),
-          quantity: text(line.quantity),
-          unitKind: line.unitKind,
-          ...(line.unitKind === "ingredient_pack"
-            ? { packConversionRevisionId: text(line.packConversionRevisionId) }
-            : { unitId: text(line.unitId) }),
-          quantityBasis: line.quantityBasis,
-          usableYield: line.quantityBasis === "usable" && text(line.usableYield) ? text(line.usableYield) : null
-        }))
+        ...command,
+        dependencyPreflightDigest: dependencyReview.evidence.dependencyPreflightDigest
       });
       const state = OPERATION_STATES.has(text(result?.state)) ? text(result.state) : "committed";
       setOperation({ state, message: text(result?.message) || (state === "committed" ? "Recipe revision committed. Waiting for its current cost projection." : "Recipe outcome requires reconciliation."), attempt: result?.attempt || null });
     } catch (error) {
       const uncertain = error?.inventoryDefinitive === false || error?.definitive === false;
+      if (!uncertain && String(error?.code || "").includes("aborted")) {
+        setDependencyReview({
+          state: "stale",
+          message: "Dependency evidence changed. Review the affected menu items again before publishing."
+        });
+      }
       setOperation({
         state: uncertain ? "uncertain" : "rejected",
         message: uncertain
@@ -501,6 +553,33 @@ export default function InventoryRecipeEditor({
           )}
         </div>
 
+        {dependencyReview.state !== "idle" && <div
+          ref={dependencyReviewFocusRef}
+          className="inventory-recipe-editor__dependency-review"
+          data-recipe-dependency-review={dependencyReview.state}
+          data-capability-state={dependencyReview.state === "loading" ? "loading"
+            : dependencyReview.state === "ready" ? "success"
+              : dependencyReview.state === "stale" ? "stale" : "error"}
+          role={dependencyReview.state === "error" ? "alert" : "status"}
+          tabIndex={-1}
+        >
+          <strong>{dependencyReview.state === "ready" ? "Affected menu items reviewed" : "Affected menu review"}</strong>
+          <p>{dependencyReview.message}</p>
+          {dependencyReview.state === "ready" && <>
+            <ul>
+              {dependencyReview.evidence.affectedMenuItems.map((item) => (
+                <li key={item.menuItemId}>{item.name}</li>
+              ))}
+            </ul>
+            <details className="staff-evidence-disclosure">
+              <summary>Reviewed recipe and dependency evidence</summary>
+              <p>Recipe revision {dependencyReview.evidence.reviewedRecipeRevision}</p>
+              <p>Recipe digest {dependencyReview.evidence.reviewedRecipeDigest || "No prior recipe"}</p>
+              <p>Dependency scope digest {dependencyReview.evidence.dependencyPreflightDigest}</p>
+            </details>
+          </>}
+        </div>}
+
         {issues.length > 0 && dirty && <div className="inventory-recipe-editor__issues" role="alert"><strong>Recipe needs attention</strong><ul>{issues.map((issue) => <li key={issue}>{issue}</li>)}</ul></div>}
         {!allowed && <p className="inventory-recipe-editor__recovery" data-recipe-publish-disabled data-capability-state="recovery">{disabledReason}</p>}
         {operation.state !== "idle" && <p
@@ -515,7 +594,7 @@ export default function InventoryRecipeEditor({
         {operation.state === "committed" && operation.attempt?.receipt && <p className="inventory-recipe-editor__receipt" data-capability-state="receipt">Server receipt retained for exact-request recovery.</p>}
 
         <div className="inventory-recipe-editor__actions" data-capability-state={operation.state === "idle" && allowed ? "ready" : undefined}>
-          <button type="button" className="ghost" disabled={!dirty || outcomeLocked} onClick={() => { setDraft(baseline); setOperation({ state: "idle", message: "" }); }}>Discard recipe changes</button>
+          <button type="button" className="ghost" disabled={!dirty || outcomeLocked} onClick={() => { setDraft(baseline); setOperation({ state: "idle", message: "" }); setDependencyReview({ state: "idle", message: "" }); }}>Discard recipe changes</button>
           {baselineConflict && <button type="button" className="ghost" onClick={() => {
             setDraft(baseline);
             setBaselineConflict(false);
@@ -523,7 +602,13 @@ export default function InventoryRecipeEditor({
           }}>Use current recipe</button>}
           {operation.state === "uncertain" && typeof onReconcile === "function" && <button type="button" className="cta" onClick={reconcile}>Reconcile exact request</button>}
           {operation.state === "rejected" && operation.attempt && typeof onReset === "function" && <button type="button" className="cta" onClick={resetRejected}>Review and retry</button>}
-          <button type="submit" className="cta" disabled={!dirty || !allowed || issues.length > 0 || outcomeLocked}>{operation.state === "pending" ? "Publishing…" : recipe ? "Publish new recipe revision" : "Publish recipe"}</button>
+          <button type="submit" className="cta" disabled={!dirty || !allowed || issues.length > 0 || outcomeLocked}>{operation.state === "pending"
+            ? "Publishing…"
+            : dependencyReview.state === "loading"
+              ? "Reviewing…"
+              : dependencyReview.state === "ready" && dependencyReview.draftFingerprint === draftFingerprint
+                ? "Publish reviewed recipe revision"
+                : "Review affected menu items"}</button>
         </div>
       </form>
     </section>

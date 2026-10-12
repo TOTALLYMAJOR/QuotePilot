@@ -1,22 +1,22 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import StatusChip from "./StatusChip";
-import { buildStaffProposalPreview, getCustomerWorkspace } from "../lib/customerWorkspace";
+import { buildStaffProposalPreview, getCustomerWorkspace, createCustomerHistoryLoader, getCustomerQuoteVersions } from "../lib/customerWorkspace";
 import { classifyDepositStatus, classifyFinalBalanceDisplayStatus, classifyQuoteStatus } from "../lib/statusSemantics";
 import { buildPortalThemeStyle } from "../data/portalThemePresets";
 import { useWorkspaceRouteHeadingFocus } from "../hooks/useWorkspaceRouteHeadingFocus";
+import { useDisclosureRefreshAnchor } from "../hooks/useDisclosureRefreshAnchor";
 import {
   useOptionalWorkspaceNavigation,
   useWorkspaceReturnContextAdapter
 } from "../context/WorkspaceNavigationContext";
 import { restoreWorkspaceReturnViewport } from "../lib/workspaceReturnContext";
+import { markRouteStage } from "../lib/routePerformance";
 import { StaffReadContextRail } from "./StaffEvidenceRail";
 import CustomerCommercialTimeline from "./CustomerCommercialTimeline";
 import CustomerCommercialMeasures from "./CustomerCommercialMeasures";
 import CustomerRevenueOpportunities, {
   buildCustomerRevenueOpportunityRead
 } from "./CustomerRevenueOpportunities";
-import RevenueAutopilotCustomerControls from "./RevenueAutopilotCustomerControls";
-import QuoteVersionComparison from "./QuoteVersionComparison";
 import {
   formatWorkspaceDate,
   formatWorkspaceDateTime,
@@ -36,6 +36,8 @@ const AmbientClientRelationshipHost = AMBIENT_UI_ENABLED
       default: module.AmbientClientRelationshipHost
     })))
   : null;
+const RevenueAutopilotCustomerControls = lazy(() => import("./RevenueAutopilotCustomerControls"));
+const QuoteVersionComparison = lazy(() => import("./QuoteVersionComparison"));
 
 const TABS = [
   ["overview", "Overview"],
@@ -66,6 +68,34 @@ function ClientRecordDisclosure({ ambientMode = false, disclosureRef, children }
       <summary>More client history and controls</summary>
       <div className="ambient-client-overview__record-body">{children}</div>
     </details>
+  );
+}
+
+function LazyVisibleSection({ children, fallback = "Additional controls load when this section is visible." }) {
+  const boundaryRef = useRef(null);
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    if (visible) return undefined;
+    const node = boundaryRef.current;
+    if (!node) return undefined;
+    if (typeof IntersectionObserver !== "function") {
+      setVisible(true);
+      return undefined;
+    }
+    const observer = new IntersectionObserver((entries) => {
+      if (!entries.some((entry) => entry.isIntersecting)) return;
+      setVisible(true);
+      observer.disconnect();
+    }, { threshold: 0.01 });
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [visible]);
+
+  return (
+    <div ref={boundaryRef} data-lazy-section-state={visible ? "visible" : "deferred"}>
+      {visible ? children : <p className="source-note" role="status">{fallback}</p>}
+    </div>
   );
 }
 
@@ -372,6 +402,11 @@ export default function CustomerWorkspaceView({
   const [refreshToken, setRefreshToken] = useState(0);
   const [state, setState] = useState(EMPTY_WORKSPACE_STATE);
   const generationRef = useRef(0);
+  const historyLoaderRef = useRef(null);
+  const historyDisclosureRefs = useRef(new Map());
+  const historyRefreshAnchor = useDisclosureRefreshAnchor();
+  const openHistoriesRef = useRef({ scopeKey: "", quoteIds: new Set() });
+  const [histories, setHistories] = useState({ scopeKey: "", byQuote: {} });
   const tabRefs = useRef({});
   const recordDisclosureRef = useRef(null);
   const closeoutReturnRef = useRef(null);
@@ -379,9 +414,59 @@ export default function CustomerWorkspaceView({
   const [revealedCloseout, setRevealedCloseout] = useState(null);
   const previewTriggerRef = useRef(null);
   const returnRestoreCancelRef = useRef(null);
+  const reportedPerformanceStagesRef = useRef(new Set());
   const requestedScopeKey = `${String(organizationId || "").trim()}\u0000${String(customerId || "").trim()}`;
-  const workspaceForScope = state.scopeKey === requestedScopeKey ? state.workspace : null;
+  const workspaceForScope = useMemo(() => {
+    if (state.scopeKey !== requestedScopeKey || !state.workspace) return null;
+    const workspace = state.workspace;
+    if (histories.scopeKey !== requestedScopeKey) return workspace;
+    const loadedIds = Object.keys(histories.byQuote).filter((id) => histories.byQuote[id].status === "success");
+    return {
+      ...workspace,
+      proposalVersions: [
+        ...workspace.proposalVersions.filter((version) => !loadedIds.includes(version.quoteId)),
+        ...loadedIds.flatMap((id) => histories.byQuote[id].items.map((version) => ({
+          ...version, quoteId: id, quoteNumber: workspace.quotes.find((quote) => quote.id === id)?.quoteNumber
+        })))
+      ],
+      versionPageInfo: {
+        ...workspace.versionPageInfo,
+        unloadedQuoteIds: (workspace.versionPageInfo.unloadedQuoteIds || []).filter((id) => !loadedIds.includes(id)),
+        truncatedQuoteIds: [...new Set([
+          ...workspace.versionPageInfo.truncatedQuoteIds.filter((id) => !loadedIds.includes(id)),
+          ...loadedIds.filter((id) => histories.byQuote[id].truncated)
+        ])]
+      }
+    };
+  }, [state.scopeKey, state.workspace, requestedScopeKey, histories]);
   const headingRef = useWorkspaceRouteHeadingFocus(Boolean(workspaceForScope));
+
+  useEffect(() => {
+    reportedPerformanceStagesRef.current = new Set();
+  }, [requestedScopeKey]);
+
+  useEffect(() => {
+    if (reportedPerformanceStagesRef.current.has("usable-core")) return;
+    if (!workspaceForScope && !(state.scopeKey === requestedScopeKey && state.error)) return;
+    reportedPerformanceStagesRef.current.add("usable-core");
+    markRouteStage({
+      routeId: "clients",
+      stage: "usable-core",
+      outcome: workspaceForScope ? "ready" : "error"
+    });
+  }, [requestedScopeKey, state.error, state.scopeKey, workspaceForScope]);
+
+  useEffect(() => {
+    const settled = state.scopeKey === requestedScopeKey
+      && ["complete", "core-error"].includes(state.phase);
+    if (!settled || reportedPerformanceStagesRef.current.has("supplemental-complete")) return;
+    reportedPerformanceStagesRef.current.add("supplemental-complete");
+    markRouteStage({
+      routeId: "clients",
+      stage: "supplemental-complete",
+      outcome: state.phase === "core-error" ? "partial" : "ready"
+    });
+  }, [requestedScopeKey, state.phase, state.scopeKey]);
 
   const captureClientOverviewReturnView = useCallback((hint = {}) => {
     const root = headingRef.current?.closest("main");
@@ -494,6 +579,38 @@ export default function CustomerWorkspaceView({
   }, []);
 
   useEffect(() => {
+    historyLoaderRef.current?.dispose();
+    historyLoaderRef.current = null;
+    if (openHistoriesRef.current.scopeKey !== requestedScopeKey) {
+      openHistoriesRef.current = { scopeKey: requestedScopeKey, quoteIds: new Set() };
+    }
+    setHistories({ scopeKey: requestedScopeKey, byQuote: {} });
+    const installHistoryLoader = (workspace) => {
+      if (!workspace || historyLoaderRef.current || generation !== generationRef.current) return;
+      historyLoaderRef.current = createCustomerHistoryLoader({
+        quoteIds: workspace.quotes.map((quote) => quote.id),
+        read: (quoteId) => {
+          // Local review fixtures can already carry retained snapshots. Keep
+          // those scoped fixtures rather than replacing them from local storage.
+          if (workspace.versionPageInfo.unloadedQuoteIds && !workspace.versionPageInfo.unloadedQuoteIds.includes(quoteId)) {
+            return Promise.resolve({
+              items: workspace.proposalVersions.filter((version) => version.quoteId === quoteId),
+              truncated: workspace.versionPageInfo.truncatedQuoteIds.includes(quoteId)
+            });
+          }
+          return getCustomerQuoteVersions({ organizationId, quoteId });
+        },
+        onResult: (quoteId, result) => {
+          if (generation !== generationRef.current) return;
+          historyRefreshAnchor.capture(quoteId, historyDisclosureRefs.current.get(quoteId));
+          setHistories((current) => current.scopeKey === requestedScopeKey
+            ? { ...current, byQuote: { ...current.byQuote, [quoteId]: result } }
+            : current);
+          historyRefreshAnchor.restore(quoteId);
+        }
+      });
+      openHistoriesRef.current.quoteIds.forEach((quoteId) => historyLoaderRef.current.load(quoteId));
+    };
     const generation = generationRef.current + 1;
     generationRef.current = generation;
     setState((current) => current.scopeKey === requestedScopeKey
@@ -519,8 +636,10 @@ export default function CustomerWorkspaceView({
     getCustomerWorkspace({
       organizationId,
       customerId,
+      includeVersions: false,
       onCoreWorkspace: (workspace) => {
         if (generation !== generationRef.current || !workspace) return;
+        installHistoryLoader(workspace);
         const loadedAt = Date.now();
         const derived = projectWorkspace(workspace, loadedAt);
         setState((current) => {
@@ -543,6 +662,7 @@ export default function CustomerWorkspaceView({
     })
       .then((workspace) => {
         if (generation !== generationRef.current) return;
+        installHistoryLoader(workspace);
         const loadedAt = Date.now();
         const derived = projectWorkspace(workspace, loadedAt);
         setState({
@@ -574,6 +694,8 @@ export default function CustomerWorkspaceView({
       });
     return () => {
       generationRef.current += 1;
+      historyLoaderRef.current?.dispose();
+      historyLoaderRef.current = null;
     };
   }, [customerId, organizationId, refreshToken, requestedScopeKey, tenantTimeZone]);
 
@@ -702,19 +824,22 @@ export default function CustomerWorkspaceView({
   const customer = workspace.customer;
   const supplementalPending = state.phase === "core";
   const supplementalError = state.phase === "core-error";
+  const clientActionsAvailable = workspace.source === "firebase"
+    && state.phase === "complete" && !state.loading && !state.stale
+    && !state.error && !state.revenueRadarError;
   const workspaceTruncated = workspace.quotePageInfo.truncated
     || workspace.versionPageInfo.truncatedQuoteIds.length > 0;
   const readOutcome = supplementalPending
-    ? "The client record and linked opportunities are ready; retained proposal history and private controls are still loading."
+    ? "The client record and linked opportunities are ready; private controls are still loading. Proposal history loads when opened."
     : supplementalError
-      ? "The client record and linked opportunities are available, but retained proposal history or private controls did not finish loading."
+      ? "The client record and linked opportunities are available, but private controls did not finish loading. Proposal history remains available on request."
       : state.loading
     ? "Refreshing client overview; the previous completed view remains visible."
     : state.error
       ? "The latest client overview refresh failed; the previous completed view remains visible."
       : workspaceTruncated
         ? "The customer record read completed within its declared quote or version bounds."
-        : "The customer record, linked quote page, and retained version reads completed within their declared bounds.";
+        : "The customer record and linked quote page are ready. Open a proposal history to load its retained versions.";
   const rootReadState = state.stale
     ? "stale"
     : state.loading
@@ -785,10 +910,10 @@ export default function CustomerWorkspaceView({
           error={state.error}
           stale={state.stale}
           truncated={workspaceTruncated}
-          truncationKnown
-          readContract="Canonical customer record, up to 25 linked quotes, and up to 10 retained proposal versions per displayed quote"
+          truncationKnown={!workspace.versionPageInfo.unloadedQuoteIds?.length}
+          readContract="Canonical customer record and up to 25 linked quotes; proposal histories load when opened"
           outcome={readOutcome}
-          boundsNote="This client overview shows up to 25 linked quotes and 10 saved proposal versions per displayed quote; open Quotes for broader history."
+          boundsNote="This client overview shows up to 25 linked quotes. Each opened proposal history reads up to 10 saved versions; unopened histories are not checked. Open Quotes for broader history."
           title="Client overview details"
           titleId="customer-workspace-read-context-title"
           caveat="Freshness describes these staff reads only. It does not establish proposal delivery, customer viewing or acceptance, booking, payment, or operational completion."
@@ -816,15 +941,15 @@ export default function CustomerWorkspaceView({
             className="customer-workspace-supplemental-state"
             data-capability-state={supplementalPending ? "loading" : "partial"}
           >
-            <h2>Client history and controls</h2>
+            <h2>Private client controls</h2>
             {supplementalPending ? (
               <p role="status">
-                Loading retained proposal history and private controls. The client overview above is ready to use.
+                Loading private controls. The client overview above is ready to use. Proposal histories can be opened independently.
               </p>
             ) : (
               <>
                 <p role="alert" className="error-note">
-                  Retained proposal history or private controls could not be loaded. The client record and linked opportunities remain available above.
+                  Private controls could not be loaded. The client record and linked opportunities remain available above.
                 </p>
                 <button type="button" className="ghost" onClick={() => setRefreshToken((value) => value + 1)}>
                   Retry client details
@@ -832,7 +957,7 @@ export default function CustomerWorkspaceView({
               </>
             )}
           </section>
-        ) : <>
+        ) : null}
         <div className="customer-workspace-tabs" role="tablist" aria-label="Customer workspace sections">
           {TABS.map(([id, label]) => (
             <button
@@ -871,19 +996,25 @@ export default function CustomerWorkspaceView({
             onOpenQuote={onOpenQuote}
             onOpenQuoteEdit={onOpenQuoteEdit}
             onCreateRebook={onCreateRebook}
-            rebookCreationAvailable={workspace.source === "firebase"}
-            closeoutReviewAvailable={workspace.source === "firebase"}
+            rebookCreationAvailable={clientActionsAvailable}
+            closeoutReviewAvailable={clientActionsAvailable}
             onCloseoutReceipt={() => setRefreshToken((value) => value + 1)}
           />
-          <RevenueAutopilotCustomerControls
-            organizationId={organizationId}
-            customerId={customer.customerId || customer.id}
-            controls={customer.revenueAutopilotEmailControls}
-            isAdmin={isAdmin}
-            projectionStale={state.stale || state.loading}
-            projectionError={customer.revenueAutopilotEmailControlsError}
-            onRefresh={() => setRefreshToken((value) => value + 1)}
-          />
+          {!supplementalPending && !supplementalError && (
+            <LazyVisibleSection fallback="Private email controls load when this section is visible.">
+              <Suspense fallback={<p className="source-note" role="status">Loading private email controls…</p>}>
+                <RevenueAutopilotCustomerControls
+                  organizationId={organizationId}
+                  customerId={customer.customerId || customer.id}
+                  controls={customer.revenueAutopilotEmailControls}
+                  isAdmin={isAdmin}
+                  projectionStale={state.stale || state.loading}
+                  projectionError={customer.revenueAutopilotEmailControlsError}
+                  onRefresh={() => setRefreshToken((value) => value + 1)}
+                />
+              </Suspense>
+            </LazyVisibleSection>
+          )}
           <CustomerCommercialMeasures
             workspace={workspace}
             loading={state.loading}
@@ -901,8 +1032,9 @@ export default function CustomerWorkspaceView({
             <div className="customer-card-list">
               {workspace.quotes.map((quote) => {
                 const status = classifyQuoteStatus(quote.status);
-                const versions = workspace.proposalVersions.filter((version) => version.quoteId === quote.id);
-                const versionsTruncated = workspace.versionPageInfo.truncatedQuoteIds.includes(quote.id);
+                const history = histories.scopeKey === requestedScopeKey ? histories.byQuote[quote.id] : null;
+                const versions = history?.items || workspace.proposalVersions.filter((version) => version.quoteId === quote.id);
+                const versionsTruncated = history?.truncated || workspace.versionPageInfo.truncatedQuoteIds.includes(quote.id);
                 return (
                   <article key={quote.id}>
                     <div>
@@ -913,12 +1045,30 @@ export default function CustomerWorkspaceView({
                       </p>
                       <StatusChip family={status.family} label={status.label} />
                       <small>
-                        {versions.length} most recent retained version{versions.length === 1 ? "" : "s"}
+                        {history?.status === "success" || versions.length ? `${versions.length} most recent retained version${versions.length === 1 ? "" : "s"}` : "Proposal history loads when opened"}
                         {versionsTruncated ? ` shown; older versions exist beyond the ${workspace.versionPageInfo.perQuoteLimit}-version read limit` : ""}
                       </small>
-                      {versions.length > 0 && (
-                        <details className="customer-version-history">
+                      <details
+                        ref={(node) => {
+                          if (node) historyDisclosureRefs.current.set(quote.id, node);
+                          else historyDisclosureRefs.current.delete(quote.id);
+                        }}
+                        className="customer-version-history"
+                        data-history-quote-id={quote.id}
+                        onToggle={(event) => {
+                          if (openHistoriesRef.current.scopeKey !== requestedScopeKey) return;
+                          if (event.currentTarget.open) {
+                            openHistoriesRef.current.quoteIds.add(quote.id);
+                            historyLoaderRef.current?.load(quote.id);
+                          } else {
+                            openHistoriesRef.current.quoteIds.delete(quote.id);
+                          }
+                        }}
+                      >
                           <summary>Review proposal versions</summary>
+                          {history?.status === "loading" && <p role="status">Loading proposal history…</p>}
+                          {history?.status === "error" && <p role="alert">{history.error} <button type="button" className="ghost compact" onClick={() => historyLoaderRef.current?.load(quote.id)}>Retry history</button></p>}
+                          {history?.status === "success" && !versions.length && <p>No retained proposal versions.</p>}
                           <ol className="customer-version-list">
                             {versions.map((version, index) => (
                               <li key={version.id || version.versionId || `${quote.id}-${index}`}>
@@ -928,9 +1078,12 @@ export default function CustomerWorkspaceView({
                               </li>
                             ))}
                           </ol>
+                          {history?.status === "success" && versions.length >= 2 && (
+                            <Suspense fallback={<p className="source-note" role="status">Loading version comparison…</p>}>
+                              <QuoteVersionComparison versions={versions} />
+                            </Suspense>
+                          )}
                         </details>
-                      )}
-                      <QuoteVersionComparison versions={versions} />
                     </div>
                     <div className="right-actions">
                       <button
@@ -1028,7 +1181,6 @@ export default function CustomerWorkspaceView({
             ))}
           </div>
         </section>
-        </>}
         </ClientRecordDisclosure>
       </section>
     </main>

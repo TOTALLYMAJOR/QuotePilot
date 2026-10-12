@@ -22,6 +22,16 @@ const RECIPE = {
   ]
 };
 
+const DEPENDENCY_REVIEW = {
+  reviewedRecipeRevision: 4,
+  reviewedRecipeDigest: "a".repeat(64),
+  dependencyPreflightDigest: "b".repeat(64),
+  affectedMenuItems: [
+    { menuItemId: "menu-alfredo", name: "Chicken Alfredo", identityDigest: "c".repeat(64) },
+    { menuItemId: "menu-buffet", name: "Chicken Buffet", identityDigest: "d".repeat(64) }
+  ]
+};
+
 let container;
 let root;
 
@@ -44,6 +54,7 @@ function editorElement(props = {}) {
       recipe={RECIPE}
       ingredientSourceState="current"
       publishEligibility={{ allowed: true }}
+      onPreviewDependencies={async () => DEPENDENCY_REVIEW}
       onPublish={async () => ({ state: "committed" })}
       {...props}
     />
@@ -66,6 +77,13 @@ function change(element, value) {
   });
 }
 
+async function submit() {
+  await act(async () => {
+    container.querySelector('button[type="submit"]').click();
+    await Promise.resolve();
+  });
+}
+
 describe("InventoryRecipeEditor", () => {
   test("publishes an exact menu-item recipe payload without deriving cost in React", async () => {
     const onPublish = vi.fn(async () => ({
@@ -73,9 +91,11 @@ describe("InventoryRecipeEditor", () => {
       message: "Recipe v5 committed.",
       attempt: { receipt: { receiptId: "receipt-5" } }
     }));
+    const onPreviewDependencies = vi.fn(async () => DEPENDENCY_REVIEW);
     const onInteractionStateChange = vi.fn();
     mount({
       onPublish,
+      onPreviewDependencies,
       onInteractionStateChange,
       expectedCatalogRevision: 9,
       projection: {
@@ -94,9 +114,16 @@ describe("InventoryRecipeEditor", () => {
     change(yieldInput, "12.5");
     expect(container.querySelector('button[type="submit"]').disabled).toBe(false);
 
-    await act(async () => {
-      container.querySelector('button[type="submit"]').click();
-    });
+    await submit();
+    expect(onPublish).not.toHaveBeenCalled();
+    expect(onPreviewDependencies).toHaveBeenCalledOnce();
+    expect(container.querySelector("[data-recipe-dependency-review='ready']").textContent)
+      .toContain("Chicken Buffet");
+    expect(document.activeElement).toBe(container.querySelector("[data-recipe-dependency-review='ready']"));
+    expect(container.textContent).toContain("Recipe revision 4");
+    expect(container.textContent).toContain("a".repeat(64));
+
+    await submit();
 
     expect(onPublish).toHaveBeenCalledWith({
       kind: "publish_menu_recipe",
@@ -108,7 +135,8 @@ describe("InventoryRecipeEditor", () => {
       lines: [
         { lineId: "line-chicken", ingredientId: "chicken", quantity: "2", unitKind: "standard", unitId: "lb", quantityBasis: "as_purchased", usableYield: null },
         { lineId: "line-pasta", ingredientId: "pasta", quantity: "1", unitKind: "standard", unitId: "lb", quantityBasis: "as_purchased", usableYield: null }
-      ]
+      ],
+      dependencyPreflightDigest: "b".repeat(64)
     });
     const committed = container.querySelector("[data-recipe-operation-state='committed'][data-capability-state='success']");
     expect(committed.outerHTML).toContain('data-capability-state="success"');
@@ -166,10 +194,8 @@ describe("InventoryRecipeEditor", () => {
     mount({ onPublish });
     change(container.querySelector('fieldset input[inputmode="decimal"]'), "11");
 
-    await act(async () => {
-      container.querySelector('button[type="submit"]').click();
-      await Promise.resolve();
-    });
+    await submit();
+    await submit();
     expect(container.querySelector("[data-recipe-operation-state='pending']").outerHTML)
       .toContain('data-capability-state="submitting"');
 
@@ -187,7 +213,8 @@ describe("InventoryRecipeEditor", () => {
     mount({ onPublish, onReconcile });
     change(container.querySelector('fieldset input[inputmode="decimal"]'), "11");
 
-    await act(async () => container.querySelector('button[type="submit"]').click());
+    await submit();
+    await submit();
     const uncertain = container.querySelector("[data-recipe-operation-state='uncertain'][data-capability-state='uncertain']");
     expect(uncertain.outerHTML).toContain('data-capability-state="uncertain"');
     expect(uncertain.textContent).toContain("Reconcile");
@@ -228,7 +255,8 @@ describe("InventoryRecipeEditor", () => {
     const yieldInput = container.querySelector('fieldset input[inputmode="decimal"]');
     change(yieldInput, "11");
 
-    await act(async () => container.querySelector('button[type="submit"]').click());
+    await submit();
+    await submit();
     const rejected = container.querySelector("[data-recipe-operation-state='rejected']");
     expect(rejected.outerHTML).toContain('data-capability-state="error"');
     expect(yieldInput.closest("fieldset").disabled).toBe(true);
@@ -252,7 +280,8 @@ describe("InventoryRecipeEditor", () => {
     expect(onInteractionStateChange).toHaveBeenLastCalledWith({ dirty: false, busy: false, locked: false });
 
     change(yieldInput, "13");
-    await act(async () => container.querySelector('button[type="submit"]').click());
+    await submit();
+    await submit();
     expect(onPublish).toHaveBeenCalledTimes(2);
     expect(container.textContent).toContain("Corrected recipe committed");
   });
@@ -278,6 +307,55 @@ describe("InventoryRecipeEditor", () => {
       .find((button) => button.textContent.includes("Use current recipe"))?.click());
     expect(container.querySelector('fieldset input[inputmode="decimal"]').value).toBe("12");
     expect(container.querySelector("fieldset").disabled).toBe(false);
+  });
+
+  test("ignores a stale dependency response when the draft changes and keeps retry local", async () => {
+    let resolveFirst;
+    const onPreviewDependencies = vi.fn()
+      .mockImplementationOnce(() => new Promise((resolve) => { resolveFirst = resolve; }))
+      .mockRejectedValueOnce(new Error("Dependency index unavailable"))
+      .mockResolvedValueOnce(DEPENDENCY_REVIEW);
+    const onPublish = vi.fn(async () => ({ state: "committed" }));
+    mount({ onPreviewDependencies, onPublish });
+    change(container.querySelector('fieldset input[inputmode="decimal"]'), "11");
+
+    await act(async () => {
+      container.querySelector('button[type="submit"]').click();
+      await Promise.resolve();
+    });
+    change(container.querySelector('fieldset input[inputmode="decimal"]'), "12");
+    await act(async () => resolveFirst(DEPENDENCY_REVIEW));
+    expect(container.querySelector("[data-recipe-dependency-review='ready']")).toBeNull();
+    expect(onPublish).not.toHaveBeenCalled();
+
+    await submit();
+    const failed = container.querySelector("[data-recipe-dependency-review='error']");
+    expect(failed.textContent).toContain("Dependency index unavailable");
+    expect(document.activeElement).toBe(failed);
+
+    await submit();
+    expect(container.querySelector("[data-recipe-dependency-review='ready']")).not.toBeNull();
+    await submit();
+    expect(onPublish).toHaveBeenCalledOnce();
+  });
+
+  test("fails closed when server-side dependency evidence changes before publication", async () => {
+    const onPublish = vi.fn(async () => {
+      throw Object.assign(new Error("Recipe dependency evidence changed."), {
+        code: "functions/aborted",
+        inventoryDefinitive: true,
+        inventoryAttempt: { requestId: "inventory_request_dependency_stale" }
+      });
+    });
+    mount({ onPublish });
+    change(container.querySelector('fieldset input[inputmode="decimal"]'), "11");
+    await submit();
+    await submit();
+
+    const stale = container.querySelector("[data-recipe-dependency-review='stale']");
+    expect(stale.textContent).toContain("Review the affected menu items again");
+    expect(document.activeElement).toBe(stale);
+    expect(container.querySelector('button[type="submit"]').disabled).toBe(true);
   });
 
   test("shows no-recipe state and only units supplied by ingredient authority", () => {

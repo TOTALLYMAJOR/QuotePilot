@@ -5,12 +5,12 @@ import { act } from "react-dom/test-utils";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
-  getQuoteHistory: vi.fn(),
+  getEventScheduleQuotes: vi.fn(),
   ingredientExecution: vi.fn()
 }));
 
 vi.mock("../../lib/quoteStore", () => ({
-  getQuoteHistory: mocks.getQuoteHistory,
+  getEventScheduleQuotes: mocks.getEventScheduleQuotes,
   updateQuoteBookingAssignment: vi.fn(),
   updateQuoteKitchenCheckpoints: vi.fn(),
   updateQuoteProductionChecklist: vi.fn()
@@ -50,12 +50,13 @@ function quote(overrides = {}) {
 
 function contextFor({
   intentId = "review_event_schedule",
-  object = { id: QUOTE_ID, type: "opportunity" }
+  object = { id: QUOTE_ID, type: "opportunity" },
+  focus = { quoteId: QUOTE_ID }
 } = {}) {
   const handoff = createWorkspaceArrivalHandoff({
     destination: "schedule",
     object,
-    focus: { quoteId: QUOTE_ID },
+    focus,
     intentId
   });
   if (!handoff.ok) throw new Error(handoff.recovery.code);
@@ -80,10 +81,12 @@ beforeEach(() => {
   HTMLElement.prototype.scrollIntoView = vi.fn();
   window.requestAnimationFrame = (callback) => window.setTimeout(() => callback(Date.now()), 0);
   window.cancelAnimationFrame = (handle) => window.clearTimeout(handle);
-  mocks.getQuoteHistory.mockResolvedValue({
+  mocks.getEventScheduleQuotes.mockResolvedValue({
     source: "firebase",
     quotes: [quote()],
-    truncated: false
+    complete: true,
+    interval: { startDate: "2026-09-27", endDate: "2026-10-31" },
+    pageCount: 1
   });
 });
 
@@ -122,10 +125,12 @@ describe("Event Schedule exact arrival consumption", () => {
       planRead: { state: "current", sourceState: "current", projection: null },
       read: { state: "not_recorded", sourceState: "current", projection: null }
     });
-    mocks.getQuoteHistory.mockResolvedValue({
+    mocks.getEventScheduleQuotes.mockResolvedValue({
       source: "firebase",
       quotes: [quote({ activeVersionId: "revision-4" })],
-      truncated: false
+      complete: true,
+      interval: { startDate: "2026-09-27", endDate: "2026-10-31" },
+      pageCount: 1
     });
 
     act(() => {
@@ -161,10 +166,11 @@ describe("Event Schedule exact arrival consumption", () => {
     const onArrivalResolution = await renderSchedule();
     const target = container.querySelector(`[data-schedule-event-id="${QUOTE_ID}"]`);
 
-    expect(mocks.getQuoteHistory).toHaveBeenCalledWith({
+    expect(mocks.getEventScheduleQuotes).toHaveBeenCalledWith(expect.objectContaining({
       organizationId: ORGANIZATION_ID,
-      limitCount: 500
-    });
+      principalId: "",
+      pageSize: 100
+    }));
     expect(target).toBeTruthy();
     expect(document.activeElement).toBe(target);
     expect(onArrivalResolution).toHaveBeenCalledWith(expect.objectContaining({
@@ -179,11 +185,73 @@ describe("Event Schedule exact arrival consumption", () => {
     }));
   });
 
+  test("opens and focuses the exact revision-bound Production disclosure", async () => {
+    mocks.getEventScheduleQuotes.mockResolvedValue({
+      source: "firebase",
+      quotes: [quote({ activeVersionId: "revision-before" })],
+      complete: true,
+      interval: { startDate: "2026-09-27", endDate: "2026-10-31" },
+      pageCount: 1
+    });
+    const onArrivalResolution = await renderSchedule({
+      arrivalContext: contextFor({
+        intentId: "review_production_consequence",
+        object: { id: QUOTE_ID, type: "production-plan" },
+        focus: {
+          quoteId: QUOTE_ID,
+          sourceRevisionId: "revision-before",
+          proposedRevisionId: "revision-proposed"
+        }
+      })
+    });
+    const disclosure = container.querySelector('[data-commercial-consequence-target="production"]');
+    const summary = disclosure?.querySelector("summary");
+
+    expect(disclosure?.open).toBe(true);
+    expect(document.activeElement).toBe(summary);
+    expect(onArrivalResolution).toHaveBeenLastCalledWith(expect.objectContaining({
+      status: "resolved",
+      itemId: QUOTE_ID,
+      target: "production"
+    }));
+  });
+
+  test("does not substitute a different saved revision for Production", async () => {
+    mocks.getEventScheduleQuotes.mockResolvedValue({
+      source: "firebase",
+      quotes: [quote({ activeVersionId: "revision-newer" })],
+      complete: true,
+      interval: { startDate: "2026-09-27", endDate: "2026-10-31" },
+      pageCount: 1
+    });
+    const onArrivalResolution = await renderSchedule({
+      arrivalContext: contextFor({
+        intentId: "review_production_consequence",
+        object: { id: QUOTE_ID, type: "production-plan" },
+        focus: {
+          quoteId: QUOTE_ID,
+          sourceRevisionId: "revision-before",
+          proposedRevisionId: "revision-proposed"
+        }
+      })
+    });
+
+    expect(onArrivalResolution).toHaveBeenLastCalledWith(expect.objectContaining({
+      status: "recovery",
+      code: "production_revision_mismatch"
+    }));
+    expect(onArrivalResolution).not.toHaveBeenCalledWith(expect.objectContaining({
+      status: "resolved"
+    }));
+  });
+
   test("focuses an exact event found in a truncated snapshot without claiming absence or completeness", async () => {
-    mocks.getQuoteHistory.mockResolvedValue({
+    mocks.getEventScheduleQuotes.mockResolvedValue({
       source: "firebase",
       quotes: [quote()],
-      truncated: true
+      complete: false,
+      interval: { startDate: "2026-09-27", endDate: "2026-10-31" },
+      pageCount: 1
     });
     const onArrivalResolution = await renderSchedule();
 
@@ -194,10 +262,12 @@ describe("Event Schedule exact arrival consumption", () => {
   });
 
   test("recovers from a missing exact event in a truncated snapshot without focusing another event", async () => {
-    mocks.getQuoteHistory.mockResolvedValue({
+    mocks.getEventScheduleQuotes.mockResolvedValue({
       source: "firebase",
       quotes: [quote({ id: "quote-neighbor" })],
-      truncated: true
+      complete: false,
+      interval: { startDate: "2026-09-27", endDate: "2026-10-31" },
+      pageCount: 1
     });
     const onArrivalResolution = await renderSchedule();
 
@@ -215,11 +285,13 @@ describe("Event Schedule exact arrival consumption", () => {
   });
 
   test("recovers from stale schedule evidence without presenting the exact event as current", async () => {
-    mocks.getQuoteHistory.mockResolvedValue({
+    mocks.getEventScheduleQuotes.mockResolvedValue({
       source: "firebase-cache",
       quotes: [quote()],
       stale: true,
-      truncated: false
+      complete: true,
+      interval: { startDate: "2026-09-27", endDate: "2026-10-31" },
+      pageCount: 1
     });
     const onArrivalResolution = await renderSchedule();
 
@@ -234,10 +306,12 @@ describe("Event Schedule exact arrival consumption", () => {
   });
 
   test("requires complete current conflict evidence before focusing an exact conflict", async () => {
-    mocks.getQuoteHistory.mockResolvedValue({
+    mocks.getEventScheduleQuotes.mockResolvedValue({
       source: "firebase",
       quotes: [quote()],
-      truncated: true
+      complete: false,
+      interval: { startDate: "2026-09-27", endDate: "2026-10-31" },
+      pageCount: 1
     });
     const onArrivalResolution = await renderSchedule({
       arrivalContext: contextFor({

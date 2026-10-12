@@ -1215,6 +1215,8 @@ export function AdminCatalogView({
   const eventTypesLoadScopeRef = useRef("");
   const confirmedInventoryLoadScopeRef = useRef("");
   const eventMenuLoadScopeRef = useRef("");
+  const [completedEventMenuLoadScope, setCompletedEventMenuLoadScope] = useState("");
+  const [failedEventMenuLoadScope, setFailedEventMenuLoadScope] = useState("");
   const [packActionId, setPackActionId] = useState("");
   const [catalogRefreshRequired, setCatalogRefreshRequired] = useState(false);
   const [manualSetupEnabled, setManualSetupEnabled] = useState(false);
@@ -1238,8 +1240,19 @@ export function AdminCatalogView({
     ? catalogSetupDraft.changes
     : [
         ...(Array.isArray(catalogSetupDraft?.serverChanges) ? catalogSetupDraft.serverChanges : []),
-        ...(Array.isArray(catalogSetupDraft?.deviceChanges) ? catalogSetupDraft.deviceChanges : [])
-      ];
+          ...(Array.isArray(catalogSetupDraft?.deviceChanges) ? catalogSetupDraft.deviceChanges : [])
+        ];
+  const catalogSetupDraftMenuFingerprint = JSON.stringify(
+    catalogSetupDraftChanges
+      .filter((change) => ["eventTypes", "menuCategories", "menuItems"].includes(change?.collection))
+      .map((change) => [
+        change.collection,
+        change.recordId,
+        change.intent,
+        change.payload,
+        change.provenance
+      ])
+  );
   const stagedIntentFor = (collection, recordId, fallbackIntent) => (
     catalogSetupDraftChanges.some((change) => (
       change.collection === collection
@@ -1283,7 +1296,8 @@ export function AdminCatalogView({
     String(selectedEventType || ""),
     catalogRevision,
     authoritativeVersion,
-    starterPackRevision
+    starterPackRevision,
+    catalogSetupDraftMenuFingerprint
   ]);
   const hasUnsavedChanges = catalogDraftFingerprint(draft, jsonDrafts) !== savedFingerprint;
   const selectedEventTypeRecord = menuEventTypes.find((item) => item.id === selectedEventType);
@@ -1581,6 +1595,8 @@ export function AdminCatalogView({
     if (pendingCatalogEvidenceRef.current) return;
     if (!shouldInitializeView && eventMenuLoadScopeRef.current === eventMenuLoadScopeKey) return;
     eventMenuLoadScopeRef.current = eventMenuLoadScopeKey;
+    setCompletedEventMenuLoadScope("");
+    setFailedEventMenuLoadScope("");
     const eventTypeId = String(selectedEventType || "").trim();
     if (!eventTypeId) {
       setMenuCategories([]);
@@ -1606,6 +1622,7 @@ export function AdminCatalogView({
         const items = stagedMenu.items.filter((item) => item.eventTypeId === eventTypeId);
         setMenuCategories(categories);
         applyManagedMenuItems(items);
+        setCompletedEventMenuLoadScope(eventMenuLoadScopeKey);
         setSelectedCategory((current) => {
           const keepCurrent = current && categories.some((category) => category.id === current);
           if (keepCurrent) return current;
@@ -1613,6 +1630,7 @@ export function AdminCatalogView({
         });
       } catch (err) {
         if (!alive) return;
+        setFailedEventMenuLoadScope(eventMenuLoadScopeKey);
         setStatus(err?.message || "Failed to load menu categories/items.");
         pushToast(err?.message || "Failed to load menu categories/items.", "error");
       } finally {
@@ -1799,7 +1817,7 @@ export function AdminCatalogView({
   }, [embedded, open]);
 
   useEffect(() => {
-    if (!open || !embedded || typeof window === "undefined") return undefined;
+    if (!open || typeof window === "undefined") return undefined;
     const requestId = String(focusRequest?.requestId || focusRequest?.id || "").trim();
     if (!requestId || handledFocusRequestRef.current === requestId) return undefined;
     const sectionId = String(focusRequest?.sectionId || "").trim();
@@ -1819,6 +1837,124 @@ export function AdminCatalogView({
     }
 
     setActiveTab(sectionId);
+    if (sectionId === "menu" && String(focusRequest?.recordId || "").trim()) {
+      if (catalogSetupDraft?.loading) return undefined;
+      const recordId = String(focusRequest.recordId).trim();
+      const requestedEventTypeId = String(focusRequest?.eventTypeId || "").trim();
+      const requestedCategoryId = String(focusRequest?.categoryId || "").trim();
+      if (!requestedEventTypeId || !requestedCategoryId) {
+        handledFocusRequestRef.current = requestId;
+        onFocusResolution?.({
+          requestId,
+          status: "recovery",
+          result: "recovery",
+          object: { type: "menu-item", id: recordId },
+          reason: "The import receipt does not contain a complete menu location.",
+          consequence: "No different menu item was substituted, and nothing in the catalog changed.",
+          nextResolutions: ["Return to Import Studio and review the accepted receipt"]
+        });
+        return undefined;
+      }
+      if (selectedEventType !== requestedEventTypeId) {
+        setManagedEventType(requestedEventTypeId);
+        return undefined;
+      }
+      if (failedEventMenuLoadScope === eventMenuLoadScopeKey) {
+        handledFocusRequestRef.current = requestId;
+        onFocusResolution?.({
+          requestId,
+          status: "recovery",
+          result: "recovery",
+          object: { type: "menu-item", id: recordId },
+          reason: "The current menu could not be loaded for exact receipt review.",
+          consequence: "No different menu item was substituted, and nothing in the catalog changed.",
+          nextResolutions: ["Reload Library and try the exact receipt again"]
+        });
+        return undefined;
+      }
+      if (menuLoading || completedEventMenuLoadScope !== eventMenuLoadScopeKey) return undefined;
+      const exactItem = menuItems.find((item) => String(item?.id || "").trim() === recordId);
+      const stagedChange = catalogSetupDraftChanges.find((change) => (
+        String(change?.collection || "").trim() === "menuItems"
+        && String(change?.recordId || "").trim() === recordId
+      ));
+      const currentProvenance = exactItem?.importProvenance || stagedChange?.provenance;
+      const provenanceMatches = Boolean(
+        String(focusRequest?.importBatchId || "").trim()
+        && Number.isInteger(Number(focusRequest?.sourceRowNumber))
+        && Number(focusRequest.sourceRowNumber) > 0
+        && String(currentProvenance?.kind || "").trim() === "catalog_import"
+        && String(currentProvenance?.importType || "").trim() === "menuItems"
+        && String(currentProvenance?.importBatchId || "").trim() === String(focusRequest.importBatchId).trim()
+        && Number(currentProvenance?.sourceRowNumber) === Number(focusRequest.sourceRowNumber)
+        && ["csv", "pdf"].includes(String(currentProvenance?.sourceKind || "").trim())
+        && String(currentProvenance?.sourceFileName || "").trim()
+      );
+      if (
+        !exactItem
+        || String(exactItem.eventTypeId || "").trim() !== requestedEventTypeId
+        || String(exactItem.categoryId || "").trim() !== requestedCategoryId
+        || !provenanceMatches
+      ) {
+        handledFocusRequestRef.current = requestId;
+        setActiveMenuItemId("");
+        onFocusResolution?.({
+          requestId,
+          status: "recovery",
+          result: "recovery",
+          object: { type: "menu-item", id: recordId },
+          reason: "The imported menu item is not available at the location recorded by the accepted receipt.",
+          consequence: "No different menu item was substituted, and nothing in the catalog changed.",
+          nextResolutions: ["Reload Library", "Return to Import Studio and review the receipt"]
+        });
+        return undefined;
+      }
+      setSelectedCategory(requestedCategoryId);
+      setMenuSearch("");
+      if (exactItem.active === false) setShowUnavailableMenuItems(true);
+      setActiveMenuItemId(recordId);
+      let frame = null;
+      let attempt = 0;
+      const focusExactItem = () => {
+        const target = [...(dialogRef.current?.querySelectorAll("[data-menu-item-id]") || [])]
+          .find((element) => element.dataset.menuItemId === recordId)
+          ?.querySelector("button");
+        if (!target && attempt < 2) {
+          attempt += 1;
+          frame = window.requestAnimationFrame(focusExactItem);
+          return;
+        }
+        if (!target) {
+          handledFocusRequestRef.current = requestId;
+          onFocusResolution?.({
+            requestId,
+            status: "recovery",
+            result: "recovery",
+            object: { type: "menu-item", id: recordId },
+            reason: "The exact imported menu item could not be focused in the current editor.",
+            consequence: "No different menu item was substituted, and nothing in the catalog changed.",
+            nextResolutions: ["Reload Library and try the exact receipt again"]
+          });
+          return;
+        }
+        target?.focus?.({ preventScroll: true });
+        target?.scrollIntoView?.({ block: "nearest", behavior: "auto" });
+        handledFocusRequestRef.current = requestId;
+        onFocusResolution?.({
+          requestId,
+          status: "focused",
+          result: "context",
+          object: { type: "menu-item", id: recordId },
+          reason: "The exact menu item accepted by the import receipt is open.",
+          consequence: "Reviewing it changes nothing until an administrator explicitly saves or publishes.",
+          nextResolutions: ["Review the imported values", "Publish the shared catalog draft when ready"]
+        });
+      };
+      frame = window.requestAnimationFrame(focusExactItem);
+      return () => {
+        if (frame !== null) window.cancelAnimationFrame(frame);
+      };
+    }
     if (sectionId === "templates" && String(focusRequest?.recordId || "").trim()) {
       return undefined;
     }
@@ -1839,7 +1975,7 @@ export function AdminCatalogView({
       });
     });
     return () => window.cancelAnimationFrame(frame);
-  }, [dialogRef, embedded, focusRequest, onFocusResolution, open]);
+  }, [catalogSetupDraft?.loading, catalogSetupDraftChanges, completedEventMenuLoadScope, dialogRef, eventMenuLoadScopeKey, failedEventMenuLoadScope, focusRequest, menuItems, menuLoading, onFocusResolution, open, selectedEventType]);
 
   const stagedPack = draft?.settings?.starterCatalogPack || {};
   const recoveryReplacementBlocked = stagedPack.replacementBlocked === true;
@@ -1892,8 +2028,6 @@ export function AdminCatalogView({
     onActiveTabChange(resolvedActiveTab);
   }, [onActiveTabChange, open, resolvedActiveTab]);
 
-  if (!open) return null;
-
   const handleApplyStarterPack = async (pack) => {
     if (blockForNewerCatalog()) return;
     if (blockForOtherDrafts()) return;
@@ -1943,6 +2077,30 @@ export function AdminCatalogView({
       pushToast(resultError, "error");
       return;
     }
+    catalogSetupDraft.adoptServerDraft?.(result);
+    const stagedCatalog = applyCatalogSetupDraftChanges({
+      ...draft,
+      eventTypes: menuEventTypes,
+      categories: menuCategories,
+      items: menuItems
+    }, result?.draft?.changes || []);
+    const stagedJsonDrafts = buildJsonDrafts(stagedCatalog);
+    const stagedEventTypes = Array.isArray(stagedCatalog.eventTypes) ? stagedCatalog.eventTypes : [];
+    const stagedEventTypeId = resolveManagedEventTypeId(stagedEventTypes, selectedEventTypeProp);
+    const stagedCategories = (Array.isArray(stagedCatalog.categories) ? stagedCatalog.categories : [])
+      .filter((item) => item.eventTypeId === stagedEventTypeId);
+    const stagedItems = (Array.isArray(stagedCatalog.items) ? stagedCatalog.items : [])
+      .filter((item) => item.eventTypeId === stagedEventTypeId);
+    setDraft(stagedCatalog);
+    setSavedCatalogSnapshot(cloneCatalogSnapshot(stagedCatalog));
+    setJsonDrafts(stagedJsonDrafts);
+    setSavedFingerprint(catalogDraftFingerprint(stagedCatalog, stagedJsonDrafts));
+    setMenuEventTypes(stagedEventTypes);
+    setManagedEventType(stagedEventTypeId);
+    setMenuCategories(stagedCategories);
+    setSelectedCategory(stagedCategories[0]?.id || "");
+    applyManagedMenuItems(stagedItems);
+    setManualSetupEnabled(true);
     setCatalogRefreshRequired(false);
     const message = `${pack.name} setup preset added to the shared draft. Review every suggested amount before publishing.`;
     setActiveTab("menu");
@@ -2730,8 +2888,11 @@ export function AdminCatalogView({
     && (showUnavailableMenuItems || item.active !== false)
     && (!normalizedMenuSearch || `${item.name || ""} ${item.id || ""}`.toLowerCase().includes(normalizedMenuSearch))
   ));
+  const exactRequestedMenuItemId = String(focusRequest?.sectionId || "").trim() === "menu"
+    ? String(focusRequest?.recordId || "").trim()
+    : "";
   const activeMenuItem = selectedCategoryItems.find((item) => item.id === activeMenuItemId)
-    || selectedCategoryItems[0]
+    || (!exactRequestedMenuItemId ? selectedCategoryItems[0] : null)
     || null;
   const recipeContextLocked = recipeInteractionLocked;
   const recipeContextLockMessage = recipeEditorInteraction.busy
@@ -2748,6 +2909,9 @@ export function AdminCatalogView({
   useEffect(() => {
     notifyActiveInventoryMenuItem?.(open ? activeMenuItem?.id || "" : "");
   }, [activeMenuItem?.id, notifyActiveInventoryMenuItem, open]);
+
+  if (!open) return null;
+
   const selectActiveMenuItem = (itemId) => {
     if (itemId === activeMenuItem?.id) return;
     if (blockRecipeContextChange()) return;
@@ -3547,7 +3711,11 @@ export function AdminCatalogView({
                         const priceBasisLabel = priceBasis === "per_person" ? "Per guest" : priceBasis === "per_item" ? "Per item" : "Per event";
                         const isActiveItem = item.id === activeMenuItem.id;
                         return (
-                          <div className={`admin-menu-item-list-row${isActiveItem ? " is-active" : ""}`} key={item.id}>
+                          <div
+                            className={`admin-menu-item-list-row${isActiveItem ? " is-active" : ""}${isActiveItem && exactRequestedMenuItemId === item.id ? " is-import-focus" : ""}`}
+                            data-menu-item-id={item.id}
+                            key={item.id}
+                          >
                             <input
                               type="checkbox"
                               aria-label={`Select ${item.name || "menu item"}`}
@@ -3572,6 +3740,21 @@ export function AdminCatalogView({
                     </div>
 
                     <section className="admin-menu-item-editor" aria-label={`Edit ${activeMenuItem.name || "menu item"}`}>
+                      {exactRequestedMenuItemId === activeMenuItem.id && (
+                        <div className="admin-menu-import-focus-note" role="status">
+                          <strong>Imported row ready for review</strong>
+                          <span>
+                            {activeMenuItem.cost === null || activeMenuItem.cost === undefined || activeMenuItem.cost === ""
+                              ? "Recorded cost: missing."
+                              : `Recorded cost: $${Number(activeMenuItem.cost).toFixed(2)}.`}
+                            {" This is an operator-declared import value, not a recipe-derived cost."}
+                          </span>
+                          {focusRequest?.status === "staged" && recipeExtensionEnabled && activeMenuItemStaged && (
+                            <span>Publish this staged menu item before attaching a recipe.</span>
+                          )}
+                          {!recipeExtensionEnabled && <span>Recipe tooling is unavailable in this Library context.</span>}
+                        </div>
+                      )}
                       <div className="admin-menu-item-fields">
                         <MenuItemFields
                           item={activeMenuItem}
@@ -3581,7 +3764,7 @@ export function AdminCatalogView({
                           disabled={recipeContextLocked}
                         />
                       </div>
-                      {recipeExtensionEnabled && (
+                      {recipeExtensionEnabled && !activeMenuItemStaged && (
                         <InventoryRecipeEditor
                           menuItem={activeMenuItem}
                           ingredients={inventoryRecipeExtension?.ingredients}
@@ -3591,6 +3774,7 @@ export function AdminCatalogView({
                           ingredientSourceState={inventoryRecipeExtension?.ingredientSourceState}
                           recipeSourceState={activeMenuCostProjectionState}
                           publishEligibility={recipePublishEligibility}
+                          onPreviewDependencies={inventoryRecipeExtension?.previewRecipeDependencies}
                           onPublish={inventoryRecipeExtension?.publishRecipe}
                           onReconcile={inventoryRecipeExtension?.reconcileRecipe}
                           onReset={inventoryRecipeExtension?.resetRecipe}

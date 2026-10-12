@@ -1,5 +1,5 @@
 name: Release UAT Attestation
-run-name: release-uat/v4/${{ vars.RELEASE_APPROVAL_MODE || 'independent-review' }}/${{ inputs.release_sha }}/${{ inputs.target }}/${{ inputs.candidate_profile }}/${{ inputs.sms_provider }}/${{ inputs.sms_configuration_generation }}/${{ inputs.rollback_sha }}/${{ inputs.staging_id }}/${{ inputs.checklist_digest }}
+run-name: release-uat/v5/${{ vars.RELEASE_APPROVAL_MODE || 'independent-review' }}/${{ inputs.release_sha }}/${{ inputs.target }}/${{ inputs.candidate_profile }}/${{ inputs.sms_provider }}/${{ inputs.sms_configuration_generation }}/${{ inputs.rollback_sha }}/${{ inputs.staging_id }}/${{ inputs.checklist_digest }}
 
 on:
   workflow_dispatch:
@@ -51,6 +51,10 @@ on:
         type: string
       checked_item_ids:
         description: Every target-required checklist id positively passed; blocked, N/A, and partial evidence are rejected
+        required: true
+        type: string
+      role_qualification_json:
+        description: Privacy-safe hosted role evidence bound to this SHA, deployment, and feature-gate profile; local fixtures, emulators, and auth bypass are rejected
         required: true
         type: string
       confirmation:
@@ -118,6 +122,7 @@ jobs:
           STAGING_ID: ${{ inputs.staging_id }}
           CHECKLIST_DIGEST: ${{ inputs.checklist_digest }}
           CHECKED_ITEM_IDS: ${{ inputs.checked_item_ids }}
+          ROLE_QUALIFICATION_JSON: ${{ inputs.role_qualification_json }}
           UAT_CONFIRMATION: ${{ inputs.confirmation }}
         run: |
           set -euo pipefail
@@ -134,6 +139,7 @@ jobs:
             --staging-id "${STAGING_ID}" \
             --checklist-digest "${CHECKLIST_DIGEST}" \
             --checked-item-ids "${CHECKED_ITEM_IDS}" \
+            --role-qualification-json "${ROLE_QUALIFICATION_JSON}" \
             --confirmation "${UAT_CONFIRMATION}" \
             --output artifacts/release/uat-attestation.json
 
@@ -162,4 +168,5 @@ jobs:
             echo "- Owner SMS provider: ${SMS_PROVIDER}"
             echo "- Owner SMS configuration generation: ${SMS_CONFIGURATION_GENERATION}"
             echo "- Immutable staging id: ${STAGING_ID}"
+            echo "- Hosted role qualification: required v1 contract"
           } >> "${GITHUB_STEP_SUMMARY}"

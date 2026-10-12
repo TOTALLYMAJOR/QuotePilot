@@ -10,7 +10,8 @@ import {
   recordDiagnosticError,
   recordDiagnosticEvent
 } from "./lib/sessionDiagnostics";
-import "./styles.css";
+import { ensureRouteFonts } from "./lib/routeFonts";
+import "./base.css";
 
 const SystemMarketingPage = createRecoverableLazy(
   () => import("./components/SystemMarketingPage"),
@@ -95,6 +96,8 @@ const routeKind = isPublicInquiryRoute
           : isPortalRoute
             ? "customer-portal"
             : "workspace";
+
+ensureRouteFonts(routeKind);
 
 recordDiagnosticEvent({
   level: "info",

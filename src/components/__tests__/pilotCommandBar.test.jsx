@@ -3,6 +3,11 @@ import React from "react";
 import { createRoot } from "react-dom/client";
 import { act } from "react-dom/test-utils";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+
+vi.hoisted(() => {
+  vi.stubEnv("VITE_PILOT_MARGINS_ENABLED", "false");
+});
+
 import PilotCommandBar from "../PilotCommandBar";
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;

@@ -153,20 +153,20 @@ export function buildReportingArrivalResolution({
     });
   }
 
-  const hasCompletedRead = Boolean(reportingState?.loadedAtISO);
-  if (reportingState?.loading || !hasCompletedRead) {
-    return Object.freeze({ status: "pending", ...common });
-  }
-  if (reportingState?.error) {
-    return reportingArrivalRecovery({
-      ...common,
-      code: "report_snapshot_stale",
-      reason: "The exact Reporting target is available only in a retained snapshot whose refresh failed.",
-      nextResolution: "Refresh Reporting before relying on this exact view."
-    });
-  }
-
   if (reportScope === "pipeline") {
+    const hasCompletedRead = Boolean(reportingState?.loadedAtISO);
+    if (reportingState?.loading || !hasCompletedRead) {
+      return Object.freeze({ status: "pending", ...common });
+    }
+    if (reportingState?.error) {
+      return reportingArrivalRecovery({
+        ...common,
+        code: "report_snapshot_stale",
+        reason: "The exact Reporting target is available only in a retained snapshot whose refresh failed.",
+        nextResolution: "Refresh Reporting before relying on this exact view."
+      });
+    }
+
     if (reportingState?.truncated) {
       return reportingArrivalRecovery({
         ...common,
@@ -182,6 +182,7 @@ export function buildReportingArrivalResolution({
     });
   }
 
+  if (reportingState?.analyticsLoading) return Object.freeze({ status: "pending", ...common });
   const analyticsAvailable = reportingState?.analytics?.source === "firebase"
     && !reportingState?.analytics?.error;
   if (!analyticsAvailable) {
@@ -441,6 +442,7 @@ export function getReportingCapabilityState(state = {}, metrics = {}) {
   if (state.error) return "error";
   if (
     state.truncated
+    || state.analyticsLoading
     || state.analytics?.error
     || Number(metrics.quotedValueUnknown || 0) > 0
     || Number(metrics.statusUnknown || 0) > 0
@@ -556,7 +558,7 @@ export function ReportingDashboardView({
   const opportunitySummaryRef = useRef(null);
   const pipelineSummaryRef = useRef(null);
   const interactionHealthRef = useRef(null);
-  const requestGenerationRef = useRef(0);
+  const requestGenerationRef = useRef({ quotes: 0, analytics: 0 });
   const arrivalGenerationRef = useRef(0);
   const arrivalReportRef = useRef("");
   const initialNowISORef = useRef(new Date().toISOString());
@@ -589,7 +591,9 @@ export function ReportingDashboardView({
         arrivalReportSignal
       ].map((value) => String(value || "").trim()).join(":")
     : "";
-  const [state, setState] = useState({
+  const [storedState, setState] = useState({
+    organizationId,
+    analyticsLoading: Boolean(open),
     loading: Boolean(open),
     error: "",
     source: "",
@@ -599,6 +603,10 @@ export function ReportingDashboardView({
     limit: REPORTING_QUOTE_LIMIT,
     loadedAtISO: ""
   });
+  const state = storedState.organizationId === organizationId ? storedState : {
+    organizationId, loading: true, analyticsLoading: true, error: "", source: "", quotes: [], analytics: null,
+    truncated: false, limit: REPORTING_QUOTE_LIMIT, loadedAtISO: ""
+  };
   const [targetState, setTargetState] = useState({
     requestedQuoteId: "",
     loading: false,
@@ -629,43 +637,45 @@ export function ReportingDashboardView({
     onArrivalResolution
   ]);
 
-  const load = useCallback(async () => {
-    const generation = requestGenerationRef.current + 1;
-    requestGenerationRef.current = generation;
-    setState((prev) => ({ ...prev, loading: true, error: "" }));
-    try {
-      const [result, analytics] = await Promise.all([
-        getQuoteHistory({ organizationId, limitCount: REPORTING_QUOTE_LIMIT }),
-        getProductAnalyticsSummary({ organizationId, days: 30 }).catch((err) => ({
-          source: "unavailable",
-          days: 30,
-          sessionsStarted: 0,
-          quotesSaved: 0,
-          completionRate: 0,
-          funnel: [],
-          addons: [],
-          error: err?.message || "Analytics summary is unavailable."
-        }))
-      ]);
-      if (requestGenerationRef.current !== generation) return;
-      setState({
-        loading: false,
-        error: "",
-        source: result.source,
-        quotes: result.quotes,
-        analytics,
-        truncated: Boolean(result.truncated),
-        limit: REPORTING_QUOTE_LIMIT,
-        loadedAtISO: new Date().toISOString()
-      });
-    } catch (err) {
-      if (requestGenerationRef.current !== generation) return;
-      setState((prev) => ({
-        ...prev,
-        loading: false,
-        error: err?.message || "Failed to load dashboard data."
+  const load = useCallback(async (section = "all") => {
+    const loadQuotes = section !== "analytics";
+    const loadAnalytics = section !== "quotes";
+    const generations = requestGenerationRef.current;
+    const quoteGeneration = loadQuotes ? ++generations.quotes : generations.quotes;
+    const analyticsGeneration = loadAnalytics ? ++generations.analytics : generations.analytics;
+    setState((prev) => ({
+      ...(prev.organizationId === organizationId ? prev : {
+        quotes: [], analytics: null, source: "", loadedAtISO: "", truncated: false, limit: REPORTING_QUOTE_LIMIT
+      }),
+      organizationId,
+      ...(loadQuotes ? { loading: true, error: "" } : {}),
+      ...(loadAnalytics ? { analyticsLoading: true } : {})
+    }));
+    const requests = [];
+    if (loadQuotes) {
+      requests.push(getQuoteHistory({ organizationId, limitCount: REPORTING_QUOTE_LIMIT }).then((result) => {
+        if (requestGenerationRef.current.quotes !== quoteGeneration) return;
+        setState((prev) => ({ ...prev, loading: false, error: "", source: result.source,
+          quotes: result.quotes, truncated: Boolean(result.truncated), loadedAtISO: new Date().toISOString() }));
+      }).catch((err) => {
+        if (requestGenerationRef.current.quotes === quoteGeneration) {
+          setState((prev) => ({ ...prev, loading: false, error: err?.message || "Failed to load dashboard data." }));
+        }
       }));
     }
+    if (loadAnalytics) {
+      requests.push(getProductAnalyticsSummary({ organizationId, days: 30 }).then((analytics) => {
+        if (requestGenerationRef.current.analytics === analyticsGeneration) {
+          setState((prev) => ({ ...prev, analyticsLoading: false, analytics }));
+        }
+      }).catch(() => {
+        if (requestGenerationRef.current.analytics === analyticsGeneration) {
+          setState((prev) => ({ ...prev, analyticsLoading: false,
+            analytics: { ...prev.analytics, days: 30, error: "Analytics summary is unavailable." } }));
+        }
+      }));
+    }
+    await Promise.allSettled(requests);
   }, [organizationId]);
 
   useEffect(() => {
@@ -673,7 +683,8 @@ export function ReportingDashboardView({
       load();
     }
     return () => {
-      requestGenerationRef.current += 1;
+      requestGenerationRef.current.quotes += 1;
+      requestGenerationRef.current.analytics += 1;
     };
   }, [load, open]);
 
@@ -836,8 +847,8 @@ export function ReportingDashboardView({
     if (exactArrivalActive && arrivalReportScope === "opportunity") {
       setArrivalRetryToken((value) => value + 1);
     }
-    return load();
-  }, [arrivalReportScope, exactArrivalActive, load]);
+    return load(state.error ? "quotes" : "all");
+  }, [arrivalReportScope, exactArrivalActive, load, state.error]);
 
   const arrivalTargetAttributes = (reportSignal) => (
     exactArrivalActive && arrivalReportSignal === reportSignal
@@ -975,7 +986,7 @@ export function ReportingDashboardView({
         </div>
         <p className="source-note">Commercial quote states only; the paid-deposit total additionally requires Firebase-backed provider confirmation. These figures are not accounting revenue.</p>
 
-        <div className="status-strip">
+        {state.loadedAtISO && <div className="status-strip">
           <span>Draft: {metrics.draft}</span>
           <span>Sent: {metrics.sent}</span>
           <span>Viewed: {metrics.viewed}</span>
@@ -990,7 +1001,7 @@ export function ReportingDashboardView({
           <span>Recorded Payment Refunded: {metrics.paymentRefunded}</span>
           {metrics.statusUnknown > 0 && <span>Lifecycle unavailable: {metrics.statusUnknown}</span>}
           {metrics.paymentUnknown > 0 && <span>Deposit state unavailable: {metrics.paymentUnknown}</span>}
-        </div>
+        </div>}
 
         <div
           id="reporting-ambient-interaction-health"
@@ -998,7 +1009,7 @@ export function ReportingDashboardView({
           {...arrivalTargetAttributes("ambient-interaction-health")}
         >
           <Suspense fallback={<ReportingAmbientMetricsFallback loading />}>
-            <ReportingAmbientMetrics analytics={state.analytics} loading={state.loading} />
+            <ReportingAmbientMetrics analytics={state.analytics} loading={state.analyticsLoading} />
           </Suspense>
         </div>
 
@@ -1016,18 +1027,30 @@ export function ReportingDashboardView({
               <p className="source-note">Last {state.analytics?.days || 30} days · anonymous staff sessions · no customer details</p>
             </div>
             <strong>
-              {state.analytics?.error
+              {state.analyticsLoading ? "Loading wizard analytics…" : state.analytics?.error
                 ? "Not available"
                 : `${Number(state.analytics?.completionRate || 0).toFixed(1)}% saved`}
             </strong>
           </div>
+          {state.analytics?.error && (
+            <div>
+              <p className="warning-note" role="alert">
+                {state.analytics?.source
+                  ? "Analytics refresh failed. Previously loaded activity may be stale."
+                  : "Wizard analytics are unavailable."}
+              </p>
+              <button type="button" className="ghost" disabled={state.analyticsLoading} onClick={() => load("analytics")}>
+                {state.analyticsLoading ? "Retrying analytics…" : "Retry analytics"}
+              </button>
+            </div>
+          )}
           <div className="status-strip">
             {(state.analytics?.funnel || []).map((row) => (
               <span key={row.step}>Reached step {row.step}: {row.sessions}</span>
             ))}
-            {!state.analytics?.error && <span>Drafts saved: {state.analytics?.quotesSaved || 0}</span>}
+            {!state.analyticsLoading && !state.analytics?.error && <span>Drafts saved: {state.analytics?.quotesSaved || 0}</span>}
           </div>
-          {!state.loading && !state.analytics?.error && !(state.analytics?.sessionsStarted > 0) && (
+          {!state.analyticsLoading && !state.analytics?.error && !(state.analytics?.sessionsStarted > 0) && (
             <p className="source-note">No wizard sessions recorded yet. New activity will appear here.</p>
           )}
         </section>
@@ -1043,6 +1066,8 @@ export function ReportingDashboardView({
             <table>
               <thead><tr><th>Add-on</th><th>Selected</th><th>Removed</th></tr></thead>
               <tbody>
+                {state.analyticsLoading && <tr><td colSpan="3" role="status">Loading add-on activity…</td></tr>}
+                {state.analytics?.error && <tr><td colSpan="3">Add-on activity is unavailable.</td></tr>}
                 {(state.analytics?.addons || []).map((row) => (
                   <tr key={row.addonId}>
                     <td>{addonNames.get(row.addonId) || row.addonId}</td>
@@ -1050,7 +1075,7 @@ export function ReportingDashboardView({
                     <td>{row.removed}</td>
                   </tr>
                 ))}
-                {!state.loading && !(state.analytics?.addons || []).length && (
+                {!state.analyticsLoading && !state.analytics?.error && !(state.analytics?.addons || []).length && (
                   <tr><td colSpan="3">No add-on activity recorded yet.</td></tr>
                 )}
               </tbody>
@@ -1070,7 +1095,7 @@ export function ReportingDashboardView({
               </tr>
             </thead>
             <tbody>
-              {metrics.months.map((row) => (
+              {state.loadedAtISO && metrics.months.map((row) => (
                 <tr key={row.monthKey}>
                   <td>{row.label}</td>
                   <td>{row.quotes}</td>

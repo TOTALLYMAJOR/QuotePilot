@@ -1,6 +1,252 @@
 # Changelog
 
-Last updated: 2026-09-17 14:01:00 CDT
+Last updated: 2026-10-11 04:13:28 CDT
+
+All notable project changes are documented in this file.
+
+## Unreleased — Current candidate refinements
+
+- Repair local browser qualification fixtures after the public/workspace split:
+  component harnesses explicitly load workspace styles, quote smoke setup waits
+  for catalog-backed controls, and geometry uses its required Ambient profile.
+  Isolate Ambient and compatibility Vite dependency caches. Preserve native
+  phone focus and the existing phone-card/tablet-table Inventory presentation.
+  Recenter the existing mobile stepper when lazy loading reattaches its rail;
+  save-flow tests wait for committed step changes before selecting controls.
+  Workflow → Edit quote now hands focus to the matching ready, visible editor
+  after lazy reveal, with stale-request and scheduled-frame cleanup.
+  Accessibility and typography browser fixtures wait for their actual task
+  surfaces before inspecting them; their assertions are unchanged. The fresh
+  full browser suite passes 90 scenarios with 314 profile-gated skips and zero
+  retries; 6,255 unit tests pass with 100 skips.
+  The route-performance lane now uses guarded disposable Auth/Firestore data,
+  real emulator sign-in, authority-generated Inventory projections, and three
+  secret-free read-only Functions handlers. Now reports fresh usable core
+  independently of unfinished or failed sibling reads; supplemental outcomes
+  retain degradation. Inventory cold arrivals now request the tenant settings
+  needed for eligibility, and ingredient pages reserve one lookahead record
+  inside the existing 200-record read bound. Failed browser runners or retained
+  browser errors cannot leave a passing receipt or generate a budget proposal.
+  Optional path-only network/CPU diagnostics are marked diagnostic-only and
+  rejected by calibration and qualification aggregation.
+  Retain all 20 successful calibration samples and reviewed p75-plus-10%
+  ceilings. The independent same-build check passes all 12 browser scenarios,
+  but Inventory and quote-review timing medians exceed their ceilings; retain
+  the failed receipt without raising budgets. The final focus-repaired candidate
+  passes all twelve visits and every unchanged ceiling; preserve both receipts.
+  Compatibility and Ambient bundles pass, with Ambient at 4,964,850 bytes
+  against its unchanged 4,968,757-byte ceiling; homepage Lighthouse also passes.
+  Branch-wide documentation governance remains blocked on 14 pre-existing
+  timestamp debts. This is local qualification, not hosted acceptance or a release.
+
+- Replace decorative one-sided status accents in Living Opportunity and
+  Operations with restrained hairlines, full-state borders, and subtle state
+  washes while preserving exact stale, attention, conflict, and selected-day
+  meaning. Retain the attendance alert rail, calendar-event color bar, and
+  reduced-motion-safe drag landing feedback as narrowly documented design
+  exceptions. This is local source and lint evidence, not hosted or human visual
+  acceptance.
+
+- Deliver the local QuotePilot progressive-performance and operability tranche:
+  public video sources attach only after an explicit action and respect motion/
+  data preferences; public, sign-in, workspace, and quote-workflow code/styles
+  have narrower boundaries; authenticated reads publish independently, page or
+  coalesce within exact principal scope, and expose route-stage marks. The
+  workspace adds responsive navigation/field geometry, route identities,
+  focus-safe disclosures, visible disabled reasons, exact commercial-consequence
+  handoffs, bounded Inventory traces, and sequential multi-line receiving over
+  the existing singular receipt authority. Release UAT v5 now requires
+  exact-candidate hosted admin, sales, customer, and cross-tenant evidence and
+  rejects local fixtures, emulators, and auth bypass. Local focused, browser,
+  build, rules, governance, and bundle checks support these bounded claims; the
+  current Ambient bundle is 4,964,683 bytes, 4,074 below the unchanged exception
+  ceiling. Inventory physical count, tenant-wide shortage projection, inbound
+  supply authority, valuation policy, passing authenticated route qualification,
+  hosted role qualification, deployment, and human acceptance remain open.
+
+- Add administrator-only, on-disclosure ingredient traceability with stable
+  bounded movement pages, verified receipt summaries, exact event-plan
+  commitments, local partial/error recovery, and focus-preserving retry. Add
+  an exact recipe-dependency review before Library or direct fixture
+  publication; the unchanged command must carry the server-issued digest and
+  is transactionally rechecked. Focused source checks cover scope, revision,
+  cursor, reconciliation, stale-response, and recovery boundaries; a disposable
+  Firebase-emulator run passes the repaired direct recipe and cost preflights.
+  This is an unreleased local candidate: the matching Firestore index is not deployed,
+  and no hosted, production, human, accessibility, physical-count, valuation,
+  procurement, readiness, or outcome proof is claimed.
+
+- Compile production JSX through React 18 createElement/Fragment bindings to
+  reduce emitted boilerplate, preserving automatic JSX for development/tests.
+  Ambient saves 151,178 raw JavaScript bytes against the matching CI-flag
+  baseline; both Ambient and compatibility now pass unchanged bundle budgets.
+  Differential tests cover key/ref/children, defaults, and spread evaluation
+  semantics. No feature, authority, visual direction, or runtime-speed change
+  is claimed.
+
+- Skip Git-confirmed deleted files during secret/document content scans while
+  retaining deletion governance, missing-canonical-document checks, and genuine
+  read failures. Eight scanner regression cases pass locally.
+- Reduce compatibility quote-workspace dependencies to its displayed event
+  identity and guest summary. The production artifact sheds 218,954 raw
+  JavaScript bytes and passes its existing budget; 55 focused tests preserve
+  display behavior. That slice left Ambient 18,394 bytes above its unchanged
+  budget; the production JSX follow-up above resolves that excess.
+  These are local artifact and test results, not measured loading-time gains.
+
+- Harden nested diagnostic-context redaction before serialization, including
+  arrays and sparse indexes, circular values, excessive nesting, accessors, and failed serializers.
+  Preserve the existing bounded event shape without adding a dependency.
+- Defer the staff application until authentication resolves, load quote-builder
+  presentation on entry through recoverable boundaries with per-import retries, and separate public
+  assets from manually grouped workspace modules. Existing portal precedence,
+  missing-configuration recovery, tenant and role checks remain authoritative.
+  Catalog settings retain their existing workspace-wide loading gate because
+  route eligibility and feature controls depend on that authority.
+- Load Client 360 proposal histories only when opened, with at most four active
+  history requests, exact-scope disposal, and per-history retry. Private email
+  controls settle separately from histories. Publish Now and Reporting reads
+  independently while keeping unfinished, unavailable, and empty states distinct.
+  These are unreleased local source changes; timing gains, hosted behavior,
+  production, accessibility, human acceptance, and outcomes need separate proof.
+
+- Expand the dedicated local accessibility lane from a contrast-only axe check
+  to the WCAG 2.0, 2.1, and 2.2 A/AA rules supported by axe, while retaining
+  the existing desktop/mobile text-size, target-size, overflow, and font-loading
+  checks. The expanded scan found and repaired the phone-width quote step rail,
+  which is now a named, keyboard-focusable scroll region in both current and
+  legacy shells. Add `npm run test:accessibility` as the focused entry point.
+  This is local automated evidence only; assistive-technology and human testing
+  remain required.
+
+- Reconcile current state, capability, performance, product-intelligence, and
+  operator documentation to QPR-005 source head
+  `dc3cdb1a33c6f75c3cff993f4a4bd9db382bf6c6`. This records source/local
+  evidence only; QPR-007 exact-head validation, push, CI, deployment, hosted,
+  provider, production, accessibility, human, and outcome proof remain open.
+
+- Replace the remaining internal **Decision Debt** label in ordinary Staff read
+  and Living Opportunity final-count copy with **pending decision review** and
+  **final-count decision** language. Internal `decisionDebt` identities,
+  Workflow routing, server bounds, and attendance/commercial authority remain
+  unchanged. Focused language and component tests pass locally; hosted,
+  assistive-technology, human-comprehension, usage, and outcome proof remain
+  open.
+
+- Orient the Library's first-quote menu-import continuation to a reload-stable
+  Import Studio route and a deterministic, header-only canonical CSV template.
+  The template maps menu item, existing event type and menu section, customer
+  price, recorded item cost, pricing type, and active state without embedding
+  catalog IDs or sample records. Download, upload, inspection, staging, save,
+  publication, customer price, recorded cost, recipe/menu-cost evidence, and
+  physical Inventory readiness remain distinct states. Focused component/model
+  tests and local 390/768/1440 route checks prove the exact handoff, template
+  filename, page containment, unchanged local catalog, and zero axe violations.
+  The route now supplies its main landmark and heading hierarchy, labels the
+  file control, and makes the horizontally scrollable progress rail keyboard-
+  focusable. Catalog imports now bind sanitized, operator-declared source file,
+  type, batch, and row context into the exact preflight and save receipt, retain
+  it through shared-draft merges and publication lineage, and stamp it on the
+  active catalog record without treating it as business content for conflict
+  hashes. Legacy changes remain compatible, and partial or invalid provenance
+  fails before draft authority. A staged or reconciled menu-item receipt now
+  carries its first exact accepted row into the administrator Library editor,
+  clears incompatible menu filters, and focuses that record. Missing, stale,
+  cross-batch, incomplete, or non-admin requests fail closed without choosing a
+  substitute item. The review labels recorded cost—including zero—as an
+  operator-declared value rather than recipe evidence, and keeps staged items
+  outside recipe attachment until publication. Focused client/server tests
+  cover this path. A disposable connected Firebase-emulator lane now starts
+  from an empty quote history, publishes the starter foundation, discovers the
+  current menu sections during routed import, stages one receipt-bound menu
+  item into the shared draft, opens that exact item for review, publishes the
+  next catalog revision, and saves one server-authoritative quote/version that
+  retains the exact imported selection snapshot. This is local automated proof
+  only: proposal delivery, customer acceptance, booking, payment, recipe truth,
+  physical Inventory, hosted/production behavior, assistive-technology use,
+  human acceptance, activation timing, and outcomes remain open.
+
+- Add a disposable Firebase-emulator Guided Inquiry acceptance lane covering
+  cross-tenant callable denial, exact active-publication reads, paused and stale
+  submission rejection, idempotent content-free recovery, tenant/IP quotas
+  without inquiry authority writes, stale conversion rejection, and one atomic
+  quote/customer/portal/version/receipt artifact set under a concurrent
+  duplicate. This is local automated evidence only; hosted Turnstile, provider
+  notification, production data, accessibility, human acceptance, and outcome
+  proof remain open.
+
+- Align the Library's semantic and keyboard order with its phone/tablet visual
+  hierarchy: quote readiness now precedes the long catalog in the DOM, while
+  explicit desktop grid placement preserves the selected catalog-left,
+  readiness-right 67/33 composition. Component and 390/768/1440 browser checks
+  cover semantic order, focusable-control order, responsive geometry, and axe;
+  hosted, assistive-technology, human-comprehension, and outcome proof remain
+  open.
+
+- Repair the phone-width Inventory evidence table as a named, keyboard-
+  focusable contained-scroll region. The instruction remains visible wherever
+  the intentional seven-axis table can overflow, including the capped desktop
+  surface, and fixed column layout keeps the final purchase-pack column fully
+  inspectable at maximum scroll. Component-browser checks at 390/768/1440 cover
+  page containment, keyboard scrolling, complete final-column visibility, and
+  forced-colors focus width and color. Complementary route tests prove local
+  fallback cannot self-enable Inventory without tenant authority and that an
+  authenticated Firebase-emulator administrator with the tenant gate can render
+  the same seven-axis table. Hosted, production, assistive-technology, human-
+  comprehension, and outcome proof stay open.
+- Continue quote-ready administrators and sales staff from Library into the
+  existing guarded new-quote draft path. The action explicitly states that it
+  opens an unsaved draft, remains hidden from unauthorized roles, and does not
+  report navigation as quote creation, save, completion, publication, or send.
+  A disposable Firebase-emulator administrator journey now reads the
+  authoritative organization quote IDs immediately before the action, proves
+  the baseline is empty, and proves the identical empty set remains after the
+  new-quote route opens.
+  At tablet and phone widths, readiness now precedes the long Library catalog so
+  the continuation remains discoverable without changing the desktop rail.
+- Make first-quote readiness the primary Business Setup Center outcome. A
+  current published catalog that can create quotes now says so even when cost
+  evidence, starting points, or provider setup remain incomplete; those items
+  stay visible as secondary improvements, and provider connection is scoped to
+  provider-backed actions rather than presented as a quote-creation blocker.
+  Its aggregate machine-readable state now distinguishes fully `ready` setup
+  from `quote-ready` setup with nonblocking follow-up, while preserving the
+  separate quote-readiness authority and action.
+  No quote, publication, proposal send, or provider outcome is created by this
+  presentation change.
+- Bind the existing repository changelog and accepted ADR history into the
+  Proofloom control-plane manifest. Proofloom now fails validation if either
+  record authority disappears; the binding does not create a parallel log or
+  imply release, deployment, or human acceptance.
+- Repair the administrator's starter-catalog journey so the open Library editor
+  adopts the exact server-staged draft before review, while keeping pricing
+  confirmation exclusively inside the publish authority. Firebase-emulator
+  acceptance now covers starter, bypass, import, and manual setup plus the
+  current opportunity-first authoritative quote path; this is local automated
+  evidence, not hosted, production, provider, human, or outcome proof.
+- Add dependency-ordered `QPI-*` delivery packets to the canonical backlog.
+  Each packet names its catering actors, `JRN-*` journey stages, `CAP-*`
+  requirements, acceptance criteria, and required evidence classes; the journey
+  ledger links back to those packets. Stripe Connect is explicitly deferred and
+  excluded from the active dependency graph without changing its stopping-point
+  authority or ordinary payment acceptance.
+- Enforce the repository's Codebase Memory graph-first retrieval protocol with
+  a repository-local Codex hook. Supported source-read and edit routes now
+  remain blocked until the exact project, current index, and material coverage
+  checks run in order; session-start context preserves the same stop rule after
+  resume or compaction. Hook trust review and specialized-tool limitations
+  remain explicit rather than being described as universal enforcement.
+- Add a versioned layered evaluation manifest and dependency-free receipt
+  runner. Authority/integrity, AI grounding, journey continuity, recovery,
+  telemetry, operator outcomes, and human accessibility remain independent
+  dimensions; automated checks emit candidate-bound immutable local receipts,
+  while manual and higher evidence classes remain explicitly unproven.
+- Refine the staff login into one recovery-first access path: one dominant
+  sign-in action, explicit registration context, visible password guidance and
+  reveal control, and an inline email recovery state when password reset cannot
+  begin. Authentication, tenant, role, and email-verification authority remain
+  unchanged; focused component checks are local evidence only, while responsive
+  browser, hosted authentication, and human acceptance remain pending.
 
 ## Unreleased — Quote-to-Confidence local candidate
 
@@ -30,9 +276,7 @@ Last updated: 2026-09-17 14:01:00 CDT
 
 All notable project changes are documented in this file.
 
-## Unreleased — Event and Commercial activation receipt correction
-
-- Enforce the Product Intelligence System with a fail-closed structural and
+## Unreleased — Event and Commercial activation receipt correction- Enforce the Product Intelligence System with a fail-closed structural and
   change-impact validator in `lane:core`. Task plans now classify explicit
   catering-value/product-intelligence work correctly, emit the required actor,
   job, improvement, outcome/metric, guardrail, and evidence fields, and require
@@ -69,7 +313,16 @@ All notable project changes are documented in this file.
 - Keep the revision-bound Kitchen BEO handoff visible in both supported event
   workspace presentations, including its explicit local no-receipt boundary,
   and make arrival focus tolerant of environments without `scrollIntoView`.
-- Recalibrate the existing expiring graph-specific bundle exception to the
+- Move the default-off Create intake implementation behind a recoverable lazy
+  boundary, reducing the local complete-flag Workspace chunk from 461,976 to
+  432,767 bytes while preserving its draft-only authority and explicit loading
+  and recovery states. Reproduce clean committed HEAD under the same flag
+  matrix, record that it already exceeded the preceding exception, and pin the
+  Ambient aggregate exception to the exact-source 4,968,733-byte graph with a
+  4,968,757-byte ceiling
+  without widening the unchanged 445,422-byte largest-chunk ceiling. This is
+  source/local bundle evidence only; exact-PR CI, Core Web Vitals, hosted,
+  production, and human-acceptance proof remain open.- Recalibrate the existing expiring graph-specific bundle exception to the
   literal combined-candidate CI matrices: 3,652,845 / 385,181 bytes for
   compatibility and 4,947,989 / 445,422 bytes for Ambient. The ceilings add no
   future-growth allowance; exact-PR CI, Core Web Vitals, hosted timing, and

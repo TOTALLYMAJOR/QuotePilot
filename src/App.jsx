@@ -4,16 +4,12 @@ import AuthGate from "./components/AuthGate";
 import GovernedQuoteStartsTest from "./components/GovernedQuoteStarts";
 import { scheduleGovernedTemplateDestinationFocus } from "./components/governedQuoteStartFocus";
 import { RebookQuoteReviewBanner } from "./components/CustomerRebookDraftAction";
-import LiveBreakdown from "./components/LiveBreakdown";
-import ProposalComposer, {
-  buildDraftSaveBlockers,
-  QuoteEditorModeSurface
-} from "./components/ProposalComposer";
-import CatalogReadNotice from "./components/CatalogReadNotice";
-import QuoteCatalogRevisionReviewPanel from "./components/QuoteCatalogRevisionReviewPanel";
+import { buildDraftSaveBlockers } from "./components/proposalSaveReadiness";
 import { buildMarginPresentation } from "./components/marginPresentation";
 import { buildRecordedCostMarginComparison } from "./lib/decisionPacketMarginComparison";
 import ProductBrandLockup from "./components/ProductBrandLockup";
+import CommercialApplyRecoveryNotice from "./components/CommercialApplyRecoveryNotice";
+import { useCommercialApplyRecovery } from "./lib/commercialApplyRecovery";
 import WorkspaceActionFeedbackNotice, {
   buildWorkspaceActionFeedbackFollowUpIdentity,
   resolveWorkspaceActionFeedbackApprovalAction,
@@ -24,6 +20,7 @@ import WorkspaceTaskJourneyNotice from "./components/WorkspaceTaskJourneyNotice"
 import ActiveWorkspaceShell from "quotepilot-active-workspace-shell";
 import {
   createRecoverableLazy,
+  UNSAVED_QUOTE_RELOAD_PROMPT,
   RecoverableErrorBoundary
 } from "./components/RecoverableErrorBoundary";
 import {
@@ -33,10 +30,21 @@ import {
   WorkspaceLazyTool,
   WorkspaceToolSurface
 } from "./components/WorkspaceSurfaceBoundary";
-
-import { StepEvent, StepMenu, StepReview, StepServices } from "./components/WizardSteps";
-import CreateIntake from "./components/CreateIntake";
-import ChangeRequestPanel from "./components/ChangeRequestPanel";
+const loadQuoteWorkflowModule = () => import("./components/QuoteWorkflowModule");
+const quoteWorkflowComponent = (name) => (module) => ({ default: module[name] });
+const ProposalComposer = createRecoverableLazy(loadQuoteWorkflowModule, "ProposalComposer", quoteWorkflowComponent("ProposalComposer"));
+const StepEvent = createRecoverableLazy(loadQuoteWorkflowModule, "StepEvent", quoteWorkflowComponent("StepEvent"));
+const StepMenu = createRecoverableLazy(loadQuoteWorkflowModule, "StepMenu", quoteWorkflowComponent("StepMenu"));
+const StepServices = createRecoverableLazy(loadQuoteWorkflowModule, "StepServices", quoteWorkflowComponent("StepServices"));
+const StepReview = createRecoverableLazy(loadQuoteWorkflowModule, "StepReview", quoteWorkflowComponent("StepReview"));
+const LiveBreakdown = createRecoverableLazy(loadQuoteWorkflowModule, "LiveBreakdown", quoteWorkflowComponent("LiveBreakdown"));
+const QuoteCatalogRevisionReviewPanel = createRecoverableLazy(loadQuoteWorkflowModule, "QuoteCatalogRevisionReviewPanel", quoteWorkflowComponent("QuoteCatalogRevisionReviewPanel"));
+const ChangeRequestPanel = createRecoverableLazy(loadQuoteWorkflowModule, "ChangeRequestPanel", quoteWorkflowComponent("ChangeRequestPanel"));
+const CatalogReadNotice = createRecoverableLazy(loadQuoteWorkflowModule, "CatalogReadNotice", quoteWorkflowComponent("CatalogReadNotice"));
+const QuoteEditorModeSurface = createRecoverableLazy(loadQuoteWorkflowModule, "QuoteEditorModeSurface", quoteWorkflowComponent("QuoteEditorModeSurface"));
+function retryQuoteBuilder() {
+  [ProposalComposer, QuoteEditorModeSurface, StepEvent, StepMenu, StepServices, StepReview, QuoteCatalogRevisionReviewPanel].forEach((component) => component.retry());
+}
 import { parseIntentDraftWithModel } from "./lib/intentParseClient";
 import { resolveQuoteCompletionCommandPathGate } from "./lib/quoteCompletionGate";
 import { resolveDecisionPacketGate } from "./lib/decisionPacketGate";
@@ -60,7 +68,10 @@ import {
 } from "./lib/changeRequestRecordClient";
 import { useEventType } from "./context/EventTypeContext";
 import { useOrganization } from "./context/OrganizationContext";
-import { useWorkspaceNavigation } from "./context/WorkspaceNavigationContext";
+import {
+  useWorkspaceNavigation,
+  useWorkspaceReturnContextAdapter
+} from "./context/WorkspaceNavigationContext";
 import { useWorkspaceActionFeedback } from "./context/WorkspaceActionFeedbackContext";
 import { DEFAULT_FEATURE_FLAGS, STAFF_RULES } from "./data/mockCatalog";
 import { useCatalogData } from "./hooks/useCatalogData";
@@ -95,6 +106,7 @@ import { setActiveOrganizationId } from "./lib/organizationService";
 import { requestPasswordReset } from "./lib/authClient";
 import { firebaseReady } from "./lib/firebase";
 import { isCatalogPricingConfirmationCurrent } from "./lib/catalogPricingConfirmation";
+import { resolveImportStudioRouteIntent } from "./lib/importWorkbenchModel";
 import { calculateQuote, currency } from "./lib/quoteCalculator";
 import { buildUpsellRecommendations } from "./lib/recommendations";
 import {
@@ -146,13 +158,20 @@ import {
   WORKSPACE_PATHS,
   WORKSPACE_ROUTE_IDS
 } from "./lib/workspaceRoutes";
+import { beginRouteMeasurement, routePerformanceId } from "./lib/routePerformance";
 import {
   createWorkspaceArrivalHandoff,
   parseWorkspaceArrivalHandoff
 } from "./lib/workspaceArrivalContract";
 import {
+  createCommercialConsequenceHandoff,
+  isCommercialConsequenceArrival
+} from "./lib/commercialConsequenceNavigation";
+import { restoreWorkspaceReturnViewport } from "./lib/workspaceReturnContext";
+import {
   clearWorkspaceTaskJourney,
   createWorkspaceTaskJourney,
+  isWorkspaceTaskJourneyFresh,
   readWorkspaceTaskJourney,
   transitionWorkspaceTaskContext,
   transitionWorkspaceTaskOutcome,
@@ -210,6 +229,10 @@ const AdminCatalogView = createRecoverableLazy(
 const CustomerPortalView = createRecoverableLazy(
   () => import("quotepilot-active-customer-portal"),
   "CustomerPortalView"
+);
+const CreateIntake = createRecoverableLazy(
+  () => import("./components/CreateIntake"),
+  "CreateIntake"
 );
 const CommandCenterHome = AMBIENT_UI_ENABLED
   ? null
@@ -943,6 +966,35 @@ function ambientClientArrivalInput(target = {}) {
   };
 }
 
+const IMPORTED_MENU_ITEM_REVIEW_TTL_MS = 30 * 60 * 1000;
+
+function importedMenuItemReviewArrivalInput(target = {}) {
+  const recordId = String(target?.recordId || "").trim();
+  return {
+    destination: "library",
+    object: { id: recordId, type: "menu-item" },
+    focus: {
+      sectionId: "menu",
+      recordId,
+      eventTypeId: String(target?.eventTypeId || "").trim(),
+      categoryId: String(target?.categoryId || "").trim(),
+      importBatchId: String(target?.importBatchId || "").trim(),
+      sourceRowNumber: Number(target?.sourceRowNumber),
+      requestId: String(target?.requestId || "").trim()
+    },
+    intentId: "review_imported_menu_item"
+  };
+}
+
+function workspaceTaskJourneyIsRestorable(journey, principal) {
+  if (!workspaceTaskJourneyBelongsToPrincipal(journey, principal)) return false;
+  if (journey?.intentId !== "review_imported_menu_item") return true;
+  return isWorkspaceTaskJourneyFresh(journey, {
+    nowISO: new Date().toISOString(),
+    ttlMs: IMPORTED_MENU_ITEM_REVIEW_TTL_MS
+  });
+}
+
 function ambientTaskActionId(target = {}, options = {}) {
   return String(
     target?.actionId
@@ -1222,7 +1274,7 @@ export default function App({
     if (!AMBIENT_UI_ENABLED) return null;
     const stored = readWorkspaceTaskJourney(authSession.organizationId);
     const principal = workspaceTaskPrincipal(authSession);
-    return stored.ok && workspaceTaskJourneyBelongsToPrincipal(stored.journey, principal)
+    return stored.ok && workspaceTaskJourneyIsRestorable(stored.journey, principal)
       ? stored.journey
       : null;
   });
@@ -1236,7 +1288,7 @@ export default function App({
   }, []);
   const activeWorkspaceTaskJourney = workspaceTaskJourney?.organizationId
     === String(authSession.organizationId || "").trim()
-    && workspaceTaskJourneyBelongsToPrincipal(workspaceTaskJourney, activeWorkspaceTaskPrincipal)
+    && workspaceTaskJourneyIsRestorable(workspaceTaskJourney, activeWorkspaceTaskPrincipal)
     ? workspaceTaskJourney
     : null;
   const [catalogRouteInteraction, setCatalogRouteInteraction] = useState(EMPTY_LIBRARY_INTERACTION);
@@ -1282,7 +1334,15 @@ export default function App({
         workspaceArrivalContext.focus?.reportScope,
         workspaceArrivalContext.focus?.reportSignal,
         workspaceArrivalContext.focus?.sectionId,
-        workspaceArrivalContext.focus?.recordId
+        workspaceArrivalContext.focus?.recordId,
+        workspaceArrivalContext.focus?.eventTypeId,
+        workspaceArrivalContext.focus?.categoryId,
+        workspaceArrivalContext.focus?.importBatchId,
+        workspaceArrivalContext.focus?.sourceRowNumber,
+        workspaceArrivalContext.focus?.sourceRevisionId,
+        workspaceArrivalContext.focus?.proposedRevisionId,
+        workspaceArrivalContext.focus?.ingredientId,
+        workspaceArrivalContext.focus?.baseUnitId
       ]) : JSON.stringify([
         "recovery",
         browserLocation.pathname,
@@ -1309,18 +1369,27 @@ export default function App({
     if (!workspaceArrivalKey || !resolution || typeof resolution !== "object") return;
     setWorkspaceArrivalResolution({ ...resolution, arrivalKey: workspaceArrivalKey });
   }, [workspaceArrivalKey]);
+  const previousWorkspaceTaskOrganizationRef = useRef(
+    String(authSession.organizationId || "").trim()
+  );
   useEffect(() => {
     if (!AMBIENT_UI_ENABLED) return;
+    const currentOrganizationId = String(authSession.organizationId || "").trim();
+    const previousOrganizationId = previousWorkspaceTaskOrganizationRef.current;
+    if (previousOrganizationId && previousOrganizationId !== currentOrganizationId) {
+      clearWorkspaceTaskJourney(previousOrganizationId);
+    }
+    previousWorkspaceTaskOrganizationRef.current = currentOrganizationId;
     const stored = readWorkspaceTaskJourney(authSession.organizationId);
     if (
       stored.ok
       && stored.journey
-      && !workspaceTaskJourneyBelongsToPrincipal(stored.journey, activeWorkspaceTaskPrincipal)
+      && !workspaceTaskJourneyIsRestorable(stored.journey, activeWorkspaceTaskPrincipal)
     ) {
       clearWorkspaceTaskJourney(authSession.organizationId);
     }
     setWorkspaceTaskJourney(
-      stored.ok && workspaceTaskJourneyBelongsToPrincipal(stored.journey, activeWorkspaceTaskPrincipal)
+      stored.ok && workspaceTaskJourneyIsRestorable(stored.journey, activeWorkspaceTaskPrincipal)
         ? stored.journey
         : null
     );
@@ -1595,7 +1664,10 @@ export default function App({
     });
   }, [navigateAmbientTaskHandoff]);
   const wizardRef = useRef(null);
+  const quoteEditFocusFrameRef = useRef(0);
+  const [quoteEditFocusRequest, setQuoteEditFocusRequest] = useState(null);
   const stepperRef = useRef(null);
+  const stepperCenterFrameRef = useRef(0);
   const mobilePricingToggleRef = useRef(null);
   const historyTriggerRef = useRef(null);
   const workflowTriggerRef = useRef(null);
@@ -1621,6 +1693,8 @@ export default function App({
   const [portalKey, setPortalKey] = useState(() => readPortalKeyFromUrl());
   const [portalMode, setPortalMode] = useState(Boolean(portalKey));
   const [paymentReturn] = useState(() => readPaymentReturnFromUrl());
+  const [adminOpen, setAdminOpen] = useState(false);
+  const [importStudioOpen, setImportStudioOpen] = useState(false);
   const lastWorkspaceLocationRef = useRef(browserRoute.surface === "workspace" ? {
     destination: `${browserLocation.pathname}${browserLocation.search}${browserLocation.hash}`,
     state: browserLocation.state
@@ -1632,13 +1706,26 @@ export default function App({
     && authSession.platformAdmin
     && !String(authSession.organizationId || "").trim()
   );
-  const catalogEnabled = authSession.isStaff
+  const catalogReadRequired = adminOpen
+    || importStudioOpen
+    || [
+      WORKSPACE_ROUTE_IDS.QUOTE_NEW,
+      WORKSPACE_ROUTE_IDS.QUOTE_EDIT,
+      WORKSPACE_ROUTE_IDS.QUOTE_DETAIL,
+      WORKSPACE_ROUTE_IDS.CATALOG,
+      WORKSPACE_ROUTE_IDS.INVENTORY,
+      WORKSPACE_ROUTE_IDS.IMPORTS
+    ].includes(browserRoute.routeId)
+    || (!CUSTOMER_CENTERED_WORKSPACE_ENABLED && browserRoute.routeId === WORKSPACE_ROUTE_IDS.HOME);
+  const catalogEnabled = catalogReadRequired
+    && authSession.isStaff
     && tenantContext.ready
     && !isUnscopedPlatformOperator
     && (!tenantContext.requiresTenant || authSession.organizationId === tenantContext.organizationId);
   const catalog = useCatalogData({
     enabled: catalogEnabled,
-    organizationId: authSession.organizationId
+    organizationId: authSession.organizationId,
+    principalId: authSession.user?.uid || ""
   });
   const hasConfiguredPackage = catalog.packages.some((item) => {
     const name = String(item?.name || "").trim();
@@ -1683,38 +1770,44 @@ export default function App({
     setDynamicMenuRetryToken((token) => token + 1);
   }, [catalog.acceptCatalogMutation]);
 
+  const centerCurrentStep = useCallback(() => {
+    if (typeof window === "undefined" || typeof window.matchMedia !== "function") return;
+    if (!window.matchMedia("(max-width: 640px)").matches) return;
+    window.cancelAnimationFrame(stepperCenterFrameRef.current);
+    stepperCenterFrameRef.current = window.requestAnimationFrame(() => {
+      const stepper = stepperRef.current;
+      const currentStep = stepper?.querySelector('[aria-current="step"]');
+      if (!stepper || !currentStep) return;
+      const railRect = stepper.getBoundingClientRect();
+      const stepRect = currentStep.getBoundingClientRect();
+      stepper.scrollTo({
+        left: Math.max(
+          0,
+          stepper.scrollLeft
+            + (stepRect.left - railRect.left)
+            - ((railRect.width - stepRect.width) / 2)
+        ),
+        behavior: "auto"
+      });
+    });
+  }, []);
+
+  const attachStepperRef = useCallback((element) => {
+    stepperRef.current = element;
+    // A newly loaded step can reveal this rail after the parent effect ran.
+    if (element) centerCurrentStep();
+  }, [centerCurrentStep]);
+
   useEffect(() => {
     setMobilePricingOpen(false);
     if (typeof window === "undefined" || typeof window.matchMedia !== "function") return undefined;
-    let frame = 0;
-    const centerCurrentStep = () => {
-      if (!window.matchMedia("(max-width: 640px)").matches) return;
-      window.cancelAnimationFrame(frame);
-      frame = window.requestAnimationFrame(() => {
-        const stepper = stepperRef.current;
-        const currentStep = stepper?.querySelector('[aria-current="step"]');
-        if (!stepper || !currentStep) return;
-        const railRect = stepper.getBoundingClientRect();
-        const stepRect = currentStep.getBoundingClientRect();
-        stepper.scrollTo({
-          left: Math.max(
-            0,
-            stepper.scrollLeft
-              + (stepRect.left - railRect.left)
-              - ((railRect.width - stepRect.width) / 2)
-          ),
-          behavior: "auto"
-        });
-      });
-    };
-
     centerCurrentStep();
     window.addEventListener("resize", centerCurrentStep);
     return () => {
-      window.cancelAnimationFrame(frame);
+      window.cancelAnimationFrame(stepperCenterFrameRef.current);
       window.removeEventListener("resize", centerCurrentStep);
     };
-  }, [step]);
+  }, [step, centerCurrentStep]);
 
   useEffect(() => {
     if (!mobilePricingOpen || typeof window === "undefined") return undefined;
@@ -1783,17 +1876,32 @@ export default function App({
     };
   }, [mobilePricingOpen]);
 
-  const [adminOpen, setAdminOpen] = useState(false);
   const [adminInitialTab, setAdminInitialTab] = useState("");
+  const [catalogFocusRequest, setCatalogFocusRequest] = useState(null);
   const [scheduleOpen, setScheduleOpen] = useState(false);
   const [integrationsOpen, setIntegrationsOpen] = useState(false);
-  const [importStudioOpen, setImportStudioOpen] = useState(false);
   const [skipCatalogSetup, setSkipCatalogSetup] = useState(false);
   const [diagnosticsOpen, setDiagnosticsOpen] = useState(false);
   const [historyTarget, setHistoryTarget] = useState({ quoteId: "", reason: "" });
   const [dashboardOpen, setDashboardOpen] = useState(false);
   const [compareOpen, setCompareOpen] = useState(false);
   const [openHeaderMenu, setOpenHeaderMenu] = useState("");
+  useEffect(() => {
+    setCatalogFocusRequest(null);
+  }, [authSession.organizationId, authSession.user?.uid]);
+  useEffect(() => {
+    if (
+      workspaceArrivalContext?.destination !== "library"
+      || workspaceArrivalContext?.object?.type !== "menu-item"
+      || workspaceArrivalContext?.intentId !== "review_imported_menu_item"
+      || !workspaceTaskJourneyMatchesArrival(activeWorkspaceTaskJourney, workspaceArrivalContext)
+    ) return;
+    setCatalogFocusRequest({ ...workspaceArrivalContext.focus });
+  }, [
+    activeWorkspaceTaskJourney?.startedAtISO,
+    workspaceArrivalContext,
+    workspaceArrivalKey
+  ]);
   const [workspaceSoundsOn, setWorkspaceSoundsOn] = useState(() => areWorkspaceSoundsEnabled());
   const toggleWorkspaceSounds = useCallback(() => {
     setWorkspaceSoundsOn((current) => {
@@ -1813,6 +1921,10 @@ export default function App({
     && browserRoute.routeId === WORKSPACE_ROUTE_IDS.HOME
     ? WORKSPACE_ROUTE_IDS.QUOTE_NEW
     : browserRoute.routeId;
+  useEffect(() => {
+    if (!routePerformanceId(resolvedWorkspaceRouteId)) return;
+    beginRouteMeasurement(resolvedWorkspaceRouteId);
+  }, [resolvedWorkspaceRouteId]);
   const historyOpen = [WORKSPACE_ROUTE_IDS.QUOTE_LIST, WORKSPACE_ROUTE_IDS.QUOTE_DETAIL]
     .includes(resolvedWorkspaceRouteId);
   const quoteAdministrationArrival = workspaceArrivalContext?.surfaceId === "quote-administration"
@@ -1847,6 +1959,9 @@ export default function App({
   const reportingRouteOpen = shellRouteOpen(WORKSPACE_ROUTE_IDS.REPORTING);
   const integrationsRouteOpen = shellRouteOpen(WORKSPACE_ROUTE_IDS.INTEGRATIONS);
   const importsRouteOpen = shellRouteOpen(WORKSPACE_ROUTE_IDS.IMPORTS);
+  const importRouteIntent = resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.IMPORTS
+    ? resolveImportStudioRouteIntent(browserLocation.search)
+    : resolveImportStudioRouteIntent();
   const catalogRouteOpen = shellRouteOpen(WORKSPACE_ROUTE_IDS.CATALOG);
   const staffRouteOpen = shellRouteOpen(WORKSPACE_ROUTE_IDS.STAFF);
   const inventoryRouteOpen = shellRouteOpen(WORKSPACE_ROUTE_IDS.INVENTORY);
@@ -3003,6 +3118,177 @@ export default function App({
     isEditingQuote,
     proposedMargin
   ]);
+  useEffect(() => {
+    setQuoteEditFocusRequest((request) => (
+      request && request.quoteId !== quoteEditRouteId ? null : request
+    ));
+  }, [quoteEditRouteId]);
+  const attachWizardRef = useCallback((element) => {
+    window.cancelAnimationFrame(quoteEditFocusFrameRef.current);
+    quoteEditFocusFrameRef.current = 0;
+    wizardRef.current = element;
+    if (
+      !element
+      || !quoteBuilderActive
+      || !quoteEditReady
+      || quoteEditFocusRequest?.quoteId !== quoteEditRouteId
+    ) return;
+    // A lazy step can reveal after the edit route commits. Focus that reveal,
+    // not the hidden editor left behind while the quote is being hydrated.
+    quoteEditFocusFrameRef.current = window.requestAnimationFrame(() => {
+      quoteEditFocusFrameRef.current = 0;
+      if (
+        wizardRef.current !== element
+        || !element.isConnected
+        || element.hidden
+        || element.closest("[inert]")
+        || !element.getClientRects().length
+      ) return;
+      const exactField = quoteEditFocusRequest.focusField
+        ? element.querySelector(`[data-ambient-field="${quoteEditFocusRequest.focusField}"]`)
+        : null;
+      const target = exactField || element;
+      element.scrollIntoView({ behavior: "smooth", block: "start" });
+      target.focus({ preventScroll: true });
+      exactField?.scrollIntoView({ behavior: "smooth", block: "center" });
+      if (document.activeElement === target) {
+        setQuoteEditFocusRequest((request) => (
+          request === quoteEditFocusRequest ? null : request
+        ));
+      }
+    });
+  }, [quoteBuilderActive, quoteEditFocusRequest, quoteEditReady, quoteEditRouteId]);
+  const commercialReturnCancelRef = useRef(null);
+  const captureCommercialConsequenceOrigin = useCallback((hint = {}) => ({
+    routeId: WORKSPACE_ROUTE_IDS.QUOTE_EDIT,
+    structured: {},
+    transient: {},
+    disclosureIds: [],
+    scrollY: typeof window === "undefined" ? 0 : window.scrollY,
+    focus: hint.focus || null
+  }), []);
+  const restoreCommercialConsequenceOrigin = useCallback((view) => {
+    commercialReturnCancelRef.current?.();
+    return new Promise((resolve) => {
+      let active = true;
+      let frame = 0;
+      let attempt = 0;
+      let cancelViewport = null;
+      const finish = (status) => {
+        if (!active) return;
+        active = false;
+        resolve({ status });
+      };
+      const cancel = () => {
+        if (frame) window.cancelAnimationFrame(frame);
+        cancelViewport?.();
+        finish("cancelled");
+      };
+      commercialReturnCancelRef.current = cancel;
+      const restore = () => {
+        if (!active) return;
+        const focus = view?.focus || {};
+        const exactQuoteId = String(editingQuote.id || "").trim();
+        const exactControl = focus.kind === "commercial-consequence"
+          && focus.objectId === exactQuoteId
+          && String(focus.controlId || "").trim()
+          ? document.getElementById(focus.controlId)
+          : null;
+        if (!exactControl && attempt < 60) {
+          attempt += 1;
+          frame = window.requestAnimationFrame(restore);
+          return;
+        }
+        const fallback = document.getElementById("commercial-change-impact-title")
+          || wizardRef.current;
+        cancelViewport = restoreWorkspaceReturnViewport({
+          focusTarget: exactControl || fallback,
+          scrollY: exactControl ? view?.scrollY : 0
+        });
+        finish(exactControl ? "restored" : "recovery");
+      };
+      frame = window.requestAnimationFrame(restore);
+    });
+  }, [editingQuote.id]);
+  useWorkspaceReturnContextAdapter({
+    routeId: WORKSPACE_ROUTE_IDS.QUOTE_EDIT,
+    active: isEditingQuote,
+    capture: captureCommercialConsequenceOrigin,
+    restore: restoreCommercialConsequenceOrigin
+  });
+  useEffect(() => () => commercialReturnCancelRef.current?.(), []);
+
+  const openCommercialConsequence = useCallback((target = {}) => {
+    if (!AMBIENT_UI_ENABLED || !isEditingQuote) {
+      pushToast("The exact affected-artifact destination is unavailable. Your commercial review remains open.", "warning");
+      return { status: "recovery" };
+    }
+    if (target.kind === "inventory_ingredient" && !inventoryWorkspaceEnabled) {
+      pushToast("Inventory is unavailable to this tenant or role. The ingredient consequence remains unresolved.", "warning");
+      return { status: "recovery" };
+    }
+    if (target.kind === "production_plan" && !eventScheduleEnabled) {
+      pushToast("Operations is unavailable. The Production consequence remains unresolved.", "warning");
+      return { status: "recovery" };
+    }
+    if (target.kind === "staffing_requirement" && !OPERATIONAL_STAFFING_UI_ENABLED) {
+      pushToast("Operational Staffing is unavailable. The staffing consequence remains unresolved.", "warning");
+      return { status: "recovery" };
+    }
+    const handoff = createCommercialConsequenceHandoff(target, {
+      expectedQuoteId: editingQuote.id
+    });
+    if (!handoff.ok) {
+      pushToast(handoff.recovery?.reason || "The exact affected artifact could not be opened.", "warning");
+      return { status: "recovery", ...handoff.recovery };
+    }
+    const navigationResult = navigateWorkspace(handoff.navigation.path, {
+      state: handoff.navigation.state,
+      preserveReturnContext: true,
+      returnContextSurfaceId: "commercial-consequence",
+      returnContextHint: { focus: handoff.returnFocus }
+    });
+    if (["blocked", "guarded"].includes(navigationResult?.status)) {
+      return navigationResult;
+    }
+    return { status: "pending", contract: handoff.contract };
+  }, [
+    editingQuote.id,
+    eventScheduleEnabled,
+    inventoryWorkspaceEnabled,
+    isEditingQuote,
+    navigateWorkspace,
+    pushToast
+  ]);
+  const commercialApplyRecovery = useCommercialApplyRecovery({
+    organizationId: authSession.organizationId || "",
+    principalId: authSession.user?.uid || "",
+    quoteId: isEditingQuote ? editingQuote.id : "",
+    ready: !authSession.loading && tenantContext.ready
+  });
+  useEffect(() => {
+    if (!commercialApplyRecovery.restored || !commercialApplyRecovery.pending) return undefined;
+    const identity = commercialApplyRecovery.pending;
+    if (isEditingQuote) setChangeImpactPreview((current) => ({
+      ...current, requested: true, simulationReceiptId: identity.simulationReceiptId,
+      authorizationReceiptId: identity.authorizationReceiptId, applyRequestId: identity.applyRequestId,
+      mutationState: "uncertain", mutationKind: "apply",
+      mutationMessage: "The previous apply request was restored. Its exact server outcome must be checked before another edit."
+    }));
+    const reconcile = () => { void handleReconcileCommercialChangeApplyOutcome(); };
+    if (typeof navigator === "undefined" || navigator.onLine !== false) reconcile();
+  }, [commercialApplyRecovery.pending?.applyRequestId, commercialApplyRecovery.restored, authSession.organizationId, authSession.user?.uid, editingQuote.id]);
+  useEffect(() => {
+    if (!commercialApplyRecovery.pending) return undefined;
+    const reconcile = () => {
+      if (commercialApplyRecovery.restored
+        || (changeImpactPreview.mutationState === "uncertain" && changeImpactPreview.mutationKind === "apply")) {
+        void handleReconcileCommercialChangeApplyOutcome();
+      }
+    };
+    window.addEventListener("online", reconcile);
+    return () => window.removeEventListener("online", reconcile);
+  }, [commercialApplyRecovery.pending?.applyRequestId, commercialApplyRecovery.restored, changeImpactPreview.mutationState, changeImpactPreview.mutationKind, authSession.organizationId, authSession.user?.uid, editingQuote.id]);
   const inventoryRecipeExtension = useInventoryRecipeExtension({
     active: adminOpen || catalogRouteOpen || catalogModalOpen || isEditingQuote,
     organizationId: authSession.organizationId,
@@ -4048,6 +4334,10 @@ export default function App({
     workbenchRequest = null
   } = {}) => {
     if (!isEditingQuote || !editingQuote.id) return;
+    if (commercialApplyRecovery.blocked) {
+      if (commercialApplyRecovery.pending) await handleReconcileCommercialChangeApplyOutcome();
+      return;
+    }
     const formKey = JSON.stringify(candidateForm);
     const suppliedWorkbenchRequest = normalizeLivingTwinProjectionRequest(
       workbenchRequest,
@@ -4463,11 +4753,17 @@ export default function App({
   };
 
   const handleReconcileCommercialChangeApplyOutcome = async () => {
-    if (
-      !editingQuote.id
-      || !changeImpactPreview.applyRequestId
-      || !changeImpactPreview.simulationReceiptId
-    ) return;
+    if (commercialApplyRecovery.busy) return;
+    if (!isEditingQuote) {
+      try {
+        const { reconcileCommercialQuoteChangeApplyOutcome } = await import("./lib/commercialChangeAuthorityClient");
+        if (commercialApplyRecovery.isCurrent()) await commercialApplyRecovery.reconcile(reconcileCommercialQuoteChangeApplyOutcome);
+      } catch (error) {
+        if (commercialApplyRecovery.isCurrent()) recordDiagnosticError(error, { surface: "commercial-apply-recovery", action: "reconcile-retained-request" });
+      }
+      return;
+    }
+    if (!editingQuote.id) return;
     setChangeImpactPreview((current) => ({
       ...current,
       error: "",
@@ -4479,15 +4775,8 @@ export default function App({
       const { reconcileCommercialQuoteChangeApplyOutcome } = await import(
         "./lib/commercialChangeAuthorityClient"
       );
-      const result = await reconcileCommercialQuoteChangeApplyOutcome({
-        organizationId: authSession.organizationId || "",
-        quoteId: editingQuote.id,
-        simulationReceiptId: changeImpactPreview.simulationReceiptId,
-        authorizationReceiptId: changeImpactPreview.authorizationReceiptId,
-        applyRequestId: changeImpactPreview.applyRequestId,
-        expectedBaseRevisionId:
-          changeImpactPreview.model?.identity?.beforeRevisionId || editingQuote.activeVersionId
-      });
+      const result = await commercialApplyRecovery.reconcile(reconcileCommercialQuoteChangeApplyOutcome);
+      if (!result || !commercialApplyRecovery.isCurrent()) return;
       if (result.outcomeReceipt.state === "committed") {
         setQuoteDirty(false);
         setSubmitState({
@@ -4502,9 +4791,10 @@ export default function App({
           appliedQuote: {
             quoteId: editingQuote.id,
             quoteNumber: editingQuote.quoteNumber || editingQuote.id,
-            previousRevisionId: changeImpactPreview.model?.identity?.beforeRevisionId || editingQuote.activeVersionId,
+            previousRevisionId: result.outcomeReceipt.baseRevisionId,
             activeVersionId: result.outcomeReceipt.newRevisionId || "",
-            latestVersionNumber: Number(editingQuote.commercialAmendment?.versionNumber || 0) + 1,
+            latestVersionNumber: current.appliedQuote?.activeVersionId === result.outcomeReceipt.newRevisionId
+              ? current.appliedQuote.latestVersionNumber : undefined,
             status: "draft"
           },
           mutationState: "receipt",
@@ -4531,9 +4821,11 @@ export default function App({
           : "The server proved this request did not commit and permanently fenced it. Start a fresh simulation before applying again."
       }));
     } catch (error) {
+      if (!commercialApplyRecovery.isCurrent()) return;
       const { isDefinitiveCommercialChangeError } = await import(
         "./lib/commercialChangeAuthorityClient"
       );
+      if (!commercialApplyRecovery.isCurrent()) return;
       const definitive = isDefinitiveCommercialChangeError(error);
       recordDiagnosticError(error, {
         surface: "quote-builder",
@@ -4543,16 +4835,17 @@ export default function App({
       setChangeImpactPreview((current) => ({
         ...current,
         error: error?.message || "The exact commercial change apply outcome could not be reconciled.",
-        mutationState: definitive ? "error" : "uncertain",
+        mutationState: "uncertain",
         mutationKind: "apply",
         mutationMessage: definitive
-          ? "The outcome request was definitively rejected. Recover from the authoritative saved quote before starting a new simulation."
+          ? "The outcome request was rejected. The original apply identity is retained; retry its exact outcome before starting a new simulation."
           : "The outcome lookup is still uncertain. Retry this same apply request identity; do not submit the quote edit again."
       }));
     }
   };
 
   const handleRecoverCommercialChangeApply = () => {
+    if (commercialApplyRecovery.blocked || changeImpactPreview.applyOutcome?.state !== "not_committed") return;
     if (changeImpactPreview.applyOutcome?.sourceChanged) {
       setHistoryTarget({ quoteId: editingQuote.id, reason: "updated" });
       navigateWorkspace(buildQuotePath(editingQuote.id));
@@ -4574,6 +4867,10 @@ export default function App({
   };
 
   const handleApplyCommercialChange = async () => {
+    if (commercialApplyRecovery.blocked) {
+      if (commercialApplyRecovery.pending) await handleReconcileCommercialChangeApplyOutcome();
+      return;
+    }
     const requiresAuthorization = changeImpactPreview.authorityState === "enforced"
       && changeImpactPreview.authorizationRequired;
     if (
@@ -4585,14 +4882,10 @@ export default function App({
       return;
     }
     const {
-      buildCommercialChangeRequestId,
       isDefinitiveCommercialChangeError
     } = await import("./lib/commercialChangeAuthorityClient");
-    const applyRequestId = changeImpactPreview.applyRequestId
-      || buildCommercialChangeRequestId("apply");
     setChangeImpactPreview((current) => ({
       ...current,
-      applyRequestId,
       error: "",
       mutationState: "applying",
       mutationKind: "apply",
@@ -4607,16 +4900,20 @@ export default function App({
           authorizationReceiptId: requiresAuthorization
             ? changeImpactPreview.authorizationReceiptId
             : "",
-          applyRequestId
+          applyRequestId: ""
         },
         propagateError: true,
         navigateAfterSave: false
       });
-      if (!result) return;
+      if (!commercialApplyRecovery.isCurrent()) return;
+      if (!result) {
+        await handleReconcileCommercialChangeApplyOutcome();
+        return;
+      }
       setChangeImpactPreview((current) => ({
         ...current,
         applyResult: result.commercialChange,
-        applyOutcome: null,
+        applyOutcome: result.commercialApplyOutcome?.outcomeReceipt || null,
         appliedQuote: {
           quoteId: result.id,
           quoteNumber: result.quoteNumber,
@@ -4632,17 +4929,23 @@ export default function App({
           : "The quote edit was saved while commercial-change enforcement remained dormant."
       }));
     } catch (error) {
+      if (!commercialApplyRecovery.isCurrent()) return;
+      if (error.commercialApplyOutcome?.outcomeReceipt) {
+        setChangeImpactPreview(current => ({ ...current, applyOutcome: error.commercialApplyOutcome.outcomeReceipt,
+          applyResult: null, appliedQuote: null, error: "", mutationState: "recovery", mutationKind: "apply", mutationMessage: error.message }));
+        return;
+      }
       const definitive = isDefinitiveCommercialChangeError(error);
       setChangeImpactPreview((current) => ({
         ...current,
         applyOutcome: null,
         appliedQuote: null,
         error: error?.message || "The commercial change apply did not return a receipt.",
-        mutationState: definitive ? "error" : "uncertain",
+        mutationState: "uncertain",
         mutationKind: "apply",
         mutationMessage: definitive
-          ? "The server definitively rejected this apply. Correct the source or authorization, then re-simulate."
-          : "The apply outcome is uncertain. This screen will not submit it again; refresh the authoritative quote record before taking another action."
+          ? "The apply was rejected. Check the retained request's exact server outcome before starting a fresh simulation."
+          : "The apply outcome is uncertain. Check the retained request's exact server outcome; the edit will not be submitted again."
       }));
     }
   };
@@ -4754,6 +5057,16 @@ export default function App({
     const submissionMenuItemCount = Array.isArray(submissionForm?.menuItems)
       ? submissionForm.menuItems.length
       : 0;
+    if (commercialChangeAuthority && submissionIsEditing
+      && commercialApplyRecovery.getPending(submissionEditingQuote.id)) {
+      throw Object.assign(new Error("The previous apply outcome is unresolved. Reconcile its retained request in the quote editor before applying another edit."), { code: "apply-outcome-unresolved" });
+    }
+    if (!commercialChangeAuthority && submissionIsEditing
+      && (commercialApplyRecovery.pending || (changeImpactPreviewAvailable && commercialApplyRecovery.blocked))) {
+      setSubmitState((current) => ({ ...current, saving: false, message: "Check the previous apply outcome before saving another edit." }));
+      if (commercialApplyRecovery.pending) await handleReconcileCommercialChangeApplyOutcome();
+      return null;
+    }
     if (!explicitDraft && quoteEditRouteId && !quoteEditReady) {
       if (manageEditorState) {
         setSubmitState((current) => ({
@@ -5001,7 +5314,24 @@ export default function App({
         }
       }
 
-      const result = await withTimeout(
+      if (commercialChangeAuthority && submissionIsEditing) {
+        if (submissionEditingQuote.organizationId
+          && submissionEditingQuote.organizationId !== authSession.organizationId) {
+          throw Object.assign(new Error("The saved quote belongs to another workspace."), { code: "permission-denied" });
+        }
+        const { buildCommercialChangeRequestId } = await import("./lib/commercialChangeAuthorityClient");
+        const retainedIdentity = commercialApplyRecovery.begin({
+          quoteId: submissionEditingQuote.id,
+          simulationReceiptId: commercialChangeAuthority.simulationReceiptId,
+          authorizationReceiptId: commercialChangeAuthority.authorizationReceiptId || "",
+          applyRequestId: commercialChangeAuthority.applyRequestId || "",
+          expectedBaseRevisionId: explicitDraft?.expectedActiveVersionId || submissionEditingQuote.activeVersionId
+        }, () => buildCommercialChangeRequestId("apply"));
+        if (!retainedIdentity) throw Object.assign(new Error("The apply identity could not be retained. No edit was submitted; reconcile any previous request before trying again."), { code: "apply-outcome-unresolved" });
+        commercialChangeAuthority = { ...commercialChangeAuthority, applyRequestId: retainedIdentity.applyRequestId };
+        if (manageEditorState) setChangeImpactPreview(current => ({ ...current, applyRequestId: retainedIdentity.applyRequestId }));
+      }
+      let result = await withTimeout(
         submissionIsEditing
           ? updateQuote({
             quoteId: submissionEditingQuote.id,
@@ -5036,9 +5366,25 @@ export default function App({
         SAVE_FLOW_TIMEOUT_MS,
         submissionIsEditing ? "updateQuote" : "submitQuote"
       );
-      if (typeof onPersistenceResolved === "function") {
-        onPersistenceResolved(result);
+      // Never project a durable command's completion into a superseding scope.
+      if (commercialChangeAuthority && !commercialApplyRecovery.isCurrent()) return null;
+      if (commercialChangeAuthority && submissionIsEditing) {
+        const { reconcileCommercialQuoteChangeApplyOutcome } = await import("./lib/commercialChangeAuthorityClient");
+        if (!commercialApplyRecovery.isCurrent()) return null;
+        const terminal = await commercialApplyRecovery.reconcileQuote(submissionEditingQuote.id, reconcileCommercialQuoteChangeApplyOutcome);
+        if (!commercialApplyRecovery.isCurrent()) return null;
+        const receipt = terminal?.outcomeReceipt;
+        if (receipt?.state !== "committed" || !receipt.appliedRevisionIsActive || receipt.newRevisionId !== result.activeVersionId) {
+          const error = new Error(receipt?.state === "not_committed"
+            ? "The server proved this request did not commit. Start a fresh preview before applying again."
+            : "The exact apply outcome is unresolved or its revision is no longer current. Review the saved quote and history.");
+          error.code = receipt?.state === "not_committed" ? "apply-not-committed" : "apply-outcome-unresolved";
+          error.commercialApplyOutcome = terminal;
+          throw error;
+        }
+        result = { ...result, commercialChange: terminal.commercialChange, commercialApplyOutcome: terminal };
       }
+      if (typeof onPersistenceResolved === "function") onPersistenceResolved(result);
       if (submissionIsEditing) {
         if (manageEditorState) {
           setQuoteDirty(false);
@@ -5171,6 +5517,7 @@ export default function App({
           });
       }
     } catch (err) {
+      if (commercialChangeAuthority && commercialApplyRecovery.isCurrent()) commercialApplyRecovery.markUncertain?.(submissionEditingQuote.id);
       recordDiagnosticError(err, {
         surface: "app",
         action: explicitDraft ? "save-quick-update" : "submit-quote",
@@ -5178,7 +5525,7 @@ export default function App({
         venue: submissionForm.venue,
         guests: submissionTotals.guests
       });
-      if (manageEditorState) {
+      if (manageEditorState && (!commercialChangeAuthority || commercialApplyRecovery.isCurrent())) {
         pushToast(err?.message || "Failed to save quote.", "error");
         setSubmitState((prev) => ({
           ...prev,
@@ -5336,6 +5683,12 @@ export default function App({
 
   const handlePreviewQuickUpdate = async (request = {}) => {
     try {
+      if (commercialApplyRecovery.getPending(request.quoteId)) {
+        return quickUpdateFailure("uncertain", "apply-outcome-unresolved",
+          "The previous apply request is unresolved. No new simulation or apply identity was created.",
+          "Reconcile the retained request in the quote editor before reviewing another change.",
+          { action: "reconcile_only", label: "Reconcile in quote editor", retryable: false });
+      }
       const candidate = await prepareQuickUpdateCandidate(request);
       if (!isFirebaseQuickUpdateSource()) {
         return quickUpdateRequiresEditor(
@@ -5411,9 +5764,18 @@ export default function App({
   const handleSaveQuickUpdate = async (request = {}) => {
     let persistenceReceipt = null;
     try {
+      if (commercialApplyRecovery.getPending(request.quoteId)) {
+        return quickUpdateFailure("uncertain", "apply-outcome-unresolved",
+          "The previous apply request is unresolved. No additional edit was submitted.",
+          "Reconcile the retained request in the quote editor before reviewing another change.",
+          { action: "reconcile_only", label: "Reconcile in quote editor", retryable: false });
+      }
       const preview = request.preview && typeof request.preview === "object"
         ? request.preview
         : null;
+      if (commercialApplyRecovery.requiresFreshPreview?.(request.quoteId, preview?.simulationReceiptId, preview?.applyRequestId)) {
+        return quickUpdateFailure("conflict", "fresh-preview-required", "This preview belongs to a resolved apply request and cannot be reused.", "Return to edit and prepare a fresh preview and request identity.", { action: "reload", label: "Review a fresh preview", retryable: false });
+      }
       if (!preview || preview.status !== "ready") {
         return quickUpdateFailure(
           "failed",
@@ -5501,6 +5863,7 @@ export default function App({
           };
         }
       });
+      if (!commercialApplyRecovery.isCurrent()) return quickUpdateFailure("uncertain", "scope-superseded", "The save completed outside this opportunity scope.", "Restore the original scope to reconcile its retained request.", { action: "reconcile_only", retryable: false });
       if (!result?.id || !result?.activeVersionId) {
         return quickUpdateFailure(
           "uncertain",
@@ -5531,6 +5894,7 @@ export default function App({
         );
       }
       const authoritativeQuote = await getQuoteById(result.id, { serverOnly: true });
+      if (!commercialApplyRecovery.isCurrent()) return quickUpdateFailure("uncertain", "scope-superseded", "The opportunity scope changed before readback completed.", "Restore the original scope to review its exact outcome.", { action: "reconcile_only", retryable: false });
       const readbackRevisionId = String(
         authoritativeQuote?.activeVersionId || authoritativeQuote?.versionMeta?.versionId || ""
       ).trim();
@@ -5616,6 +5980,9 @@ export default function App({
         quote: authoritativeQuote
       };
     } catch (error) {
+      if (error.code === "apply-not-committed") {
+        return quickUpdateFailure("conflict", error.code, error.message, "Return to edit and run a fresh preview. The fenced request and old simulation cannot be reused.", { action: "reload", label: "Review a fresh preview", retryable: false });
+      }
       recordDiagnosticError(error, {
         surface: "quick-updates",
         action: "save-service-style",
@@ -5718,6 +6085,7 @@ export default function App({
     ambientArrival = null
   ) => {
     const arrivalContext = AMBIENT_UI_ENABLED ? ambientArrival : null;
+    setQuoteEditFocusRequest(null);
     if (!quote?.id) {
       if (!AMBIENT_UI_ENABLED) return;
       return {
@@ -5842,6 +6210,7 @@ export default function App({
         : `Editing ${quote.quoteNumber || quote.id}. Save will update this quote and keep a version snapshot.`
     });
     const ambientFocusField = draftRuntime.ambientDraftIntent?.focusField || "";
+    setQuoteEditFocusRequest({ quoteId: String(quote.id), focusField: ambientFocusField });
     wizardRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
     if (QUOTE_COMPLETION_BUILD_ENABLED) {
       const quoteCompletionFocus = scheduleQuoteCompletionDestinationFocus(quoteCompletionDestination, {
@@ -6031,16 +6400,18 @@ export default function App({
 
   const handleSignOut = async () => {
     if (!canLeaveAmbientLibrary("sign out")) return;
+    const taskOrganizationId = String(authSession.organizationId || "").trim();
     try {
       await authSession.signOut();
-      clearWorkspaceTaskJourney(authSession.organizationId);
-      setWorkspaceTaskJourney(null);
     } catch (err) {
       recordDiagnosticError(err, {
         surface: "app",
         action: "sign-out"
       });
       setSubmitState((prev) => ({ ...prev, message: err?.message || "Failed to sign out." }));
+    } finally {
+      clearWorkspaceTaskJourney(taskOrganizationId);
+      setWorkspaceTaskJourney(null);
     }
   };
 
@@ -6464,6 +6835,10 @@ export default function App({
               onReload={catalog.reload}
               saving={catalog.saving}
               initialTab={adminInitialTab}
+              focusRequest={catalogFocusRequest}
+              onFocusResolution={(resolution) => {
+                if (resolution?.requestId === catalogFocusRequest?.requestId) setCatalogFocusRequest(null);
+              }}
               selectedEventType={globalEventTypeId}
               onEventTypeChange={setGlobalEventTypeId}
               onInteractionStateChange={setCatalogModalInteraction}
@@ -6518,6 +6893,8 @@ export default function App({
         arrivalAttempted: workspaceArrivalAttempted,
         onArrivalResolution: handleWorkspaceArrivalResolution,
         onInteractionStateChange: setCatalogRouteInteraction,
+        quoteCreationReady: catalogSetupComplete,
+        onStartQuote: handleGetInstantQuote,
         contextualOrigin: libraryContextualOrigin
           && libraryContextualOrigin.organizationId === String(authSession.organizationId || "").trim()
           && workspaceArrivalContext?.surfaceId === "ambient-library"
@@ -6531,7 +6908,11 @@ export default function App({
                 });
               }
             }
-          } : null
+          } : null,
+        catalogFocusRequest,
+        onCatalogFocusResolution: (resolution) => {
+          if (resolution?.requestId === catalogFocusRequest?.requestId) setCatalogFocusRequest(null);
+        }
       }
     },
     modal: {
@@ -6566,7 +6947,11 @@ export default function App({
       events: commercialSnapshot.quotes,
       exceptionWorkspaceEnabled: import.meta.env.VITE_INVENTORY_EXCEPTION_WORKSPACE_ENABLED === "true" && featureFlags.inventoryExceptionWorkspace === true,
       eventSupplyActionPlanEnabled: import.meta.env.VITE_EVENT_SUPPLY_ACTION_PLAN_ENABLED === "true" && featureFlags.eventSupplyActionPlan === true,
-      inventoryMobileCaptureEnabled: import.meta.env.VITE_INVENTORY_MOBILE_CAPTURE_ENABLED === "true" && featureFlags.inventoryMobileCapture === true
+      inventoryMobileCaptureEnabled: import.meta.env.VITE_INVENTORY_MOBILE_CAPTURE_ENABLED === "true" && featureFlags.inventoryMobileCapture === true,
+      arrivalContext: workspaceArrivalContext?.surfaceId === "inventory"
+        ? workspaceArrivalContext
+        : null,
+      onArrivalResolution: handleWorkspaceArrivalResolution
     },
     route: { mounted: inventoryRouteMounted, open: inventoryRouteOpen },
     modal: { mounted: false, open: false }
@@ -6581,6 +6966,8 @@ export default function App({
       organizationName: workspaceName,
       currentUserUid,
       currentUserEmail,
+      initialImportType: importRouteIntent.initialImportType,
+      arrivalSource: importRouteIntent.arrivalSource,
       catalogRevision: Math.max(0, Number(catalog.settings?.catalogRevision || 0)),
       catalogContext: {
         eventTypeId: globalEventTypeId,
@@ -6588,7 +6975,8 @@ export default function App({
         packages: catalog.packages || [],
         addons: catalog.addons || [],
         rentals: catalog.rentals || [],
-        menuSections: effectiveMenuSections
+        menuSections: effectiveMenuSections,
+        loadMenuByEvent: catalog.loadMenuByEvent
       },
       onReload: () => catalog.reload({ background: true }),
       onReviewCatalog: (result) => {
@@ -6599,10 +6987,24 @@ export default function App({
             ? importType
             : "starter";
         setImportStudioOpen(false);
+        if (reviewTab === "menu" && String(result?.recordId || "").trim()) {
+          const handoff = createWorkspaceArrivalHandoff(
+            importedMenuItemReviewArrivalInput(result)
+          );
+          if (handoff.ok) {
+            setLibraryContextualOrigin(null);
+            return navigateAmbientTaskHandoff(handoff, "review-imported-menu-item");
+          }
+          pushToast(
+            "The accepted import receipt could not open an exact menu item. No catalog record changed.",
+            "warning"
+          );
+        }
         openRoutedWorkspaceTool(WORKSPACE_PATHS.catalog, setAdminOpen, {
           beforeOpen: () => {
             setLibraryContextualOrigin(null);
             setAdminInitialTab(reviewTab);
+            setCatalogFocusRequest(null);
           }
         });
       },
@@ -6931,6 +7333,18 @@ export default function App({
             recovery: Boolean(changeImpactPresentationError)
           })}
         >
+      {(commercialApplyRecovery.restored || commercialApplyRecovery.error || commercialApplyRecovery.outcome || !changeImpactPreview.model) && <CommercialApplyRecoveryNotice
+        pending={commercialApplyRecovery.pending}
+        busy={commercialApplyRecovery.busy}
+        error={commercialApplyRecovery.error}
+        outcome={commercialApplyRecovery.outcome}
+        onReconcile={handleReconcileCommercialChangeApplyOutcome}
+        onRecover={handleRecoverCommercialChangeApply}
+        onOpenQuote={() => {
+          setHistoryTarget({ quoteId: editingQuote.id, reason: "updated" });
+          navigateWorkspace(buildQuotePath(editingQuote.id));
+        }}
+      />}
       {changeImpactPreview.requested && (
         <RecoverableErrorBoundary
           active
@@ -6978,6 +7392,7 @@ export default function App({
               onApplyAllConsequences={handleApplyUnifiedConsequences}
               onApplySelectedConsequences={handleApplyUnifiedConsequences}
               onKeepQuotedPlan={handleKeepUnifiedQuotedPlan}
+              onOpenAffectedArtifact={openCommercialConsequence}
               onOpenAppliedQuote={() => {
                 const quoteId = changeImpactPreview.appliedQuote?.quoteId || editingQuote.id;
                 setHistoryTarget({ quoteId, reason: "updated" });
@@ -7262,6 +7677,19 @@ export default function App({
       ambientNavigation={AMBIENT_UI_ENABLED}
     >
       {PostEventLearningReviewBanner ? <Suspense fallback={null}><PostEventLearningReviewBanner organizationId={authSession.organizationId} principalId={currentUserUid} role={authSession.role} enabled={POST_EVENT_LEARNING_BUILD_ENABLED && featureFlags.postEventLearning === true} /></Suspense> : null}
+      {!isEditingQuote && <CommercialApplyRecoveryNotice
+        recoveryLabel="Open saved quote for a fresh preview"
+        pending={commercialApplyRecovery.pending}
+        busy={commercialApplyRecovery.busy}
+        error={commercialApplyRecovery.error}
+        outcome={commercialApplyRecovery.outcome}
+        onReconcile={handleReconcileCommercialChangeApplyOutcome}
+        onRecover={() => navigateWorkspace(buildQuotePath(commercialApplyRecovery.recoveryQuoteId))}
+        onOpenQuote={() => {
+          setHistoryTarget({ quoteId: commercialApplyRecovery.recoveryQuoteId, reason: "updated" });
+          navigateWorkspace(buildQuotePath(commercialApplyRecovery.recoveryQuoteId));
+        }}
+      />}
       {AMBIENT_UI_ENABLED && AmbientGlobalPilotSurface && (
         <RecoverableErrorBoundary
           active={globalPilotSurfaceOpen}
@@ -7327,6 +7755,27 @@ export default function App({
             ? "Restoring your previous place."
             : "")}
         </div>
+      )}
+
+      {AMBIENT_UI_ENABLED && isCommercialConsequenceArrival(workspaceArrivalContext) && (
+        <section
+          className="workspace-arrival-context source-note"
+          aria-label="Commercial consequence navigation"
+          data-commercial-consequence-return="true"
+        >
+          <strong>Reviewing one affected artifact</strong>
+          <span>No commercial or operational record changes until you use an authorized action.</span>
+          <button
+            type="button"
+            className="ghost compact"
+            onClick={() => returnToWorkspaceOrigin(
+              buildQuoteEditPath(workspaceArrivalContext.focus.quoteId),
+              { targetRouteId: WORKSPACE_ROUTE_IDS.QUOTE_EDIT }
+            )}
+          >
+            Return to commercial change
+          </button>
+        </section>
       )}
 
       {AMBIENT_UI_ENABLED && (currentWorkspaceActionFeedback || activeWorkspaceTaskJourney) && (
@@ -7513,6 +7962,7 @@ export default function App({
             staffLeads={scheduleStaffLeads}
             capacityLimit={scheduleCapacityLimit}
             currentUserEmail={currentUserEmail}
+            principalId={authSession.user?.uid || ""}
             arrivalContext={workspaceArrivalContext?.surfaceId === "schedule"
               ? workspaceArrivalContext
               : null}
@@ -7724,9 +8174,14 @@ export default function App({
       )}
 
       {quoteBuilderMounted && (
+      <RecoverableErrorBoundary surfaceName="Quote builder" surfaceKind="route" onRetry={retryQuoteBuilder} onClose={returnWorkspaceHome}
+        onReload={() => {
+          if (!quoteDirty || window.confirm(UNSAVED_QUOTE_RELOAD_PROMPT)) window.location.reload();
+        }}>
+      <Suspense fallback={<div className="qp-route-loading" role="status">Loading quote builder...</div>}>
       <main
         className={proposalComposerActive ? "container pc-shell" : "container wizard-grid"}
-        ref={wizardRef}
+        ref={attachWizardRef}
         tabIndex={-1}
         hidden={!quoteBuilderActive || Boolean(quoteEditRouteId && !quoteEditReady)}
         aria-hidden={!quoteBuilderActive || Boolean(quoteEditRouteId && !quoteEditReady)}
@@ -7794,13 +8249,28 @@ export default function App({
         {PILOT_CREATE_ENABLED && CreateIntake
           && resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.QUOTE_NEW
           && !editingQuote.id && (
-          <CreateIntake
-            eventTypes={catalog.eventTypes || []}
-            styles={Object.keys(STAFF_RULES)}
-            onApplyDraft={applyIntentDraft}
-            organizationId={authSession.organizationId}
-            onModelParse={PILOT_MODEL_ENABLED ? parseIntentDraftWithModel : undefined}
-          />
+          <RecoverableErrorBoundary
+            key={`create-intake-${authSession.organizationId || "no-org"}`}
+            active
+            surfaceName="Create intake"
+            surfaceKind="tool"
+            hasUnsavedWorkspaceChanges={quoteDirty}
+            onRetry={CreateIntake.retry}
+          >
+            <Suspense fallback={(
+              <section className="panel source-note" role="status" data-surface-purpose="clarify">
+                Preparing Create intake. Your quote draft is unchanged.
+              </section>
+            )}>
+              <CreateIntake
+                eventTypes={catalog.eventTypes || []}
+                styles={Object.keys(STAFF_RULES)}
+                onApplyDraft={applyIntentDraft}
+                organizationId={authSession.organizationId}
+                onModelParse={PILOT_MODEL_ENABLED ? parseIntentDraftWithModel : undefined}
+              />
+            </Suspense>
+          </RecoverableErrorBoundary>
         )}
         {PILOT_CHANGE_REQUESTS_ENABLED && ChangeRequestPanel
           && isEditingQuote
@@ -7855,7 +8325,12 @@ export default function App({
             </div>
             <p>{completedStepCount} of {stepperModel.length} decisions complete</p>
           </div>
-          <ol className="stepper" ref={stepperRef}>
+          <ol
+            aria-label="Quote creation steps"
+            className="stepper"
+            ref={attachStepperRef}
+            tabIndex={0}
+          >
             {stepperModel.map((stepMeta) => {
               const stepOneMissing = stepMeta.stepNumber === 1 && !step1Validation.valid;
               const stepContents = (
@@ -8102,6 +8577,8 @@ export default function App({
         </>
         </QuoteEditorModeSurface>
       </main>
+      </Suspense>
+      </RecoverableErrorBoundary>
       )}
 
       {renderWorkspaceTools("modal", [catalogTool, importsTool])}

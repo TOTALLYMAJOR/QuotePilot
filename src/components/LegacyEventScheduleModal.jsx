@@ -11,7 +11,7 @@ import {
   parseTimeToMinutes
 } from "../lib/quoteWorkflow";
 import {
-  getQuoteHistory,
+  getEventScheduleQuotes,
   updateQuoteBookingAssignment,
   updateQuoteKitchenCheckpoints,
   updateQuoteProductionChecklist
@@ -31,7 +31,7 @@ import {
 import { buildEventRunOfShowReadModel } from "../lib/eventRunOfShow";
 import "./scheduleMotion.css";
 
-export const EVENT_SCHEDULE_QUOTE_LIMIT = 500;
+export const EVENT_SCHEDULE_QUOTE_LIMIT = 100;
 
 const STATUS_SET = new Set(["accepted", "booked"]);
 const WEEKDAY_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -78,6 +78,18 @@ function startOfWeek(date) {
 
 function endOfWeek(date) {
   return addDays(startOfWeek(date), 6);
+}
+
+export function getScheduleVisibleInterval({ anchorIso, viewMode = "month" } = {}) {
+  const anchorDate = parseIsoDate(anchorIso);
+  if (!anchorDate) return null;
+  const start = viewMode === "week"
+    ? startOfWeek(anchorDate)
+    : startOfWeek(startOfMonth(anchorDate));
+  const end = viewMode === "week"
+    ? endOfWeek(anchorDate)
+    : endOfWeek(endOfMonth(anchorDate));
+  return { startDate: toIsoDate(start), endDate: toIsoDate(end) };
 }
 
 function sameMonth(a, b) {
@@ -461,6 +473,7 @@ export function EventScheduleView({
   staffLeads = [],
   capacityLimit = 400,
   currentUserEmail = "",
+  principalId = "",
   returnFocusRef = null
 }) {
   const embedded = presentation === "embedded";
@@ -503,9 +516,13 @@ export function EventScheduleView({
         }
     ));
     try {
-      const result = await getQuoteHistory({
+      const interval = getScheduleVisibleInterval({ anchorIso, viewMode });
+      if (!interval) throw new Error("The visible schedule interval is invalid.");
+      const result = await getEventScheduleQuotes({
         organizationId: readOrganizationId,
-        limitCount: EVENT_SCHEDULE_QUOTE_LIMIT
+        principalId,
+        ...interval,
+        pageSize: EVENT_SCHEDULE_QUOTE_LIMIT
       });
       if (loadGenerationRef.current !== generation) return;
       setState({
@@ -513,7 +530,10 @@ export function EventScheduleView({
         error: "",
         source: result.source,
         quotes: result.quotes,
-        truncated: result.truncated === true,
+        truncated: result.complete !== true,
+        complete: result.complete === true,
+        interval: result.interval,
+        pageCount: result.pageCount,
         organizationId: readOrganizationId
       });
     } catch (err) {
@@ -535,7 +555,7 @@ export function EventScheduleView({
     return () => {
       loadGenerationRef.current += 1;
     };
-  }, [open, organizationId]);
+  }, [anchorIso, open, organizationId, principalId, viewMode]);
 
   // Backstop clear so the one-shot drop-settle / lane-glow classes always
   // come off and a repeat drop can re-fire them.

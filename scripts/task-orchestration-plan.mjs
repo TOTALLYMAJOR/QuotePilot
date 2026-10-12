@@ -2,6 +2,12 @@ import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
+import {
+  ENHANCEMENT_MANIFEST_PATH,
+  extractEnhancementIds,
+  loadEnhancementManifest,
+  resolveEnhancementImpact
+} from "./check-enhancement-impact-contract.mjs";
 
 const CONTRACT_PATH = path.join("docs", "task-orchestration-contracts.json");
 const RISK_ORDER = Object.freeze({ low: 0, medium: 1, high: 2 });
@@ -223,6 +229,7 @@ function buildTaskGraph(plan, { expertiseEvaluationRequired = false } = {}) {
       dependsOn: [],
       outputs: [
         "bounded file scope",
+        "enhancement routes, authorities, and tests",
         "execution classification",
         "domain classification",
         "model recommendation"
@@ -284,10 +291,24 @@ export function buildTaskPlan({
   phase = "plan",
   now = new Date(),
   contract,
+  enhancementIds = [],
+  enhancementManifest,
+  root = process.cwd(),
   env = process.env
 }) {
   if (!String(task || "").trim()) throw new Error("A non-empty task description is required.");
   const normalizedFiles = unique(files.map(normalizePath)).sort();
+  const requestedEnhancementIds = unique([
+    ...extractEnhancementIds(task),
+    ...enhancementIds.map((id) => String(id || "").replace(/^#/, "").trim())
+  ]);
+  const enhancementDeclarations = requestedEnhancementIds.length
+    ? resolveEnhancementImpact({
+      manifest: enhancementManifest || loadEnhancementManifest(root),
+      enhancementIds: requestedEnhancementIds,
+      files: normalizedFiles
+    })
+    : [];
   const selectedContract = contract || loadTaskContract();
   const normalizedPhase = String(phase || "").toLowerCase();
   if (!selectedContract.lifecyclePhases?.includes(normalizedPhase)) {
@@ -371,6 +392,11 @@ export function buildTaskPlan({
     },
     domainClassification,
     productIntelligence,
+    enhancementImpact: {
+      required: requestedEnhancementIds.length > 0,
+      manifest: ENHANCEMENT_MANIFEST_PATH,
+      declarations: enhancementDeclarations
+    },
     modelRouting: {
       tier: modelTier,
       selectedModel: String(env[envKey] || tier.defaultModel),
@@ -394,7 +420,9 @@ export function buildTaskPlan({
       ),
       validations: unique([
         ...(profile.validations || []),
-        productIntelligenceConfig.validation
+        productIntelligenceConfig.validation,
+        "node scripts/check-enhancement-impact-contract.mjs",
+        ...enhancementDeclarations.flatMap((declaration) => declaration.tests)
       ])
     }
   };
@@ -407,18 +435,26 @@ export function buildTaskPlan({
 }
 
 function parseArgs(argv) {
-  const parsed = { task: "", files: [], requestedRisk: "", phase: "plan", json: false };
+  const parsed = {
+    task: "",
+    files: [],
+    enhancementIds: [],
+    requestedRisk: "",
+    phase: "plan",
+    json: false
+  };
   for (let index = 0; index < argv.length; index += 1) {
     const token = argv[index];
     if (token === "--json") {
       parsed.json = true;
       continue;
     }
-    if (["--task", "--file", "--files", "--risk", "--phase"].includes(token)) {
+    if (["--task", "--file", "--files", "--enhancement", "--risk", "--phase"].includes(token)) {
       const value = argv[index + 1];
       if (!value || value.startsWith("--")) throw new Error(`${token} requires a value.`);
       index += 1;
       if (token === "--task") parsed.task = value;
+      else if (token === "--enhancement") parsed.enhancementIds.push(...value.split(","));
       else if (token === "--risk") parsed.requestedRisk = value;
       else if (token === "--phase") parsed.phase = value;
       else parsed.files.push(...value.split(","));
@@ -433,6 +469,14 @@ function formatText(plan) {
   const docLines = plan.dependencies.docRequirements.length
     ? plan.dependencies.docRequirements.map((item) => `  - ${item.mode}: ${item.paths.join(", ")}`)
     : ["  - none"];
+  const enhancementLines = plan.enhancementImpact.declarations.length
+    ? plan.enhancementImpact.declarations.flatMap((item) => [
+      `  - ${item.id}: ${item.changeType}`,
+      `    routes: ${item.routes.join(", ") || "[]"}`,
+      `    authorities: ${item.authorities.join(", ") || "[]"}`,
+      `    tests: ${item.tests.join(", ")}`
+    ])
+    : ["  - none"];
   return [
     "Task orchestration plan",
     `- phase: ${plan.lifecycle.phase}`,
@@ -442,6 +486,9 @@ function formatText(plan) {
     `- domain_applicable: ${plan.domainClassification.applicable}`,
     `- domain_contexts: ${plan.domainClassification.contexts.join(", ")}`,
     `- product_intelligence: ${plan.productIntelligence.disposition}`,
+    `- enhancement_impact_required: ${plan.enhancementImpact.required}`,
+    "- enhancement_declarations:",
+    ...enhancementLines,
     `- catering_value_fields: ${plan.productIntelligence.requiredFields.join(", ") || "none"}`,
     `- model: ${plan.modelRouting.selectedModel} (${plan.modelRouting.tier}, ${plan.modelRouting.reasoningEffort})`,
     `- switch_authority: ${plan.modelRouting.switchAuthority}`,
@@ -472,7 +519,9 @@ function main() {
     files,
     requestedRisk: args.requestedRisk,
     phase: args.phase,
-    contract: loadTaskContract(root)
+    contract: loadTaskContract(root),
+    enhancementIds: args.enhancementIds,
+    root
   });
   console.log(args.json ? JSON.stringify(plan, null, 2) : formatText(plan));
 }

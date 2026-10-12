@@ -1,4 +1,6 @@
-import React from "react";
+// @vitest-environment jsdom
+import React, { act } from "react";
+import { createRoot } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, test, vi } from "vitest";
 import UnifiedCommercialConsequenceReview from "../UnifiedCommercialConsequenceReview";
@@ -43,9 +45,10 @@ describe("UnifiedCommercialConsequenceReview", () => {
     expect(html).toContain("Operator-declared guided-selling policy");
     expect(html).toContain("Tenant-recorded staff-only cost evidence");
     expect(html).toContain("Draft completeness policy");
-    expect(html).toContain("Apply all");
-    expect(html).toContain("Apply selected");
+    expect(html).toContain("Stage all in form");
+    expect(html).toContain("Stage selected in form");
     expect(html).toContain("Keep quoted plan");
+    expect(html).toContain("do not save, approve, or authoritatively apply a quote");
     expect(html).toContain('data-capability-state="success"');
   });
 
@@ -54,5 +57,27 @@ describe("UnifiedCommercialConsequenceReview", () => {
     expect(html).toContain('data-capability-state="stale"');
     expect(html).toContain("quote, catalog, or simulation fence changed");
     expect(html).toContain("disabled=\"\"");
+  });
+
+  test("preserves an operator selection when recommendation identities are unchanged", () => {
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    const props = {
+      scopeCurrent: true,
+      onApplyAll: vi.fn(),
+      onApplySelected: vi.fn(),
+      onKeepQuotedPlan: vi.fn()
+    };
+    act(() => root.render(<UnifiedCommercialConsequenceReview review={review()} {...props} />));
+    const checkbox = container.querySelector('input[type="checkbox"]');
+    expect(checkbox.checked).toBe(true);
+    act(() => checkbox.click());
+    expect(checkbox.checked).toBe(false);
+
+    act(() => root.render(<UnifiedCommercialConsequenceReview review={review()} {...props} />));
+    expect(container.querySelector('input[type="checkbox"]').checked).toBe(false);
+    act(() => root.unmount());
+    container.remove();
   });
 });

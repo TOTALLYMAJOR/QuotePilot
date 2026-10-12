@@ -81,6 +81,8 @@ describe("StaffWorkspace", () => {
   let root;
 
   beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-09-19T12:00:00.000Z"));
     container = document.createElement("div");
     document.body.appendChild(container);
     root = createRoot(container);
@@ -111,9 +113,13 @@ describe("StaffWorkspace", () => {
   });
 
   afterEach(() => {
-    act(() => root.unmount());
-    container.remove();
-    vi.clearAllMocks();
+    try {
+      act(() => root.unmount());
+      container.remove();
+      vi.clearAllMocks();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   test("opens the exact private staff record with role-safe briefing outcomes", async () => {

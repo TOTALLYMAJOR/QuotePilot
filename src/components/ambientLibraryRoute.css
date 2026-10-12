@@ -1242,11 +1242,15 @@
 
 .ambient-library__catalog-column {
   display: grid;
+  grid-column: 1;
+  grid-row: 1;
   gap: clamp(1.5rem, 2vw, 2rem);
   min-width: 0;
 }
 
 .ambient-library__readiness-rail {
+  grid-column: 2;
+  grid-row: 1;
   min-width: 0;
   padding-left: clamp(1.5rem, 3vw, 2.75rem);
   border-left: 1px solid var(--library-line);
@@ -1567,9 +1571,16 @@
     grid-template-columns: minmax(0, 1fr);
   }
 
+  .ambient-library__catalog-column {
+    grid-column: 1;
+    grid-row: 2;
+  }
+
   .ambient-library__readiness-rail {
-    padding: clamp(1.25rem, 4vw, 2rem) 0 0;
-    border-top: 1px solid var(--library-line);
+    grid-column: 1;
+    grid-row: 1;
+    padding: 0 0 clamp(1.25rem, 4vw, 2rem);
+    border-bottom: 1px solid var(--library-line);
     border-left: 0;
   }
 
@@ -1588,7 +1599,7 @@
   }
 
   .ambient-library__readiness-rail {
-    padding-top: 1.5rem;
+    padding-bottom: 1.5rem;
   }
 
   .business-setup-center__header h2 {

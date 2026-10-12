@@ -105,7 +105,7 @@ test("switching authenticated principals destroys the prior tenant workspace sta
     await signOutCurrentUser();
   });
   await expect(page.getByRole("heading", { name: "Staff Sign In" })).toBeVisible({ timeout: 45_000 });
-  await expect(quotesDialog).toHaveCount(0);
+  await expect(opportunitiesRegion).toHaveCount(0);
 
   await page.evaluate(() => {
     window.__quotePilotScopeLeakFrames = [];
@@ -242,7 +242,7 @@ test("email-password staff can complete account recovery with the same on-screen
   await expect(page.getByRole("button", { name: "Sending..." }))
     .toHaveAttribute("aria-busy", "true");
   await expect(page.getByLabel(/^Email$/i)).toBeDisabled();
-  await expect(page.getByRole("button", { name: "Register" })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Create a staff account" })).toBeDisabled();
   releaseResetRequest();
   await expect(page.getByRole("button", { name: "Forgot password?" })).toBeEnabled();
   await expect(page.getByRole("status")).toHaveText(PASSWORD_RESET_CONFIRMATION);

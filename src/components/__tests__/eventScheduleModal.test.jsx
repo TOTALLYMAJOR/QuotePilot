@@ -1,8 +1,11 @@
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, test } from "vitest";
-import { StaffLeadChoiceField } from "../EventScheduleModal";
-import { StaffLeadChoiceField as LegacyStaffLeadChoiceField } from "../LegacyEventScheduleModal";
+import { getScheduleVisibleInterval, StaffLeadChoiceField } from "../EventScheduleModal";
+import {
+  getScheduleVisibleInterval as getLegacyScheduleVisibleInterval,
+  StaffLeadChoiceField as LegacyStaffLeadChoiceField
+} from "../LegacyEventScheduleModal";
 
 function renderChoice(Component, overrides = {}) {
   return renderToStaticMarkup(
@@ -16,6 +19,22 @@ function renderChoice(Component, overrides = {}) {
     />
   );
 }
+
+describe.each([
+  ["converged", getScheduleVisibleInterval],
+  ["legacy", getLegacyScheduleVisibleInterval]
+])("%s visible schedule interval", (_surface, resolveInterval) => {
+  test("uses the complete rendered month grid and exact rendered week", () => {
+    expect(resolveInterval({ anchorIso: "2026-10-10", viewMode: "month" })).toEqual({
+      startDate: "2026-09-27",
+      endDate: "2026-10-31"
+    });
+    expect(resolveInterval({ anchorIso: "2026-10-10", viewMode: "week" })).toEqual({
+      startDate: "2026-10-04",
+      endDate: "2026-10-10"
+    });
+  });
+});
 
 describe.each([
   ["converged", StaffLeadChoiceField],

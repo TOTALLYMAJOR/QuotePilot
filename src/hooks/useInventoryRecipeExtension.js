@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   applyInventoryCommand,
   buildInventoryRequestId,
+  getInventoryRecipeDependencyPreflight,
   getInventoryMenuCostBrowserAccess,
   reconcileInventoryCommand,
   resetDefinitiveInventoryCommand,
@@ -142,6 +143,10 @@ export function useInventoryRecipeExtension({
     }
   }, [scope]);
 
+  const previewRecipeDependencies = useCallback(async (command) => (
+    getInventoryRecipeDependencyPreflight({ ...scope, command })
+  ), [scope]);
+
   const reconcileRecipe = useCallback(async (attempt) => {
     const result = await reconcileInventoryCommand({ ...scope, requestId: attempt?.requestId });
     return {
@@ -187,6 +192,7 @@ export function useInventoryRecipeExtension({
       ? exactMenuCost.state
       : "loading",
     onActiveMenuItemChange,
+    previewRecipeDependencies: access.mutationEnabled ? previewRecipeDependencies : undefined,
     publishRecipe: access.mutationEnabled ? publishRecipe : undefined,
     reconcileRecipe: access.mutationEnabled ? reconcileRecipe : undefined,
     resetRecipe: access.mutationEnabled ? resetRecipe : undefined

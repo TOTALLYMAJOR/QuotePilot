@@ -1,7 +1,6 @@
 # Orchestration Runbook
 
-Last updated: 2026-09-17 02:01:13 CDT
-
+Last updated: 2026-10-10 19:54:09 CDT
 ## Purpose
 Operational usage guide for orchestration lanes, CI behavior, and release evidence expectations.
 
@@ -17,6 +16,21 @@ Machine-readable runner handoff:
 npm run plan:task -- --task "Review Firestore role authority" \
   --files firestore.rules,src/lib/authClient.js --json
 ```
+
+Named enhancements must exist in `docs/enhancement-impact-manifest.json`:
+```bash
+node scripts/check-enhancement-impact-contract.mjs
+npm run plan:task -- --task "Implement enhancement 97" \
+  --enhancement 97 \
+  --files scripts/task-orchestration-plan.mjs,docs/enhancement-impact-manifest.json
+```
+
+The declaration supplies affected routes, authority identifiers, and runnable
+tests. A presentation-only item must use `authorities: []`; if its bounded file
+set crosses a registered pricing, commercial-quote, or Inventory authority
+path, planning fails and the authority work must be separated or truthfully
+reclassified. Exact IDs in task text are detected automatically;
+`--enhancement` is the unambiguous runner form.
 
 The output recommends a model and reasoning effort, but the external runner
 must apply that selection before task execution. In a dirty worktree, always
@@ -42,6 +56,22 @@ outcome or metric IDs, guardrail IDs, evidence need, and release/experiment
 ledger entry before implementation. When it is `not_applicable_allowed`, use
 `not_applicable` only for genuinely mechanical work and record the rationale.
 
+Validate the layered evaluation plan without running its checks:
+```bash
+npm run eval:layered -- --dry-run
+```
+
+Run every automated dimension, or select the smallest affected dimensions:
+```bash
+npm run eval:layered
+npm run eval:layered -- --eval EVAL-001 --eval EVAL-002
+```
+
+Successful non-dry runs write create-only receipts under
+`.cache/layered-evaluations/`. A receipt proves only its declared evidence
+class for the exact candidate and environment. Manual operator, assistive-
+technology, hosted, provider, production, and outcome evidence must be recorded
+separately; no result authorizes deployment or owner adoption.
 For a UI-classified plan, confirm `dependencies.requiredSkills` contains
 `design-language` before editing. Load it completely, then read
 `docs/DESIGN_SYSTEM.md` and `docs/DESIGN_PRINCIPLES.md`. If the skill and local

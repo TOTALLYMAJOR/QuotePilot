@@ -53,7 +53,8 @@ describe("statically foldable Pilot build flags", () => {
     expect(VITE_CONFIG_SOURCE).toContain('new URL("./src/App.jsx", import.meta.url)');
     expect(VITE_CONFIG_SOURCE).toContain('new URL("./src/LegacyApp.jsx", import.meta.url)');
     expect(VITE_CONFIG_SOURCE).toContain('"quotepilot-active-app": activeApp');
-    expect(WORKSPACE_ROUTE_SOURCE).toContain('import ActiveApp from "quotepilot-active-app";');
+    expect(WORKSPACE_ROUTE_SOURCE).toContain('() => import("quotepilot-active-app")');
+    expect(WORKSPACE_ROUTE_SOURCE).not.toMatch(/import\s+\w+\s+from\s+["']quotepilot-active-app["']/);
     expect(WORKSPACE_ROUTE_SOURCE).not.toMatch(/import\s+\w+\s+from\s+["']\.\.\/App["']/);
   });
 

@@ -575,8 +575,8 @@ export function parseSoloOperatorIds(value) {
 
 export function parseReleaseUatRunTitle(value) {
   const parts = String(value || "").split("/");
-  if (parts.length !== 11 || parts[0] !== "release-uat" || parts[1] !== "v4") {
-    throw evidenceError("the UAT workflow title does not match the v4 evidence contract.");
+  if (parts.length !== 11 || parts[0] !== "release-uat" || parts[1] !== "v5") {
+    throw evidenceError("the UAT workflow title does not match the v5 evidence contract.");
   }
   const [, , approvalModeValue, releaseShaValue, target, candidateProfile,
     smsProviderValue,
@@ -966,6 +966,7 @@ export function validateUatRun(
   return {
     actorId,
     approvalMode: normalizedApprovalMode,
+    evidenceContract: "release-uat/v5",
     completedAt: new Date(uatCompletedMs).toISOString(),
     stagingId: title.stagingId,
     attestedTarget: title.target,
@@ -1608,7 +1609,7 @@ export async function verifyProductionReleaseEvidence(
   }
 
   return Object.freeze({
-    schema: "com.mbmapps.quotepilot.production-release-evidence/v5",
+    schema: "com.mbmapps.quotepilot.production-release-evidence/v6",
     approvalMode,
     releaseSha,
     releaseTag: publishedRevision.releaseTag,
@@ -1620,6 +1621,7 @@ export async function verifyProductionReleaseEvidence(
     uatRunId,
     preparationRunId,
     stagingId: uat.stagingId,
+    uatEvidenceContract: uat.evidenceContract,
     attesterId: uat.actorId,
     uatReviewerId: uatReview.reviewerId,
     uatReviewId: uatReview.reviewId,

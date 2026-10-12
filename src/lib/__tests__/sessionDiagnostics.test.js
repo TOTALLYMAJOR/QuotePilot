@@ -135,4 +135,37 @@ describe("sessionDiagnostics", () => {
     expect(snapshot.summary.total).toBe(0);
     expect(snapshot.session.sessionId).not.toBe("");
   });
+
+  test("redacts nested keys and array entries before persisting diagnostic context", async () => {
+    const diagnostics = await import("../sessionDiagnostics");
+    diagnostics.recordDiagnosticEvent({ type: "nested", context: {
+      detail: { password: "NESTED_PRIVATE", rows: [{ token: "ARRAY_PRIVATE", count: 2 }], ok: true }
+    } });
+    const context = diagnostics.readSessionDiagnostics().events[0].context;
+    expect(JSON.parse(context.detail)).toEqual({ password: "[redacted]", rows: [{ token: "[redacted]", count: 2 }], ok: true });
+    expect(JSON.stringify(window.localStorage.snapshot())).not.toMatch(/NESTED_PRIVATE|ARRAY_PRIVATE/);
+  });
+
+  test("caps sparse array indexes before serialization", async () => {
+    const diagnostics = await import("../sessionDiagnostics");
+    const sparse = [];
+    sparse[10000] = "outside-bound";
+    diagnostics.recordDiagnosticEvent({ type: "sparse", context: { sparse } });
+    expect(diagnostics.readSessionDiagnostics().events[0].context.sparse).toBe("[]");
+  });
+
+  test("bounds recursive diagnostics without invoking custom serialization or leaking failed values", async () => {
+    const diagnostics = await import("../sessionDiagnostics");
+    const circular = { status: "ready", password: "CIRCULAR_PRIVATE" };
+    circular.self = circular;
+    const hostile = { toJSON() { throw new Error("SERIALIZER_PRIVATE"); }, toString() { return "STRING_PRIVATE"; } };
+    Object.defineProperty(hostile, "value", { enumerable: true, get() { throw new Error("GETTER_PRIVATE"); } });
+    let deep = { password: "DEEP_PRIVATE" };
+    for (let i = 0; i < 100; i += 1) deep = { child: deep };
+    expect(() => diagnostics.recordDiagnosticEvent({ type: "bounded", context: { circular, hostile, deep, invalidDate: new Date(NaN), number: 3, flag: false } })).not.toThrow();
+    const snapshot = diagnostics.readSessionDiagnostics();
+    expect(snapshot.events[0].context).toMatchObject({ number: 3, flag: false });
+    expect(snapshot.events[0].context.circular).toContain("ready");
+    expect(JSON.stringify(window.localStorage.snapshot())).not.toMatch(/CIRCULAR_PRIVATE|SERIALIZER_PRIVATE|STRING_PRIVATE|GETTER_PRIVATE|DEEP_PRIVATE/);
+  });
 });

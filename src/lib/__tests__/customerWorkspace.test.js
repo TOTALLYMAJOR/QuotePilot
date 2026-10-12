@@ -13,6 +13,7 @@ import {
   encodeCustomerPathId,
   getCustomerDirectoryPage,
   getCustomerWorkspace,
+  createCustomerHistoryLoader,
   normalizeRevenueAutopilotEmailControlsProjection,
   normalizeCustomerSearchKey
 } from "../customerWorkspace";
@@ -352,6 +353,8 @@ describe("buildCustomerWorkspaceDto", () => {
       onCoreWorkspace: (coreWorkspace) => coreReads.push(coreWorkspace)
     });
 
+    const coreOnly = await getCustomerWorkspace({ organizationId: "org-1", customerId: "customer-1", includeVersions: false });
+    expect(coreOnly.proposalVersions).toEqual([]);
     expect(coreReads).toHaveLength(1);
     expect(coreReads[0]).toMatchObject({
       source: "local",
@@ -555,5 +558,45 @@ describe("buildStaffProposalPreview", () => {
       total: 0,
       deposit: 0
     });
+  });
+});
+
+
+describe("demand-loaded customer histories", () => {
+  test("limits reads to four and isolates failures with retry", async () => {
+    const pending = [];
+    let active = 0;
+    let peak = 0;
+    const reads = [];
+    const read = (quoteId) => new Promise((resolve, reject) => {
+      active += 1;
+      peak = Math.max(peak, active);
+      reads.push(quoteId);
+      pending.push({ resolve: (value) => { active -= 1; resolve(value); }, reject: () => { active -= 1; reject(new Error("unavailable")); } });
+    });
+    const results = [];
+    const loader = createCustomerHistoryLoader({
+      quoteIds: ["a", "b", "c", "d", "e"], read,
+      onResult: (id, result) => results.push([id, result])
+    });
+    ["a", "b", "c", "d", "e", "foreign"].forEach((id) => loader.load(id));
+    await Promise.resolve();
+    expect(peak).toBe(4);
+    expect(reads).not.toContain("foreign");
+    pending[0].reject();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(reads).toContain("e");
+    expect(results).toContainEqual(["a", expect.objectContaining({ status: "error" })]);
+    pending[1].resolve({ items: [{ id: "v1" }], truncated: false });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(results).toContainEqual(["b", expect.objectContaining({ status: "success", items: [{ id: "v1" }] })]);
+    loader.load("a");
+    await Promise.resolve();
+    expect(reads.filter((id) => id === "a")).toHaveLength(2);
+    loader.dispose();
+    const count = results.length;
+    pending.slice(2).forEach((entry) => entry.resolve({ items: [], truncated: false }));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(results).toHaveLength(count);
   });
 });

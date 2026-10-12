@@ -2,14 +2,19 @@ import { defineConfig, devices } from "@playwright/test";
 
 const PORT = Number(process.env.PLAYWRIGHT_PORT || 4173);
 const SALES_PORT = Number(process.env.PLAYWRIGHT_SALES_PORT || PORT + 3);
+const AMBIENT_PORT = Number(process.env.PLAYWRIGHT_AMBIENT_PORT || PORT + 6);
 const HOST = "127.0.0.1";
 const BASE_URL = `http://${HOST}:${PORT}`;
 const SALES_BASE_URL = `http://${HOST}:${SALES_PORT}`;
+const AMBIENT_BASE_URL = `http://${HOST}:${AMBIENT_PORT}`;
+const FIREBASE_SMOKE_TESTS = /firebase-(?:auth-rules|authoritative-pricing|first-quote-activation|guided-inquiry|starter-catalog-onboarding)\.smoke\.spec\.js$/;
+const AMBIENT_TESTS = /workspace-geometry\.spec\.js$/;
+const ROUTE_PERFORMANCE_TESTS = /route-performance\.spec\.js$/;
 
-function buildWebServer(port, role) {
+function buildWebServer(port, role, env = {}) {
   const baseURL = `http://${HOST}:${port}`;
   return {
-    command: `npm run dev -- --mode development --host ${HOST} --port ${port}`,
+    command: `npm run dev -- --mode development --host ${HOST} --port ${port} --strictPort`,
     url: baseURL,
     env: {
       VITE_E2E_BYPASS_AUTH: "true",
@@ -37,7 +42,8 @@ function buildWebServer(port, role) {
       VITE_FIREBASE_AUTH_DOMAIN: "",
       VITE_FIREBASE_STORAGE_BUCKET: "",
       VITE_FIREBASE_MESSAGING_SENDER_ID: "",
-      VITE_FIREBASE_APP_ID: ""
+      VITE_FIREBASE_APP_ID: "",
+      ...env
     },
     reuseExistingServer: !process.env.CI,
     timeout: 120_000
@@ -46,7 +52,7 @@ function buildWebServer(port, role) {
 
 export default defineConfig({
   testDir: "./e2e",
-  testIgnore: /firebase-(?:auth-rules|authoritative-pricing|starter-catalog-onboarding)\.smoke\.spec\.js$/,
+  testIgnore: [FIREBASE_SMOKE_TESTS, ROUTE_PERFORMANCE_TESTS],
   fullyParallel: false,
   retries: process.env.CI ? 2 : 0,
   workers: process.env.CI ? 1 : undefined,
@@ -65,7 +71,9 @@ export default defineConfig({
     {
       name: "chromium-admin",
       testIgnore: [
-        /firebase-(?:auth-rules|authoritative-pricing|starter-catalog-onboarding)\.smoke\.spec\.js$/,
+        FIREBASE_SMOKE_TESTS,
+        ROUTE_PERFORMANCE_TESTS,
+        AMBIENT_TESTS,
         /quote-history-role-permissions\.spec\.js$/
       ],
       use: { ...devices["Desktop Chrome"], baseURL: BASE_URL }
@@ -74,10 +82,34 @@ export default defineConfig({
       name: "chromium-sales",
       testMatch: /quote-history-role-permissions\.spec\.js$/,
       use: { ...devices["Desktop Chrome"], baseURL: SALES_BASE_URL }
+    },
+    {
+      name: "chromium-ambient",
+      testMatch: AMBIENT_TESTS,
+      use: { ...devices["Desktop Chrome"], baseURL: AMBIENT_BASE_URL }
     }
   ],
   webServer: [
     buildWebServer(PORT, process.env.VITE_E2E_ROLE || "admin"),
-    buildWebServer(SALES_PORT, "sales")
+    buildWebServer(SALES_PORT, "sales"),
+    {
+      ...buildWebServer(AMBIENT_PORT, "admin", {
+        VITE_E2E_LOCAL_REVIEW_FIXTURES: "false",
+        VITE_CUSTOMER_CENTERED_WORKSPACE_ENABLED: "true",
+        VITE_AMBIENT_UI_ENABLED: "true",
+        VITE_PILOT_NOW_ENABLED: "true",
+        VITE_PROPOSAL_COMPOSER_ENABLED: "false",
+        VITE_PILOT_EVENT_ROOM_ENABLED: "false",
+        VITE_OPERATIONAL_STAFFING_ENABLED: "false",
+        VITE_PILOT_GUIDED_SELLING_ENABLED: "false",
+        VITE_PILOT_CREATE_ENABLED: "false",
+        VITE_PILOT_CHANGE_REQUESTS_ENABLED: "false",
+        VITE_PILOT_COMMAND_ENABLED: "false",
+        VITE_PILOT_MARGINS_ENABLED: "false",
+        VITE_PILOT_DECISION_ROOM_ENABLED: "false"
+      }),
+      // Geometry requires this exact profile, even during local development.
+      reuseExistingServer: false
+    }
   ]
 });

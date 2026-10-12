@@ -1,0 +1,373 @@
+{
+  "$schema": "./enhancement-impact-contract.schema.json",
+  "schemaVersion": 1,
+  "authorityBoundaries": [
+    {
+      "id": "pricing",
+      "exactPaths": [
+        "src/lib/quoteCalculator.js",
+        "docs/PRICING_CONSTITUTION.md"
+      ],
+      "pathPrefixes": [
+        "functions/pricing"
+      ]
+    },
+    {
+      "id": "commercial_quote",
+      "exactPaths": [
+        "src/lib/quoteStore.js",
+        "src/lib/commercialApplyRecovery.js",
+        "docs/COMMERCIAL_CHANGE_AUTHORITY_ADR.md"
+      ],
+      "pathPrefixes": [
+        "functions/commercialChange"
+      ]
+    },
+    {
+      "id": "inventory",
+      "exactPaths": [
+        "functions/inventoryAuthority.js",
+        "functions/inventoryAuthorityCore.cjs",
+        "src/lib/inventoryAuthorityClient.js",
+        "docs/INVENTORY_AUTHORITY_ADR.md"
+      ],
+      "pathPrefixes": [
+        "src/hooks/useInventory"
+      ]
+    },
+    {
+      "id": "task_orchestration",
+      "exactPaths": [
+        "scripts/task-orchestration-plan.mjs",
+        "scripts/check-enhancement-impact-contract.mjs",
+        "docs/enhancement-impact-contract.schema.json",
+        "docs/enhancement-impact-manifest.json",
+        "docs/DOC_SYSTEM.md",
+        "docs/AGENT_GOVERNANCE.md",
+        "docs/ORCHESTRATION_BLUEPRINT.md",
+        "docs/ORCHESTRATION_RUNBOOK.md"
+      ],
+      "pathPrefixes": []
+    }
+  ],
+  "enhancements": [
+    {
+      "id": "32",
+      "title": "Normalize authenticated route headings and landmarks",
+      "changeType": "presentation",
+      "routes": [
+        "/app",
+        "/app/operations"
+      ],
+      "authorities": [],
+      "tests": [
+        "npm run test:unit -- src/components/__tests__/workspaceShell.test.jsx src/components/__tests__/workspaceRoutePortalGuard.test.jsx"
+      ]
+    },
+    {
+      "id": "33",
+      "title": "Tune tablet navigation and content geometry together",
+      "changeType": "presentation",
+      "routes": [
+      "/app",
+      "/app/customers",
+        "/app/inventory",
+        "/app/workflow"
+      ],
+      "authorities": [],
+      "tests": [
+        "npm run test:unit -- src/components/__tests__/workspaceShell.test.jsx",
+        "npx playwright test e2e/workspace-geometry.spec.js"
+      ]
+    },
+    {
+      "id": "34",
+      "title": "Qualify fixed navigation at zoom keyboard and safe-area profiles",
+      "changeType": "presentation",
+      "routes": [
+      "/app",
+      "/app/customers",
+        "/app/inventory",
+      "/app/quotes/:quoteId",
+      "/app/quotes/new"
+      ],
+      "authorities": [],
+      "tests": [
+        "npx playwright test e2e/workspace-geometry.spec.js"
+      ]
+    },
+    {
+      "id": "35",
+      "title": "Keep quote identity and unsaved state visible during long reviews",
+      "changeType": "presentation",
+      "routes": ["/app/now"],
+      "authorities": [],
+      "tests": [
+        "npm run test:unit -- src/components/__tests__/ambientLivingOpportunity.test.jsx"
+      ]
+    },
+    {
+      "id": "36",
+      "title": "Match loading placeholders to authenticated route geometry",
+      "changeType": "presentation",
+      "routes": [
+        "/app/now",
+        "/app/clients",
+        "/app/inventory",
+        "/app/quotes/:quoteId"
+      ],
+      "authorities": [],
+      "tests": [
+        "npm run test:unit -- src/components/__tests__/recoverableLazyLoading.test.jsx src/components/__tests__/workspaceRoutePortalGuard.test.jsx"
+      ]
+    },
+    {
+      "id": "37",
+      "title": "Preserve scroll and focus while evidence disclosures refresh",
+      "changeType": "presentation",
+      "routes": [
+        "/app/clients/:customerId"
+      ],
+      "authorities": [],
+      "tests": [
+        "npm run test:unit -- src/components/__tests__/customerWorkspaceView.test.jsx src/hooks/__tests__/useDisclosureRefreshAnchor.test.jsx"
+      ]
+    },
+    {
+      "id": "39",
+      "title": "Move technical source identifiers behind evidence disclosures",
+      "changeType": "presentation",
+      "routes": ["/app/now"],
+      "authorities": [],
+      "tests": [
+        "npm run test:unit -- src/components/__tests__/ambientDraftIntentReview.test.jsx"
+      ]
+    },
+    {
+    "id": "41",
+    "title": "Standardize Inventory field widths by expected input length",
+    "changeType": "presentation",
+    "routes": [
+      "/app/inventory"
+    ],
+    "authorities": [],
+    "tests": [
+      "npm run test:unit -- src/components/__tests__/inventoryWorkspace.test.jsx",
+      "npx playwright test e2e/workspace-field-presentation.spec.js"
+    ]
+  },
+  {
+    "id": "44",
+    "title": "Align money quantities dates and units for vertical comparison",
+    "changeType": "presentation",
+    "routes": [
+      "/app/inventory",
+      "/app/customers/:customerId"
+    ],
+    "authorities": [],
+    "tests": [
+      "npm run test:unit -- src/components/__tests__/inventoryWorkspace.test.jsx src/components/__tests__/quoteVersionComparisonPresentation.test.jsx",
+      "npx playwright test e2e/workspace-field-presentation.spec.js"
+    ]
+  },
+  {
+      "id": "43",
+      "title": "Expose disabled-action reasons visibly and programmatically",
+      "changeType": "presentation",
+      "routes": [
+        "/app/quotes/:quoteId"
+      ],
+      "authorities": [],
+      "tests": [
+      "npm run test:unit -- src/components/__tests__/disabledActionReason.test.jsx src/components/__tests__/configuredQuoteActionRail.test.jsx src/components/__tests__/quoteHistoryPermissions.test.jsx src/components/__tests__/proposalComposerPresentation.test.js"
+      ]
+    },
+    {
+      "id": "45",
+      "title": "Use a shared operational secondary-heading scale",
+      "changeType": "presentation",
+      "routes": [
+      "/app",
+        "/app/inventory",
+        "/app/workflow"
+      ],
+      "authorities": [],
+      "tests": [
+        "npm run test:unit -- src/components/__tests__/workspaceShell.test.jsx",
+        "npx playwright test e2e/workspace-geometry.spec.js"
+      ]
+    },
+    {
+      "id": "47",
+      "title": "Make active filters and result scope explicit beside list headings",
+      "changeType": "presentation",
+      "routes": ["/app/clients"],
+      "authorities": [],
+      "tests": [
+        "npm run test:unit -- src/components/__tests__/ambientClientsView.test.jsx src/components/__tests__/ambientCustomerDirectoryView.test.jsx"
+      ]
+    },
+    {
+      "id": "63",
+      "title": "Read bounded ingredient movement history from immutable records",
+      "changeType": "authority",
+      "routes": [
+        "/app/inventory"
+      ],
+      "authorities": ["inventory"],
+      "tests": [
+        "npm run test:unit -- src/components/__tests__/inventoryWorkspace.test.jsx src/lib/__tests__/inventoryAuthorityClient.test.js src/lib/__tests__/inventoryAuthorityRuntime.server.test.js"
+      ]
+    },
+    {
+      "id": "64",
+      "title": "Reconcile ingredient commitments to exact event plans",
+      "changeType": "authority",
+      "routes": [
+        "/app/inventory"
+      ],
+      "authorities": ["inventory"],
+      "tests": [
+        "npm run test:unit -- src/components/__tests__/inventoryWorkspace.test.jsx src/lib/__tests__/inventoryAuthorityClient.test.js src/lib/__tests__/inventoryAuthorityRuntime.server.test.js"
+      ]
+    },
+    {
+      "id": "65",
+      "title": "Show affected menu items before revising recipe authority inputs",
+      "changeType": "workflow",
+      "routes": ["/app/library"],
+      "authorities": ["inventory"],
+      "tests": [
+        "npm run test:unit -- src/components/__tests__/inventoryRecipeEditor.test.jsx src/lib/__tests__/inventoryAuthorityClient.test.js src/lib/__tests__/inventoryAuthorityRuntime.server.test.js"
+      ]
+    },
+    {
+      "id": "70",
+      "title": "Run multi-line receiving with independent receipt outcomes",
+      "changeType": "workflow",
+      "routes": [
+        "/app/inventory"
+      ],
+      "authorities": ["inventory"],
+      "tests": [
+        "npm run test:unit -- src/components/__tests__/inventoryWorkspace.test.jsx src/lib/__tests__/inventoryReceivingBatch.test.js"
+      ]
+    },
+    {
+      "id": "71",
+      "title": "Reconcile reviewed physical counts through immutable movements",
+      "changeType": "authority",
+      "routes": [
+        "/app/inventory"
+      ],
+      "authorities": ["inventory"],
+      "tests": [
+        "npm run test:unit -- src/lib/__tests__/inventoryAuthorityRuntime.server.test.js src/lib/__tests__/inventoryAuthorityClient.test.js src/components/__tests__/inventoryWorkspace.test.jsx",
+        "npm run test:rules:firestore"
+      ]
+    },
+    {
+      "id": "72",
+      "title": "Keep planned consumption recorded consumption and waste distinct",
+      "changeType": "workflow",
+      "routes": [
+        "/app/operations"
+      ],
+      "authorities": ["inventory"],
+      "tests": [
+        "npm run test:unit -- src/components/__tests__/eventIngredientUsagePanel.test.jsx src/lib/__tests__/inventoryIngredientExecutionCore.server.test.js src/lib/__tests__/inventoryAuthorityRuntime.server.test.js"
+      ]
+    },
+    {
+      "id": "73",
+      "title": "Publish a bounded event-linked shortage worklist",
+      "changeType": "authority",
+      "routes": [
+        "/app/inventory"
+      ],
+      "authorities": ["inventory"],
+      "tests": [
+        "npm run test:unit -- src/lib/__tests__/inventoryAuthorityRuntime.server.test.js src/lib/__tests__/inventoryAuthorityClient.test.js src/components/__tests__/inventoryWorkspace.test.jsx",
+        "npm run test:rules:firestore"
+      ]
+    },
+    {
+      "id": "74",
+      "title": "Track explicitly confirmed inbound supply without changing allocatable stock",
+      "changeType": "authority",
+      "routes": [
+        "/app/inventory"
+      ],
+      "authorities": ["inventory"],
+      "tests": [
+        "npm run test:unit -- src/lib/__tests__/inventoryAuthorityRuntime.server.test.js src/lib/__tests__/inventoryAuthorityClient.test.js src/components/__tests__/inventoryWorkspace.test.jsx",
+        "npm run test:rules:firestore"
+      ]
+    },
+    {
+      "id": "91",
+      "title": "Navigate to exact commercial consequences with a safe return path",
+      "changeType": "workflow",
+      "routes": [
+        "/app/quotes/:quoteId/edit",
+        "/app/quotes",
+        "/app/quotes/:quoteId",
+        "/app/operations",
+        "/app/inventory"
+      ],
+      "authorities": [],
+      "tests": [
+        "npm run test:unit -- src/components/__tests__/commercialChangeImpactPanel.test.jsx src/components/__tests__/commercialConsequenceNavigation.test.jsx src/components/__tests__/commercialInventoryArrival.test.jsx src/components/__tests__/eventScheduleArrival.test.jsx src/components/__tests__/quoteHistoryEventWorkspaceIntegration.test.jsx src/lib/__tests__/workspaceReturnContext.test.js"
+      ]
+    },
+    {
+      "id": "94",
+      "title": "Reconcile uncertain commercial application across refresh or reconnect",
+      "changeType": "workflow",
+      "routes": [
+        "/app/now",
+        "/app/clients/:customerId",
+        "/app/quotes/:quoteId"
+      ],
+      "authorities": ["commercial_quote"],
+      "tests": [
+        "npm run test:unit -- src/lib/__tests__/commercialApplyRecovery.test.js src/components/__tests__/commercialApplyRecoveryNotice.test.jsx src/components/__tests__/commercialApplyRecoveryWiring.test.js"
+      ]
+    },
+    {
+      "id": "97",
+      "title": "Declare enhancement routes, authorities, and tests",
+      "changeType": "process",
+      "routes": [],
+      "authorities": ["task_orchestration"],
+      "tests": [
+        "node --test scripts/__tests__/enhancement-impact-contract.test.mjs"
+      ]
+    },
+    {
+      "id": "98",
+      "title": "Bind hosted role and feature-gate qualification to one exact release candidate",
+      "changeType": "process",
+      "routes": [
+        "/app",
+        "/customer/:token"
+      ],
+      "authorities": [],
+      "tests": [
+        "npm run test:unit -- --run src/lib/__tests__/productionReleaseEvidence.test.js"
+      ]
+    },
+    {
+      "id": "100",
+      "title": "Consolidate shared authenticated loading and route orchestration incrementally",
+      "changeType": "presentation",
+      "routes": [
+        "/app"
+      ],
+      "authorities": [],
+      "tests": [
+        "npx vitest run src/components/__tests__/uiRecovery.test.jsx"
+      ]
+    }
+  ]
+}
