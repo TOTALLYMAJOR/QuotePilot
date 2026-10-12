@@ -233,7 +233,13 @@ export function recordProductAnalyticsEvent(eventName, dimensions = {}) {
 }
 
 export async function flushProductAnalyticsEvents() {
-  if (flushing) return flushing;
+  if (flushing) {
+    try {
+      return await flushing;
+    } catch {
+      return { sent: 0, queued: readQueue().length };
+    }
+  }
   if (!firebaseReady || !cloudFunctions) return { sent: 0, queued: readQueue().length };
   const queue = readQueue();
   if (!queue.length) return { sent: 0, queued: 0 };

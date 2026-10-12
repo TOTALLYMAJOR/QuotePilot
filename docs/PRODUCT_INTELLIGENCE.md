@@ -1,6 +1,6 @@
 # QuotePilot Product Intelligence System
 
-Last updated: 2026-10-11 22:57:06 CDT
+Last updated: 2026-10-11 23:14:06 CDT
 
 ## Quote-to-Confidence measurement extension
 
@@ -15,8 +15,9 @@ denominator yields an unavailable (`null`) resolution rate, not zero performance
 Presentation-only capability contracts are export-free: callable ownership and
 complete read/mutation lifecycles remain with existing authority contracts.
 The integrated Reporting surface review advances its capability contract to
-revision 5 because independent loading and retained-stale recovery coverage now
-travels with the bounded measures; this changes no metric or reporting authority.
+revision 6 because independent loading, retained-stale recovery, the bounded
+production loader, and concurrent flush recovery now travel with the bounded
+measures; this changes no metric or reporting authority.
 Final integration corrections stop new shelf-count requests after scope changes,
 retain original attempt outcomes, allow backend-derived supply resolution after
 an empty-shortage rebase, and align Legacy recorded-cost comparisons. These are
@@ -25,6 +26,15 @@ The final packaging pass keeps default-off implementations behind compile-time
 and lazy boundaries, while small role-safe gate, comparison, navigation, and
 arrival helpers remain in their owning shells. This reduces disabled-bundle
 cost without changing `LED-022` exposure, metrics, authority, or outcome claims.
+The combined v0.21.0 integration removes a further 6,197 bytes of dormant
+production code. Its exact local Ambient graph is 4,975,456 bytes, a measured
+9,363-byte increase over `f3ff212a` in the same environment, with the largest
+chunk unchanged at 385,181 bytes. The reviewed temporary ceiling is 4,978,120
+bytes and preserves the prior 2,664-byte environment margin; exact-PR CI,
+hosted timing, release, adoption, and outcome evidence remain separate.
+Concurrent analytics callers now receive the same contained provider-failure
+result instead of allowing an in-flight rejection to escape after a test or UI
+action completes; the queued evidence remains available for later retry.
 ## Purpose
 
 This is the canonical entry point for deciding whether QuotePilot creates

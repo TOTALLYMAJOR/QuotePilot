@@ -1,6 +1,23 @@
 # Project Status
 
-Last updated: 2026-10-11 04:13:28 CDT
+Last updated: 2026-10-11 23:14:06 CDT
+
+## v0.21.0 integration qualification — local candidate (October 11, 2026)
+
+The isolated release candidate includes exact source `f3ff212a` and the other
+authorized recent development lines. Its first combined Ambient build exceeded
+the existing aggregate ceiling by 12,896 bytes. Compile-time boundaries now
+remove dormant quote-completion, decision-packet, and analytics integration
+from the production graph, reducing the candidate by 6,197 bytes. The remaining
+4,975,456 / 385,181-byte graph is 9,363 aggregate bytes above `f3ff212a` in the
+same local environment and retains active Inventory, opportunity, reporting,
+customer, and actuals behavior. The reviewed 4,978,120 / 445,422 temporary
+ceilings preserve the previous 2,664-byte aggregate environment margin and add
+no percentage or future-growth headroom. Full release-lane, protected exact-PR,
+merge, deployment, hosted-role UAT, adoption, and outcome evidence remain open.
+The same integration also contains concurrent analytics provider rejection for
+every caller while preserving the queued batch for retry; a focused regression
+test reproduces the prior overlap and verifies one provider attempt.
 
 ## Browser and route-budget qualification — local work (October 11, 2026)
 

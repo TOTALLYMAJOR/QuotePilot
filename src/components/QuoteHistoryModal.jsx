@@ -58,7 +58,6 @@ import {
 } from "../lib/workspacePresentation";
 import CommercialDependencyStatePanel from "./CommercialDependencyStatePanel";
 import ConfiguredQuoteActionRail from "./ConfiguredQuoteActionRail";
-import DecisionPacketPanelTest from "./DecisionPacketPanel";
 import DisabledActionReason from "./DisabledActionReason";
 import EventWorkspaceView from "./EventWorkspaceView";
 import KitchenBeoArtifactPanel from "./KitchenBeoArtifactPanel";
@@ -76,11 +75,13 @@ const AmbientLivingOpportunityRoute = AMBIENT_UI_ENABLED
   : null;
 const DECISION_PACKET_BUILD_ENABLED = import.meta.env.MODE === "test"
   || import.meta.env.VITE_DECISION_PACKET_ENABLED === "true";
-const DecisionPacketPanel = import.meta.env.MODE === "test"
-  ? DecisionPacketPanelTest
-  : DECISION_PACKET_BUILD_ENABLED
-    ? lazy(() => import("./DecisionPacketPanel"))
-    : null;
+const QUOTE_COMPLETION_BUILD_ENABLED = import.meta.env.MODE === "test"
+  || import.meta.env.VITE_QUOTE_COMPLETION_COMMAND_PATH_ENABLED === "true";
+const EXACT_ADMINISTRATION_HANDOFF_ENABLED = DECISION_PACKET_BUILD_ENABLED
+  || QUOTE_COMPLETION_BUILD_ENABLED;
+const DecisionPacketPanel = DECISION_PACKET_BUILD_ENABLED
+  ? lazy(() => import("./DecisionPacketPanel"))
+  : null;
 const OperationalStaffingPanel = lazy(() => import("./OperationalStaffingPanel"));
 
 const QUOTE_STATUS_FILTER_OPTIONS = [
@@ -1521,15 +1522,19 @@ export function QuoteHistoryView({
     const returnFocusOwnsEntry = ["restoring", "restored"].includes(returnStatus?.state)
       && returnStatus?.entryId === workspaceNavigation?.location?.historyEntry?.entryId;
     if (returnFocusOwnsEntry) return;
-    const focusEvidenceQuote = state.quotes.find((quote) => quote.id === focusQuoteId);
+    const focusEvidenceQuote = DECISION_PACKET_BUILD_ENABLED
+      ? state.quotes.find((quote) => quote.id === focusQuoteId)
+      : null;
     const focusKey = [
       focusQuoteId,
       String(focusAction || "").trim(),
-      String(focusDestinationAction || "").trim(),
-      String(arrivalContext?.focus?.acceptedRevisionId || "").trim(),
-      String(arrivalContext?.focus?.acceptanceReceiptId || "").trim(),
-      String(focusEvidenceQuote?.activeVersionId || focusEvidenceQuote?.versionMeta?.versionId || "").trim(),
-      String(focusEvidenceQuote?.acceptanceReceipt?.receiptId || "").trim(),
+      ...(EXACT_ADMINISTRATION_HANDOFF_ENABLED ? [String(focusDestinationAction || "").trim()] : []),
+      ...(DECISION_PACKET_BUILD_ENABLED ? [
+        String(arrivalContext?.focus?.acceptedRevisionId || "").trim(),
+        String(arrivalContext?.focus?.acceptanceReceiptId || "").trim(),
+        String(focusEvidenceQuote?.activeVersionId || focusEvidenceQuote?.versionMeta?.versionId || "").trim(),
+        String(focusEvidenceQuote?.acceptanceReceipt?.receiptId || "").trim()
+      ] : []),
       String(arrivalContext?.intentId || "").trim(),
       String(arrivalContext?.focus?.sourceRevisionId || "").trim(),
       String(arrivalContext?.focus?.proposedRevisionId || "").trim()
@@ -1564,11 +1569,13 @@ export function QuoteHistoryView({
     }
     const targetQuote = state.quotes.find((quote) => quote.id === focusQuoteId);
     if (!targetQuote) return;
-    const acceptedRevisionArrival = resolveAcceptedRevisionAdministrationArrival({
-      arrivalContext,
-      quote: targetQuote,
-      source: state.source
-    });
+    const acceptedRevisionArrival = DECISION_PACKET_BUILD_ENABLED
+      ? resolveAcceptedRevisionAdministrationArrival({
+          arrivalContext,
+          quote: targetQuote,
+          source: state.source
+        })
+      : { applies: false, status: "not_applicable" };
     if (
       administrationArrival
       && acceptedRevisionArrival.applies
@@ -1620,7 +1627,7 @@ export function QuoteHistoryView({
     if (normalizedAction === "administration") {
       let destinationFrame = null;
       const frame = window.requestAnimationFrame(() => {
-        destinationFrame = window.requestAnimationFrame(() => {
+        const focusAdministration = () => {
         const commercialConsequenceIntent = [
           "review_commercial_proposal_consequence",
           "review_kitchen_beo_consequence"
@@ -1685,7 +1692,9 @@ export function QuoteHistoryView({
         );
         const administrationDetails = administrationSummary?.closest("details") || null;
         if (administrationDetails) administrationDetails.open = true;
-        const destinationAction = String(focusDestinationAction || "").trim();
+        const destinationAction = EXACT_ADMINISTRATION_HANDOFF_ENABLED
+          ? String(focusDestinationAction || "").trim()
+          : "";
         const actionRoot = targetRow || administrationDetails;
         const exactAction = destinationAction
           ? Array.from(actionRoot?.querySelectorAll("[data-quote-action-id]") || [])
@@ -1699,7 +1708,12 @@ export function QuoteHistoryView({
           onArrivalResolution?.({ status: "resolved", quoteId: focusQuoteId });
         }
         focusedHandoffIdRef.current = focusKey;
-        });
+        };
+        if (EXACT_ADMINISTRATION_HANDOFF_ENABLED) {
+          destinationFrame = window.requestAnimationFrame(focusAdministration);
+        } else {
+          focusAdministration();
+        }
       });
       return () => {
         window.cancelAnimationFrame(frame);
@@ -2082,11 +2096,13 @@ export function QuoteHistoryView({
     source: state.source
   });
   const focusedQuote = quoteHistoryController.eventRoom.quote;
-  const acceptedRevisionArrival = resolveAcceptedRevisionAdministrationArrival({
-    arrivalContext,
-    quote: focusedQuote,
-    source: state.source
-  });
+  const acceptedRevisionArrival = DECISION_PACKET_BUILD_ENABLED
+    ? resolveAcceptedRevisionAdministrationArrival({
+        arrivalContext,
+        quote: focusedQuote,
+        source: state.source
+      })
+    : { applies: false, status: "not_applicable" };
   const acceptedRevisionArrivalRecovery = administrationFocusActive
     && acceptedRevisionArrival.applies
     && state.readComplete
@@ -3677,7 +3693,7 @@ export function QuoteHistoryView({
             />
           </Suspense>
         )}
-        {acceptedRevisionArrivalRecovery ? (
+        {DECISION_PACKET_BUILD_ENABLED && acceptedRevisionArrivalRecovery ? (
           <section
             className="warning-note"
             data-accepted-revision-arrival="recovery"
@@ -3691,7 +3707,7 @@ export function QuoteHistoryView({
               Return to Quotes
             </button>
           </section>
-        ) : acceptedRevisionArrivalPending ? (
+        ) : DECISION_PACKET_BUILD_ENABLED && acceptedRevisionArrivalPending ? (
           <section
             className="source-note"
             data-accepted-revision-arrival="pending"

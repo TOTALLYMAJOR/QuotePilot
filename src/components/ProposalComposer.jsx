@@ -620,7 +620,7 @@ export default function ProposalComposer({
     setActivityLog((current) => [entry, ...current].slice(0, ACTIVITY_LOG_LIMIT));
   };
 
-  const requestSave = (options = {}) => {
+  const requestSave = QUOTE_COMPLETION_BUILD_ENABLED ? (options = {}) => {
     const commandRunner = options?.command === true;
     setPulseOpen(true);
     if (saveAction.mode === "review") {
@@ -646,6 +646,13 @@ export default function ProposalComposer({
       result.catch(() => {});
     }
     return result;
+  } : () => {
+    setPulseOpen(true);
+    if (saveAction.mode === "review") {
+      pendingSaveReviewFocusRef.current = true;
+      return;
+    }
+    onSaveQuote?.();
   };
 
   useEffect(() => {
@@ -803,7 +810,7 @@ export default function ProposalComposer({
     });
   };
 
-  const runQuoteCompletionAction = async (action) => {
+  const runQuoteCompletionAction = QUOTE_COMPLETION_BUILD_ENABLED ? async (action) => {
     if (action?.kind === "resolve_field") {
       const blockerId = String(action.id || "").replace(/^resolve:/u, "");
       const blocker = currentSaveBlockers.find((item) => String(item?.id || "") === blockerId);
@@ -852,7 +859,7 @@ export default function ProposalComposer({
       message: action?.reason || "The exact proposal destination is not available here.",
       recovery: { label: "Try exact destination again" }
     };
-  };
+  } : null;
   const commitField = (field) => (value) => {
     onFieldChange(field, value);
     logActivity(`${ACTIVITY_FIELD_LABELS[field] || field} → ${activityValue(value)}`);
@@ -1313,7 +1320,7 @@ export default function ProposalComposer({
 
       <div className="pc-pulse-block pc-draft-activity">
         <p className="pc-eyebrow">Draft activity</p>
-        {quoteCompletionCommandPathEnabled && QuoteCompletionCommandPath ? (
+        {QUOTE_COMPLETION_BUILD_ENABLED && quoteCompletionCommandPathEnabled && QuoteCompletionCommandPath ? (
           <Suspense fallback={<p className="status-strip" role="status">Loading quote completion…</p>}>
             <QuoteCompletionCommandPath
               enabled
@@ -1396,7 +1403,7 @@ export default function ProposalComposer({
         <button type="button" className="pc-ghost" onClick={() => setPreviewOpen(true)}>
           Preview client view
         </button>
-        {!quoteCompletionCommandPathEnabled ? <DisabledActionReason
+        {!(QUOTE_COMPLETION_BUILD_ENABLED && quoteCompletionCommandPathEnabled) ? <DisabledActionReason
           id="proposal-pulse-save-disabled-reason"
           reason={saveActionDisabledReason}
           grouped
@@ -1457,7 +1464,7 @@ export default function ProposalComposer({
             {header.saveState.label}
           </p>
           <div className="pc-header-actions">
-            {!quoteCompletionCommandPathEnabled ? <DisabledActionReason
+            {!(QUOTE_COMPLETION_BUILD_ENABLED && quoteCompletionCommandPathEnabled) ? <DisabledActionReason
               id="proposal-header-save-disabled-reason"
               reason={saveActionDisabledReason}
               grouped

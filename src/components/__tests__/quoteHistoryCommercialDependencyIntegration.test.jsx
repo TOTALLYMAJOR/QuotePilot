@@ -159,8 +159,12 @@ describe("Quote History Commercial Dependency integration", () => {
     mount({ decisionPacketEnabled: true, onOpenQuoteAdministration });
     await settle();
 
-    const action = [...container.querySelectorAll("button")]
-      .find((button) => button.textContent.includes("Open accepted revision"));
+    let action;
+    await vi.waitFor(() => {
+      action = [...container.querySelectorAll("button")]
+        .find((button) => button.textContent.includes("Open accepted revision"));
+      expect(action).toBeTruthy();
+    });
     expect(action).toBeTruthy();
     act(() => action.click());
 

@@ -1,7 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import "./ambientSurfaceGrammar.css";
 import AuthGate from "./components/AuthGate";
-import GovernedQuoteStartsTest from "./components/GovernedQuoteStarts";
 import { scheduleGovernedTemplateDestinationFocus } from "./components/governedQuoteStartFocus";
 import { RebookQuoteReviewBanner } from "./components/CustomerRebookDraftAction";
 import { buildDraftSaveBlockers } from "./components/proposalSaveReadiness";
@@ -204,7 +203,7 @@ const QUOTE_CONFIDENCE_BUILD_ENABLED = QUOTE_COMPLETION_BUILD_ENABLED
   || import.meta.env.VITE_EVENT_SUPPLY_ACTION_PLAN_ENABLED === "true"
   || import.meta.env.VITE_INVENTORY_MOBILE_CAPTURE_ENABLED === "true";
 const GovernedQuoteStarts = import.meta.env.MODE === "test"
-  ? GovernedQuoteStartsTest
+  ? lazy(() => import("./components/GovernedQuoteStarts"))
   : DECISION_PACKET_BUILD_ENABLED
     ? lazy(() => import("./components/GovernedQuoteStarts"))
     : null;
@@ -411,7 +410,7 @@ const loadAmbientQuoteDraftRuntime = AMBIENT_UI_ENABLED
   ? () => import("./lib/quoteDraftRuntime")
   : null;
 const loadAmbientProductAnalytics = AMBIENT_UI_ENABLED
-  ? () => import("./lib/productAnalyticsAmbient")
+  ? () => import("./lib/productAnalyticsAmbientLoader")
   : null;
 const loadAmbientGlobalPilotTarget = AMBIENT_UI_ENABLED
   ? () => import("./lib/ambientGlobalPilotTarget")

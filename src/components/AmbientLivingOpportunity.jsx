@@ -3284,7 +3284,7 @@ const AmbientLivingOpportunity = forwardRef(function AmbientLivingOpportunity({
         || "No conversation next step is available here. These details remain read-only."}
     </p>
   );
-  const runQuoteCompletionAction = async (action) => {
+  const runQuoteCompletionAction = QUOTE_COMPLETION_UI_ENABLED ? async (action) => {
     const surfaceId = String(action?.destination?.surfaceId || "");
     if (surfaceId === "quote-administration") {
       return openProposalControls(action.destination);
@@ -3299,7 +3299,7 @@ const AmbientLivingOpportunity = forwardRef(function AmbientLivingOpportunity({
       });
     }
     return { state: "recovery", message: "The exact proposal destination is not available here." };
-  };
+  } : null;
   const contextSurfaceActive = Boolean(
     guestOpen
     || staffingOpen

@@ -1,10 +1,23 @@
 # Changelog
 
-Last updated: 2026-10-11 23:03:10 CDT
+Last updated: 2026-10-11 23:14:06 CDT
 
 All notable project changes are documented in this file.
 
 ## Unreleased — Current candidate refinements
+
+- Tighten the integrated v0.21.0 production graph without deleting capability.
+  Default-off quote-completion, decision-packet, and analytics handlers now
+  compile out of the Ambient production build, removing 6,197 bytes from the
+  first combined candidate. The remaining active integration measures
+  4,975,456 / 385,181 bytes, an exact 9,363-byte aggregate increase over
+  `f3ff212a` in the same local environment. The reviewed temporary ceiling is
+  4,978,120 / 445,422 bytes, preserving the prior 2,664-byte environment margin
+  with no percentage or future-growth allowance. Protected exact-PR CI, merge,
+  deployment, hosted UAT, adoption, and outcome evidence remain separate.
+  Concurrent analytics flush callers now share a contained provider-failure
+  result instead of exposing an unhandled rejection; queued events remain for
+  the existing retry path.
 
 - Reconcile the combined release candidate's closeout-learning, Inventory
   draft, and commercial-comparison seams. Exact-source actuals now wait for the

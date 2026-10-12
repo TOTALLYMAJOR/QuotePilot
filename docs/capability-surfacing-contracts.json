@@ -1709,7 +1709,7 @@
     },
     {
       "id": "bounded-commercial-search",
-      "reviewRevision": 5,
+      "reviewRevision": 6,
       "status": "active",
       "deliveryType": "user_relevant",
       "capabilityKind": "read_surface",
@@ -2891,6 +2891,7 @@
         "functions/productAnalytics.js",
         "src/lib/productAnalytics.js",
         "src/lib/productAnalyticsAmbient.js",
+        "src/lib/productAnalyticsAmbientLoader.js",
         "src/lib/productAnalyticsCore.js",
         "src/lib/productAnalyticsLegacy.js",
         "src/lib/quoteStore.js"
@@ -2915,6 +2916,7 @@
         "src/components/__tests__/reportingDashboardEvidence.test.jsx",
         "src/lib/__tests__/productAnalytics.client.test.js",
         "src/lib/__tests__/productAnalytics.core.test.js",
+        "src/lib/__tests__/productAnalytics.flush.test.js",
         "src/lib/__tests__/productAnalytics.server.test.js"
       ],
       "testLocators": [
@@ -2974,7 +2976,7 @@
         }
       ],
       "surfaceReview": "changed",
-      "surfaceReviewNote": "The routed entry point, displayed-record scope, source and freshness rail, bounded denominators, missing-money handling, provider-payment evidence gate, stale retention, responsive presentation, and recovery control were reviewed together. Revision 2 adds three privacy-bounded client-observed Ambient measures to the existing product-event read: exact 250ms primary-action assessments; first intent paired only with a server-authoritative Firebase saved priced-draft receipt; and issue surfaced-to-resolved timing paired only by an exact bounded category in the same staff session. Revision 3 records the build-time decomposition of that same analytics client into compatibility facade, shared transport, Ambient extension, and flag-off legacy implementation; the split preserves the callable names, queue keys, fail-closed sanitization, local fallback, and existing read authority. Raw quote/customer identifiers, message/proposal content, and free text remain rejected, local fallback infers no rate or duration, and the display labels the data as client observation rather than server timing telemetry. Commercial records and analytics now settle independently with source-specific loading and unavailable states; unresolved analytics cannot appear as zero activity, and organization changes discard prior-scope display state.",
+      "surfaceReviewNote": "The routed entry point, displayed-record scope, source and freshness rail, bounded denominators, missing-money handling, provider-payment evidence gate, stale retention, responsive presentation, and recovery control were reviewed together. Revision 2 adds three privacy-bounded client-observed Ambient measures to the existing product-event read: exact 250ms primary-action assessments; first intent paired only with a server-authoritative Firebase saved priced-draft receipt; and issue surfaced-to-resolved timing paired only by an exact bounded category in the same staff session. Revision 3 records the build-time decomposition of that same analytics client into compatibility facade, shared transport, Ambient extension, and flag-off legacy implementation; the split preserves the callable names, queue keys, fail-closed sanitization, local fallback, and existing read authority. Revision 6 narrows the production loader to first-intent and priced-draft observations and contains a shared provider rejection for every concurrent flush caller while retaining the queued batch for retry. Raw quote/customer identifiers, message/proposal content, and free text remain rejected, local fallback infers no rate or duration, and the display labels the data as client observation rather than server timing telemetry. Commercial records and analytics now settle independently with source-specific loading and unavailable states; unresolved analytics cannot appear as zero activity, and organization changes discard prior-scope display state.",
       "stateEvidence": [
         {
           "state": "loading",

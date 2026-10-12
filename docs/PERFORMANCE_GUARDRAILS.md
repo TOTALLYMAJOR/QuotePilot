@@ -1,6 +1,6 @@
 # Performance Guardrails
 
-Last updated: 2026-10-11 04:13:28 CDT
+Last updated: 2026-10-11 23:14:06 CDT
 ## Objectives
 Keep delivery speed high while protecting end-user experience and predictable performance.
 
@@ -197,6 +197,18 @@ Threshold policy:
   have their own exact byte-and-SHA-256 manifest in
   `docs/performance/optional-tool-budget.json`. The bundle guard rejects a
   changed, missing, additional, or unbudgeted optional runtime asset.
+  The v0.21.0 integration candidate then compiles dormant Quote-to-Confidence
+  handlers and analytics out of the production graph, removing 6,197 bytes
+  from the first combined build. Against the same local production environment,
+  exact source `f3ff212a` measures 4,966,093 / 385,181 bytes and the integrated
+  candidate measures 4,975,456 / 385,181 bytes. The 9,363-byte retained delta
+  is distributed across active Inventory, opportunity, reporting, customer,
+  and actuals integrations. The temporary aggregate ceiling is therefore
+  4,978,120 bytes: the prior 4,968,757-byte ceiling plus that exact source
+  delta, preserving the same 2,664-byte environment margin. The 445,422-byte
+  largest-chunk ceiling is unchanged. This is reviewed capability cost with no
+  percentage or future-growth allowance; exact-PR CI must still confirm the
+  emitted graph.
   `ambient-opportunity-model` and `quote-builder-ui` chunk boundaries reduced
   the Ambient largest chunk from 436,188 bytes before Team access; at that
   checkpoint the largest chunk was 391,901 bytes. The remaining
