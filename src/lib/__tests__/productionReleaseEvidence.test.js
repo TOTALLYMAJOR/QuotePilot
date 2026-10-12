@@ -582,7 +582,7 @@ function makePreparationReviewLog({
 }
 
 function makeGit({
-  origin = "https://github.com/TOTALLYMAJOR/quoteflow.git",
+  origin = "https://github.com/TOTALLYMAJOR/QuotePilot.git",
   tags = RELEASE_TAG,
   fail = ""
 } = {}) {
@@ -1710,9 +1710,9 @@ describe("UAT workflow evidence validators", () => {
 
 describe("Git release and rollback evidence", () => {
   test.each([
-    "https://github.com/TOTALLYMAJOR/quoteflow",
-    "https://github.com/TOTALLYMAJOR/quoteflow.git",
-    "git@github.com:TOTALLYMAJOR/quoteflow.git"
+    "https://github.com/TOTALLYMAJOR/QuotePilot",
+    "https://github.com/TOTALLYMAJOR/QuotePilot.git",
+    "git@github.com:TOTALLYMAJOR/QuotePilot.git"
   ])("accepts canonical origin %s with an ancestor rollback", (origin) => {
     const { git, calls } = makeGit({ origin });
     expect(validateGitEvidence({
@@ -1748,6 +1748,7 @@ describe("Git release and rollback evidence", () => {
   });
 
   test.each([
+    [{ origin: "https://github.com/TOTALLYMAJOR/quoteflow.git" }, /origin is not the canonical/i],
     [{ origin: "https://github.com/other/repo.git" }, /origin is not the canonical/i],
     [{ fail: "diff --quiet HEAD --" }, /tracked checkout files changed/i],
     [{ fail: "remote get-url origin" }, /origin remote cannot be resolved/i],

@@ -47,7 +47,7 @@ unknowns:
 
 | Resource             | Feature-specific identifier       | Notes                                                                              |
 | -------------------- | --------------------------------- | ---------------------------------------------------------------------------------- |
-| Canonical Git remote | `TOTALLYMAJOR/quoteflow`          | Read-only branch, tag, and workflow identity where credentials permit.             |
+| Canonical Git remote | `TOTALLYMAJOR/QuotePilot`         | Read-only branch, tag, and workflow identity where credentials permit.             |
 | Production edge      | `https://quotepilot.mbmapps.com/` | Reachability only; HTTP success is not build identity or authenticated acceptance. |
 | Firebase origin      | `https://tonicatering.web.app/`   | Reachability only; the legacy infrastructure name is not product identity.         |
 

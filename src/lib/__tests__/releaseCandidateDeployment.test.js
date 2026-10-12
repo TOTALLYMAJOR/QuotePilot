@@ -194,6 +194,10 @@ describe("governed release candidate deployment", () => {
   });
 
   test("uses fixed provider identities and SHA-bound confirmations", () => {
+    expect(RELEASE_CANDIDATE_POLICY.repository).toEqual({
+      id: 1167899098,
+      fullName: "TOTALLYMAJOR/QuotePilot"
+    });
     expect(RELEASE_CANDIDATE_POLICY.firebase.projectId).toBe("quotepilot-staging-20260804");
     expect(RELEASE_CANDIDATE_POLICY.vercel.projectName).toBe("quoteflow");
     expect(candidateConfirmation("firebase-all", SHA)).toContain(`quotepilot-staging-20260804 ${SHA}`);
