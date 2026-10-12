@@ -31,7 +31,8 @@ export function isIsolatedFunctionSource(file) {
     && !parts.some((part) => part.startsWith(".") || part === "node_modules")
     && (/\.(?:js|cjs)$/.test(file) || ["functions/package.json", "functions/package-lock.json", "functions/data/starterCatalogPacks.json"].includes(file));
 }
-export const STAFF = Object.freeze({ uid: "route-performance-admin", email: "performance-admin@example.test", password: "Local-performance-only-123!" });
+// Explicit non-secret placeholder, used only by the guarded disposable emulator.
+export const STAFF = Object.freeze({ uid: "route-performance-admin", email: "performance-admin@example.test", password: "<route-performance-test-only>" });
 export const QUOTE = Object.freeze({
   id: "route-perf-quote", organizationId: "e2e-org", customerId: "route-perf-customer",
   quoteNumber: "Q-PERF-001", status: "draft", activeVersionId: "v0001", latestVersionNumber: 1,
