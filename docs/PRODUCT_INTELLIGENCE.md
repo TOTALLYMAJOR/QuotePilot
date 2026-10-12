@@ -1,13 +1,13 @@
 # QuotePilot Product Intelligence System
 
-Last updated: 2026-10-11 20:45:43 CDT
+Last updated: 2026-10-11 22:48:37 CDT
 
 ## Quote-to-Confidence measurement extension
 
 The local, default-off candidate adds `MET-19`–`MET-21`, categorical completion
 and learning signals `SIG-017`–`SIG-021`, five named operator journeys, and
 `BASE-09` with a 14-day pre-exposure baseline. Fewer than 50 eligible observations
-per compared cohort are informational only. `LED-021` records source/local
+per compared cohort are informational only. `LED-022` records source/local
 implementation without adoption or outcome claims. No baseline has been collected.
 Reporting retains proposed and receipt-confirmed counts separately for recipe,
 template, pack-conversion and workflow categories. A zero completion-action
@@ -17,11 +17,11 @@ complete read/mutation lifecycles remain with existing authority contracts.
 Final integration corrections stop new shelf-count requests after scope changes,
 retain original attempt outcomes, allow backend-derived supply resolution after
 an empty-shortage rebase, and align Legacy recorded-cost comparisons. These are
-local reliability corrections under `LED-021`; no metric or exposure changes.
+local reliability corrections under `LED-022`; no metric or exposure changes.
 The final packaging pass keeps default-off implementations behind compile-time
 and lazy boundaries, while small role-safe gate, comparison, navigation, and
 arrival helpers remain in their owning shells. This reduces disabled-bundle
-cost without changing `LED-021` exposure, metrics, authority, or outcome claims.
+cost without changing `LED-022` exposure, metrics, authority, or outcome claims.
 ## Purpose
 
 This is the canonical entry point for deciding whether QuotePilot creates
