@@ -20,9 +20,9 @@ async function fillRequiredQuoteFields(page) {
 async function advanceToSave(page) {
   for (let step = 0; step < 6; step += 1) {
     const firstMenuChoice = page.locator(
-      ".wizard-panel .menu-library input[type='checkbox']:not(:checked)"
+      ".wizard-panel .menu-library input[type='checkbox']"
     ).first();
-    if (await firstMenuChoice.count()) {
+    if (await firstMenuChoice.count() && !(await firstMenuChoice.isChecked())) {
       await firstMenuChoice.check();
     }
 

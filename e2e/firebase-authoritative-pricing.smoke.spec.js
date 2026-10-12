@@ -3,12 +3,19 @@ import { expect, test } from "@playwright/test";
 const STAFF_EMAIL = process.env.E2E_FIREBASE_EMAIL || "e2e-admin@local.test";
 const STAFF_PASSWORD = process.env.E2E_FIREBASE_PASSWORD || "Passw0rd!";
 
+async function expectAnyVisible(locators, timeout = 45_000) {
+  await expect.poll(async () => {
+    const visibility = await Promise.all(locators.map((locator) => locator.isVisible()));
+    return visibility.some(Boolean);
+  }, { timeout }).toBe(true);
+}
+
 async function signInAsStaff(page) {
   await page.goto("/app");
   const signInHeading = page.getByRole("heading", { name: "Staff Sign In" });
-  const quoteButton = page.getByRole("button", { name: "New quote", exact: true });
+  const quoteButton = page.getByRole("button", { name: "New quote", exact: true }).first();
   const exploreButton = page.getByRole("button", { name: "Explore the workspace", exact: true });
-  await expect(signInHeading.or(exploreButton).or(quoteButton)).toBeVisible({ timeout: 45_000 });
+  await expectAnyVisible([signInHeading, exploreButton, quoteButton]);
   if (await signInHeading.isVisible()) {
     await expect(signInHeading).toBeVisible();
     await page.getByLabel(/^Email$/i).fill(STAFF_EMAIL);
@@ -16,7 +23,7 @@ async function signInAsStaff(page) {
     await page.locator(".auth-actions").getByRole("button", { name: "Sign In" }).click();
   }
   // Complete the native onboarding entry before opening the quote workflow.
-  await expect(exploreButton.or(quoteButton)).toBeVisible({ timeout: 45_000 });
+  await expectAnyVisible([exploreButton, quoteButton]);
   if (await exploreButton.isVisible()) await exploreButton.click();
   await expect(quoteButton).toBeVisible({ timeout: 45_000 });
   await quoteButton.click();
@@ -59,16 +66,15 @@ async function advanceToSave(page, saveLabel = "Save draft") {
       return;
     }
 
-    const nextButton = page.getByRole("button", { name: /^Next:/ });
-    if (!(await nextButton.count())) break;
-
     const menuHeading = page.getByRole("heading", { name: /Build the menu|Customized Cuisine Menu/i });
     if (await menuHeading.isVisible()) {
       const firstMenuItem = page.getByRole("checkbox").first();
       await expect(firstMenuItem).toBeVisible();
-      await firstMenuItem.check();
+      if (!(await firstMenuItem.isChecked())) await firstMenuItem.check();
     }
 
+    const nextButton = page.getByRole("button", { name: /^Next:/ });
+    if (!(await nextButton.count())) break;
     await nextButton.click();
   }
 
