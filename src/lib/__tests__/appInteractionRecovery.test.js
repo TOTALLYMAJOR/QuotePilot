@@ -83,9 +83,11 @@ describe("workspace interaction recovery wiring", () => {
     expect(appSource).toContain('href="https://mbmapps.com/contact"');
     expect(appSource).toContain('onClick={handleRefreshAccess}');
     expect(appSource).toContain("await authSession.refreshAccess()");
-    expect(appSource).toContain('import CatalogReadNotice from "./components/CatalogReadNotice"');
+    expect(appSource).toContain('const CatalogReadNotice = createRecoverableLazy(loadQuoteWorkflowModule, "CatalogReadNotice", quoteWorkflowComponent("CatalogReadNotice"))');
+    expect(appSource).not.toContain('import CatalogReadNotice from "./components/CatalogReadNotice"');
     expect(appSource.match(/onRetry=\{catalog\.reload\}/g)).toHaveLength(2);
-    expect(legacyAppSource).toContain('import CatalogReadNotice from "./components/CatalogReadNotice"');
+    expect(legacyAppSource).toContain('const CatalogReadNotice = createRecoverableLazy(loadQuoteWorkflowModule, "CatalogReadNotice", quoteWorkflowComponent("CatalogReadNotice"))');
+    expect(legacyAppSource).not.toContain('import CatalogReadNotice from "./components/CatalogReadNotice"');
     expect(legacyAppSource.match(/onRetry=\{catalog\.reload\}/g)).toHaveLength(2);
     expect(appSource).toContain("Check for catalog updates");
   });
@@ -211,7 +213,7 @@ describe("workspace interaction recovery wiring", () => {
     expect(appSource).toContain("const beginWorkspaceTaskJourney = useCallback((handoff, actionId) => {");
     expect(appSource).toContain("principal: activeWorkspaceTaskPrincipal");
     expect(appSource).toContain("startedAtISO: new Date().toISOString(),");
-    expect(appSource).toContain("workspaceTaskJourneyBelongsToPrincipal(stored.journey, activeWorkspaceTaskPrincipal)");
+    expect(appSource).toContain("workspaceTaskJourneyIsRestorable(stored.journey, activeWorkspaceTaskPrincipal)");
     expect(appSource).toContain("clearWorkspaceTaskJourney(authSession.organizationId)");
     expect(appSource).toContain("const stored = writeWorkspaceTaskJourney(authSession.organizationId, journey)");
     expect(appSource).toContain("if (stored.ok) setWorkspaceTaskJourney(stored.journey)");

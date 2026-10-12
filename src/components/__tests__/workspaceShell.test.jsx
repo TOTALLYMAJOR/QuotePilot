@@ -148,6 +148,25 @@ describe("WorkspaceShell", () => {
     return currentProps;
   }
 
+  test.each([641, 768, 1180])("keeps a single usable header New quote action throughout the %spx tablet range", (width) => {
+    const previous = window.matchMedia;
+    window.matchMedia = vi.fn((query) => ({
+      matches: query === "(min-width: 1181px)" && width >= 1181,
+      addEventListener: vi.fn(), removeEventListener: vi.fn()
+    }));
+    try {
+      const props = render({ ambientNavigation: true });
+      const action = buttonsByText(container, "New quote");
+      expect(action).toHaveLength(1);
+      expect(action[0].closest(".site-header")).not.toBeNull();
+      act(() => action[0].click());
+      expect(props.actions.onNewQuote).toHaveBeenCalledOnce();
+      expect(container.querySelector(".ambient-workarea-new-quote")).toBeNull();
+    } finally {
+      window.matchMedia = previous;
+    }
+  });
+
   test("renders workspace orientation, identity, crew, theme, ambient class, and active Now state", () => {
     render({
       identity: {

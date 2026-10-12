@@ -1,8 +1,15 @@
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, test } from "vitest";
-import { QuoteHistoryView } from "../QuoteHistoryModal";
-import { SalesWorkflowView } from "../SalesWorkflowModal";
+import { afterEach, beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
+
+let QuoteHistoryView;
+let SalesWorkflowView;
+
+beforeAll(async () => {
+  vi.stubEnv("VITE_AMBIENT_UI_ENABLED", "false");
+  ({ QuoteHistoryView } = await import("../QuoteHistoryModal"));
+  ({ SalesWorkflowView } = await import("../SalesWorkflowModal"));
+});
 
 function renderHistory(presentation) {
   return renderToStaticMarkup(
@@ -27,6 +34,14 @@ function renderWorkflow(presentation) {
     />
   );
 }
+
+beforeEach(() => {
+  vi.stubEnv("VITE_AMBIENT_UI_ENABLED", "false");
+});
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 describe("workspace route presentation", () => {
   test("Quotes uses route return language and a focusable heading only when embedded", () => {

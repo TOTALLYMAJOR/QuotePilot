@@ -219,6 +219,8 @@ export function buildCatalogSetupChanges({
     };
   });
   const settingsPatch = buildSettingsPatch(catalog.settings || {}, baselineCatalog.settings || {});
+  delete settingsPatch.pricingSetupConfirmed;
+  delete settingsPatch.pricingConfirmation;
   const changes = [
     ...catalogChanges,
     ...(Object.keys(settingsPatch).length > 0
@@ -248,6 +250,42 @@ function importRecordId(batchId, row, index) {
 
 const IMPORT_MONEY_MAX_MINOR = 100_000_000;
 const IMPORT_RELATIONSHIP_LIMIT = 100;
+const IMPORT_SOURCE_KINDS = new Set(["csv", "pdf"]);
+
+function cleanImportProvenanceText(value, maxLength) {
+  return String(value ?? "")
+    .replace(/[\u0000-\u001f\u007f]|\p{Cf}/gu, "")
+    .trim()
+    .slice(0, maxLength);
+}
+
+function catalogImportProvenance({ importBatchId, importType, sourceKind, sourceFileName, rowNumber }) {
+  const provenanceRequested = String(sourceKind ?? "").length > 0
+    || String(sourceFileName ?? "").length > 0;
+  if (!provenanceRequested) return null;
+  const normalizedImportBatchId = cleanImportProvenanceText(importBatchId, 180)
+    .replace(/[^A-Za-z0-9_-]/g, "_");
+  const normalizedSourceKind = cleanImportProvenanceText(sourceKind, 20).toLowerCase();
+  const normalizedSourceFileName = cleanImportProvenanceText(sourceFileName, 240);
+  const sourceRowNumber = Number(rowNumber);
+  if (
+    !normalizedImportBatchId
+    || !IMPORT_SOURCE_KINDS.has(normalizedSourceKind)
+    || !normalizedSourceFileName
+    || !Number.isSafeInteger(sourceRowNumber)
+    || sourceRowNumber < 1
+  ) {
+    throw new Error("Catalog import source has invalid import provenance.");
+  }
+  return {
+    kind: "catalog_import",
+    importBatchId: normalizedImportBatchId,
+    importType: cleanImportProvenanceText(importType, 40),
+    sourceKind: normalizedSourceKind,
+    sourceFileName: normalizedSourceFileName,
+    sourceRowNumber
+  };
+}
 
 function importText(value, {
   label = "Value",
@@ -310,10 +348,20 @@ function importRelationshipIds(value, { label, rowNumber }) {
   return normalized;
 }
 
-export function buildCatalogImportDraftChanges({ importType = "", rows = [], importBatchId = "" } = {}) {
+export function buildCatalogImportDraftChanges({
+  importType = "",
+  rows = [],
+  importBatchId = "",
+  sourceKind = "",
+  sourceFileName = ""
+} = {}) {
   const collection = COLLECTION_BY_CATALOG_KEY[importType] || (importType === "menuItems" ? "menuItems" : "");
   if (!collection) throw new Error("Choose a supported catalog import type.");
-  return (Array.isArray(rows) ? rows : []).map((row, index) => {
+  const normalizedRows = Array.isArray(rows) ? rows : [];
+  if (normalizedRows.length === 0 && (String(sourceKind ?? "").length > 0 || String(sourceFileName ?? "").length > 0)) {
+    catalogImportProvenance({ importBatchId, importType, sourceKind, sourceFileName, rowNumber: 1 });
+  }
+  return normalizedRows.map((row, index) => {
     const record = row?.record || row?.data || row || {};
     const rowNumber = Number.isSafeInteger(Number(row?.rowNumber)) ? Number(row.rowNumber) : index + 1;
     const name = importText(record.name, { label: "Name", required: true, rowNumber });
@@ -384,7 +432,20 @@ export function buildCatalogImportDraftChanges({ importType = "", rows = [], imp
       }
       payload = { name, eventTypeId, categoryId, priceMinor: importMoney(record.price, { label: "Price", required: true, rowNumber }), costMinor: importMoney(record.cost, { label: "Cost", rowNumber }), pricingType: basis, type: basis, active: record.active !== false };
     }
-    return { collection, recordId: importRecordId(importBatchId, row, index), intent: "create", payload };
+    const provenance = catalogImportProvenance({
+      importBatchId,
+      importType,
+      sourceKind,
+      sourceFileName,
+      rowNumber
+    });
+    return {
+      collection,
+      recordId: importRecordId(provenance?.importBatchId || importBatchId, row, index),
+      intent: "create",
+      payload,
+      ...(provenance ? { provenance } : {})
+    };
   });
 }
 
@@ -540,6 +601,7 @@ function assertCatalogImportMutationReceipt({ result, plan, patches, organizatio
       || authoritative.requestedIntent !== patch.intent
       || !compatibleCatalogImportIntent(patch.intent, authoritative.intent)
       || !valuesMatch(authoritative.payload, patch.payload)
+      || !valuesMatch(authoritative.provenance || null, patch.provenance || null)
     ) {
       throw catalogImportReceiptMismatch(`requested patch ${expectedId} mismatch`);
     }
@@ -563,11 +625,13 @@ export async function preflightCatalogImportDraft({
   organizationId = "",
   importType = "",
   rows = [],
-  importBatchId = createCatalogSetupRequestId("import")
+  importBatchId = createCatalogSetupRequestId("import"),
+  sourceKind = "",
+  sourceFileName = ""
 } = {}) {
   const current = await getCatalogSetupDraft({ organizationId });
   const draft = current?.draft || {};
-  const patches = buildCatalogImportDraftChanges({ importType, rows, importBatchId });
+  const patches = buildCatalogImportDraftChanges({ importType, rows, importBatchId, sourceKind, sourceFileName });
   const expectedGeneration = Number(draft.state === "open" ? draft.generation || 0 : 0);
   const currentCatalogRevision = Number(current.currentCatalogRevision || 0);
   const baseCatalogRevision = Number(draft.state === "open" ? draft.baseCatalogRevision : currentCatalogRevision);
@@ -627,10 +691,12 @@ export async function stageCatalogImportDraft({
   importType = "",
   rows = [],
   importBatchId = createCatalogSetupRequestId("import"),
+  sourceKind = "",
+  sourceFileName = "",
   preflight = null
 } = {}) {
   const plan = preflight;
-  const patches = buildCatalogImportDraftChanges({ importType, rows, importBatchId });
+  const patches = buildCatalogImportDraftChanges({ importType, rows, importBatchId, sourceKind, sourceFileName });
   if (
     plan?.ok !== true
     || plan?.status !== "ready"

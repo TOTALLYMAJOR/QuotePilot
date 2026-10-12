@@ -6,17 +6,26 @@ import {
   writeProductAnalyticsSession
 } from "./productAnalyticsCore";
 
+const QUOTE_COMPLETION_ANALYTICS_ENABLED = import.meta.env.MODE === "test"
+  || import.meta.env.VITE_QUOTE_COMPLETION_COMMAND_PATH_ENABLED === "true";
+const POST_EVENT_LEARNING_ANALYTICS_ENABLED = import.meta.env.MODE === "test"
+  || import.meta.env.VITE_POST_EVENT_LEARNING_ENABLED === "true";
+
 const AMBIENT_EVENT_NAMES = new Set([
   "first_intent_observed",
   "priced_draft_receipt_observed",
   "ambient_primary_action_assessed",
   "ambient_issue_surfaced",
   "ambient_issue_resolved",
-  "quote_completion_action_shown",
-  "quote_completion_action_resolved",
-  "quote_completion_sendable_reached",
-  "post_event_learning_proposed",
-  "post_event_learning_applied"
+  ...(QUOTE_COMPLETION_ANALYTICS_ENABLED ? [
+    "quote_completion_action_shown",
+    "quote_completion_action_resolved",
+    "quote_completion_sendable_reached"
+  ] : []),
+  ...(POST_EVENT_LEARNING_ANALYTICS_ENABLED ? [
+    "post_event_learning_proposed",
+    "post_event_learning_applied"
+  ] : [])
 ]);
 const AMBIENT_RESULT_KINDS = new Set([
   "context",
@@ -48,14 +57,14 @@ export const PRODUCT_ANALYTICS_ISSUE_CATEGORIES = Object.freeze([
 ]);
 
 const ISSUE_CATEGORIES = new Set(PRODUCT_ANALYTICS_ISSUE_CATEGORIES);
-const QUOTE_COMPLETION_STATES = new Set([
+const QUOTE_COMPLETION_STATES = QUOTE_COMPLETION_ANALYTICS_ENABLED ? new Set([
   "blocked",
   "review_required",
   "sendable",
   "sent",
   "accepted"
-]);
-const QUOTE_COMPLETION_ACTION_KINDS = new Set([
+]) : null;
+const QUOTE_COMPLETION_ACTION_KINDS = QUOTE_COMPLETION_ANALYTICS_ENABLED ? new Set([
   "resolve_field",
   "recover_evidence",
   "save_revision",
@@ -63,13 +72,15 @@ const QUOTE_COMPLETION_ACTION_KINDS = new Set([
   "recover_delivery",
   "configured_action",
   "review_proposal"
-]);
-const QUOTE_COMPLETION_SURFACES = new Set([
+]) : null;
+const QUOTE_COMPLETION_SURFACES = QUOTE_COMPLETION_ANALYTICS_ENABLED ? new Set([
   "proposal_composer",
   "review",
   "living_opportunity"
-]);
-const QUOTE_COMPLETION_RESULTS = new Set(["success", "failure", "stale", "recovery"]);
+]) : null;
+const QUOTE_COMPLETION_RESULTS = QUOTE_COMPLETION_ANALYTICS_ENABLED
+  ? new Set(["success", "failure", "stale", "recovery"])
+  : null;
 
 function normalizeIssueCategory(value) {
   const normalized = String(value || "").trim().toLowerCase();
@@ -78,7 +89,7 @@ function normalizeIssueCategory(value) {
 
 function sanitizeAmbientDimensions(eventName, dimensions = {}) {
   if (!AMBIENT_EVENT_NAMES.has(eventName)) return null;
-  if (eventName.startsWith("post_event_learning_")) {
+  if (POST_EVENT_LEARNING_ANALYTICS_ENABLED && eventName.startsWith("post_event_learning_")) {
     if (!["recipe", "template", "pack_conversion", "workflow"].includes(dimensions.category)) return null;
     if (eventName === "post_event_learning_applied" && dimensions.authority !== "existing_authority_receipt") return null;
     return { category: dimensions.category, ...(eventName === "post_event_learning_applied" ? { authority: "existing_authority_receipt" } : {}) };
@@ -127,7 +138,7 @@ function sanitizeAmbientDimensions(eventName, dimensions = {}) {
       ...(resultKind === null ? {} : { resultKind })
     };
   }
-  if (eventName.startsWith("quote_completion_")) {
+  if (QUOTE_COMPLETION_ANALYTICS_ENABLED && eventName.startsWith("quote_completion_")) {
     const completionState = String(dimensions.completionState || "").trim().toLowerCase();
     const surface = String(dimensions.surface || "").trim().toLowerCase();
     if (!QUOTE_COMPLETION_STATES.has(completionState) || !QUOTE_COMPLETION_SURFACES.has(surface)) {

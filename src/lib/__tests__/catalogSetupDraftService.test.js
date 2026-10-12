@@ -123,6 +123,21 @@ describe("catalog setup draft client adapter", () => {
     })]);
   });
 
+  test("leaves pricing confirmation to the publish authority", () => {
+    const baseline = catalog({ settings: { pricingSetupConfirmed: false, pricingConfirmation: null } });
+    const next = catalog({
+      settings: {
+        pricingSetupConfirmed: true,
+        pricingConfirmation: { actorUid: "local-operator" }
+      }
+    });
+
+    expect(buildCatalogSetupChanges({
+      catalog: next,
+      baselineCatalog: baseline
+    })).toEqual([]);
+  });
+
   test("creates stable callable-safe request ids", () => {
     expect(createCatalogSetupRequestId("draft")).toMatch(/^draft_[A-Za-z0-9_]{16,}$/);
   });

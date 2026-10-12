@@ -15,6 +15,9 @@ const AMBIENT_UI_ENABLED = ["1", "true", "yes", "on"].includes(
 const CUSTOMER_CENTERED_WORKSPACE_ENABLED = ["1", "true", "yes", "on"].includes(
   String(process.env.VITE_CUSTOMER_CENTERED_WORKSPACE_ENABLED || "").trim().toLowerCase()
 );
+const PILOT_MARGINS_ENABLED = ["1", "true", "yes", "on"].includes(
+  String(process.env.VITE_PILOT_MARGINS_ENABLED || "").trim().toLowerCase()
+);
 const CAPTURE_PROOF = ["1", "true", "yes", "on"].includes(
   String(process.env.CAPTURE_AMBIENT_BROWSER_PROOF || "").trim().toLowerCase()
 );
@@ -95,10 +98,20 @@ const CATALOG = {
   }
 };
 
-async function seedLibrary(page) {
+const MENU_IMPORT_CATALOG = {
+  ...CATALOG,
+  organizationName: "Northstar Catering",
+  managedMenuItems: [],
+  settings: {
+    ...CATALOG.settings,
+    organizationName: "Northstar Catering"
+  }
+};
+
+async function seedLibrary(page, catalog = CATALOG) {
   await page.addInitScript((catalog) => {
     localStorage.setItem("quoteWizard.catalog.e2e-org", JSON.stringify(catalog));
-  }, CATALOG);
+  }, catalog);
 }
 
 async function openAmbientLibrary(page) {
@@ -280,9 +293,9 @@ async function layoutAudit(page) {
         mode: window.innerWidth >= 981 ? "split" : "stack",
         catalogShare: catalogRect.width / (catalogRect.width + readinessRect.width),
         catalogRight: catalogRect.right,
-        catalogBottom: catalogRect.bottom,
+        catalogTop: catalogRect.top,
         readinessLeft: readinessRect.left,
-        readinessTop: readinessRect.top
+        readinessBottom: readinessRect.bottom
       } : null
     };
   });
@@ -326,6 +339,19 @@ test.describe("Ambient Library", () => {
       await expect(page.locator("body")).not.toContainText("Every new quote");
       await expect(page.locator("body")).not.toContainText("Return to Rivera Wedding");
 
+      const workspaceFocusableOrder = await page.locator('[data-library-workspace="commercial"]').evaluate((workspace) => (
+        [...workspace.querySelectorAll('button:not([disabled]), input:not([disabled]), select:not([disabled]), summary, a[href]')]
+          .map((element) => ({
+            inReadinessRail: element.closest('[data-library-readiness-rail]') !== null,
+            inCatalogColumn: element.closest('.ambient-library__catalog-column') !== null
+          }))
+      ));
+      const firstReadinessControl = workspaceFocusableOrder.findIndex((control) => control.inReadinessRail);
+      const firstCatalogControl = workspaceFocusableOrder.findIndex((control) => control.inCatalogColumn);
+      expect(firstReadinessControl).toBeGreaterThanOrEqual(0);
+      expect(firstCatalogControl).toBeGreaterThanOrEqual(0);
+      expect(firstReadinessControl).toBeLessThan(firstCatalogControl);
+
       const audit = await layoutAudit(page);
       expect(audit.setupError).toBe("");
       expect(audit.auditedGroupCount).toBeGreaterThanOrEqual(3);
@@ -342,7 +368,7 @@ test.describe("Ambient Library", () => {
         expect(audit.workspaceGeometry.readinessLeft).toBeGreaterThanOrEqual(audit.workspaceGeometry.catalogRight);
       } else {
         expect(audit.workspaceGeometry.mode).toBe("stack");
-        expect(audit.workspaceGeometry.readinessTop).toBeGreaterThanOrEqual(audit.workspaceGeometry.catalogBottom);
+        expect(audit.workspaceGeometry.catalogTop).toBeGreaterThanOrEqual(audit.workspaceGeometry.readinessBottom);
       }
 
       const accessibility = await new AxeBuilder({ page }).analyze();
@@ -352,6 +378,66 @@ test.describe("Ambient Library", () => {
         mkdirSync(PROOF_DIRECTORY, { recursive: true });
         await page.screenshot({
           path: `${PROOF_DIRECTORY}/ambient-library-${viewport.width}.png`,
+          fullPage: true
+        });
+      }
+    });
+  }
+
+  for (const viewport of VIEWPORTS) {
+    test(`orients menu import in Import Studio without a catalog write at ${viewport.width}px`, async ({ page }) => {
+      await page.setViewportSize(viewport);
+      await seedLibrary(page, MENU_IMPORT_CATALOG);
+      await openAmbientLibrary(page);
+      const catalogBefore = await readPersistedCatalog(page);
+
+      const importAction = page.getByRole("button", { name: "Import an existing menu" });
+      await expect(importAction).toBeVisible();
+      await importAction.scrollIntoViewIfNeeded();
+      await importAction.click();
+
+      await expect(page).toHaveURL(/\/app\/imports\?source=library-first-quote&importType=menuItems$/u);
+      const importStudio = page.getByRole("main", { name: "Import Studio" });
+      await expect(importStudio).toBeVisible({ timeout: LAZY_SURFACE_TIMEOUT_MS });
+      await expect(importStudio).toHaveAttribute("data-import-arrival", "library-first-quote");
+      await expect(importStudio).toHaveAttribute("data-import-type", "menuItems");
+      await expect(importStudio.getByRole("heading", { name: "Start with your real menu" })).toBeVisible();
+      await expect(importStudio).toContainText("does not import, save, or publish anything");
+      await expect(importStudio.locator('[data-mutation-state="idle"]')).toContainText(
+        "Nothing has been written to the organization"
+      );
+
+      const template = importStudio.getByRole("link", {
+        name: "Download quotepilot-menu-items-template.csv"
+      });
+      await expect(template).toBeVisible();
+      await expect(template).toHaveAttribute("download", "quotepilot-menu-items-template.csv");
+      await expect(template).toHaveAttribute("href", /^data:text\/csv;charset=utf-8,/u);
+
+      if (viewport.width === 390) {
+        const [download] = await Promise.all([
+          page.waitForEvent("download"),
+          template.click()
+        ]);
+        expect(download.suggestedFilename()).toBe("quotepilot-menu-items-template.csv");
+      }
+
+      const documentOverflow = await page.evaluate(() => Math.max(
+        0,
+        document.documentElement.scrollWidth - document.documentElement.clientWidth
+      ));
+      expect(documentOverflow).toBeLessThanOrEqual(1);
+      expect(await readPersistedCatalog(page)).toBe(catalogBefore);
+
+      const progress = importStudio.getByRole("navigation", { name: "Import Workbench progress" });
+      await expect(progress).toHaveAttribute("tabindex", "0");
+      const accessibility = await new AxeBuilder({ page }).analyze();
+      expect(accessibility.violations).toEqual([]);
+
+      if (CAPTURE_PROOF) {
+        mkdirSync(PROOF_DIRECTORY, { recursive: true });
+        await page.screenshot({
+          path: `${PROOF_DIRECTORY}/menu-import-studio-${viewport.width}.png`,
           fullPage: true
         });
       }
@@ -724,6 +810,8 @@ test.describe("Ambient Library", () => {
   });
 
   test("keeps advanced pricing policy compact and preserves a mobile nested edit", async ({ page }) => {
+    test.skip(!PILOT_MARGINS_ENABLED, "Requires the pilot margin presentation gate.");
+
     await page.setViewportSize({ width: 390, height: 844 });
     await seedLibrary(page);
     await openAmbientLibrary(page);

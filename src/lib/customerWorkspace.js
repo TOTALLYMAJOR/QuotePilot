@@ -621,6 +621,7 @@ export function buildCustomerWorkspaceDto({
     quotePageInfo: resolvedQuotePageInfo,
     versionPageInfo: {
       perQuoteLimit: VERSION_LIMIT_PER_QUOTE,
+      unloadedQuoteIds: normalizedQuotes.filter((quote) => !Object.hasOwn(versionsByQuote, quote.id)).map((quote) => quote.id),
       truncatedQuoteIds: [...new Set(versionTruncatedQuoteIds.map(text).filter(Boolean))]
     }
   };
@@ -652,10 +653,60 @@ function emitCoreWorkspace(onCoreWorkspace, workspace) {
   }
 }
 
+// One loader belongs to one exact customer read generation. Disposal suppresses
+// late results and queued work; in-flight read-only requests may still finish.
+export function createCustomerHistoryLoader({ quoteIds = [], read, onResult }) {
+  const allowed = new Set(quoteIds);
+  const states = new Map();
+  const queue = [];
+  let active = 0;
+  let disposed = false;
+  const publish = (id, result) => {
+    if (disposed) return;
+    states.set(id, result.status);
+    onResult(id, result);
+  };
+  const drain = () => {
+    while (!disposed && active < 4 && queue.length) {
+      const id = queue.shift();
+      active += 1;
+      Promise.resolve().then(() => read(id)).then(
+        (result) => publish(id, { ...result, status: "success", error: "" }),
+        () => publish(id, { status: "error", items: [], error: "Proposal history could not be loaded." })
+      ).finally(() => { active -= 1; drain(); });
+    }
+  };
+  return {
+    load(id) {
+      if (disposed || !allowed.has(id) || ["loading", "success"].includes(states.get(id))) return;
+      publish(id, { status: "loading", items: [], error: "" });
+      queue.push(id);
+      drain();
+    },
+    dispose() { disposed = true; queue.length = 0; }
+  };
+}
+
+export async function getCustomerQuoteVersions({ organizationId, quoteId }) {
+  const orgId = text(organizationId);
+  const id = text(quoteId);
+  if (!orgId || !id || orgId.includes("/") || id.includes("/")) throw new Error("Exact quote scope is required.");
+  if (firebaseReady && db) return loadQuoteVersions(orgId, id);
+  const result = await getQuoteVersionHistory(id, { organizationId: orgId });
+  const versions = result.versions.filter((version) => text(version.organizationId) === orgId);
+  return {
+    items: versions.slice(0, VERSION_LIMIT_PER_QUOTE).map((version) => ({
+      ...version, createdAtISO: toIso(version.createdAtISO || version.createdAt || version.timestamp)
+    })),
+    truncated: versions.length > VERSION_LIMIT_PER_QUOTE
+  };
+}
+
 export async function getCustomerWorkspace({
   organizationId = "",
   customerId = "",
-  onCoreWorkspace
+  onCoreWorkspace,
+  includeVersions = true
 } = {}) {
   const orgId = text(organizationId);
   const id = text(customerId);
@@ -715,7 +766,7 @@ export async function getCustomerWorkspace({
         quotePageInfo
       })
     });
-    const versionResults = await Promise.all(quotes.map(async (quote) => {
+    const versionResults = await Promise.all((includeVersions ? quotes : []).map(async (quote) => {
       const result = await getQuoteVersionHistory(quote.id, { organizationId: orgId });
       const scopedVersions = result.versions.filter((version) => (
         text(version?.organizationId) === orgId
@@ -785,7 +836,7 @@ export async function getCustomerWorkspace({
     error: "Current customer email controls could not be loaded."
   }));
   const [versionResults, revenueAutopilotResult] = await Promise.all([
-    Promise.all(quotes.map(async (quote) => (
+    Promise.all((includeVersions ? quotes : []).map(async (quote) => (
       [quote.id, await loadQuoteVersions(orgId, quote.id)]
     ))),
     revenueAutopilotRead

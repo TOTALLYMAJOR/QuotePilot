@@ -41,6 +41,7 @@ import {
   useWorkspaceReturnContextAdapter
 } from "../context/WorkspaceNavigationContext";
 import { restoreWorkspaceReturnViewport } from "../lib/workspaceReturnContext";
+import { markRouteStage } from "../lib/routePerformance";
 import { buildQuotePath } from "../lib/workspaceRoutes";
 import {
   buildQuoteHistoryController,
@@ -57,7 +58,7 @@ import {
 } from "../lib/workspacePresentation";
 import CommercialDependencyStatePanel from "./CommercialDependencyStatePanel";
 import ConfiguredQuoteActionRail from "./ConfiguredQuoteActionRail";
-import DecisionPacketPanelTest from "./DecisionPacketPanel";
+import DisabledActionReason from "./DisabledActionReason";
 import EventWorkspaceView from "./EventWorkspaceView";
 import KitchenBeoArtifactPanel from "./KitchenBeoArtifactPanel";
 import QuoteDecisionDebtPanel from "./QuoteDecisionDebtPanel";
@@ -74,11 +75,14 @@ const AmbientLivingOpportunityRoute = AMBIENT_UI_ENABLED
   : null;
 const DECISION_PACKET_BUILD_ENABLED = import.meta.env.MODE === "test"
   || import.meta.env.VITE_DECISION_PACKET_ENABLED === "true";
-const DecisionPacketPanel = import.meta.env.MODE === "test"
-  ? DecisionPacketPanelTest
-  : DECISION_PACKET_BUILD_ENABLED
-    ? lazy(() => import("./DecisionPacketPanel"))
-    : null;
+const QUOTE_COMPLETION_BUILD_ENABLED = import.meta.env.MODE === "test"
+  || import.meta.env.VITE_QUOTE_COMPLETION_COMMAND_PATH_ENABLED === "true";
+const EXACT_ADMINISTRATION_HANDOFF_ENABLED = DECISION_PACKET_BUILD_ENABLED
+  || QUOTE_COMPLETION_BUILD_ENABLED;
+const DecisionPacketPanel = DECISION_PACKET_BUILD_ENABLED
+  ? lazy(() => import("./DecisionPacketPanel"))
+  : null;
+const OperationalStaffingPanel = lazy(() => import("./OperationalStaffingPanel"));
 
 const QUOTE_STATUS_FILTER_OPTIONS = [
   { value: "all", label: "All statuses" },
@@ -550,11 +554,15 @@ export function getAmbientQuoteSourceFreshness({
 export function isExactQuoteAdministrationArrival({ arrivalContext, focusQuoteId } = {}) {
   const exactQuoteId = String(focusQuoteId || "").trim();
   const objectType = String(arrivalContext?.object?.type || "").trim();
-  const expectedIntent = {
-    opportunity: "review_quote_controls",
-    "payment-evidence": "review_payment_controls",
-    "customer-decision-artifact": "review_proposal_controls"
-  }[objectType] || "";
+  const expectedIntents = {
+    opportunity: ["review_quote_controls"],
+    "payment-evidence": ["review_payment_controls"],
+    "customer-decision-artifact": [
+      "review_proposal_controls",
+      "review_commercial_proposal_consequence"
+    ],
+    "kitchen-beo": ["review_kitchen_beo_consequence"]
+  }[objectType] || [];
   return Boolean(
     exactQuoteId
     && arrivalContext?.destination === "administration"
@@ -562,7 +570,7 @@ export function isExactQuoteAdministrationArrival({ arrivalContext, focusQuoteId
     && arrivalContext?.focusConsumerState === "supported"
     && String(arrivalContext?.object?.id || "").trim() === exactQuoteId
     && String(arrivalContext?.focus?.quoteId || "").trim() === exactQuoteId
-    && arrivalContext?.intentId === expectedIntent
+    && expectedIntents.includes(arrivalContext?.intentId)
   );
 }
 
@@ -621,6 +629,22 @@ export function resolveAcceptedRevisionAdministrationArrival({
     };
   }
   return { applies: true, status: "ready" };
+}
+
+export function commercialConsequenceRevisionMatchesQuote(arrivalContext, quote) {
+  const intentId = String(arrivalContext?.intentId || "").trim();
+  if (![
+    "review_commercial_proposal_consequence",
+    "review_kitchen_beo_consequence",
+    "review_staffing_consequence"
+  ].includes(intentId)) {
+    return true;
+  }
+  const requestedRevisionId = String(arrivalContext?.focus?.sourceRevisionId || "").trim();
+  const activeRevisionId = String(
+    quote?.activeVersionId || quote?.versionMeta?.versionId || ""
+  ).trim();
+  return Boolean(requestedRevisionId && activeRevisionId && requestedRevisionId === activeRevisionId);
 }
 
 const fmtDate = formatQuoteHistoryDate;
@@ -880,23 +904,39 @@ export function QuoteHistoryKitchenBeoAction({
       ? onExportLocal
       : null;
   const unavailable = typeof handler !== "function" || mode.action === "none";
+  const actionDisabled = disabled || exportingLocal || unavailable;
+  const actionDisabledReason = disabled
+    ? disabledReason || mode.title
+    : exportingLocal
+      ? "Wait for the current Kitchen BEO preparation to finish."
+      : unavailable
+        ? mode.title
+        : "";
   return (
-    <button
-      type="button"
-      className="ghost compact"
-      data-beo-authority={mode.authority}
-      data-capability-action={mode.action === "open-authoritative"
-        ? "open-kitchen-beo"
-        : mode.action === "export-local"
-          ? "export-local-kitchen-beo"
-          : undefined}
-      aria-haspopup={mode.action === "open-authoritative" ? "dialog" : undefined}
-      onClick={() => handler?.(quote)}
-      disabled={disabled || exportingLocal || unavailable}
-      title={disabledReason || mode.title}
+    <DisabledActionReason
+      id={`quote-${quote?.id || "current"}-kitchen-beo-disabled-reason`}
+      reason={actionDisabledReason}
+      grouped
     >
-      {exportingLocal ? "Generating local BEO…" : mode.label}
-    </button>
+      <button
+        type="button"
+        className="ghost compact"
+        data-quote-action-id="review_beo"
+        data-quote-action-group="operations"
+        data-beo-authority={mode.authority}
+        data-capability-action={mode.action === "open-authoritative"
+          ? "open-kitchen-beo"
+          : mode.action === "export-local"
+            ? "export-local-kitchen-beo"
+            : undefined}
+        aria-haspopup={mode.action === "open-authoritative" ? "dialog" : undefined}
+        onClick={() => handler?.(quote)}
+        disabled={actionDisabled}
+        title={actionDisabled ? undefined : mode.title}
+      >
+        {exportingLocal ? "Generating local BEO…" : mode.label}
+      </button>
+    </DisabledActionReason>
   );
 }
 
@@ -1052,6 +1092,7 @@ export function QuoteHistoryView({
   const deliveryReviewRef = useRef(null);
   const deliveryReviewReturnFocusRef = useRef(null);
   const kitchenBeoReturnFocusRef = useRef(null);
+  const staffingArrivalTargetRef = useRef(null);
   const deliveryReviewStateRef = useRef(null);
   const focusedHandoffIdRef = useRef("");
   const loadedFocusQuoteIdRef = useRef("");
@@ -1061,6 +1102,7 @@ export function QuoteHistoryView({
   const onCloseRef = useRef(onClose);
   const onCloseBlockedRef = useRef(onCloseBlocked);
   const quoteHistoryCloseGuardRef = useRef(buildQuoteHistoryCloseGuard());
+  const reportedPerformanceStagesRef = useRef(new Set());
 
   const quoteHistoryCloseGuard = buildQuoteHistoryCloseGuard({
     conversationQuote,
@@ -1072,6 +1114,32 @@ export function QuoteHistoryView({
     onCloseRef.current = onClose;
     onCloseBlockedRef.current = onCloseBlocked;
   }, [onClose, onCloseBlocked]);
+  useEffect(() => {
+    reportedPerformanceStagesRef.current = new Set();
+  }, [focusQuoteId, organizationId]);
+
+  useEffect(() => {
+    if (!open || !detailMode || reportedPerformanceStagesRef.current.has("usable-core")) return;
+    if (state.loading || !state.readComplete) return;
+    const focusedQuoteReady = state.quotes.some((quote) => quote.id === focusQuoteId);
+    reportedPerformanceStagesRef.current.add("usable-core");
+    markRouteStage({
+      routeId: "quote-review",
+      stage: "usable-core",
+      outcome: focusedQuoteReady ? "ready" : state.error ? "error" : "unavailable"
+    });
+  }, [detailMode, focusQuoteId, open, state.error, state.loading, state.quotes, state.readComplete]);
+
+  useEffect(() => {
+    if (!open || !detailMode || reportedPerformanceStagesRef.current.has("supplemental-complete")) return;
+    if (state.loading || !state.readComplete || emailSetup.loading) return;
+    const focusedQuoteReady = state.quotes.some((quote) => quote.id === focusQuoteId);
+    const outcome = !focusedQuoteReady
+      ? state.error ? "error" : "unavailable"
+      : emailSetup.error ? "partial" : "ready";
+    reportedPerformanceStagesRef.current.add("supplemental-complete");
+    markRouteStage({ routeId: "quote-review", stage: "supplemental-complete", outcome });
+  }, [detailMode, emailSetup.error, emailSetup.loading, focusQuoteId, open, state.error, state.loading, state.quotes, state.readComplete]);
   useEffect(() => {
     if (!open || detailMode || workspaceNavigation?.route?.routeId !== "quote-list") return;
     const next = quoteFiltersFromSearch(workspaceNavigation.location?.search);
@@ -1454,15 +1522,22 @@ export function QuoteHistoryView({
     const returnFocusOwnsEntry = ["restoring", "restored"].includes(returnStatus?.state)
       && returnStatus?.entryId === workspaceNavigation?.location?.historyEntry?.entryId;
     if (returnFocusOwnsEntry) return;
-    const focusEvidenceQuote = state.quotes.find((quote) => quote.id === focusQuoteId);
+    const focusEvidenceQuote = DECISION_PACKET_BUILD_ENABLED
+      ? state.quotes.find((quote) => quote.id === focusQuoteId)
+      : null;
     const focusKey = [
       focusQuoteId,
       String(focusAction || "").trim(),
-      String(focusDestinationAction || "").trim(),
-      String(arrivalContext?.focus?.acceptedRevisionId || "").trim(),
-      String(arrivalContext?.focus?.acceptanceReceiptId || "").trim(),
-      String(focusEvidenceQuote?.activeVersionId || focusEvidenceQuote?.versionMeta?.versionId || "").trim(),
-      String(focusEvidenceQuote?.acceptanceReceipt?.receiptId || "").trim()
+      ...(EXACT_ADMINISTRATION_HANDOFF_ENABLED ? [String(focusDestinationAction || "").trim()] : []),
+      ...(DECISION_PACKET_BUILD_ENABLED ? [
+        String(arrivalContext?.focus?.acceptedRevisionId || "").trim(),
+        String(arrivalContext?.focus?.acceptanceReceiptId || "").trim(),
+        String(focusEvidenceQuote?.activeVersionId || focusEvidenceQuote?.versionMeta?.versionId || "").trim(),
+        String(focusEvidenceQuote?.acceptanceReceipt?.receiptId || "").trim()
+      ] : []),
+      String(arrivalContext?.intentId || "").trim(),
+      String(arrivalContext?.focus?.sourceRevisionId || "").trim(),
+      String(arrivalContext?.focus?.proposedRevisionId || "").trim()
     ].join(":");
     if (focusedHandoffIdRef.current === focusKey) return;
     const normalizedAction = String(focusAction || "").trim();
@@ -1494,11 +1569,13 @@ export function QuoteHistoryView({
     }
     const targetQuote = state.quotes.find((quote) => quote.id === focusQuoteId);
     if (!targetQuote) return;
-    const acceptedRevisionArrival = resolveAcceptedRevisionAdministrationArrival({
-      arrivalContext,
-      quote: targetQuote,
-      source: state.source
-    });
+    const acceptedRevisionArrival = DECISION_PACKET_BUILD_ENABLED
+      ? resolveAcceptedRevisionAdministrationArrival({
+          arrivalContext,
+          quote: targetQuote,
+          source: state.source
+        })
+      : { applies: false, status: "not_applicable" };
     if (
       administrationArrival
       && acceptedRevisionArrival.applies
@@ -1513,33 +1590,130 @@ export function QuoteHistoryView({
       });
       return;
     }
+    if (normalizedAction === "staffing") {
+      const exactStaffingArrival = arrivalContext?.destination === "opportunity"
+        && arrivalContext?.surfaceId === "living-opportunity"
+        && arrivalContext?.intentId === "review_staffing_consequence"
+        && arrivalContext?.object?.type === "staffing-plan"
+        && String(arrivalContext?.object?.id || "").trim() === focusQuoteId
+        && String(arrivalContext?.focus?.quoteId || "").trim() === focusQuoteId
+        && commercialConsequenceRevisionMatchesQuote(arrivalContext, targetQuote);
+      let frame = 0;
+      let attempt = 0;
+      const focusStaffing = () => {
+        const target = exactStaffingArrival ? staffingArrivalTargetRef.current : null;
+        if (!target && exactStaffingArrival && attempt < 30) {
+          attempt += 1;
+          frame = window.requestAnimationFrame(focusStaffing);
+          return;
+        }
+        focusedHandoffIdRef.current = focusKey;
+        if (!target) {
+          onArrivalResolution?.({
+            status: "recovery",
+            reason: "The exact revision's Operational Staffing plan is unavailable.",
+            consequence: "No Schedule field or alternate quote was substituted and no staffing assignment changed.",
+            nextResolution: "Return to the commercial change review and keep the Staffing consequence unresolved."
+          });
+          return;
+        }
+        target.focus({ preventScroll: true });
+        target.scrollIntoView?.({ block: "nearest", inline: "nearest" });
+        onArrivalResolution?.({ status: "resolved", quoteId: focusQuoteId, target: "staffing" });
+      };
+      frame = window.requestAnimationFrame(focusStaffing);
+      return () => window.cancelAnimationFrame(frame);
+    }
     if (normalizedAction === "administration") {
       let destinationFrame = null;
       const frame = window.requestAnimationFrame(() => {
-        destinationFrame = window.requestAnimationFrame(() => {
-          const administrationSummary = dialogRef.current?.querySelector(
-            '[data-quote-administration="true"] > summary'
-          );
-          const administrationDetails = administrationSummary?.closest("details") || null;
-          if (administrationDetails) administrationDetails.open = true;
-          const destinationAction = String(focusDestinationAction || "").trim();
-          const exactQuoteRow = Array.from(
-            dialogRef.current?.querySelectorAll("tr[data-quote-id]") || []
-          ).find((row) => row.dataset.quoteId === focusQuoteId);
-          const actionRoot = exactQuoteRow || administrationDetails;
-          const exactAction = destinationAction
-            ? Array.from(actionRoot?.querySelectorAll("[data-quote-action-id]") || [])
-              .find((element) => element.dataset.quoteActionId === destinationAction && !element.disabled)
-            : null;
-          const focusTarget = exactAction || administrationSummary || routeHeadingRef.current;
-          if (!focusTarget) return;
-          focusTarget.focus({ preventScroll: true });
-          focusTarget.scrollIntoView({ block: "start", inline: "nearest" });
-          if (administrationArrival && document.activeElement === focusTarget) {
-            onArrivalResolution?.({ status: "resolved", quoteId: focusQuoteId });
-          }
+        const focusAdministration = () => {
+        const commercialConsequenceIntent = [
+          "review_commercial_proposal_consequence",
+          "review_kitchen_beo_consequence"
+        ].includes(String(arrivalContext?.intentId || "").trim());
+        if (commercialConsequenceIntent && !commercialConsequenceRevisionMatchesQuote(arrivalContext, targetQuote)) {
           focusedHandoffIdRef.current = focusKey;
-        });
+          onArrivalResolution?.({
+            status: "recovery",
+            reason: "The affected artifact belongs to a different saved quote revision.",
+            consequence: "No proposal or Kitchen BEO control was opened and no record changed.",
+            nextResolution: "Return to the commercial change review, refresh the preview, and choose its current affected artifact."
+          });
+          return;
+        }
+        const targetRow = Array.from(dialogRef.current?.querySelectorAll("tr[data-quote-id]") || [])
+          .find((row) => row.dataset.quoteId === focusQuoteId);
+        if (arrivalContext?.intentId === "review_commercial_proposal_consequence") {
+          const proposalAction = targetRow?.querySelector('[data-quote-action-group="proposal"]');
+          const moreActions = proposalAction?.closest("details.configured-quote-more-actions");
+          if (moreActions && !moreActions.open) moreActions.open = true;
+          const proposalGroup = proposalAction?.closest('[data-quote-action-group-container="proposal"]');
+          const focusTarget = proposalAction && !proposalAction.disabled
+            ? proposalAction
+            : proposalGroup;
+          if (!focusTarget) {
+            focusedHandoffIdRef.current = focusKey;
+            onArrivalResolution?.({
+              status: "recovery",
+              reason: "The exact quote has no Proposal controls available to this role and state.",
+              consequence: "No alternate quote or action group was selected and no record changed.",
+              nextResolution: "Return to the commercial change review and keep the Proposal consequence unresolved."
+            });
+            return;
+          }
+          focusTarget.focus({ preventScroll: true });
+          focusTarget.scrollIntoView?.({ block: "nearest", inline: "nearest" });
+          focusedHandoffIdRef.current = focusKey;
+          onArrivalResolution?.({ status: "resolved", quoteId: focusQuoteId, target: "proposal" });
+          return;
+        }
+        if (arrivalContext?.intentId === "review_kitchen_beo_consequence") {
+          const beoAction = targetRow?.querySelector('[data-quote-action-id="review_beo"]');
+          const moreActions = beoAction?.closest("details.configured-quote-more-actions");
+          if (moreActions && !moreActions.open) moreActions.open = true;
+          if (state.source !== "firebase" || !beoAction || beoAction.disabled) {
+            focusedHandoffIdRef.current = focusKey;
+            onArrivalResolution?.({
+              status: "recovery",
+              reason: "The exact quote's authoritative Kitchen BEO is unavailable to this role and source.",
+              consequence: "No local export or alternate quote was substituted and no artifact was generated.",
+              nextResolution: "Return to the commercial change review and retry after authoritative quote access is restored."
+            });
+            return;
+          }
+          kitchenBeoReturnFocusRef.current = beoAction;
+          setKitchenBeoQuote(targetQuote);
+          focusedHandoffIdRef.current = focusKey;
+          return;
+        }
+        const administrationSummary = dialogRef.current?.querySelector(
+          '[data-quote-administration="true"] > summary'
+        );
+        const administrationDetails = administrationSummary?.closest("details") || null;
+        if (administrationDetails) administrationDetails.open = true;
+        const destinationAction = EXACT_ADMINISTRATION_HANDOFF_ENABLED
+          ? String(focusDestinationAction || "").trim()
+          : "";
+        const actionRoot = targetRow || administrationDetails;
+        const exactAction = destinationAction
+          ? Array.from(actionRoot?.querySelectorAll("[data-quote-action-id]") || [])
+            .find((element) => element.dataset.quoteActionId === destinationAction && !element.disabled)
+          : null;
+        const focusTarget = exactAction || administrationSummary || routeHeadingRef.current;
+        if (!focusTarget) return;
+        focusTarget.focus({ preventScroll: true });
+        focusTarget.scrollIntoView({ block: "start", inline: "nearest" });
+        if (administrationArrival && document.activeElement === focusTarget) {
+          onArrivalResolution?.({ status: "resolved", quoteId: focusQuoteId });
+        }
+        focusedHandoffIdRef.current = focusKey;
+        };
+        if (EXACT_ADMINISTRATION_HANDOFF_ENABLED) {
+          destinationFrame = window.requestAnimationFrame(focusAdministration);
+        } else {
+          focusAdministration();
+        }
       });
       return () => {
         window.cancelAnimationFrame(frame);
@@ -1595,6 +1769,28 @@ export function QuoteHistoryView({
     workspaceNavigation?.location?.historyEntry?.entryId,
     workspaceNavigation?.returnContextStatus
   ]);
+
+  useEffect(() => {
+    if (
+      !kitchenBeoQuote
+      || arrivalContext?.intentId !== "review_kitchen_beo_consequence"
+      || String(arrivalContext?.focus?.quoteId || "").trim() !== kitchenBeoQuote.id
+    ) return undefined;
+    const frame = window.requestAnimationFrame(() => {
+      const target = dialogRef.current
+        ?.querySelector('[data-capability-id="cwf-15-kitchen-beo-artifact-status"]')
+        ?.closest('[role="dialog"]');
+      if (!target) return;
+      target.focus({ preventScroll: true });
+      target.scrollIntoView?.({ block: "nearest", inline: "nearest" });
+      onArrivalResolution?.({
+        status: "resolved",
+        quoteId: kitchenBeoQuote.id,
+        target: "kitchen-beo"
+      });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [arrivalContext, kitchenBeoQuote, onArrivalResolution]);
 
   useEffect(() => {
     if (!deliveryReview) return undefined;
@@ -1900,11 +2096,13 @@ export function QuoteHistoryView({
     source: state.source
   });
   const focusedQuote = quoteHistoryController.eventRoom.quote;
-  const acceptedRevisionArrival = resolveAcceptedRevisionAdministrationArrival({
-    arrivalContext,
-    quote: focusedQuote,
-    source: state.source
-  });
+  const acceptedRevisionArrival = DECISION_PACKET_BUILD_ENABLED
+    ? resolveAcceptedRevisionAdministrationArrival({
+        arrivalContext,
+        quote: focusedQuote,
+        source: state.source
+      })
+    : { applies: false, status: "not_applicable" };
   const acceptedRevisionArrivalRecovery = administrationFocusActive
     && acceptedRevisionArrival.applies
     && state.readComplete
@@ -3080,6 +3278,29 @@ export function QuoteHistoryView({
               onReadStateChange={handleFocusedDecisionDebtRead}
             />
           )}
+          {focusedQuote && focusAction === "staffing" && arrivalContext?.intentId === "review_staffing_consequence" && (
+            <section
+              ref={staffingArrivalTargetRef}
+              className="admin-section staff-capability-state"
+              data-commercial-consequence-target="staffing"
+              data-quote-id={focusedQuote.id}
+              tabIndex={-1}
+              aria-labelledby="quote-history-operational-staffing-title"
+            >
+              <p className="eyebrow">Operational plan</p>
+              <h3 id="quote-history-operational-staffing-title">Operational Staffing</h3>
+              <Suspense fallback={<p className="source-note" role="status">Loading exact staffing assignments…</p>}>
+                <OperationalStaffingPanel
+                  open
+                  organizationId={organizationId || focusedQuote.organizationId || "local-fallback"}
+                  quote={focusedQuote}
+                  source={state.source}
+                  role={permissions.role}
+                  available={Boolean(organizationId)}
+                />
+              </Suspense>
+            </section>
+          )}
           {conversationQuote && (
             <aside className="quote-conversation-modal">
               <QuoteConversationPanel
@@ -3154,15 +3375,20 @@ export function QuoteHistoryView({
                 {state.loading ? "Refreshing..." : "Refresh"}
               </button>
             )}
-            <button
-              type="button"
-              className="ghost"
-              onClick={requestQuoteHistoryClose}
-              disabled={quoteHistoryCloseGuard.blocked}
-              title={quoteHistoryCloseGuard.message}
+            <DisabledActionReason
+              id="quote-history-close-disabled-reason"
+              reason={quoteHistoryCloseGuard.blocked ? quoteHistoryCloseGuard.message : ""}
+              grouped
             >
-              {embedded ? AMBIENT_UI_ENABLED ? "Back to Now" : "Back to Home" : "Close"}
-            </button>
+              <button
+                type="button"
+                className="ghost"
+                onClick={requestQuoteHistoryClose}
+                disabled={quoteHistoryCloseGuard.blocked}
+              >
+                {embedded ? AMBIENT_UI_ENABLED ? "Back to Now" : "Back to Home" : "Close"}
+              </button>
+            </DisabledActionReason>
           </div>
         </div>}
 
@@ -3178,9 +3404,6 @@ export function QuoteHistoryView({
             </p>
           )}
         </details>}
-        {quoteHistoryCloseGuard.blocked && (
-          <p className="warning-note" role="status">{quoteHistoryCloseGuard.message}</p>
-        )}
         {permissions.canSendQuoteEmail && state.source === "firebase" && (
           <p
             id="quote-email-provider-readiness"
@@ -3284,7 +3507,11 @@ export function QuoteHistoryView({
               )}
             </div>
             <div className="saved-quote-handoff-actions">
-              {focusedRebookDeliveryGate.applies
+              <DisabledActionReason
+                id="saved-quote-handoff-disabled-reason"
+                reason={focusedRebookDeliveryGate.ready ? "" : focusedRebookDeliveryGate.message}
+              >
+                {focusedRebookDeliveryGate.applies
                 && !focusedRebookDeliveryGate.ready
                 && permissions.canEditQuote
                 && typeof onEditQuote === "function" ? (
@@ -3328,7 +3555,6 @@ export function QuoteHistoryView({
                   className="cta"
                   onClick={() => handleExportPdf(focusedQuote)}
                   disabled={exportingPdfId === focusedQuote.id || !focusedRebookDeliveryGate.ready}
-                  title={!focusedRebookDeliveryGate.ready ? focusedRebookDeliveryGate.message : ""}
                   aria-busy={exportingPdfId === focusedQuote.id}
                 >
                   {exportingPdfId === focusedQuote.id ? "Generating draft PDF..." : "Download draft PDF"}
@@ -3360,7 +3586,6 @@ export function QuoteHistoryView({
                   className="ghost"
                   onClick={() => handleExportPdf(focusedQuote)}
                   disabled={exportingPdfId === focusedQuote.id || !focusedRebookDeliveryGate.ready}
-                  title={!focusedRebookDeliveryGate.ready ? focusedRebookDeliveryGate.message : ""}
                   aria-busy={exportingPdfId === focusedQuote.id}
                 >
                   {exportingPdfId === focusedQuote.id ? "Generating PDF..." : "Download PDF"}
@@ -3372,7 +3597,7 @@ export function QuoteHistoryView({
                   className="ghost"
                   onClick={() => handlePrintProposal(focusedQuote)}
                   disabled={exportingPdfId === focusedQuote.id || !focusedRebookDeliveryGate.ready}
-                  title={!focusedRebookDeliveryGate.ready ? focusedRebookDeliveryGate.message : "Open a print-ready proposal PDF"}
+                  title={focusedRebookDeliveryGate.ready ? "Open a print-ready proposal PDF" : undefined}
                 >
                   {exportingPdfId === focusedQuote.id ? "Preparing proposal…" : "Print proposal"}
                 </button>
@@ -3383,7 +3608,7 @@ export function QuoteHistoryView({
                   className="ghost"
                   onClick={() => handleOpenDefaultEmailApp(focusedQuote)}
                   disabled={!focusedRebookDeliveryGate.ready}
-                  title={!focusedRebookDeliveryGate.ready ? focusedRebookDeliveryGate.message : "Open a prefilled message without changing delivery status"}
+                  title={focusedRebookDeliveryGate.ready ? "Open a prefilled message without changing delivery status" : undefined}
                 >
                   Open email app
                 </button>
@@ -3399,6 +3624,7 @@ export function QuoteHistoryView({
               {!focusedQuoteCanSend && permissions.role === "sales" && (
                 <span className="muted">Use Copy Email or Download PDF for an admin handoff.</span>
               )}
+              </DisabledActionReason>
             </div>
           </section>
         )}
@@ -3467,7 +3693,7 @@ export function QuoteHistoryView({
             />
           </Suspense>
         )}
-        {acceptedRevisionArrivalRecovery ? (
+        {DECISION_PACKET_BUILD_ENABLED && acceptedRevisionArrivalRecovery ? (
           <section
             className="warning-note"
             data-accepted-revision-arrival="recovery"
@@ -3481,7 +3707,7 @@ export function QuoteHistoryView({
               Return to Quotes
             </button>
           </section>
-        ) : acceptedRevisionArrivalPending ? (
+        ) : DECISION_PACKET_BUILD_ENABLED && acceptedRevisionArrivalPending ? (
           <section
             className="source-note"
             data-accepted-revision-arrival="pending"

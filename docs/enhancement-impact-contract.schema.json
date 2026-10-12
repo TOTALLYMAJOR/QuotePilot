@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://quotepilot.mbmapps.com/schemas/enhancement-impact-contract.schema.json",
+  "title": "QuotePilot enhancement impact manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "authorityBoundaries", "enhancements"],
+  "properties": {
+    "$schema": { "type": "string" },
+    "schemaVersion": { "const": 1 },
+    "authorityBoundaries": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "exactPaths", "pathPrefixes"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "exactPaths": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": { "type": "string", "minLength": 1 }
+          },
+          "pathPrefixes": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": { "type": "string", "minLength": 1 }
+          }
+        },
+        "anyOf": [
+          { "properties": { "exactPaths": { "minItems": 1 } } },
+          { "properties": { "pathPrefixes": { "minItems": 1 } } }
+        ]
+      }
+    },
+    "enhancements": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "title", "changeType", "routes", "authorities", "tests"],
+        "properties": {
+          "id": { "type": "string", "pattern": "^[1-9][0-9]*$" },
+          "title": { "type": "string", "minLength": 1 },
+          "changeType": {
+            "enum": ["authority", "performance", "presentation", "process", "workflow"]
+          },
+          "routes": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": { "type": "string", "minLength": 1 }
+          },
+          "authorities": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": { "type": "string", "minLength": 1 }
+          },
+          "tests": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": { "type": "string", "minLength": 1 }
+          }
+        },
+        "allOf": [
+          {
+            "if": { "properties": { "changeType": { "const": "presentation" } } },
+            "then": { "properties": { "authorities": { "maxItems": 0 } } }
+          },
+          {
+            "if": { "properties": { "changeType": { "const": "authority" } } },
+            "then": { "properties": { "authorities": { "minItems": 1 } } }
+          }
+        ]
+      }
+    }
+  }
+}

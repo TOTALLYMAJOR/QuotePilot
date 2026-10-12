@@ -172,7 +172,7 @@ describe("StaffEvidenceRail", () => {
     expect(partialMarkup).toContain('data-capability-state="partial"');
   });
 
-  test("includes the optional Decision Debt read in Clear the Deck completeness", () => {
+  test("names the optional pending-decision read in operator language", () => {
     const completeMarkup = renderToStaticMarkup(
       <StaffEvidenceRail
         source="firebase"
@@ -189,7 +189,7 @@ describe("StaffEvidenceRail", () => {
       <StaffEvidenceRail
         source="firebase"
         partial
-        error="Decision Debt unavailable."
+        error="Pending decision review unavailable."
         reads={{
           attention: { status: "success" },
           history: { status: "success" },
@@ -200,7 +200,8 @@ describe("StaffEvidenceRail", () => {
     );
 
     expect(completeMarkup).toContain("All four tenant reads completed.");
-    expect(partialMarkup).toContain("Decision Debt did not complete.");
+    expect(partialMarkup).toContain("pending decision review did not complete.");
+    expect(partialMarkup).not.toContain("Decision Debt");
   });
 
   test("keeps the standard presentation as the default", () => {

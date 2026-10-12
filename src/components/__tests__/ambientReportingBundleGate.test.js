@@ -55,7 +55,7 @@ describe("Ambient reporting bundle boundary", () => {
 
   test("keeps Ambient timing observation behind the active App loader", () => {
     expect(APP_SOURCE).toContain("const loadAmbientProductAnalytics = AMBIENT_UI_ENABLED");
-    expect(APP_SOURCE).toContain('? () => import("./lib/productAnalyticsAmbient")');
+    expect(APP_SOURCE).toContain('? () => import("./lib/productAnalyticsAmbientLoader")');
     expect(APP_SOURCE.match(/if \(typeof loadAmbientProductAnalytics === "function"\)/g))
       .toHaveLength(4);
     expect(APP_SOURCE.match(/analytics\.recordProductAnalyticsPricedDraftReceipt\(/g))

@@ -52,7 +52,7 @@ const DEPLOYMENT_REVIEWS_QUERY = `
 export const RELEASE_EVIDENCE_POLICY = Object.freeze({
   repository: Object.freeze({
     id: 1167899098,
-    fullName: "TOTALLYMAJOR/quoteflow"
+    fullName: "TOTALLYMAJOR/QuotePilot"
   }),
   ciWorkflow: Object.freeze({
     id: 244476596,
@@ -107,6 +107,8 @@ export const RELEASE_EVIDENCE_POLICY = Object.freeze({
     "lane:cwv-smoke"
   ])
 });
+const GITHUB_REPOSITORY_API =
+  `${GITHUB_API}/repos/${RELEASE_EVIDENCE_POLICY.repository.fullName}`;
 
 export const RELEASE_APPROVAL_MODES = Object.freeze([
   "independent-review",
@@ -575,8 +577,8 @@ export function parseSoloOperatorIds(value) {
 
 export function parseReleaseUatRunTitle(value) {
   const parts = String(value || "").split("/");
-  if (parts.length !== 11 || parts[0] !== "release-uat" || parts[1] !== "v4") {
-    throw evidenceError("the UAT workflow title does not match the v4 evidence contract.");
+  if (parts.length !== 11 || parts[0] !== "release-uat" || parts[1] !== "v5") {
+    throw evidenceError("the UAT workflow title does not match the v5 evidence contract.");
   }
   const [, , approvalModeValue, releaseShaValue, target, candidateProfile,
     smsProviderValue,
@@ -966,6 +968,7 @@ export function validateUatRun(
   return {
     actorId,
     approvalMode: normalizedApprovalMode,
+    evidenceContract: "release-uat/v5",
     completedAt: new Date(uatCompletedMs).toISOString(),
     stagingId: title.stagingId,
     attestedTarget: title.target,
@@ -1229,11 +1232,12 @@ export function validateGitEvidence(
     git(["remote", "get-url", "origin"], root),
     "the origin remote cannot be resolved."
   );
+  const normalizedOriginUrl = originUrl.replace(/\.git$/, "");
   if (
-    !/^https:\/\/github\.com\/TOTALLYMAJOR\/quoteflow(?:\.git)?$/.test(originUrl)
-    && !/^git@github\.com:TOTALLYMAJOR\/quoteflow(?:\.git)?$/.test(originUrl)
+    normalizedOriginUrl !== `https://github.com/${RELEASE_EVIDENCE_POLICY.repository.fullName}`
+    && normalizedOriginUrl !== `git@github.com:${RELEASE_EVIDENCE_POLICY.repository.fullName}`
   ) {
-    throw evidenceError("origin is not the canonical TOTALLYMAJOR/quoteflow repository.");
+    throw evidenceError("origin is not the canonical TOTALLYMAJOR/QuotePilot repository.");
   }
   const releaseTags = requireGitSuccess(
     git(["tag", "--points-at", releaseSha, "--list", "v[0-9]*.[0-9]*.[0-9]*"], root),
@@ -1297,7 +1301,7 @@ async function validatePublishedReleaseRevision(
   requestOptions
 ) {
   const mainReference = await fetchGitHubJson(
-    `${GITHUB_API}/repos/TOTALLYMAJOR/quoteflow/git/ref/heads/main`,
+    `${GITHUB_REPOSITORY_API}/git/ref/heads/main`,
     requestOptions
   );
   if (
@@ -1310,7 +1314,7 @@ async function validatePublishedReleaseRevision(
 
   for (const tag of releaseTags) {
     const tagReference = await fetchGitHubJson(
-      `${GITHUB_API}/repos/TOTALLYMAJOR/quoteflow/git/ref/tags/${encodeURIComponent(tag)}`,
+      `${GITHUB_REPOSITORY_API}/git/ref/tags/${encodeURIComponent(tag)}`,
       requestOptions,
       { allowNotFound: true }
     );
@@ -1324,7 +1328,7 @@ async function validatePublishedReleaseRevision(
       }
       seenTagObjects.add(tagObjectSha.toLowerCase());
       const tagObject = await fetchGitHubJson(
-        `${GITHUB_API}/repos/TOTALLYMAJOR/quoteflow/git/tags/${tagObjectSha}`,
+        `${GITHUB_REPOSITORY_API}/git/tags/${tagObjectSha}`,
         requestOptions
       );
       if (depth === 0 && String(tagObject?.tag || "") !== tag) {
@@ -1417,7 +1421,7 @@ async function fetchRunJobs(runId, options) {
   let totalCount = Number.POSITIVE_INFINITY;
   while (jobs.length < totalCount) {
     const result = await fetchGitHubJson(
-      `${GITHUB_API}/repos/TOTALLYMAJOR/quoteflow/actions/runs/${runId}/jobs?filter=latest&per_page=100&page=${page}`,
+      `${GITHUB_REPOSITORY_API}/actions/runs/${runId}/jobs?filter=latest&per_page=100&page=${page}`,
       options
     );
     const pageJobs = Array.isArray(result?.jobs) ? result.jobs : [];
@@ -1506,25 +1510,25 @@ export async function verifyProductionReleaseEvidence(
     await Promise.all([
       validatePublishedReleaseRevision({ releaseSha, ...gitEvidence }, requestOptions),
       fetchGitHubJson(
-        `${GITHUB_API}/repos/TOTALLYMAJOR/quoteflow/actions/runs/${preparationRunId}`,
+        `${GITHUB_REPOSITORY_API}/actions/runs/${preparationRunId}`,
         requestOptions
       ),
       fetchGitHubJson(
-        `${GITHUB_API}/repos/TOTALLYMAJOR/quoteflow/actions/runs/${ciRunId}`,
+        `${GITHUB_REPOSITORY_API}/actions/runs/${ciRunId}`,
         requestOptions
       ),
       fetchRunJobs(ciRunId, requestOptions),
       fetchGitHubJson(
-        `${GITHUB_API}/repos/TOTALLYMAJOR/quoteflow/actions/runs/${uatRunId}`,
+        `${GITHUB_REPOSITORY_API}/actions/runs/${uatRunId}`,
         requestOptions
       ),
       fetchRunJobs(uatRunId, requestOptions),
       fetchGitHubJson(
-        `${GITHUB_API}/repos/TOTALLYMAJOR/quoteflow/environments/${environmentNames.uat}`,
+        `${GITHUB_REPOSITORY_API}/environments/${environmentNames.uat}`,
         requestOptions
       ),
       fetchGitHubJson(
-        `${GITHUB_API}/repos/TOTALLYMAJOR/quoteflow/environments/${environmentNames.deploy}`,
+        `${GITHUB_REPOSITORY_API}/environments/${environmentNames.deploy}`,
         requestOptions
       )
     ]);
@@ -1608,7 +1612,7 @@ export async function verifyProductionReleaseEvidence(
   }
 
   return Object.freeze({
-    schema: "com.mbmapps.quotepilot.production-release-evidence/v5",
+    schema: "com.mbmapps.quotepilot.production-release-evidence/v6",
     approvalMode,
     releaseSha,
     releaseTag: publishedRevision.releaseTag,
@@ -1620,6 +1624,7 @@ export async function verifyProductionReleaseEvidence(
     uatRunId,
     preparationRunId,
     stagingId: uat.stagingId,
+    uatEvidenceContract: uat.evidenceContract,
     attesterId: uat.actorId,
     uatReviewerId: uatReview.reviewerId,
     uatReviewId: uatReview.reviewId,
@@ -1697,16 +1702,16 @@ export async function verifyDirectProductionReleaseEvidence(
     await Promise.all([
       validatePublishedReleaseRevision({ releaseSha, ...gitEvidence }, requestOptions),
       fetchGitHubJson(
-        `${GITHUB_API}/repos/TOTALLYMAJOR/quoteflow/actions/runs/${deploymentRunId}`,
+        `${GITHUB_REPOSITORY_API}/actions/runs/${deploymentRunId}`,
         requestOptions
       ),
       fetchGitHubJson(
-        `${GITHUB_API}/repos/TOTALLYMAJOR/quoteflow/actions/runs/${ciRunId}`,
+        `${GITHUB_REPOSITORY_API}/actions/runs/${ciRunId}`,
         requestOptions
       ),
       fetchRunJobs(ciRunId, requestOptions),
       fetchGitHubJson(
-        `${GITHUB_API}/repos/TOTALLYMAJOR/quoteflow/environments/${environmentName}`,
+        `${GITHUB_REPOSITORY_API}/environments/${environmentName}`,
         requestOptions
       )
     ]);

@@ -18,11 +18,14 @@ async function fillRequiredQuoteFields(page) {
 }
 
 async function advanceToSave(page) {
+  const currentStepLabel = page.locator('.stepper-item[aria-current="step"] .step-copy em');
   for (let step = 0; step < 6; step += 1) {
+    await expect(currentStepLabel).toBeVisible();
+    const previousStepLabel = await currentStepLabel.innerText();
     const firstMenuChoice = page.locator(
-      ".wizard-panel .menu-library input[type='checkbox']:not(:checked)"
+      ".wizard-panel .menu-library input[type='checkbox']"
     ).first();
-    if (await firstMenuChoice.count()) {
+    if (await firstMenuChoice.count() && !(await firstMenuChoice.isChecked())) {
       await firstMenuChoice.check();
     }
 
@@ -44,6 +47,7 @@ async function advanceToSave(page) {
     }
 
     await page.getByRole("button", { name: /^Next:/ }).click();
+    await expect(currentStepLabel).not.toHaveText(previousStepLabel);
   }
 
   throw new Error("Unable to reach Save draft");

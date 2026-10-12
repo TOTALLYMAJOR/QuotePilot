@@ -199,17 +199,34 @@ describe("AmbientDraftIntentReview", () => {
     expect(markup).toContain("Keep saved menu");
   });
 
+  test("keeps machine identifiers and quantity policy inside collapsed evidence", () => {
+    mount({ intent: MENU_INTENT, catalogContext: ORDER_CATALOG_CONTEXT });
+
+    const savedComparison = container.querySelector('[id$="-before"]').closest("section");
+    const proposedComparison = container.querySelector('[id$="-proposed"]').closest("section");
+    const proposedEvidence = proposedComparison.querySelector("[data-draft-technical-evidence]");
+
+    expect(savedComparison.textContent).toContain("Herb Chicken");
+    expect(savedComparison.querySelector("dl").textContent).not.toContain("chicken");
+    expect(proposedComparison.querySelector("dl").textContent).not.toContain("salmon");
+    expect(proposedComparison.querySelector("dl").textContent)
+      .not.toContain("preserve_explicit_saved_quantity");
+    expect(proposedEvidence.open).toBe(false);
+    expect(proposedEvidence.textContent).toContain("salmon");
+    expect(proposedEvidence.textContent).toContain("preserve_explicit_saved_quantity");
+  });
+
   test("renders the exact saved and proposed menu order with outcome-specific controls", () => {
     mount({ intent: ORDER_INTENT, catalogContext: ORDER_CATALOG_CONTEXT });
 
     const savedOrder = container.querySelector('[aria-label="before menu order"]');
     const proposedOrder = container.querySelector('[aria-label="proposed menu order"]');
-    expect([...savedOrder.querySelectorAll("code")].map((item) => item.textContent))
-      .toEqual(["salad", "chicken"]);
-    expect([...proposedOrder.querySelectorAll("code")].map((item) => item.textContent))
-      .toEqual(["chicken", "salad"]);
+    expect(savedOrder.querySelectorAll("code")).toHaveLength(0);
+    expect(proposedOrder.querySelectorAll("code")).toHaveLength(0);
     expect(savedOrder.textContent).toContain("Garden Salad");
     expect(proposedOrder.textContent).toContain("Herb Chicken");
+    expect(savedOrder.parentElement.querySelector("details").textContent).toContain("salad");
+    expect(proposedOrder.parentElement.querySelector("details").textContent).toContain("chicken");
     expect(button("Apply proposed order to draft")).toBeDefined();
     expect(button("Keep saved order")).toBeDefined();
   });

@@ -140,6 +140,7 @@ let originalRequestAnimationFrame;
 let originalCancelAnimationFrame;
 
 beforeEach(() => {
+  vi.setSystemTime(new Date("2026-09-19T12:00:00.000Z"));
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
@@ -152,6 +153,7 @@ beforeEach(() => {
 afterEach(() => {
   act(() => root.unmount());
   container.remove();
+  vi.useRealTimers();
   window.requestAnimationFrame = originalRequestAnimationFrame;
   window.cancelAnimationFrame = originalCancelAnimationFrame;
 });
@@ -333,7 +335,25 @@ describe("AmbientClientsView", () => {
       expect(primaryActions[0].textContent).toContain("Review client");
       expect(primaryActions[0].getAttribute("data-ambient-action-id"))
         .toMatch(/^review-client:/u);
+      expect(primaryActions[0].getAttribute("aria-label"))
+        .toMatch(/^Review client: Client [12]$/u);
     }
+  });
+
+  test("does not repeat company text inside the relationship row contact summary", () => {
+    const markup = renderToStaticMarkup(
+      <AmbientClientsDirectory
+        model={directoryModel({ rows: [directoryRow(1), directoryRow(2)] })}
+        {...DIRECTORY_CALLBACKS}
+      />
+    );
+    const parsed = document.createElement("div");
+    parsed.innerHTML = markup;
+    const row = parsed.querySelector('.ambient-clients__relationship-row[data-client-id="client-2"]');
+
+    expect(row.querySelector("div:first-child p").textContent).toBe("Company 2");
+    expect(row.querySelector("[data-client-row-contact]").textContent).not.toContain("Company 2");
+    expect(row.querySelector("[data-client-row-contact]").textContent).toContain("client-2@example.com");
   });
 
   test("introduces search and relationship filters only for a populated bounded page", () => {
@@ -363,6 +383,8 @@ describe("AmbientClientsView", () => {
     expect(container.querySelectorAll("[data-client-id]")).toHaveLength(2);
     expect(container.textContent).toContain("Contact details to add");
     expect(container.textContent).toContain("No linked opportunity in this view");
+    expect(container.querySelector("[data-client-result-scope]").textContent)
+      .toBe("All clients. Showing 2 of 2 clients on this loaded page.");
 
     const select = container.querySelector(".ambient-clients__filter-select select");
     act(() => {
@@ -372,6 +394,8 @@ describe("AmbientClientsView", () => {
     expect(container.querySelectorAll("[data-client-id]")).toHaveLength(1);
     expect(container.textContent).toContain("Contact Gap Client");
     expect(container.textContent).not.toContain("Client 1");
+    expect(container.querySelector("[data-client-result-scope]").textContent)
+      .toBe("Contact to add. Showing 1 of 2 clients on this loaded page.");
 
     act(() => {
       select.value = "upcoming";
@@ -380,6 +404,22 @@ describe("AmbientClientsView", () => {
     expect(container.querySelectorAll("[data-client-id]")).toHaveLength(2);
     expect(container.textContent).toContain("Client 1");
     expect(container.textContent).toContain("Contact Gap Client");
+    expect(container.querySelector("[data-client-result-scope]").textContent)
+      .toBe("Upcoming events. Showing 2 of 2 clients on this loaded page.");
+  });
+
+  test("names the applied search without implying organization-wide completeness", () => {
+    mount(
+      <AmbientClientsDirectory
+        model={directoryModel({ rows: [directoryRow(1)] })}
+        appliedSearch="Maya"
+        {...DIRECTORY_CALLBACKS}
+      />
+    );
+
+    const scope = container.querySelector("[data-client-result-scope]");
+    expect(scope.textContent).toBe("All clients. Showing 1 of 1 client on this loaded page for “Maya”.");
+    expect(scope.textContent).not.toContain("organization");
   });
 
   test("keeps populated relationship filtering available without a separate mobile dashboard block", async () => {

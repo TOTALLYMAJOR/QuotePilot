@@ -1,6 +1,6 @@
 # Version Control Playbook
 
-Last updated: 2026-09-15 00:15:41 CDT
+Last updated: 2026-10-12 03:41:06 CDT
 
 ## Goals
 - Keep `main` stable and deployable.
@@ -227,7 +227,13 @@ all-surface receipt cannot stand in for a newer backend deployment.
    mutation and retains failed or partial outcomes. Hosted manifest equality is
    retried every two seconds for at most one minute to absorb bounded provider
    propagation; source SHA, CI run, profile, and authority values must still
-   match exactly. A partial provider-mutation receipt is immutable and is not
+   match exactly. After Firebase reports deployment completion, the combined
+   Hosting, Firestore Rules, and active Functions readback is retried every
+   five seconds for at most 13 attempts so a still-converging Function revision
+   does not create a false terminal failure. These retries are read-only and
+   never repeat provider mutation; the last validation error remains the
+   receipt outcome when convergence does not complete inside the bound. A
+   partial provider-mutation receipt is immutable and is not
    retried; a corrected attempt requires a newly published, newly qualified
    source SHA. Firebase-all verification
    binds Hosting, active Functions revisions and fail-closed runtime readback,

@@ -173,7 +173,7 @@ function exactFactValue(value) {
 }
 
 function factLabel(nodeId) {
-  return humanizeWorkspaceValue(text(nodeId).replace(/^fact\./, ""), {
+  return humanizeWorkspaceValue(text(nodeId).replace(/^fact\./, "").replace(/\./gu, "_"), {
     emptyLabel: "Changed detail"
   });
 }
@@ -184,9 +184,28 @@ function dependencyLabel(nodeId) {
   });
 }
 
+const AFFECTED_ARTIFACT_DESTINATIONS = Object.freeze({
+  "artifact.beo": Object.freeze({ kind: "kitchen_beo", label: "Review Kitchen BEO" }),
+  "artifact.kitchen_beo": Object.freeze({ kind: "kitchen_beo", label: "Review Kitchen BEO" }),
+  "artifact.contract": Object.freeze({ kind: "proposal", label: "Review proposal" }),
+  "artifact.production_plan": Object.freeze({ kind: "production_plan", label: "Review production plan" }),
+  "output.staffing_requirement": Object.freeze({ kind: "staffing_requirement", label: "Review staffing" }),
+  "output.plan.staffing_requirement": Object.freeze({ kind: "staffing_requirement", label: "Review staffing" })
+});
+
+export function commercialAffectedArtifactDestination(nodeId) {
+  return AFFECTED_ARTIFACT_DESTINATIONS[text(nodeId)] || null;
+}
+
+function affectedArtifactControlId(nodeId) {
+  const stableId = text(nodeId).toLowerCase().replace(/[^a-z0-9]+/gu, "-").replace(/^-|-$/gu, "");
+  return `commercial-change-artifact-${stableId || "unknown"}`;
+}
+
 const CONSEQUENCE_DOMAINS = Object.freeze([
   { id: "commercial", label: "Commercial & payment", patterns: ["pricing", "payment", "deposit", "balance"] },
   { id: "staffing", label: "Staffing", patterns: ["staff", "labor", "crew"] },
+  { id: "inventory", label: "Inventory", patterns: ["ingredient", "inventory", "stock", "shortage", "recipe"] },
   { id: "production", label: "Production & rentals", patterns: ["production", "kitchen", "food", "rental", "beo"] },
   { id: "operations", label: "Event operations", patterns: ["operations", "delivery_window", "checkpoint", "venue_setup"] },
   { id: "customer", label: "Customer & documents", patterns: ["customer", "contract", "proposal", "decision"] }
@@ -194,7 +213,7 @@ const CONSEQUENCE_DOMAINS = Object.freeze([
 
 export function groupCommercialConsequences(nodes = []) {
   const groups = new Map(CONSEQUENCE_DOMAINS.map((domain) => [domain.id, { ...domain, items: [] }]));
-  const other = { id: "other", label: "Related workflow", items: [] };
+  const other = { id: "other", label: "Not evaluated domain", items: [] };
   (Array.isArray(nodes) ? nodes : []).forEach((node) => {
     const id = text(node?.id || node?.nodeId).toLowerCase();
     const domain = CONSEQUENCE_DOMAINS.find((candidate) => (
@@ -379,6 +398,231 @@ function ConsequenceSummary({ model }) {
   );
 }
 
+function CommercialComparisonSummary({ model, inventoryConsequences, unifiedReview }) {
+  const total = model?.commercialValues?.authoritativeTotal || {};
+  const currency = text(model?.commercialValues?.currency) || "USD";
+  const cost = inventoryConsequences?.cost || {};
+  const completeCost = inventoryConsequences?.state === "current"
+    && ["changed", "unchanged"].includes(cost.state)
+    && Number.isSafeInteger(cost.before?.projectedCostMinor)
+    && Number.isSafeInteger(cost.proposedAfter?.projectedCostMinor);
+  const marginItem = unifiedReview?.groups
+    ?.find((group) => group.id === "margin-evidence")
+    ?.items?.[0];
+  return (
+    <div className="commercial-comparison-grid" aria-label="Separate commercial comparisons">
+      <article data-commercial-comparison="price">
+        <span>Price</span>
+        <strong>{formatCurrency(total.before, currency)} → {formatCurrency(total.proposedAfter, currency)}</strong>
+        <small>Server-authoritative quote simulation</small>
+      </article>
+      <article data-commercial-comparison="ingredient-cost">
+        <span>Ingredient cost</span>
+        <strong>{completeCost
+          ? `${formatCurrency(cost.before.projectedCostMinor / 100, cost.currency)} → ${formatCurrency(cost.proposedAfter.projectedCostMinor / 100, cost.currency)}`
+          : "Unknown — incomplete cost evidence"}</strong>
+        <small>{completeCost ? "Exact Inventory scenario preview" : "Unknown cost is not treated as zero"}</small>
+      </article>
+      <article data-commercial-comparison="margin">
+        <span>Margin evidence</span>
+        <strong>{completeCost && marginItem
+          ? marginItem.label
+          : "Not evaluated — complete ingredient cost evidence is required"}</strong>
+        <small>{completeCost && marginItem
+          ? `${marginItem.detail} No before/after margin change is asserted.`
+          : "Incomplete cost evidence cannot produce an apparently exact margin change."}</small>
+      </article>
+    </div>
+  );
+}
+
+function AffectedArtifactList({ model, inventoryConsequences, onOpenAffectedArtifact }) {
+  const graphSource = `Dependency graph ${text(model?.graph?.graphId) || "unavailable"} · version ${text(model?.graph?.graphVersion) || "unavailable"}`;
+  const rows = (Array.isArray(model?.impact?.dependentNodes) ? model.impact.dependentNodes : [])
+    .map((node) => {
+      const id = text(node?.id || node?.nodeId);
+      const advisoryClass = text(node?.advisoryClass || node?.classification).toUpperCase();
+      return {
+        id,
+        label: dependencyLabel(id),
+        currentness: advisoryClass === "STALE"
+          ? "Becomes out of date when applied"
+          : advisoryClass === "REVIEW"
+            ? "Requires review"
+            : "Not evaluated",
+        source: graphSource,
+        destination: commercialAffectedArtifactDestination(id)
+      };
+    });
+  rows.push({
+    id: "inventory.projection",
+    label: "Inventory projection",
+    currentness: !inventoryConsequences
+      ? "Not evaluated"
+      : inventoryConsequences.state === "current"
+        ? "Current read-only preview"
+        : `Not current · ${inventoryEvidenceStateLabel(inventoryConsequences.state)}`,
+    source: inventoryConsequences ? "Exact Inventory scenario preview" : "No Inventory preview supplied"
+  });
+  return (
+    <section className="workflow-form-section" aria-labelledby="commercial-change-affected-artifacts-title">
+      <h4 id="commercial-change-affected-artifacts-title">Affected artifacts and outputs</h4>
+      <ul className="commercial-affected-artifacts">
+        {rows.map((row) => (
+          <li key={row.id} data-affected-artifact={row.id}>
+            <strong>{row.label}</strong>
+            <span>{row.currentness}</span>
+            <small>{row.source}</small>
+            {row.destination && typeof onOpenAffectedArtifact === "function" && (
+              <button
+                type="button"
+                className="ghost compact"
+                id={affectedArtifactControlId(row.id)}
+                data-affected-artifact-action={row.destination.kind}
+                onClick={() => onOpenAffectedArtifact({
+                  ...row.destination,
+                  artifactId: row.id,
+                  quoteId: text(model?.identity?.quoteId),
+                  beforeRevisionId: text(model?.identity?.beforeRevisionId),
+                  proposedRevisionId: text(model?.identity?.proposedRevisionId),
+                  returnFocusId: affectedArtifactControlId(row.id)
+                })}
+              >
+                {row.destination.label}
+              </button>
+            )}
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+const CUSTOMER_SAFE_FACT_IDS = new Set([
+  "fact.event_date",
+  "fact.event_type",
+  "fact.guest_count",
+  "fact.service_style",
+  "fact.venue",
+  "fact.event.date",
+  "fact.event.type",
+  "fact.event.guest_count",
+  "fact.event.service_style",
+  "fact.event.venue"
+]);
+
+function CustomerSafeAmendmentSummary({ model }) {
+  const currency = text(model?.commercialValues?.currency) || "USD";
+  const total = model?.commercialValues?.authoritativeTotal || {};
+  const facts = (Array.isArray(model?.factDiffs) ? model.factDiffs : [])
+    .filter((diff) => CUSTOMER_SAFE_FACT_IDS.has(text(diff?.nodeId)));
+  return (
+    <section
+      className="workflow-form-section customer-safe-amendment-summary"
+      data-customer-safe-amendment-summary="projected"
+      aria-labelledby="customer-safe-amendment-summary-title"
+    >
+      <p className="eyebrow">Customer-safe projection</p>
+      <h4 id="customer-safe-amendment-summary-title">Customer-safe amendment summary</h4>
+      {facts.length > 0 ? (
+        <p>Updated customer-facing details: {facts.map((diff) => factLabel(diff.nodeId)).join(", ")}.</p>
+      ) : (
+        <p>No customer-facing detail change is included in this projection.</p>
+      )}
+      <p>Total price: {formatCurrency(total.before, currency)} → {formatCurrency(total.proposedAfter, currency)}.</p>
+      <p className="source-note">Internal operating evidence is excluded. Review this projection before placing it in a customer document.</p>
+    </section>
+  );
+}
+
+function CommercialDecisionSummary({
+  model,
+  inventoryConsequences,
+  unifiedReview,
+  commitment,
+  appliedQuote,
+  applyResult,
+  applyOutcome,
+  scopeCurrent,
+  authorizationRequired,
+  authorizationReceiptId,
+  approval,
+  mutationState,
+  mutationKind
+}) {
+  const total = model?.commercialValues?.authoritativeTotal || {};
+  const currency = text(model?.commercialValues?.currency) || "USD";
+  const changedFacts = Array.isArray(model?.factDiffs) ? model.factDiffs.length : 0;
+  const graphGroups = groupCommercialConsequences(model?.impact?.dependentNodes);
+  const inventoryRows = Array.isArray(inventoryConsequences?.availability?.ingredients)
+    ? inventoryConsequences.availability.ingredients.filter((row) => row.changed)
+    : [];
+  const affectedDomains = graphGroups.map((group) => group.label);
+  if (inventoryConsequences) affectedDomains.push("Inventory");
+  const authorized = Boolean(authorizationReceiptId) || text(approval?.state).toLowerCase() === "authorized";
+  const normalizedMutation = text(mutationState).toLowerCase();
+  const nextAction = normalizedMutation === "uncertain" && mutationKind === "apply"
+    ? "Reconcile the exact prior apply request."
+    : normalizedMutation === "reconciliation" && mutationKind === "apply"
+      ? "Wait for the exact prior apply request to reconcile."
+      : applyOutcome?.state === "not_committed"
+        ? "Start a fresh simulation only after the prior request is proven not committed."
+        : Boolean(appliedQuote) || Boolean(applyResult) || applyOutcome?.state === "committed"
+          ? "Review the recorded revision and complete the receipt-backed follow-up work."
+    : !scopeCurrent
+      ? "Refresh the preview for the current form and saved revision."
+      : authorizationRequired && !authorized
+        ? "Complete the required authorization for this exact preview."
+        : "Apply the reviewed change when the operator is ready.";
+  const acceptedRevisionId = text(
+    commitment?.acceptedRevisionId
+    || commitment?.acceptedVersionId
+    || commitment?.quoteRevisionId
+    || commitment?.preservedEvidence?.find((item) => item?.kind === "customer_acceptance")?.revisionId
+  );
+  const appliedRevisionId = text(
+    appliedQuote?.activeVersionId
+    || appliedQuote?.revisionId
+    || appliedQuote?.currentRevisionId
+    || applyOutcome?.newRevisionId
+    || applyResult?.revisionId
+    || applyResult?.quoteRevisionId
+  );
+  return (
+    <section className="commercial-decision-summary" data-commercial-decision-summary aria-labelledby="commercial-decision-summary-title">
+      <div className="commercial-decision-summary__lead">
+        <p className="eyebrow">Decision summary</p>
+        <h4 id="commercial-decision-summary-title">Review the consequence before the evidence</h4>
+        <p>{nextAction}</p>
+      </div>
+      <dl>
+        <div><dt>Changed scope</dt><dd>{changedFacts} input{changedFacts === 1 ? "" : "s"}</dd></div>
+        <div><dt>Price</dt><dd>{formatSignedCurrency(total.before, total.proposedAfter, currency)}</dd></div>
+        <div><dt>Affected work</dt><dd>{affectedDomains.length ? [...new Set(affectedDomains)].join(", ") : "No related work identified"}</dd></div>
+        <div>
+          <dt>Inventory</dt>
+          <dd>{!inventoryConsequences
+            ? "Not evaluated"
+            : inventoryConsequences.state !== "current"
+              ? `Not current · ${inventoryEvidenceStateLabel(inventoryConsequences.state)}`
+              : `${inventoryRows.length} ingredient change${inventoryRows.length === 1 ? "" : "s"}`}</dd>
+        </div>
+      </dl>
+      <CommercialComparisonSummary
+        model={model}
+        inventoryConsequences={inventoryConsequences}
+        unifiedReview={unifiedReview}
+      />
+      <dl className="commercial-decision-summary__revisions" aria-label="Commercial revision identities">
+        <div><dt>Saved revision</dt><dd>{text(model?.identity?.beforeRevisionId) || "Unavailable"}</dd></div>
+        <div><dt>Proposed preview</dt><dd>{text(model?.identity?.proposedRevisionId) || "Unavailable"}</dd></div>
+        <div><dt>Customer-current accepted</dt><dd>{acceptedRevisionId || "Not established in this review"}</dd></div>
+        <div><dt>Applied revision</dt><dd>{appliedRevisionId || "Not applied"}</dd></div>
+      </dl>
+    </section>
+  );
+}
+
 function PreservedTruth({ commitment }) {
   const evidence = Array.isArray(commitment?.preservedEvidence)
     ? commitment.preservedEvidence
@@ -408,7 +652,7 @@ function PreservedTruth({ commitment }) {
   );
 }
 
-function SimulationEvidence({ model }) {
+function SimulationEvidence({ model, inventoryConsequences, onOpenAffectedArtifact }) {
   const factDiffs = Array.isArray(model.factDiffs) ? model.factDiffs : [];
   const dependents = Array.isArray(model.impact?.dependentNodes)
     ? model.impact.dependentNodes
@@ -427,6 +671,12 @@ function SimulationEvidence({ model }) {
       <CommercialDelta model={model} />
       <FactDiffs factDiffs={factDiffs} />
       <ConsequenceSummary model={model} />
+      <AffectedArtifactList
+        model={model}
+        inventoryConsequences={inventoryConsequences}
+        onOpenAffectedArtifact={onOpenAffectedArtifact}
+      />
+      <CustomerSafeAmendmentSummary model={model} />
 
       <section className="workflow-form-section" aria-labelledby="commercial-change-impact-dependents-title">
         <h4 id="commercial-change-impact-dependents-title">What this touches after apply</h4>
@@ -499,7 +749,31 @@ function inventoryEvidenceStateLabel(state) {
   })[state] || "Unavailable";
 }
 
-function IngredientConsequenceIntelligence({ consequence }) {
+function inventoryIssueExplanation(issue) {
+  return ({
+    scenario_preview_missing: "This scenario has not received an Inventory preview.",
+    scenario_preview_pending: "The Inventory preview for this exact scenario is still running.",
+    scenario_preview_unavailable: "The Inventory preview could not be completed.",
+    scenario_fingerprint_changed: "The guest count or another scenario input changed after this Inventory preview.",
+    saved_projection_not_server_current: "The saved recipe, stock, catalog, or cost evidence is no longer server-current.",
+    scenario_projection_not_server_preview: "The returned Inventory projection is not an exact server preview.",
+    projection_provenance_invalid: "Inventory projection provenance is incomplete or invalid.",
+    projection_identity_mismatch: "The Inventory preview belongs to a different quote or revision."
+  })[issue] || `Inventory evidence was not evaluated: ${humanizeWorkspaceValue(issue, { emptyLabel: "unknown reason" })}.`;
+}
+
+function shortageChangeLabel(row) {
+  const before = row.before?.shortageQuantityMicros;
+  const proposed = row.proposedAfter?.shortageQuantityMicros;
+  if (!Number.isSafeInteger(before) || !Number.isSafeInteger(proposed)) return "Shortage unknown";
+  if (before <= 0 && proposed > 0) return "New shortage";
+  if (before > 0 && proposed <= 0) return "Shortage resolved";
+  if (proposed > before) return "Shortage increased";
+  if (proposed < before) return "Shortage reduced";
+  return proposed > 0 ? "Shortage unchanged" : "No shortage";
+}
+
+function IngredientConsequenceIntelligence({ consequence, onOpenAffectedArtifact }) {
   if (!consequence) return null;
   const current = consequence.state === "current";
   const cost = consequence.cost || {};
@@ -524,10 +798,13 @@ function IngredientConsequenceIntelligence({ consequence }) {
         <StatusChip family={stateFamily} label={inventoryEvidenceStateLabel(consequence.state)} />
       </div>
       {!current ? (
-        <p className="source-note" role={consequence.state === "unavailable" ? "alert" : "status"}>
-          Ingredient consequence evidence is {inventoryEvidenceStateLabel(consequence.state).toLowerCase()}.
-          Run a server preview for this exact unsaved scenario; cached, pending, stale, or mismatched evidence is never shown as current.
-        </p>
+        <div className="source-note" role={consequence.state === "unavailable" ? "alert" : "status"}>
+          <p>Ingredient consequence evidence is {inventoryEvidenceStateLabel(consequence.state).toLowerCase()}.
+            Run a server preview for this exact unsaved scenario; cached, pending, stale, or mismatched evidence is never shown as current.</p>
+          {Array.isArray(consequence.issues) && consequence.issues.length > 0 && (
+            <ul>{consequence.issues.map((issue) => <li key={issue}>{inventoryIssueExplanation(issue)}</li>)}</ul>
+          )}
+        </div>
       ) : (
         <>
           <div className="workflow-form-grid" data-inventory-rails="independent">
@@ -571,16 +848,50 @@ function IngredientConsequenceIntelligence({ consequence }) {
                   <div className="command-center-row-main">
                     <strong>{row.proposedAfter?.ingredientName || row.before?.ingredientName || row.ingredientId}</strong>
                     <p className="command-center-row-meta">
-                      Requirement {formatIngredientQuantity(row.requiredDeltaMicros, row.baseUnitId, { signed: true })}
-                      {Number.isSafeInteger(row.shortageDeltaMicros)
-                        ? ` · Shortage ${formatIngredientQuantity(row.shortageDeltaMicros, row.baseUnitId, { signed: true })}`
-                        : " · Shortage comparison unavailable"}
+                      Requirement {formatIngredientQuantity(row.before?.requiredQuantityMicros || 0, row.baseUnitId)} → {formatIngredientQuantity(row.proposedAfter?.requiredQuantityMicros || 0, row.baseUnitId)} · delta {formatIngredientQuantity(row.requiredDeltaMicros, row.baseUnitId, { signed: true })}
                     </p>
+                    <p className="command-center-row-meta">
+                      Shortage {formatIngredientQuantity(row.before?.shortageQuantityMicros, row.baseUnitId)} → {formatIngredientQuantity(row.proposedAfter?.shortageQuantityMicros, row.baseUnitId)}
+                    </p>
+                    {Array.isArray(row.proposedAfter?.contributions) && row.proposedAfter.contributions.length > 0 && (
+                      <details>
+                        <summary>Contributing menu selections</summary>
+                        <ul className="plain-list">
+                          {row.proposedAfter.contributions.map((contribution) => (
+                            <li key={`${contribution.selectionId}:${contribution.menuItemId}`}>
+                              <strong>{contribution.menuItemId}</strong> · selection {contribution.selectionId} · recipe {contribution.recipeRevisionId}
+                            </li>
+                          ))}
+                        </ul>
+                      </details>
+                    )}
                   </div>
                   <StatusChip
                     family={row.proposedAfter?.availabilityState === "shortage" ? "action" : "info"}
-                    label={row.proposedAfter?.availabilityState === "shortage" ? "Shortage" : "Review"}
+                    label={shortageChangeLabel(row)}
                   />
+                  {text(row.ingredientId) && typeof onOpenAffectedArtifact === "function" && (
+                    <button
+                      type="button"
+                      className="ghost compact"
+                      id={affectedArtifactControlId(`inventory-${row.ingredientId}`)}
+                      data-affected-artifact-action="inventory_ingredient"
+                      onClick={() => onOpenAffectedArtifact({
+                        kind: "inventory_ingredient",
+                        label: "Review Inventory ingredient",
+                        artifactId: "inventory.projection",
+                        targetId: text(row.ingredientId),
+                        baseUnitId: text(row.baseUnitId),
+                        quoteId: text(consequence?.expected?.quoteId),
+                        beforeRevisionId: text(consequence?.expected?.savedQuoteRevisionId),
+                        proposedRevisionId: text(consequence?.expected?.proposedQuoteRevisionId),
+                        eventPlanId: text(consequence?.expected?.eventPlanId),
+                        returnFocusId: affectedArtifactControlId(`inventory-${row.ingredientId}`)
+                      })}
+                    >
+                      Review {row.proposedAfter?.ingredientName || row.before?.ingredientName || row.ingredientId} in Inventory
+                    </button>
+                  )}
                 </li>
               ))}
             </ul>
@@ -638,6 +949,12 @@ function AmendmentReceipt({
   const enforced = text(authorityState).toLowerCase() === "enforced";
   const changedCount = Array.isArray(model?.factDiffs) ? model.factDiffs.length : 0;
   const newRevisionId = text(appliedQuote?.activeVersionId || applyOutcome?.newRevisionId);
+  const totalInvalidationCount = Number.isSafeInteger(applyResult?.totalInvalidationCount)
+    ? applyResult.totalInvalidationCount
+    : null;
+  const openInvalidationCount = Number.isSafeInteger(applyResult?.openInvalidationCount)
+    ? applyResult.openInvalidationCount
+    : null;
 
   return (
     <article
@@ -674,17 +991,39 @@ function AmendmentReceipt({
         </section>
         <section>
           <h5>Needs attention</h5>
-          {enforced ? (
-            dependents.length > 0
-              ? <ul>{dependents.map((node) => <li key={node.id || node.nodeId}>{dependencyLabel(node.id || node.nodeId)}</li>)}</ul>
-              : <p>No named dependent item requires review or regeneration.</p>
+          {enforced && openInvalidationCount !== null ? (
+            openInvalidationCount > 0
+              ? <><p>{openInvalidationCount} of {totalInvalidationCount} named dependency items remain open.</p><ul>{dependents.map((node) => <li key={node.id || node.nodeId}>{dependencyLabel(node.id || node.nodeId)}</li>)}</ul></>
+              : <p>The apply receipt reports no open dependency invalidations.</p>
+          ) : enforced ? (
+            <p>Exact dependency-resolution state is unavailable in this receipt. Refresh authoritative dependency state before publication.</p>
           ) : (
             <p>Enforcement was dormant, so this is review evidence only: no dependency invalidation was persisted or implied.</p>
           )}
         </section>
         <section>
           <h5>Next</h5>
-          <p>{commitment?.protocol?.nextAction || "Review the new quote revision before continuing."}</p>
+          <ol className="commercial-follow-up-checklist" aria-label="Post-apply follow-up checklist">
+            <li data-receipt-follow-up="revision-recorded" data-follow-up-state={enforced ? "complete" : "review-only"}>
+              <strong>{enforced ? "Complete" : "Review only"}</strong>
+              <span>{newRevisionId ? `Revision ${newRevisionId} recorded` : "New revision recorded"}</span>
+            </li>
+            {enforced && openInvalidationCount !== null && (
+              <li
+                data-receipt-follow-up="dependency-state"
+                data-follow-up-state={openInvalidationCount > 0 ? "remaining" : "complete"}
+              >
+                <strong>{openInvalidationCount > 0 ? "Remaining" : "Complete"}</strong>
+                <span>{openInvalidationCount > 0
+                  ? `${openInvalidationCount} of ${totalInvalidationCount} named dependency items remain open.`
+                  : "The receipt reports no open dependency invalidations."}</span>
+              </li>
+            )}
+            <li data-receipt-follow-up="review-updated-quote" data-follow-up-state="next">
+              <strong>Next</strong>
+              <span>{commitment?.protocol?.nextAction || "Review the new quote revision before continuing."}</span>
+            </li>
+          </ol>
           {typeof onOpenAppliedQuote === "function" && (
             <button type="button" className="cta compact" onClick={onOpenAppliedQuote}>
               Review updated quote
@@ -745,6 +1084,19 @@ function CommercialChangeAuthorityControls({
   const requiresAuthorization = normalizedAuthority === "enforced" && authorizationRequired;
   const canMutate = scopeCurrent && !busy && policyRoleAllowed;
   const canApply = canMutate && (!requiresAuthorization || authorized);
+  const applyBlocker = applyOutcomeUncertain
+    ? "The previous apply outcome is unresolved; reconcile that exact request before another apply."
+    : !scopeCurrent
+      ? "The form, catalog, or saved quote revision changed; run a fresh preview."
+      : !policyRoleAllowed
+        ? "The published quote review policy excludes this role."
+        : busy
+          ? "Another authorization or apply request is still resolving."
+          : requiresAuthorization && !authorized
+            ? "Administrator authorization for this exact preview is required."
+            : applyResult || applyOutcome?.state === "committed"
+              ? "This reviewed change is already applied."
+              : "";
 
   useEffect(() => {
     const receiptId = text(applyOutcome?.outcomeReceiptId);
@@ -857,12 +1209,19 @@ function CommercialChangeAuthorityControls({
         </p>
       )}
 
+      {applyBlocker && (
+        <p id="commercial-change-apply-blocker" className="warning-note" role="status">
+          <strong>Apply unavailable:</strong> {applyBlocker}
+        </p>
+      )}
+
       <div className="right-actions commercial-change-apply-actions">
         {typeof onApply === "function" && !applyOutcomeRecoverable && (
           <button
             type="button"
             className="cta compact"
             onClick={onApply}
+            aria-describedby={applyBlocker ? "commercial-change-apply-blocker" : undefined}
             disabled={!canApply || applyOutcomeUncertain || Boolean(applyResult) || applyOutcome?.state === "committed"}
             title={applyOutcomeUncertain
               ? "The prior outcome is unresolved. Reconcile this exact request; this screen will not submit the edit again."
@@ -960,6 +1319,11 @@ function BoundCommercialReview({ model }) {
   return <section className="workflow-form-section" aria-label="Published approval and guest count evidence">
     <h4>{model.attendanceBinding ? "Before you apply this guest count" : "Approval for this change"}</h4>
     <p><strong>{usd(evaluation.absoluteTotalDeltaCents)} total price change</strong> · {evaluation.impactApprovalRequired || evaluation.thresholdApprovalRequired ? "Administrator approval required" : "No administrator approval required"}</p>
+    <p className="source-note">
+      {policy
+        ? `Published policy version ${policy.definitionPin.version} · ${threshold === null ? "no additional price threshold" : `administrator review at ${usd(threshold)} or more`}`
+        : "Existing commercial approval rules apply; no published threshold was supplied to this review."}
+    </p>
     <details><summary>Approval policy and threshold</summary><dl className="staff-evidence-details">
       <div><dt>Quote review policy</dt><dd>{policy ? `Published version ${policy.definitionPin.version}` : "Existing commercial approval rules"}</dd></div>
       <div><dt>Absolute total change</dt><dd>{usd(evaluation.absoluteTotalDeltaCents)}</dd></div>
@@ -1007,6 +1371,7 @@ export default function CommercialChangeImpactPanel({
   onApplySelectedConsequences,
   onKeepQuotedPlan,
   onOpenAppliedQuote,
+  onOpenAffectedArtifact,
   titleId = "commercial-change-impact-title"
 }) {
   const view = buildCommercialChangeImpactPanelState({ model, loading, recovering, error, partial });
@@ -1064,13 +1429,42 @@ export default function CommercialChangeImpactPanel({
         {view.detail}
       </p>
 
+      {view.snapshotAvailable && (
+        <CommercialDecisionSummary
+          model={model}
+          inventoryConsequences={inventoryConsequences}
+          unifiedReview={unifiedReview}
+          commitment={commitment}
+          appliedQuote={appliedQuote}
+          applyResult={applyResult}
+          applyOutcome={applyOutcome}
+          scopeCurrent={scopeCurrent && !partial && !error}
+          authorizationRequired={authorizationRequired}
+          authorizationReceiptId={authorizationReceiptId}
+          approval={approval}
+          mutationState={mutationState}
+          mutationKind={mutationKind}
+        />
+      )}
+
       <p className="workflow-attention-boundary" role="note" data-simulation-boundary="authorization-reconciliation-publication">
         <strong>Simulation only — authorization and reconciliation are required.</strong>{" "}
         Nothing is invalidated, regenerated, or published here. {boundary}
       </p>
 
-      {view.snapshotAvailable && <SimulationEvidence model={model} />}
-      {inventoryConsequences && <IngredientConsequenceIntelligence consequence={inventoryConsequences} />}
+      {view.snapshotAvailable && (
+        <SimulationEvidence
+          model={model}
+          inventoryConsequences={inventoryConsequences}
+          onOpenAffectedArtifact={onOpenAffectedArtifact}
+        />
+      )}
+      {inventoryConsequences && (
+        <IngredientConsequenceIntelligence
+          consequence={inventoryConsequences}
+          onOpenAffectedArtifact={onOpenAffectedArtifact}
+        />
+      )}
       {view.snapshotAvailable && <PreservedTruth commitment={commitment} />}
       {view.snapshotAvailable && unifiedReview && (
         <UnifiedCommercialConsequenceReview

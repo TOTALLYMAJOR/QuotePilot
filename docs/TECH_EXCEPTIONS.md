@@ -1,7 +1,6 @@
 # Technology Exceptions
 
-Last updated: 2026-09-17 14:01:00 CDT
-
+Last updated: 2026-10-11 23:14:06 CDT
 Use this log when a change intentionally departs from stable-first policy or requires temporary governance/performance exception handling.
 
 ## Record Template
@@ -83,8 +82,7 @@ Use this log when a change intentionally departs from stable-first policy or req
   artifacts while compatibility's largest-chunk ceiling remains unchanged.
   The remaining increase is the reviewed role-safe host
   integration for the five separately gated workflows; there is no
-  discretionary headroom. The Proposal
-  Composer quote-builder candidate (measured 2,943,941 local compatibility bytes, largest chunk
+  discretionary headroom. The Proposal  Composer quote-builder candidate (measured 2,943,941 local compatibility bytes, largest chunk
   unchanged), the first Live planning and Staff People presentation slice
   (measured 2,963,542 compatibility bytes, largest chunk unchanged), and the
   shared shell and Now visual-system pass (measured 2,964,327 compatibility
@@ -240,7 +238,13 @@ Use this log when a change intentionally departs from stable-first policy or req
   implementations are compile-gated or lazy. Compatibility's largest emitted
   chunk remains 385,181 bytes; Ambient's current largest chunk is 446,541
   bytes, 1,100 bytes above the v0.20.0 ceiling. These exact residuals are the
-  reviewed integration cost, not a general allowance.
+  reviewed integration cost, not a general allowance. The v0.21.0 combined
+  release integration subsequently removes 6,197 bytes of dormant production
+  code and retains an exact 9,363-byte local Ambient delta over `f3ff212a` for
+  active Inventory, opportunity, reporting, customer, and actuals behavior.
+  Its 4,978,120-byte temporary aggregate ceiling preserves the prior 2,664-byte
+  environment margin; the 445,422-byte largest-chunk ceiling is unchanged.
+  Exact-PR CI remains required.
 - Rollback plan: Revert the quote-builder decision-flow slice and its exact
   recalibration, then revert Pingram if needed; or revert Team access and its role/App Check adapters
   with the earlier recalibration. The two manual chunks, graph-aware checker,

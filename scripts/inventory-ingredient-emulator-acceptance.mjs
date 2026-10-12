@@ -146,6 +146,41 @@ async function callInventory(principal, requestId, command) {
   return payload?.result || payload?.data || {};
 }
 
+async function callInventoryWorkspace(principal, data) {
+  const response = await fetch(
+    `http://${functionsHost}/${projectId}/${REGION}/getInventoryWorkspace`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Origin: "http://localhost:4174",
+        Authorization: `Bearer ${principal.idToken}`,
+        "X-Firebase-AppCheck": emulatorAppCheckToken
+      },
+      body: JSON.stringify({
+        data: {
+          schemaVersion: 2,
+          organizationId: ORGANIZATION_ID,
+          ...data
+        }
+      })
+    }
+  );
+  const raw = await response.text();
+  let payload;
+  try {
+    payload = JSON.parse(raw);
+  } catch {
+    throw new Error(`getInventoryWorkspace returned non-JSON (${response.status}): ${raw.slice(0, 180)}`);
+  }
+  if (payload?.error) {
+    const error = new Error(payload.error.message || "getInventoryWorkspace failed.");
+    error.status = String(payload.error.status || "");
+    throw error;
+  }
+  return payload?.result || payload?.data || {};
+}
+
 async function callEventPreview(principal, data) {
   const response = await fetch(
     `http://${functionsHost}/${projectId}/${REGION}/previewEventInventory`,
@@ -486,9 +521,23 @@ await callInventory(principal, "cost-pasta-create-0001", {
 });
 
 const recipeRequestId = "recipe-chicken-alfredo-create-0001";
+const recipeDraft = recipeCommand();
+const recipeDependencyReview = await callInventoryWorkspace(principal, {
+  recipeDependencyPreflight: recipeDraft
+});
+assert.equal(recipeDependencyReview.organizationId, ORGANIZATION_ID);
+assert.equal(recipeDependencyReview.menuItemId, recipeDraft.menuItemId);
+assert.equal(recipeDependencyReview.reviewedCatalogRevision, recipeDraft.expectedCatalogRevision);
+assert.equal(recipeDependencyReview.reviewedRecipeRevision, recipeDraft.expectedRecipeRevision);
+assert.equal(recipeDependencyReview.complete, true);
+assert.match(recipeDependencyReview.dependencyPreflightDigest, /^[a-f0-9]{64}$/u);
+const reviewedRecipeCommand = {
+  ...recipeDraft,
+  dependencyPreflightDigest: recipeDependencyReview.dependencyPreflightDigest
+};
 const concurrentRecipeReplay = await Promise.all([
-  callInventory(principal, recipeRequestId, recipeCommand()),
-  callInventory(principal, recipeRequestId, recipeCommand())
+  callInventory(principal, recipeRequestId, reviewedRecipeCommand),
+  callInventory(principal, recipeRequestId, reviewedRecipeCommand)
 ]);
 assert.deepEqual(concurrentRecipeReplay.map((result) => result.idempotent).sort(), [false, true]);
 assert.equal(concurrentRecipeReplay[0].receipt.receiptId, concurrentRecipeReplay[1].receipt.receiptId);
@@ -858,7 +907,7 @@ const receivingEvidence = await orgRef.collection("inventoryCostEvidence")
 assert.equal(receivingEvidence.data()?.planningBasisAction, "retained_existing");
 assert.equal(receivingEvidence.data()?.totalCostMinor, 2500);
 
-const changedChickenCost = await callInventory(principal, "cost-chicken-change-0002", {
+const changedChickenCostDraft = {
   kind: "record_ingredient_cost",
   ingredientId: "chicken",
   baseUnitId: "lb",
@@ -870,6 +919,21 @@ const changedChickenCost = await callInventory(principal, "cost-chicken-change-0
   basisQuantity: "40",
   totalCostMinor: 16000,
   currency: "USD"
+};
+const chickenIngredient = await orgRef.collection("inventoryIngredients").doc("chicken").get();
+const chickenCostDependencyReview = await callInventoryWorkspace(principal, {
+  expectedIngredientRevision: chickenIngredient.data()?.revision,
+  costDependencyPreflight: changedChickenCostDraft
+});
+assert.equal(chickenCostDependencyReview.organizationId, ORGANIZATION_ID);
+assert.equal(chickenCostDependencyReview.ingredientId, changedChickenCostDraft.ingredientId);
+assert.equal(chickenCostDependencyReview.reviewedIngredientRevision, chickenIngredient.data()?.revision);
+assert.equal(chickenCostDependencyReview.reviewedCostRevision, changedChickenCostDraft.expectedCostRevision);
+assert.equal(chickenCostDependencyReview.complete, true);
+assert.match(chickenCostDependencyReview.dependencyPreflightDigest, /^[a-f0-9]{64}$/u);
+const changedChickenCost = await callInventory(principal, "cost-chicken-change-0002", {
+  ...changedChickenCostDraft,
+  dependencyPreflightDigest: chickenCostDependencyReview.dependencyPreflightDigest
 });
 assert.deepEqual(changedChickenCost.result.affectedMenuItemIds, ["chicken-alfredo"]);
 const changedMenuCost = await orgRef.collection("inventoryMenuCostProjections").doc("chicken-alfredo").get();

@@ -35,6 +35,13 @@ function role(value) {
   return text(value).toLowerCase() || "staff";
 }
 
+const DIRECTORY_FILTER_LABELS = /* @__PURE__ */ Object.freeze({
+  all: "All clients",
+  linked: "With linked work",
+  upcoming: "Upcoming events",
+  contact_gap: "Contact to add"
+});
+
 function scheduleFrame(callback) {
   if (typeof window !== "undefined" && typeof window.requestAnimationFrame === "function") {
     const frame = window.requestAnimationFrame(callback);
@@ -153,9 +160,9 @@ function clientDirectoryState(row = {}) {
   return { key: "unlinked", label: "No linked work in this view", tone: "neutral" };
 }
 
-function clientRecordedContactDetails(row = {}) {
+function clientRecordedContactDetails(row = {}, { includeCompany = true } = {}) {
   const identity = clientIdentity(row);
-  const details = [identity.company, identity.email, identity.phone].filter(Boolean);
+  const details = [includeCompany ? identity.company : "", identity.email, identity.phone].filter(Boolean);
   return details.length
     ? details.join(" · ")
     : "No recorded contact details are shown on this page yet.";
@@ -201,6 +208,7 @@ function fallbackReviewClientAction(row, currentUserRole) {
 export function AmbientClientsDirectory({
   model = {},
   searchDraft = "",
+  appliedSearch = "",
   cursorHistoryLength = 0,
   directoryFilter: controlledDirectoryFilter,
   onDirectoryFilterChange,
@@ -250,6 +258,8 @@ export function AmbientClientsDirectory({
   const remainingRows = featuredRow
     ? visibleRows.filter((row) => row !== featuredRow)
     : visibleRows;
+  const filterLabel = DIRECTORY_FILTER_LABELS[directoryFilter] || DIRECTORY_FILTER_LABELS.all;
+  const resultLabel = `${filterLabel}. Showing ${formatWorkspaceInteger(visibleRows.length)} of ${formatWorkspaceInteger(rows.length)} ${rows.length === 1 ? "client" : "clients"} on this loaded page${text(appliedSearch) ? ` for “${text(appliedSearch)}”` : ""}.`;
 
   const announce = (result, message) => {
     setAcknowledgement({ result, message });
@@ -408,6 +418,43 @@ export function AmbientClientsDirectory({
     }
   };
 
+  const renderDirectoryControls = (className = "") => (
+    <div className={`ambient-clients__directory-controls${className ? ` ${className}` : ""}`}>
+      <form className="ambient-clients__toolbar" role="search" onSubmit={onApplySearch}>
+        <label className="ambient-clients__search">
+          <span className="visually-hidden">Find a client by name or email</span>
+          <input
+            type="search"
+            value={searchDraft}
+            autoComplete="off"
+            placeholder="Search clients"
+            onChange={(event) => onSearchDraftChange?.(event.target.value)}
+          />
+        </label>
+        <button type="submit" className="ghost">Search</button>
+        {searchDraft ? <button type="button" className="ghost" onClick={onClear}>Clear</button> : null}
+      </form>
+      <p className="source-note" data-client-search-boundary>
+        Search stays in this browser tab and clears after a reload.
+      </p>
+      {(rows.length > 1 || directoryFilter !== "all") && (
+        <label className="ambient-clients__filter-select">
+          <span className="visually-hidden">Filter clients</span>
+          <select
+            data-view-filter="client-relationship"
+            value={directoryFilter}
+            onChange={(event) => changeDirectoryFilter(event.target.value)}
+          >
+            <option value="all">All clients</option>
+            <option value="linked">With linked work</option>
+            <option value="upcoming">Upcoming events</option>
+            <option value="contact_gap">Contact to add</option>
+          </select>
+        </label>
+      )}
+    </div>
+  );
+
   return (
     <main
       className="container workspace-route-main"
@@ -508,6 +555,11 @@ export function AmbientClientsDirectory({
               </div>
             </header>
 
+            <section className="ambient-clients__mobile-directory-access" aria-labelledby="ambient-clients-mobile-search-title">
+              <h2 id="ambient-clients-mobile-search-title">Find a client</h2>
+              {renderDirectoryControls("ambient-clients__directory-controls--mobile")}
+            </section>
+
             {featuredRow && (() => {
               const customerId = text(featuredRow.customerId || featuredRow.clientId || featuredRow.id);
               const identity = clientIdentity(featuredRow);
@@ -553,6 +605,7 @@ export function AmbientClientsDirectory({
                   <button
                     type="button"
                     className="ambient-client__primary"
+                    aria-label={`${action.outcomeLabel}: ${identity.name}`}
                     data-ambient-action-id={action.id}
                     data-client-summary-part="action"
                     disabled={!action.enabled}
@@ -568,41 +621,16 @@ export function AmbientClientsDirectory({
             <section className="ambient-clients__directory" aria-labelledby="ambient-clients-list-title">
               <div className="ambient-clients__directory-heading">
                 <h2 id="ambient-clients-list-title">All clients</h2>
-              </div>
-              <div className="ambient-clients__directory-controls">
-                <form className="ambient-clients__toolbar" role="search" onSubmit={onApplySearch}>
-                  <label className="ambient-clients__search">
-                    <span className="visually-hidden">Find a client by name or email</span>
-                    <input
-                      type="search"
-                      value={searchDraft}
-                      autoComplete="off"
-                      placeholder="Search clients"
-                      onChange={(event) => onSearchDraftChange?.(event.target.value)}
-                    />
-                  </label>
-                  <button type="submit" className="ghost">Search</button>
-                  {searchDraft ? <button type="button" className="ghost" onClick={onClear}>Clear</button> : null}
-                </form>
-                <p className="source-note" data-client-search-boundary>
-                  Search stays in this browser tab and clears after a reload.
+                <p
+                  className="source-note"
+                  data-client-result-scope
+                  role="status"
+                  aria-live="polite"
+                >
+                  {resultLabel}
                 </p>
-                {(rows.length > 1 || directoryFilter !== "all") && (
-                  <label className="ambient-clients__filter-select">
-                    <span className="visually-hidden">Filter clients</span>
-                    <select
-                      data-view-filter="client-relationship"
-                      value={directoryFilter}
-                      onChange={(event) => changeDirectoryFilter(event.target.value)}
-                    >
-                      <option value="all">All clients</option>
-                      <option value="linked">With linked work</option>
-                      <option value="upcoming">Upcoming events</option>
-                      <option value="contact_gap">Contact to add</option>
-                    </select>
-                  </label>
-                )}
               </div>
+              {renderDirectoryControls()}
 
               {remainingRows.length ? (
                 <ol className="ambient-clients__relationship-list">
@@ -617,11 +645,12 @@ export function AmbientClientsDirectory({
                         <article className="ambient-clients__relationship-row" data-client-id={customerId}>
                           <div><h3>{identity.name}</h3>{identity.company && <p>{identity.company}</p>}</div>
                           <div><strong>{event.title}</strong><span>{event.date}{event.reference ? ` · ${event.reference}` : ""}</span></div>
-                          <p>{clientRecordedContactDetails(row)}</p>
+                          <p data-client-row-contact>{clientRecordedContactDetails(row, { includeCompany: false })}</p>
                           <span className="ambient-clients__relationship-state" data-tone={relationshipState.tone}>{relationshipState.label}</span>
                           <button
                             type="button"
                             className="ambient-client__primary"
+                            aria-label={`${action.outcomeLabel}: ${identity.name}`}
                             data-ambient-action-id={action.id}
                             disabled={!action.enabled}
                             title={action.disabledReason || undefined}

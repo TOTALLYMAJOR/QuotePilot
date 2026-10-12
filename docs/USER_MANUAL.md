@@ -1,6 +1,6 @@
 # User Manual
 
-Last updated: 2026-09-17 11:51:38 CDT
+Last updated: 2026-10-11 04:13:28 CDT
 
 ## Quote-to-Confidence workflows
 
@@ -67,7 +67,6 @@ the existing Inventory read gates; financial evidence retains its own authority.
    confirmation records an applied observation. Template/workflow adoption
    tracking and event-bound receiving remain unavailable. No suggestion sets
    price, margin, rates, thresholds, yield, pack contents or supplier policy.
-
 ## Purpose
 This guide explains day-to-day usage of QuotePilot for staff users and admins.
 
@@ -141,8 +140,20 @@ progressively disclosed Administration, account settings, and sign-out.
 3. At **Offers and menu**, choose **Build offers and menu** for manual entry or
    **Import an existing menu** to open Import Studio. An import is reviewed and
    staged into the existing catalog setup draft; it does not create a second
-   catalog or become active pricing by itself.
-4. Treat each readiness measure independently. **Cost visibility** is optional
+   catalog or become active pricing by itself. Import Studio loads the current
+   published menu sections
+   for the selected event type before section assignment. A loading message
+   means that lookup is still pending; a load failure is reported separately
+   from a genuinely empty menu. Choosing a starter catalog opens
+   its exact staged items in the current Library editor for review; it also
+   remains inactive until the administrator checks and publishes the draft.
+   After a menu import, choose **Review catalog draft** to open the first exact
+   accepted receipt row. QuotePilot selects only the event type, menu section,
+   and item named by that receipt; if the record is unavailable, it reports
+   recovery instead of opening a different item. A recorded cost of zero is a
+   real recorded value, while a blank cost is missing. Imported cost remains an
+   operator-declared value, not recipe evidence. Publish a staged item before
+   attaching a recipe through the separately governed Inventory extension.4. Treat each readiness measure independently. **Cost visibility** is optional
    for the first quote. Missing optional starting
    points, additional users, provider connections, or cost evidence does not by
    itself block ordinary quote creation. Missing cost evidence does make margin
@@ -891,12 +902,18 @@ code.
   `/app/customers/<customerId>`. A missing or other-tenant ID does not reveal a
   customer and offers a safe return to the directory.
 - The client identity and bounded linked opportunities become available first.
-  While retained proposal history and private customer controls are still
-  loading, the relationship overview remains usable and **More client history
-  and controls** names the unfinished read. If that supplemental read fails,
-  the exact client and current opportunities remain visible; use **Retry client
-  details** to request a fresh complete profile read without changing records.
-- `Customer directory read context` and `Customer 360 read context` name the
+  Private email controls finish separately. A controls read failure leaves the
+  client overview usable; **Retry client details** refreshes that exact profile.
+- In **Quotes & Proposals**, open **Review proposal versions** for the quote
+  whose retained history you need. An unopened history has not been checked;
+  it does not mean the quote has no versions. Histories load independently,
+  with at most four active reads. **Retry history** retries only the failed
+  quote history. Changing client or organization discards obsolete results;
+  no retry changes a saved quote or version. Rebooking and post-event closeout
+  remain unavailable until the current client controls and supporting read
+  evidence finish successfully. The relationship timeline stays
+  explicitly partial while quote histories remain unread and incorporates
+  successfully loaded versions without treating failed histories as empty.- `Customer directory read context` and `Customer 360 read context` name the
   exact tenant, source, bounded contract, device-time last complete read, and
   loading/current/partial/retained-stale/error outcome. A fresh staff read does
   not prove delivery, viewing, acceptance, booking, payment, or operational
@@ -1555,6 +1572,16 @@ The initial setup is intentionally small:
    unavailable purchase cost, then wait for the realtime stock projection to
    confirm the receipt.
 
+When several deliveries must be recorded, open **Receive multiple lines**.
+Each row remains an independent use of the same receiving authority and shows
+its own pending, confirmed, uncertain, or failed outcome. Do not resubmit a
+confirmed row. For an uncertain row, use its recovery control so QuotePilot
+checks the original request identity before another submission can become
+eligible. A definitive failure may be corrected and retried without repeating
+successful rows. The batch surface is convenience orchestration, not a purchase
+order, supplier confirmation, allocation, valuation, or proof that goods were
+physically received.
+
 For example, record **Chicken**, `40 lb`, and a `$120` total cost basis. The
 stock receipt establishes 40 lb on hand; the separate cost receipt retains the
 exact `$120 / 40 lb` evidence. A cost failure does not undo the stock record,
@@ -1565,6 +1592,17 @@ realtime. **Cached**, **pending**, **stale**, **unavailable**, and **uncertain**
 states are not confirmation. If an action may have reached the server but no
 receipt returned, keep the entered values and use **Check exact request**; do
 not start a replacement request.
+
+To inspect one ingredient, open **Movement history and commitments** beside
+that ingredient. QuotePilot then loads only that ingredient's bounded verified
+summary. Movement pages retain their exact receipts, and each commitment names
+the exact event plan and requirement revision that contributes to the displayed
+total. **Load earlier movements** follows the server cursor; it does not scan
+the whole ledger. A partial page or failed request stays inside that disclosure
+and does not clear the current Inventory workspace. Use **Retry this ingredient
+trace** to retry the same ingredient; keyboard focus remains on that recovery
+action. These summaries do not prove a physical count, inventory value,
+procurement, or event readiness.
 
 The founder-pilot staging and production workspaces may contain the
 `ragnakok-realistic-v1` planning fixture: five kitchen locations, 132
@@ -1636,7 +1674,14 @@ To cost an existing menu item:
    of that ingredient's declared purchase packs.
 4. Mark the quantity **As purchased** or **Usable quantity**. A usable quantity
    needs an explicit yield ratio, such as `0.8`; QuotePilot does not assume one.
-5. Publish the recipe revision. A local, dirty, staged, saving, or stale catalog
+5. Select **Review affected menu items**. QuotePilot returns a bounded,
+   role-safe review for this exact recipe draft and focuses it in the editor.
+   Inspect the named menu items and evidence digest; this is dependency scope,
+   not a claim that their price, production plan, or customer document changed.
+6. Confirm publication without editing the draft. QuotePilot sends the
+   server-issued review digest with the unchanged recipe. If the catalog,
+   recipe, draft, or dependency evidence changed, publication fails closed and
+   the review must be repeated. A local, dirty, staged, saving, or stale catalog
    item must first be saved and refreshed.
 
 The cost card is a server-calculated projection, not browser arithmetic. It
@@ -1755,10 +1800,13 @@ valuation policy.
 
 This source-candidate slice supports at most 200 location definitions and 200
 ingredient definitions per organization. The shared server transaction fence
-rejects record 201, and a projection at its bound is labeled **Partial**. That
-temporary limit must be replaced by cursor-based navigation before larger
-catalogs are activated; the browser never silently treats a truncated list as
-complete.
+rejects record 201. Definition capacity is separate from browser pagination:
+the ingredient projection list displays up to 199 rows and reserves one
+lookahead record within each authorized 200-record query. Moving to the next page follows
+the last displayed ingredient, so the lookahead row is retained on the next
+page. A remaining page is explicit; the browser never silently treats a
+truncated list as complete. This pagination repair does not lift server
+definition limits.
 
 Event Preflight and the selected Operations event now reuse the same exact
 realtime plan and execution reads. They show **Physical stock**, **Menu cost**,
@@ -2183,6 +2231,10 @@ reporting remain unavailable until their own bounded evidence authorities exist.
   token hash, or other private data.
 
 ## Reporting Dashboard
+- Commercial records and product analytics load independently. Available
+  commercial measures stay usable while analytics are loading or unavailable;
+  loading is not zero activity. Use the existing refresh/retry control to
+  request current evidence, and read any retained-stale label before acting.
 - Open `Reporting` or `/app/reporting` to review quote pipeline, conversion,
   accepted/booked quote value, and the separately verified paid-deposit total.
   These operational values are not accounting revenue.
@@ -2763,6 +2815,22 @@ existing catalog authority. The browser accepts a save receipt only when its
 organization, base revision, expected and resulting generation, projected
 change count, and complete patch identities and payloads match the reviewed
 plan; a success-shaped but substituted response fails closed.
+
+Each newly imported catalog change also carries sanitized source context: the
+operator-declared filename, CSV or PDF kind, import type, batch identity, and
+source row number. The same context is bound into preflight, the shared-draft
+receipt, later draft merges, publication lineage, and the active catalog record.
+It helps staff trace a published record back to the reviewed source, but it is
+not provider attestation, recipe/menu-cost evidence, Inventory evidence, or a
+claim that the file was complete. Partial or invalid context is rejected before
+the draft is staged. Older draft changes without this metadata remain valid.
+
+The disposable local first-quote activation acceptance lane verifies one
+bounded engineering path from an empty quote history through starter
+publication, routed menu import, exact draft review, later publication, and one
+server-authoritative saved quote/version. It does not send or accept a proposal,
+book work, take payment, establish recipe or physical-Inventory truth, or prove
+hosted, production, human, or outcome behavior.
 
 The server also keeps a tenant- and actor-bound mutation receipt for the exact
 request ID and SHA-256-normalized patch set. Publication records the exact patch
@@ -4065,3 +4133,31 @@ outreach policy is invented or published during activation. The global scheduler
 receives no tenant scope and stays disabled, and the outbound-send gate stays
 off. Other tenants cannot use these scoped authorities. Existing explicit
 operator email actions retain their normal authorization and confirmations.
+
+## Developer-only route performance fixture
+
+This local developer/operator process adds no customer workspace entry or hosted
+access. Use `npm run test:perf:routes` for fixture and aggregation unit checks;
+`npm run calibrate:perf:routes` and `npm run check:perf:routes` follow the
+[Performance Guardrails](PERFORMANCE_GUARDRAILS.md) calibration and qualification
+policy. Calibration produces evidence for review and does not automatically edit
+the committed budget. The October 11 calibration passed all 20 scenarios and
+its reviewed ceilings are retained. The first independent check passed all 12
+browser scenarios but failed Inventory and quote-review timing ceilings. The
+final focus-repaired candidate passes all twelve visits and every unchanged
+ceiling; earlier failures remain retained. This is local timing qualification,
+not release approval: branch-wide documentation governance remains blocked.
+A working route is not itself a passing performance budget.
+
+The fixture refuses writes unless the project is `demo-qp-routeperf`, Auth is at
+`127.0.0.1:9498`, and Firestore is at `127.0.0.1:8488`. It uses real administrator
+sign-in and synthetic catalog, customer, quote/version and Inventory records.
+Native Inventory commands produce an opening-stock projection; the quantity is
+test data, not a physical count or stock promise.
+
+The runner removes inherited credentials and excludes dotenv/secret files from
+its temporary Functions source. Only three existing read handlers are exposed on
+the local Functions emulator; other browser callables are blocked and unavailable
+providers remain visible as unavailable. A successful local run establishes no
+hosted access, provider delivery, customer outcome or human acceptance. The shared
+seeder boundary is governed by [Version Control](VERSION_CONTROL.md#time-bound-browser-fixtures).

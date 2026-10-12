@@ -2,7 +2,7 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
 import { act } from "react-dom/test-utils";
-import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
 import { ambientQuoteAdministrationArrivalInput } from "../../App";
 import {
   createWorkspaceArrivalHandoff,
@@ -26,12 +26,11 @@ vi.mock("../../lib/menuService", async () => ({
   getEventTypes: mocks.getEventTypes
 }));
 
-import {
-  isExactQuoteAdministrationArrival,
-  QuoteHistoryView
-} from "../QuoteHistoryModal";
-
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+
+let isExactQuoteAdministrationArrival;
+let commercialConsequenceRevisionMatchesQuote;
+let QuoteHistoryView;
 
 const QUOTE = Object.freeze({
   id: "quote-event-route",
@@ -97,6 +96,15 @@ function acceptedRevisionArrival() {
 let container;
 let root;
 
+beforeAll(async () => {
+  vi.stubEnv("VITE_AMBIENT_UI_ENABLED", "false");
+  ({
+    commercialConsequenceRevisionMatchesQuote,
+    isExactQuoteAdministrationArrival,
+    QuoteHistoryView
+  } = await import("../QuoteHistoryModal"));
+});
+
 async function settle() {
   await act(async () => {
     await new Promise((resolve) => window.setTimeout(resolve, 10));
@@ -120,6 +128,7 @@ function byText(label) {
 }
 
 beforeEach(() => {
+  vi.stubEnv("VITE_AMBIENT_UI_ENABLED", "false");
   Object.defineProperty(Element.prototype, "scrollIntoView", {
     configurable: true,
     value: vi.fn()
@@ -136,6 +145,7 @@ afterEach(() => {
   act(() => root.unmount());
   container.remove();
   delete Element.prototype.scrollIntoView;
+  vi.unstubAllEnvs();
 });
 
 describe("QuoteHistoryView event workspace integration", () => {
@@ -419,6 +429,34 @@ describe("QuoteHistoryView event workspace integration", () => {
         intentId: "review_proposal_controls"
       },
       focusQuoteId: QUOTE.id
+    })).toBe(false);
+  });
+
+  test.each([
+    ["customer-decision-artifact", "review_commercial_proposal_consequence"],
+    ["kitchen-beo", "review_kitchen_beo_consequence"]
+  ])("accepts an exact revision-bound %s commercial arrival", (objectType, intentId) => {
+    const arrivalContext = {
+      destination: "administration",
+      surfaceId: "quote-administration",
+      focusConsumerState: "supported",
+      object: { id: QUOTE.id, type: objectType },
+      intentId,
+      focus: {
+        quoteId: QUOTE.id,
+        sourceRevisionId: "revision-current",
+        proposedRevisionId: "revision-proposed"
+      }
+    };
+
+    expect(isExactQuoteAdministrationArrival({ arrivalContext, focusQuoteId: QUOTE.id })).toBe(true);
+    expect(commercialConsequenceRevisionMatchesQuote(arrivalContext, {
+      ...QUOTE,
+      activeVersionId: "revision-current"
+    })).toBe(true);
+    expect(commercialConsequenceRevisionMatchesQuote(arrivalContext, {
+      ...QUOTE,
+      activeVersionId: "revision-newer"
     })).toBe(false);
   });
 

@@ -1,6 +1,11 @@
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
+
+vi.hoisted(() => {
+  vi.stubEnv("VITE_PILOT_MARGINS_ENABLED", "false");
+});
+
 import QuoteCompareModal from "../QuoteCompareModal";
 
 const settings = {

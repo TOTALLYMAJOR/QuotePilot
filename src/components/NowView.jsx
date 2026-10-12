@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import DecisionCard from "./DecisionCard";
 import StatusChip from "./StatusChip";
 import StaffEvidenceRail from "./StaffEvidenceRail";
@@ -14,6 +14,8 @@ import {
   describeNowEmptyState
 } from "./nowPresentation";
 import { classifyQuoteStatus } from "../lib/statusSemantics";
+import { getNowRoutePerformanceOutcomes, markRouteStage } from "../lib/routePerformance";
+import { WorkspaceSectionLoading } from "./WorkspaceSurfaceBoundary";
 import {
   formatWorkspaceDate,
   formatWorkspaceInteger,
@@ -45,6 +47,24 @@ export default function NowView({
     quotes: [],
     truncated: false
   };
+  const reportedStagesRef = useRef(new Set());
+  const { core: coreOutcome, supplemental: supplementalOutcome } = getNowRoutePerformanceOutcomes(state);
+
+  useEffect(() => {
+    if (!coreOutcome || reportedStagesRef.current.has("usable-core")) return;
+    reportedStagesRef.current.add("usable-core");
+    markRouteStage({ routeId: "now", stage: "usable-core", outcome: coreOutcome });
+  }, [coreOutcome]);
+
+  useEffect(() => {
+    if (!supplementalOutcome || reportedStagesRef.current.has("supplemental-complete")) return;
+    reportedStagesRef.current.add("supplemental-complete");
+    markRouteStage({ routeId: "now", stage: "supplemental-complete", outcome: supplementalOutcome });
+  }, [supplementalOutcome]);
+  const historyLoading = state.reads?.history?.status === "loading"
+    || (state.loading && !["success", "error"].includes(state.reads?.history?.status));
+  const historyError = state.reads?.history?.error || (!state.reads && state.error);
+  const attentionLoading = state.loading;
   const attentionItems = state.attentionSummary?.items || [];
   const [additionalAttentionVisible, setAdditionalAttentionVisible] = useState(false);
   const hiddenAttentionCount = Math.max(0, attentionItems.length - NOW_CARD_LIMIT);
@@ -90,14 +110,14 @@ export default function NowView({
       <div className="command-center-head now-briefing__masthead">
         <div>
           <p className="eyebrow">Now</p>
-          <h2
+          <h1
             ref={headingRef}
             id="now-heading"
             className="workspace-route-heading"
             tabIndex={-1}
           >
             What to review today
-          </h2>
+          </h1>
           <p className="now-date">{dayLabel} · {dateLabel}</p>
           <p className="now-briefing__intro">Your priorities, upcoming events, and recorded payment steps in one view.</p>
         </div>
@@ -129,26 +149,28 @@ export default function NowView({
       />
 
       {state.error && <p className="error-note" role="alert">{state.error}</p>}
+      {Object.entries(state.reads || {}).filter(([read, result]) => read !== "history" && result.status === "error").map(([read]) => (
+        <button key={read} type="button" className="ghost" onClick={() => onRefresh?.({ force: true, read })}>
+          Retry {read === "unreadReplies" ? "customer replies" : read === "decisionDebt" ? "pending decisions" : "attention"}
+        </button>
+      ))}
 
       <div className="now-grid">
         <div className="now-stream" id="now-attention-items">
           <div className="now-section-heading">
             <div>
               <p className="eyebrow">Requires you</p>
-              <h3>{cards.length ? "What needs attention" : "Your deck is clear"}</h3>
+              <h3>{attentionLoading ? "Checking attention…" : state.error ? "Attention unavailable" : "What needs attention"}</h3>
             </div>
             {cards.length > 0 && <span>{cards.length} shown</span>}
           </div>
-          {state.loading && !state.attentionSummary && (
-            <p className="source-note">Loading attention items...</p>
+          {attentionLoading && !cards.length && (
+            <WorkspaceSectionLoading label="Loading attention items..." rows={3} />
           )}
           {!state.loading && !cards.length && !state.error && (
             <div className="now-empty-state">
               <span className="now-empty-state__mark" aria-hidden="true">✓</span>
-              <div>
-                <strong>Nothing needs an immediate decision.</strong>
-                <p className="source-note">{describeNowEmptyState({ truncated: state.truncated })}</p>
-              </div>
+              <p className="source-note">{describeNowEmptyState({ truncated: state.truncated })}</p>
             </div>
           )}
           {cards.map((card) => (
@@ -186,7 +208,18 @@ export default function NowView({
         <div className="now-rail">
           <div className="command-center-rail-section">
             <h3>Next 7 days</h3>
-            {!state.loading && !upcomingEvents.length && !state.error && (
+            {historyError && (
+              <div>
+                <p className="warning-note" role="alert">Events and payment steps are unavailable. Any retained records may be stale.</p>
+                <button type="button" className="ghost" disabled={historyLoading} onClick={() => onRefresh?.({ force: true, read: "history" })}>
+                  Retry events and payments
+                </button>
+              </div>
+            )}
+            {historyLoading && !upcomingEvents.length && (
+              <WorkspaceSectionLoading label="Loading events…" rows={3} />
+            )}
+            {!historyLoading && !upcomingEvents.length && !historyError && (
               <p className="source-note">No accepted or booked events in the next 7 days.</p>
             )}
             {upcomingEvents.slice(0, 3).map((quote) => {
@@ -212,7 +245,10 @@ export default function NowView({
 
           <div className="command-center-rail-section">
             <h3>Money</h3>
-            {!state.loading && !moneyRows.length && !state.error && (
+            {historyLoading && !moneyRows.length && (
+              <WorkspaceSectionLoading label="Loading payment steps…" rows={2} />
+            )}
+            {!historyLoading && !moneyRows.length && !historyError && (
               <p className="source-note">No payments awaiting action. Requests become available after a proposal is accepted.</p>
             )}
             {moneyRows.length > 0 && (

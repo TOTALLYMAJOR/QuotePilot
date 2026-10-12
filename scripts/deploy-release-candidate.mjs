@@ -551,6 +551,35 @@ async function readFirebaseProviderEvidence(
   return { ...surfaces, functions };
 }
 
+export async function retryFirebaseProviderReadback({
+  readProviderEvidence,
+  attempts = 13,
+  delayMs = 5_000,
+  wait = (durationMs) => new Promise((resolve) => setTimeout(resolve, durationMs))
+} = {}) {
+  if (
+    typeof readProviderEvidence !== "function"
+    || !Number.isInteger(attempts)
+    || attempts < 1
+    || attempts > 60
+    || !Number.isInteger(delayMs)
+    || delayMs < 0
+    || typeof wait !== "function"
+  ) {
+    throw new Error("Firebase provider readback retry configuration is invalid.");
+  }
+  let lastError;
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      return await readProviderEvidence();
+    } catch (error) {
+      lastError = error;
+      if (attempt < attempts) await wait(delayMs);
+    }
+  }
+  throw lastError;
+}
+
 async function deployFirebase({
   releaseSha,
   ciRunId,
@@ -625,12 +654,14 @@ async function deployFirebase({
     }
   });
   const manifestUrl = await validateHostedManifest(RELEASE_CANDIDATE_POLICY.firebase.hostingUrl, manifest);
-  const providerSurfaces = await readFirebaseProviderEvidence(
-    provider.providerDeploymentId,
-    firebaseCliPath,
-    firebaseRulesAccessToken,
-    candidateProfile
-  );
+  const providerSurfaces = await retryFirebaseProviderReadback({
+    readProviderEvidence: () => readFirebaseProviderEvidence(
+      provider.providerDeploymentId,
+      firebaseCliPath,
+      firebaseRulesAccessToken,
+      candidateProfile
+    )
+  });
   const functionsTree = capture("git", ["rev-parse", `${releaseSha}:functions`]);
   if (!/^[0-9a-f]{40,64}$/i.test(functionsTree)) {
     throw new Error("Release candidate rejected: exact Functions source tree cannot be resolved.");

@@ -55,30 +55,61 @@ async function getPasswordResetCodes(request) {
     : [];
 }
 
+async function expectAnyVisible(locators, timeout = 45_000) {
+  await expect.poll(async () => {
+    const visibility = await Promise.all(locators.map((locator) => locator.isVisible()));
+    return visibility.some(Boolean);
+  }, { timeout }).toBe(true);
+}
+
+async function enterStaffWorkspace(page) {
+  const exploreButton = page.getByRole("button", { name: "Explore the workspace", exact: true });
+  const quoteButton = page.getByRole("button", { name: "New quote", exact: true }).first();
+  // Fresh sign-ins may require the native onboarding entry again.
+  await expectAnyVisible([exploreButton, quoteButton]);
+  if (await exploreButton.isVisible()) await exploreButton.click();
+  await expect(quoteButton).toBeVisible({ timeout: 45_000 });
+  return quoteButton;
+}
+
 async function signInAsStaff(page) {
   await page.goto("/app");
   const signInHeading = page.getByRole("heading", { name: "Staff Sign In" });
-  const quoteButton = page
-    .getByRole("banner")
-    .getByRole("button", { name: "New quote", exact: true });
-  await expect(signInHeading.or(quoteButton)).toBeVisible({ timeout: 45_000 });
+  const quoteButton = page.getByRole("button", { name: "New quote", exact: true }).first();
+  const exploreButton = page.getByRole("button", { name: "Explore the workspace", exact: true });
+  await expectAnyVisible([signInHeading, exploreButton, quoteButton]);
   if (await signInHeading.isVisible()) {
     await expect(signInHeading).toBeVisible();
     await page.getByLabel(/^Email$/i).fill(STAFF_EMAIL);
     await page.getByLabel(/^Password$/i).fill(STAFF_PASSWORD);
     await page.locator(".auth-actions").getByRole("button", { name: "Sign In" }).click();
   }
-  await expect(quoteButton).toBeVisible({ timeout: 45_000 });
+  await enterStaffWorkspace(page);
   await quoteButton.click();
   await expect(page.getByRole("combobox", { name: /^Event type\b/ })).toBeVisible({ timeout: 45_000 });
 }
 
 test("firebase auth and firestore rules load the organization catalog", async ({ page }) => {
   await signInAsStaff(page);
-  await page.getByRole("button", { name: "Account" }).click();
-  const accountMenu = page.getByRole("menu", { name: "Account" });
-  await expect(accountMenu).toContainText(STAFF_EMAIL);
-  await expect(accountMenu).toContainText("admin");
+  const workspaceAndToolsButton = page.getByRole("button", {
+    name: "Workspace and tools",
+    exact: true
+  });
+  const accountButton = page.getByRole("button", { name: "Account", exact: true });
+  await expectAnyVisible([workspaceAndToolsButton, accountButton]);
+  if (await workspaceAndToolsButton.isVisible()) {
+    await workspaceAndToolsButton.click();
+    const workspaceTools = page.getByRole("dialog", { name: "Workspace & tools" });
+    await expect(workspaceTools).toContainText(STAFF_EMAIL);
+    await expect(workspaceTools).toContainText("admin");
+    await workspaceTools.getByRole("button", { name: "Close workspace and tools" }).click();
+  } else {
+    await accountButton.click();
+    const accountMenu = page.getByRole("menu", { name: "Account", exact: true });
+    await expect(accountMenu).toContainText(STAFF_EMAIL);
+    await expect(accountMenu).toContainText("admin");
+    await accountButton.click();
+  }
   await expect(page.getByRole("combobox", { name: /^Event type\b/ }).locator("option")).toHaveCount(5);
 });
 
@@ -91,21 +122,27 @@ test("switching authenticated principals destroys the prior tenant workspace sta
   expect(await eventType.inputValue()).not.toBe("");
 
   await page.goto("/app/quotes");
-  const quotesDialog = page.getByRole("region", { name: "Quotes" });
-  const quoteRow = quotesDialog.locator('tr[data-quote-id="conversation-e2e-quote"]');
-  await expect(quoteRow).toContainText(CONVERSATION_QUOTE_NUMBER, { timeout: 45_000 });
-  page.once("dialog", (dialog) => dialog.accept());
-  await quoteRow.getByRole("button", { name: "Edit" }).click();
+  const opportunitiesRegion = page.getByRole("region", { name: "Every event, with its next move." });
+  const quoteOpportunity = opportunitiesRegion.locator(
+    `[data-opportunity-id="${CONVERSATION_QUOTE_ID}"]`
+  );
+  const quoteHistoryRegion = page.getByRole("region", { name: "Quotes" });
+  const quoteHistoryRow = quoteHistoryRegion
+    .getByRole("row")
+    .filter({ hasText: CONVERSATION_QUOTE_NUMBER });
+  await expectAnyVisible([quoteOpportunity, quoteHistoryRow]);
+  await page.goto(`/app/quotes/${CONVERSATION_QUOTE_ID}/edit`);
   await expect(page).toHaveURL(new RegExp(`/app/quotes/${CONVERSATION_QUOTE_ID}/edit$`));
   await page.goto("/app/quotes");
-  await expect(quotesDialog).toBeVisible();
+  await expectAnyVisible([opportunitiesRegion, quoteHistoryRegion]);
 
   await page.evaluate(async () => {
     const { signOutCurrentUser } = await import("/src/lib/authClient.js");
     await signOutCurrentUser();
   });
   await expect(page.getByRole("heading", { name: "Staff Sign In" })).toBeVisible({ timeout: 45_000 });
-  await expect(quotesDialog).toHaveCount(0);
+  await expect(opportunitiesRegion).toHaveCount(0);
+  await expect(quoteHistoryRegion).toHaveCount(0);
 
   await page.evaluate(() => {
     window.__quotePilotScopeLeakFrames = [];
@@ -144,18 +181,17 @@ test("switching authenticated principals destroys the prior tenant workspace sta
   await page.getByLabel(/^Email$/i).fill(STAFF_EMAIL);
   await page.getByLabel(/^Password$/i).fill(STAFF_PASSWORD);
   await page.locator(".auth-actions").getByRole("button", { name: "Sign In" }).click();
-  const restoredQuoteButton = page
-    .getByRole("banner")
-    .getByRole("button", { name: "New quote", exact: true });
-  await expect(restoredQuoteButton).toBeVisible({ timeout: 45_000 });
+  const restoredQuoteButton = await enterStaffWorkspace(page);
 
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await expect(page.getByText(`Editing quote ${CONVERSATION_QUOTE_NUMBER}`)).toHaveCount(0);
   await restoredQuoteButton.click();
   const restoredGuidedMode = page.getByRole("button", { name: "Guided mode" });
-  if (await restoredGuidedMode.isVisible()) {
-    await restoredGuidedMode.click();
-  }
+  await expect(restoredGuidedMode).toBeVisible({ timeout: 45_000 });
+  await restoredGuidedMode.click();
+  await expect(page.getByRole("textbox", { name: /Your name/i })).toBeVisible({
+    timeout: 45_000
+  });
   await expect(page.getByRole("combobox", { name: "Event type", exact: true })).toHaveValue("", {
     timeout: 45_000
   });
@@ -242,7 +278,7 @@ test("email-password staff can complete account recovery with the same on-screen
   await expect(page.getByRole("button", { name: "Sending..." }))
     .toHaveAttribute("aria-busy", "true");
   await expect(page.getByLabel(/^Email$/i)).toBeDisabled();
-  await expect(page.getByRole("button", { name: "Register" })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Create a staff account" })).toBeDisabled();
   releaseResetRequest();
   await expect(page.getByRole("button", { name: "Forgot password?" })).toBeEnabled();
   await expect(page.getByRole("status")).toHaveText(PASSWORD_RESET_CONFIRMATION);
@@ -280,11 +316,5 @@ test("email-password staff can complete account recovery with the same on-screen
   await page.getByLabel(/^Email$/i).fill(STAFF_EMAIL);
   await page.getByLabel(/^Password$/i).fill(RECOVERED_PASSWORD);
   await page.locator(".auth-actions").getByRole("button", { name: "Sign In" }).click();
-  await expect(
-    page
-      .getByRole("banner")
-      .getByRole("button", { name: "New quote", exact: true })
-  ).toBeVisible({
-    timeout: 45_000
-  });
+  await enterStaffWorkspace(page);
 });

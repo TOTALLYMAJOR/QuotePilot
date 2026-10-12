@@ -399,6 +399,8 @@ export default function AmbientLibraryRoute({
   onApplyStarterPack,
   onCatalogMutation,
   onReload,
+  quoteCreationReady,
+  onStartQuote,
   saving,
   selectedEventType = "",
   onEventTypeChange,
@@ -410,13 +412,19 @@ export default function AmbientLibraryRoute({
   contextualOrigin = null,
   inventoryRecipeExtension = null,
   inventoryRecipeAccess = null,
-  inquiryShowcaseEnabled = false
+  inquiryShowcaseEnabled = false,
+  catalogFocusRequest = null,
+  onCatalogFocusResolution
 }) {
   const navigation = useOptionalWorkspaceNavigation();
   const headingRef = useWorkspaceRouteHeadingFocus(open);
   const acknowledgementRef = useRef(null);
   const returnFocusRef = useRef(null);
   const arrivalHandledRef = useRef(null);
+  const catalogFocusHandledRef = useRef("");
+  const catalogFocusScopeRef = useRef("");
+  const catalogFocusRequestIdRef = useRef("");
+  const catalogOpenRef = useRef(false);
   const editorOpenFrameRef = useRef(null);
   const editorOpenTimerRef = useRef(null);
   const returnRestoreCancelRef = useRef(null);
@@ -425,6 +433,27 @@ export default function AmbientLibraryRoute({
   const [editorTarget, setEditorTarget] = useState(null);
   const [editorPresentationSectionId, setEditorPresentationSectionId] = useState("");
   const isAdmin = text(currentUserRole).toLowerCase() === "admin";
+  catalogFocusRequestIdRef.current = text(catalogFocusRequest?.requestId);
+  catalogOpenRef.current = Boolean(open);
+  useEffect(() => {
+    const scope = `${text(organizationId)}:${text(principalId)}`;
+    if (catalogFocusScopeRef.current && catalogFocusScopeRef.current !== scope) {
+      catalogFocusHandledRef.current = "";
+      if (typeof window !== "undefined" && editorOpenFrameRef.current !== null) {
+        window.cancelAnimationFrame(editorOpenFrameRef.current);
+        editorOpenFrameRef.current = null;
+      }
+      if (typeof window !== "undefined" && editorOpenTimerRef.current !== null) {
+        window.clearTimeout(editorOpenTimerRef.current);
+        editorOpenTimerRef.current = null;
+      }
+      if (editorTarget?.requestId) {
+        setEditorTarget(null);
+        setEditorPresentationSectionId("");
+      }
+    }
+    catalogFocusScopeRef.current = scope;
+  }, [editorTarget?.importBatchId, organizationId, principalId]);
   const resolvedInventoryRecipeExtension = useInventoryRecipeExtension({
     active: open,
     injected: inventoryRecipeExtension,
@@ -612,9 +641,11 @@ export default function AmbientLibraryRoute({
     scheduleFrame(() => acknowledgementRef.current?.focus({ preventScroll: true }));
   };
 
-  const mountEditorAfterAcknowledgement = (target) => {
+  const mountEditorAfterAcknowledgement = (target, { onMounted, shouldMount } = {}) => {
     if (typeof window === "undefined" || typeof window.requestAnimationFrame !== "function") {
+      if (shouldMount && !shouldMount()) return;
       setEditorTarget(target);
+      onMounted?.();
       return;
     }
     if (editorOpenFrameRef.current !== null) {
@@ -627,7 +658,9 @@ export default function AmbientLibraryRoute({
       editorOpenFrameRef.current = null;
       editorOpenTimerRef.current = window.setTimeout(() => {
         editorOpenTimerRef.current = null;
+        if (shouldMount && !shouldMount()) return;
         setEditorTarget(target);
+        onMounted?.();
       }, 0);
     });
   };
@@ -719,13 +752,26 @@ export default function AmbientLibraryRoute({
 
   const openImportStudio = () => {
     if (!isAdmin || typeof navigation?.navigate !== "function") return;
-    navigation.navigate(WORKSPACE_PATHS.imports, {
+    navigation.navigate(`${WORKSPACE_PATHS.imports}?source=library-first-quote&importType=menuItems`, {
       preserveSearch: false,
-      preserveHash: false
+      preserveHash: false,
+      preserveReturnContext: true,
+      returnContextSurfaceId: "ambient-library",
+      returnContextHint: {
+        focus: { kind: "library-action", actionId: "import-menu" }
+      },
+      returnContextDestination: {
+        kind: "import-studio",
+        source: "library-first-quote",
+        importType: "menuItems"
+      }
     });
   };
 
   const handleEditorFocusResolution = (resolution) => {
+    if (resolution?.requestId && resolution.requestId === catalogFocusRequest?.requestId) {
+      onCatalogFocusResolution?.(resolution);
+    }
     const recovered = resolution?.status === "recovery" || resolution?.result === "recovery";
     if (recovered) {
       const action = editorTarget?.action;
@@ -778,6 +824,64 @@ export default function AmbientLibraryRoute({
     if (!CATALOG_SECTION_IDS.has(normalized)) return;
     setEditorPresentationSectionId(normalized);
   }, []);
+
+  useEffect(() => {
+    if (!open || !catalogFocusRequest?.requestId) return undefined;
+    if (catalogFocusHandledRef.current === catalogFocusRequest.requestId) return undefined;
+    if (catalog?.loading || model.state === "loading") return undefined;
+    if (!isAdmin) {
+      catalogFocusHandledRef.current = catalogFocusRequest.requestId;
+      onCatalogFocusResolution?.({
+        requestId: catalogFocusRequest.requestId,
+        status: "recovery",
+        reason: "Only an organization administrator can open an imported menu item for editing.",
+        consequence: "No catalog record was opened or changed.",
+        nextResolutions: ["Ask an organization administrator to review the imported item"]
+      });
+      return undefined;
+    }
+    const section = model.sections.find((item) => item.id === "menu");
+    const action = section?.primaryAction;
+    const target = normalizeEditorTarget(action);
+    if (!target) {
+      catalogFocusHandledRef.current = catalogFocusRequest.requestId;
+      onCatalogFocusResolution?.({
+        requestId: catalogFocusRequest.requestId,
+        status: "recovery",
+        reason: "The Menu editor is unavailable in the current Library.",
+        consequence: "No catalog record was opened or changed.",
+        nextResolutions: ["Return to Library and review the available sections"]
+      });
+      return undefined;
+    }
+    const requestId = catalogFocusRequest.requestId;
+    const requestScope = `${text(organizationId)}:${text(principalId)}`;
+    setEditorPresentationSectionId("menu");
+    mountEditorAfterAcknowledgement({
+      ...target,
+      ...catalogFocusRequest,
+      sectionId: "menu",
+      action
+    }, {
+      shouldMount: () => (
+        catalogOpenRef.current
+        && catalogFocusRequestIdRef.current === requestId
+        && catalogFocusScopeRef.current === requestScope
+      ),
+      onMounted: () => {
+        catalogFocusHandledRef.current = requestId;
+      }
+    });
+    return undefined;
+  }, [
+    catalog?.loading,
+    catalogFocusRequest,
+    isAdmin,
+    model.sections,
+    model.state,
+    onCatalogFocusResolution,
+    open
+  ]);
 
   useEffect(() => {
     if (!open) return;
@@ -898,6 +1002,7 @@ export default function AmbientLibraryRoute({
         data-surface-purpose={model.surfaceContract.purposes.join(" ")}
         data-surface-density="editorial"
         data-ambient-library-state="editing"
+        data-catalog-focus-request={editorTarget.requestId || undefined}
         data-library-editor-section={editorSectionId}
         data-library-context={contextualReturn ? "opportunity" : "standalone"}
         data-library-draft-preserved={open ? undefined : "route-hidden"}
@@ -956,6 +1061,7 @@ export default function AmbientLibraryRoute({
       className="container workspace-route-main ambient-library ambient-purpose-surface"
       data-ambient-library-state={model.state}
       data-library-context={contextualReturn ? "opportunity" : "standalone"}
+      data-catalog-focus-request={catalogFocusRequest?.requestId || undefined}
       data-surface-contract-id={model.surfaceContract.id}
       data-surface-purpose={model.surfaceContract.purposes.join(" ")}
       data-surface-density="editorial"
@@ -995,6 +1101,20 @@ export default function AmbientLibraryRoute({
 
       {workflowAllowed && <section className="ambient-library__group" data-library-section="workflow" aria-label="Workflow configuration"><div className="ambient-library__group-title"><p>Workflow configuration</p><span aria-hidden="true" /></div><ol className="ambient-library__row-list"><li><article className="ambient-library__row" data-library-record-id="workflow"><span className="ambient-library__row-icon" aria-hidden="true">◎</span><h3>Business workflows</h3><p>Set tasks, timing, and review rules for quote approval, final guest count, event execution, and closeout follow-up.</p><button type="button" className="ambient-library__row-action" data-library-action-id="open-workflow-studio" data-workflow-studio-entry="library" onClick={(event) => openAction(workflowAction, event.currentTarget)}><span className="ambient-library__row-action-label">Open Configuration Studio</span><span aria-hidden="true">→</span></button></article></li></ol></section>}
       <div className="ambient-library__workspace" data-library-workspace="commercial">
+        <aside className="ambient-library__readiness-rail" aria-label="Library readiness" data-library-readiness-rail>
+          <BusinessSetupCenter
+            catalog={catalog}
+            draftState={setupDraft}
+            currentUserRole={currentUserRole}
+            providerConnected={catalog?.providerConnectionReady === true}
+            quoteCreationReady={quoteCreationReady}
+            onOpenSection={openSetupSection}
+            onOpenImport={openImportStudio}
+            onRefresh={() => refreshLibrary(model.actions["refresh-library"])}
+            onStartQuote={onStartQuote}
+          />
+        </aside>
+
         <div className="ambient-library__catalog-column">
           {model.sections.length === 0 ? (
             <LibraryState model={model} onRefresh={refreshLibrary} />
@@ -1156,17 +1276,6 @@ export default function AmbientLibraryRoute({
           </details>
         </div>
 
-        <aside className="ambient-library__readiness-rail" aria-label="Library readiness" data-library-readiness-rail>
-          <BusinessSetupCenter
-            catalog={catalog}
-            draftState={setupDraft}
-            currentUserRole={currentUserRole}
-            providerConnected={catalog?.providerConnectionReady === true}
-            onOpenSection={openSetupSection}
-            onOpenImport={openImportStudio}
-            onRefresh={() => refreshLibrary(model.actions["refresh-library"])}
-          />
-        </aside>
       </div>
     </main>
   );

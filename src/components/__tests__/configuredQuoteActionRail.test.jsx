@@ -114,7 +114,11 @@ describe("ConfiguredQuoteActionRail", () => {
 
     expect(markup).toContain('data-quote-action-state="blocked"');
     expect(markup).toContain('aria-disabled="true"');
-    expect(markup).toContain('title="Configure delivery first."');
+    expect(markup).toContain('aria-describedby="configured-quote-action-send_quote-disabled-reason"');
+    expect(markup).toContain('id="configured-quote-action-send_quote-disabled-reason"');
+    expect(markup).toContain('data-disabled-action-reason="visible"');
+    expect(markup).toContain(">Configure delivery first.<");
+    expect(markup).not.toContain('title="Configure delivery first."');
     expect(markup).not.toContain("Unmanaged action");
   });
 });

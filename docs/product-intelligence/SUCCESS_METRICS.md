@@ -1,6 +1,6 @@
 # Success Metric Specification
 
-Last updated: 2026-09-17 11:56:08 CDT
+Last updated: 2026-10-11 23:14:06 CDT
 
 ## Quote-to-Confidence diagnostic measures
 
@@ -20,6 +20,11 @@ are persisted. Quote IDs, proposal IDs, source references, quantities, money,
 customer fields and rationale never enter event dimensions. These signals use
 the existing analytics session; absent sessions or failed telemetry yield missing
 observations, never invented counts. No product outcome baseline is yet collected.
+
+Concurrent flush callers share one in-flight provider attempt. If that attempt is
+rejected, each caller receives the same contained zero-sent result and the bounded
+queue remains available for retry. This is transport recovery, not additional
+metric evidence, a successful observation, or an outcome claim.
 
 ## Measurement rules
 

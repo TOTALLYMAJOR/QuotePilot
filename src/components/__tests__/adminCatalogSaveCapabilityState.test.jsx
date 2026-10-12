@@ -141,6 +141,17 @@ function setInputValue(input, value) {
 }
 
 describe("AdminCatalogModal save capability state", () => {
+  test("preserves hook order when the Library view closes and reopens", async () => {
+    renderView();
+    await act(async () => Promise.resolve());
+
+    expect(() => renderView({ open: false })).not.toThrow();
+    expect(container.innerHTML).toBe("");
+
+    expect(() => renderView({ open: true })).not.toThrow();
+    expect(container.querySelector("#catalog-admin-title")).toBeTruthy();
+  });
+
   test("organizes Menu Builder as context, item list, and focused editor", async () => {
     vi.mocked(getMenuItems).mockResolvedValue([{
       id: "item-1",
@@ -160,6 +171,192 @@ describe("AdminCatalogModal save capability state", () => {
     expect(container.querySelector('[aria-label="Edit Cocktail meatballs"]')).toBeTruthy();
     expect(container.querySelector('button[aria-pressed="true"]')?.textContent)
       .toContain("Cocktail meatballs");
+  });
+
+  test("resolves an imported menu receipt to its exact item after async menu loading", async () => {
+    vi.mocked(getEventTypes).mockResolvedValue([
+      { id: "evt-1", name: "Dinner" },
+      { id: "evt-2", name: "Reception" }
+    ]);
+    vi.mocked(getMenuCategories).mockImplementation(async (eventTypeId) => eventTypeId === "evt-2"
+      ? [{ id: "cat-2", eventTypeId: "evt-2", name: "Canapes" }]
+      : [{ id: "cat-1", eventTypeId: "evt-1", name: "Entrees" }]);
+    const importProvenance = {
+      kind: "catalog_import",
+      importBatchId: "batch-1",
+      importType: "menuItems",
+      sourceKind: "csv",
+      sourceFileName: "menu-items.csv",
+      sourceRowNumber: 2
+    };
+    vi.mocked(getMenuItems).mockImplementation(async (eventTypeId) => eventTypeId === "evt-2"
+      ? [{ id: "menu-other", eventTypeId: "evt-2", categoryId: "cat-2", name: "Other bite", price: 4, cost: null, active: true }]
+      : []);
+    setupDraft.current = {
+      ...setupDraft.current,
+      changedRecordCount: 1,
+      changes: [{
+        collection: "menuItems",
+        recordId: "menu-imported",
+        intent: "create",
+        payload: { eventTypeId: "evt-2", categoryId: "cat-2", name: "Imported bite", priceMinor: 800, costMinor: 0, active: false },
+        provenance: importProvenance
+      }]
+    };
+    const onFocusResolution = vi.fn();
+    renderView({
+      presentation: "modal",
+      initialTab: "starter",
+      focusRequest: {
+        sectionId: "menu",
+        recordId: "menu-imported",
+        eventTypeId: "evt-2",
+        categoryId: "cat-2",
+        importBatchId: "batch-1",
+        status: "staged",
+        sourceRowNumber: 2,
+        requestId: "catalog-import:batch-1:menu-imported:2"
+      },
+      onFocusResolution,
+      inventoryRecipeExtension: {
+        enabled: true,
+        ingredients: [],
+        recipesByMenuItemId: {},
+        menuCostProjectionsByMenuItemId: {},
+        activeMenuItemId: "menu-imported",
+        activeMenuCostProjectionState: "current"
+      }
+    });
+
+    await vi.waitFor(() => {
+      expect(container.querySelector('[data-menu-item-id="menu-imported"]')).not.toBeNull();
+    });
+
+    const importedRow = container.querySelector('[data-menu-item-id="menu-imported"]');
+    expect(importedRow.classList.contains("is-import-focus")).toBe(true);
+    expect(importedRow.querySelector('button[aria-pressed="true"]')).not.toBeNull();
+    await vi.waitFor(() => {
+      expect(document.activeElement).toBe(importedRow.querySelector("button"));
+    });
+    expect(container.textContent).toContain("Recorded cost: $0.00");
+    expect(container.textContent).toContain("operator-declared import value, not a recipe-derived cost");
+    expect(container.textContent).toContain("Publish this staged menu item before attaching a recipe");
+    expect(container.querySelector('[aria-label="Recipe for Imported bite"]')).toBeNull();
+    expect(onFocusResolution).toHaveBeenCalledWith(expect.objectContaining({
+      requestId: "catalog-import:batch-1:menu-imported:2",
+      status: "focused",
+      object: { type: "menu-item", id: "menu-imported" }
+    }));
+  });
+
+  test("reloads a published menu when a receipt-bound shared-draft item arrives later", async () => {
+    const importProvenance = {
+      kind: "catalog_import",
+      importBatchId: "batch-late",
+      importType: "menuItems",
+      sourceKind: "csv",
+      sourceFileName: "late-menu-items.csv",
+      sourceRowNumber: 2
+    };
+    const focusRequest = {
+      sectionId: "menu",
+      recordId: "menu-imported-late",
+      eventTypeId: "evt-1",
+      categoryId: "cat-1",
+      importBatchId: "batch-late",
+      status: "staged",
+      sourceRowNumber: 2,
+      requestId: "catalog-import:batch-late:menu-imported-late:2"
+    };
+    const onFocusResolution = vi.fn();
+
+    setupDraft.current = {
+      ...setupDraft.current,
+      loading: true,
+      status: "loading"
+    };
+    renderView({ initialTab: "menu", focusRequest, onFocusResolution });
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 20)));
+    const publishedLoadCount = vi.mocked(getMenuItems).mock.calls.length;
+    expect(publishedLoadCount).toBeGreaterThan(0);
+    expect(onFocusResolution).not.toHaveBeenCalled();
+    expect(container.querySelector('[data-menu-item-id="menu-imported-late"]')).toBeNull();
+
+    setupDraft.current = {
+      ...setupDraft.current,
+      loading: false,
+      status: "idle",
+      generation: 1,
+      changedRecordCount: 1,
+      changes: [{
+        collection: "menuItems",
+        recordId: "menu-imported-late",
+        intent: "create",
+        payload: {
+          eventTypeId: "evt-1",
+          categoryId: "cat-1",
+          name: "Late imported bite",
+          priceMinor: 1200,
+          costMinor: 0,
+          active: true
+        },
+        provenance: importProvenance
+      }]
+    };
+    renderView({ initialTab: "menu", focusRequest, onFocusResolution });
+
+    await vi.waitFor(() => {
+      expect(container.querySelector('[data-menu-item-id="menu-imported-late"]')).not.toBeNull();
+    });
+    expect(vi.mocked(getMenuItems).mock.calls.length).toBeGreaterThan(publishedLoadCount);
+    await vi.waitFor(() => {
+      expect(onFocusResolution).toHaveBeenCalledWith(expect.objectContaining({
+        requestId: focusRequest.requestId,
+        status: "focused"
+      }));
+    });
+  });
+
+  test("recovers without substituting the first menu item when the receipt target is absent", async () => {
+    vi.mocked(getMenuItems).mockResolvedValue([{
+      id: "menu-missing",
+      eventTypeId: "evt-1",
+      categoryId: "cat-1",
+      name: "Reused identity",
+      price: 5,
+      active: true,
+      importProvenance: {
+        kind: "catalog_import",
+        importBatchId: "different-batch",
+        importType: "menuItems",
+        sourceKind: "csv",
+        sourceFileName: "other.csv",
+        sourceRowNumber: 9
+      }
+    }]);
+    const onFocusResolution = vi.fn();
+    renderView({
+      initialTab: "menu",
+      focusRequest: {
+        sectionId: "menu",
+        recordId: "menu-missing",
+        eventTypeId: "evt-1",
+        categoryId: "cat-1",
+        importBatchId: "batch-1",
+        sourceRowNumber: 2,
+        requestId: "catalog-import:batch-1:menu-missing:2"
+      },
+      onFocusResolution
+    });
+
+    await vi.waitFor(() => {
+      expect(onFocusResolution).toHaveBeenCalledWith(expect.objectContaining({
+        status: "recovery",
+        object: { type: "menu-item", id: "menu-missing" },
+        consequence: expect.stringContaining("No different menu item")
+      }));
+    });
+    expect(container.querySelector('button[aria-pressed="true"]')).toBeNull();
   });
 
   test("keeps a dirty recipe mounted by locking every menu-context control until recovery", async () => {
@@ -187,6 +384,13 @@ describe("AdminCatalogModal save capability state", () => {
         inventoryAttempt: { requestId: "recipe-rejected-1" }
       });
     });
+    const previewRecipeDependencies = vi.fn(async () => ({
+      reviewedCatalogRevision: 1,
+      reviewedRecipeRevision: 1,
+      reviewedRecipeDigest: "a".repeat(64),
+      dependencyPreflightDigest: "b".repeat(64),
+      affectedMenuItems: [{ menuItemId: "item-1", name: "Chicken Alfredo" }]
+    }));
     const resetRecipe = vi.fn(async () => ({ state: "idle" }));
     const recipeExtension = (recipeRevision = 1, outputYield = "10") => ({
       enabled: true,
@@ -212,6 +416,7 @@ describe("AdminCatalogModal save capability state", () => {
           recipeDefinition: { outputUnitId: "portion" }
         }
       },
+      previewRecipeDependencies,
       publishRecipe,
       resetRecipe
     });
@@ -282,6 +487,8 @@ describe("AdminCatalogModal save capability state", () => {
       publishRecipeButton.disabled,
       container.querySelector("[data-recipe-publish-disabled]")?.textContent || "recipe publish should be enabled"
     ).toBe(false);
+    await act(async () => publishRecipeButton.click());
+    expect(previewRecipeDependencies).toHaveBeenCalledOnce();
     await act(async () => publishRecipeButton.click());
     expect(container.querySelector("[data-recipe-operation-state='rejected']")).not.toBeNull();
 

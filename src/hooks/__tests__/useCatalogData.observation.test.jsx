@@ -140,8 +140,8 @@ describe("catalog reload completion contract", () => {
   let root;
   let current;
 
-  function CatalogHarness() {
-    current = useCatalogData({ enabled: true, organizationId: "org-1" });
+  function CatalogHarness({ organizationId = "org-1" } = {}) {
+    current = useCatalogData({ enabled: true, organizationId });
     return null;
   }
 
@@ -243,6 +243,42 @@ describe("catalog reload completion contract", () => {
 
     await expect(reloadPromise).rejects.toBe(readError);
     expect(current.error).toBe(readError.message);
+  });
+
+  test("a changed organization cannot render the prior catalog while its read is pending", async () => {
+    await mountLoadedCatalog();
+    expect(current).toMatchObject({
+      loading: false,
+      source: "firebase-org-empty"
+    });
+    expect(current.observedAtISO).toBeTruthy();
+
+    let releaseRead;
+    const pendingRead = new Promise((resolve) => {
+      releaseRead = resolve;
+    });
+    catalogReadMocks.getDocs.mockImplementation(() => pendingRead);
+    catalogReadMocks.getDoc.mockResolvedValue(settingsSnapshot());
+
+    await act(async () => {
+      root.render(<CatalogHarness organizationId="org-2" />);
+    });
+
+    expect(current).toMatchObject({
+      loading: true,
+      source: "firebase",
+      observedAtISO: "",
+      complete: false
+    });
+
+    await act(async () => {
+      releaseRead(emptyQuerySnapshot());
+      await pendingRead;
+    });
+    expect(current).toMatchObject({
+      loading: false,
+      source: "firebase-org-empty"
+    });
   });
 
   test("newer requests supersede older promises and unmount cancels the survivor", async () => {

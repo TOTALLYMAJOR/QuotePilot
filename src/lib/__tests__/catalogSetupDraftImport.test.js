@@ -34,7 +34,8 @@ function mutationReceiptChange(patch) {
     recordId: patch.recordId,
     requestedIntent: patch.intent,
     intent: patch.intent,
-    payload: patch.payload
+    payload: patch.payload,
+    ...(patch.provenance ? { provenance: patch.provenance } : {})
   };
 }
 
@@ -134,6 +135,64 @@ describe("catalog import draft shapes", () => {
       intent: "create",
       payload: { name: "Entrees", eventTypeId: "evt_wedding", active: false }
     }]);
+  });
+
+  test("attaches sanitized operator-declared source provenance to every imported draft change", () => {
+    expect(buildCatalogImportDraftChanges({
+      importType: "menuItems",
+      importBatchId: " menu_batch_001 ",
+      sourceKind: " CSV ",
+      sourceFileName: "  Fall\u0000 Menu.csv  ",
+      rows: [row({
+        name: "Roast chicken",
+        eventTypeId: "wedding",
+        categoryId: "entrees",
+        price: 24
+      }, 17)]
+    })).toEqual([expect.objectContaining({
+      provenance: {
+        kind: "catalog_import",
+        importBatchId: "menu_batch_001",
+        importType: "menuItems",
+        sourceKind: "csv",
+        sourceFileName: "Fall Menu.csv",
+        sourceRowNumber: 17
+      }
+    })]);
+  });
+
+  test("rejects partial or invalid import provenance before draft authority", () => {
+    expect(() => buildCatalogImportDraftChanges({
+      importType: "eventTypes",
+      importBatchId: "",
+      sourceKind: "csv",
+      sourceFileName: "events.csv",
+      rows: [row({ name: "Wedding" })]
+    })).toThrow(/invalid import provenance/i);
+    expect(() => buildCatalogImportDraftChanges({
+      importType: "eventTypes",
+      importBatchId: "event_batch_001",
+      sourceKind: "spreadsheet",
+      sourceFileName: "events.csv",
+      rows: [row({ name: "Wedding" })]
+    })).toThrow(/invalid import provenance/i);
+    expect(() => buildCatalogImportDraftChanges({
+      importType: "eventTypes",
+      importBatchId: "",
+      sourceKind: "csv",
+      sourceFileName: "events.csv",
+      rows: []
+    })).toThrow(/invalid import provenance/i);
+  });
+
+  test("removes Unicode format controls from retained source filenames", () => {
+    expect(buildCatalogImportDraftChanges({
+      importType: "eventTypes",
+      importBatchId: "event_batch_001",
+      sourceKind: "csv",
+      sourceFileName: "operator-\u202Egpj.csv",
+      rows: [row({ name: "Wedding" })]
+    })[0].provenance.sourceFileName).toBe("operator-gpj.csv");
   });
 
   test("preserves package inclusion relationships and exact minor-unit amounts in draft payloads", () => {
@@ -415,6 +474,39 @@ describe("catalog import draft shapes", () => {
       preflight
     })).rejects.toThrow(/preflight no longer matches/i);
     expect(mockState.saveDraft).toHaveBeenCalledTimes(1);
+  });
+
+  test("binds sanitized provenance into preflight, staging, and the durable receipt", async () => {
+    const input = {
+      organizationId: "org-alpha",
+      importType: "eventTypes",
+      importBatchId: "catalog_event_types_provenance",
+      sourceKind: "csv",
+      sourceFileName: " Operator Events.csv ",
+      rows: [row({ name: "Wedding" }, 9)]
+    };
+    const preflight = await preflightCatalogImportDraft(input);
+
+    expect(preflight.patches[0].provenance).toEqual({
+      kind: "catalog_import",
+      importBatchId: "catalog_event_types_provenance",
+      importType: "eventTypes",
+      sourceKind: "csv",
+      sourceFileName: "Operator Events.csv",
+      sourceRowNumber: 9
+    });
+
+    const result = await stageCatalogImportDraft({ ...input, preflight });
+    expect(mockState.saveDraft).toHaveBeenCalledWith(expect.objectContaining({
+      patches: [expect.objectContaining({ provenance: preflight.patches[0].provenance })]
+    }));
+    expect(result.mutationReceipt.changes[0].provenance).toEqual(preflight.patches[0].provenance);
+
+    await expect(stageCatalogImportDraft({
+      ...input,
+      sourceFileName: "Different Events.csv",
+      preflight
+    })).rejects.toThrow(/records changed after preflight/i);
   });
 
   test("accepts a published replay from its bound mutation receipt while ignoring a later open draft", async () => {

@@ -175,12 +175,13 @@ describe("EventRunOfShowPanel", () => {
     expect(retry).toHaveBeenCalledOnce();
   });
 
-  test("is discoverable inside the routed Schedule region during its true loading state", () => {
+  test("is discoverable inside the routed Schedule main during its true loading state", () => {
     const markup = renderToStaticMarkup(
       <EventScheduleView open onClose={() => {}} organizationId="org-a" />
     );
 
-    expect(markup).toContain('role="region"');
+    expect(markup).toContain('<main class="container workspace-route-main embedded-workspace-route"');
+    expect(markup).toContain('<h1 id="event-schedule-title"');
     expect(markup).toContain('data-capability-id="event-run-of-show"');
     expect(markup).toContain('data-capability-state="loading"');
     expect(markup).toContain("Loading run-of-show records for this day.");

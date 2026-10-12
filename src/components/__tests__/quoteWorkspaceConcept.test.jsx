@@ -17,23 +17,6 @@ vi.mock("../../hooks/useCommercialWorkspaceSnapshot", () => ({
   useCommercialWorkspaceSnapshot: () => snapshot
 }));
 
-vi.mock("../ambientLivingOpportunityPresentation", () => ({
-  buildAmbientLivingOpportunityPresentation: (quote) => ({
-    identity: {
-      quoteId: quote.id,
-      quoteNumber: quote.quoteNumber,
-      eventName: quote.eventName,
-      customerName: quote.customerName,
-      venue: quote.venue,
-      date: quote.eventDate,
-      time: quote.eventTime,
-      total: quote.total,
-      status: { label: quote.status }
-    },
-    guestObject: { currentGuestCount: quote.guestCount }
-  })
-}));
-
 import QuoteWorkspaceConceptPage from "../QuoteWorkspaceConceptPage";
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
@@ -53,6 +36,9 @@ const QUOTE = {
   eventDate: "2026-09-12",
   eventTime: "5:00 PM",
   guestCount: 175,
+  event: { name: "Morgan wedding", venue: "Pine Hall", date: "2026-09-12", time: "17:00", guests: 175 },
+  customer: { name: "Morgan Lee" },
+  totals: { total: 19475 },
   status: "Draft",
   total: 19475,
   updatedAtISO: "2026-08-19T11:30:00.000Z",
@@ -129,7 +115,7 @@ describe("QuoteWorkspaceConceptPage", () => {
   });
 
   test("uses the canonical route quote identity instead of substituting the first saved quote", () => {
-    snapshot.quotes = [QUOTE, { ...QUOTE, id: "quote-202", quoteNumber: "QP-202", eventName: "Lee gala" }];
+    snapshot.quotes = [QUOTE, { ...QUOTE, id: "quote-202", quoteNumber: "QP-202", eventName: "Lee gala", event: { ...QUOTE.event, name: "Lee gala" } }];
     mount({ quoteId: "quote-202" });
 
     expect(container.textContent).toContain("QP-202");

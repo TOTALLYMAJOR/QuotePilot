@@ -1,0 +1,44 @@
+{
+  "description": "Enforce QuotePilot's Codebase Memory graph-first retrieval protocol.",
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume|clear|compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/usr/bin/python3 \"$(git rev-parse --show-toplevel)/.codex/hooks/codebase_memory_guard.py\"",
+            "timeout": 5,
+            "statusMessage": "Loading graph-first retrieval policy",
+            "additionalContextLimit": 500
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "^(Bash|apply_patch)$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/usr/bin/python3 \"$(git rev-parse --show-toplevel)/.codex/hooks/codebase_memory_guard.py\"",
+            "timeout": 5,
+            "statusMessage": "Enforcing graph-first retrieval"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "^mcp__codebase_memory_mcp__(list_projects|index_status|check_index_coverage)$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/usr/bin/python3 \"$(git rev-parse --show-toplevel)/.codex/hooks/codebase_memory_guard.py\"",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  }
+}

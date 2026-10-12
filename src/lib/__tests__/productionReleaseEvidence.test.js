@@ -33,6 +33,7 @@ import {
   getReleaseUatItemIdsForTarget,
   getReleaseUatPlanForTarget,
   parseReleaseUatArgs,
+  validateHostedRoleQualification,
   writeReleaseUatReceipt
 } from "../../../scripts/release-uat-attestation.mjs";
 
@@ -377,7 +378,7 @@ function makeUatTitle({
 } = {}) {
   return [
     "release-uat",
-    "v4",
+    "v5",
     approvalMode,
     releaseSha,
     target,
@@ -388,6 +389,60 @@ function makeUatTitle({
     stagingId,
     checklistDigest
   ].join("/");
+}
+
+function makeRoleQualification({
+  releaseSha = RELEASE_SHA,
+  target = "firebase-all",
+  candidateProfile = "staging-provider-acceptance",
+  stagingId = "dpl_immutable-123",
+  deploymentOrigin = "https://quotepilot-staging-20260804.web.app",
+  ...overrides
+} = {}) {
+  return {
+    schema: "com.mbmapps.quotepilot.hosted-role-qualification/v1",
+    releaseSha,
+    target,
+    candidateProfile,
+    stagingId,
+    deploymentOrigin,
+    executionContext: "hosted",
+    fixtureMode: false,
+    authBypass: false,
+    emulator: false,
+    featureGateProfiles: [{
+      id: candidateProfile,
+      outcome: "passed",
+      observationId: "gate-profile-observation-01"
+    }],
+    roleResults: [
+      {
+        role: "admin",
+        outcome: "passed",
+        featureGateProfileId: candidateProfile,
+        observationId: "admin-observation-01"
+      },
+      {
+        role: "sales",
+        outcome: "passed",
+        featureGateProfileId: candidateProfile,
+        observationId: "sales-observation-01"
+      },
+      {
+        role: "customer",
+        outcome: "passed",
+        featureGateProfileId: candidateProfile,
+        observationId: "customer-observation-01"
+      },
+      {
+        role: "cross-tenant",
+        outcome: "denied",
+        featureGateProfileId: candidateProfile,
+        observationId: "cross-tenant-observation-01"
+      }
+    ],
+    ...overrides
+  };
 }
 
 function makeUatRun(overrides = {}) {
@@ -527,7 +582,7 @@ function makePreparationReviewLog({
 }
 
 function makeGit({
-  origin = "https://github.com/TOTALLYMAJOR/quoteflow.git",
+  origin = "https://github.com/TOTALLYMAJOR/QuotePilot.git",
   tags = RELEASE_TAG,
   fail = ""
 } = {}) {
@@ -558,22 +613,32 @@ function makeGit({
 
 function makeReceiptArgs(overrides = {}) {
   const target = overrides.target || "firebase-all";
+  const releaseSha = overrides["release-sha"] || RELEASE_SHA;
+  const candidateProfile = overrides["candidate-profile"]
+    || "staging-provider-acceptance";
+  const stagingId = overrides["staging-id"] || "dpl_immutable-123";
   const smsProvider = overrides["sms-provider"] || SMS_PROVIDER;
   const checkedItemIds = Object.hasOwn(overrides, "checked-item-ids")
     ? overrides["checked-item-ids"]
     : (checklist.itemIdsByTargetAndSmsProvider[target]?.[smsProvider] || []).join(",");
   return {
-    "release-sha": RELEASE_SHA,
+    "release-sha": releaseSha,
     target,
-    "candidate-profile": "staging-provider-acceptance",
+    "candidate-profile": candidateProfile,
     "sms-provider": smsProvider,
     "sms-configuration-generation": smsProvider === "pingram"
       ? "sandbox-2026-08-11-01"
       : SMS_CONFIGURATION_GENERATION,
     "rollback-sha": ROLLBACK_SHA,
-    "staging-id": "dpl_immutable-123",
+    "staging-id": stagingId,
     "checklist-digest": checklist.digest,
     "checked-item-ids": checkedItemIds,
+    "role-qualification-json": JSON.stringify(makeRoleQualification({
+      releaseSha,
+      target,
+      candidateProfile,
+      stagingId
+    })),
     confirmation: `ATTEST UAT ${RELEASE_SHA}`,
     output: "artifacts/release/uat-attestation.json",
     ...overrides
@@ -1087,7 +1152,7 @@ describe("attester and UAT title parsing", () => {
   });
 
   test.each([
-    ["release-uat/v3", /does not match the v4 evidence contract/i],
+    ["release-uat/v4", /does not match the v5 evidence contract/i],
     [makeUatTitle({ releaseSha: "abc" }), /UAT release SHA must be a full/i],
     [makeUatTitle({ target: "all" }), /target is not firebase-hosting, firebase-backend, firebase-all, or vercel/i],
     [makeUatTitle({ target: "firebase-functions" }), /target is not firebase-hosting, firebase-backend, firebase-all, or vercel/i],
@@ -1559,6 +1624,7 @@ describe("UAT workflow evidence validators", () => {
       )).toEqual({
         actorId: ATTESTER_ID,
         approvalMode: "independent-review",
+        evidenceContract: "release-uat/v5",
         completedAt: UAT_COMPLETED_AT,
         stagingId: "dpl_immutable-123",
         attestedTarget: profile,
@@ -1644,9 +1710,9 @@ describe("UAT workflow evidence validators", () => {
 
 describe("Git release and rollback evidence", () => {
   test.each([
-    "https://github.com/TOTALLYMAJOR/quoteflow",
-    "https://github.com/TOTALLYMAJOR/quoteflow.git",
-    "git@github.com:TOTALLYMAJOR/quoteflow.git"
+    "https://github.com/TOTALLYMAJOR/QuotePilot",
+    "https://github.com/TOTALLYMAJOR/QuotePilot.git",
+    "git@github.com:TOTALLYMAJOR/QuotePilot.git"
   ])("accepts canonical origin %s with an ancestor rollback", (origin) => {
     const { git, calls } = makeGit({ origin });
     expect(validateGitEvidence({
@@ -1682,6 +1748,7 @@ describe("Git release and rollback evidence", () => {
   });
 
   test.each([
+    [{ origin: "https://github.com/TOTALLYMAJOR/quoteflow.git" }, /origin is not the canonical/i],
     [{ origin: "https://github.com/other/repo.git" }, /origin is not the canonical/i],
     [{ fail: "diff --quiet HEAD --" }, /tracked checkout files changed/i],
     [{ fail: "remote get-url origin" }, /origin remote cannot be resolved/i],
@@ -1814,7 +1881,7 @@ describe("full production release verifier", () => {
     );
 
     expect(result).toEqual({
-      schema: "com.mbmapps.quotepilot.production-release-evidence/v5",
+      schema: "com.mbmapps.quotepilot.production-release-evidence/v6",
       approvalMode: "independent-review",
       releaseSha: RELEASE_SHA,
       releaseTag: RELEASE_TAG,
@@ -1826,6 +1893,7 @@ describe("full production release verifier", () => {
       uatRunId: UAT_RUN_ID,
       preparationRunId: PREPARATION_RUN_ID,
       stagingId: "dpl_immutable-123",
+      uatEvidenceContract: "release-uat/v5",
       attesterId: ATTESTER_ID,
       uatReviewerId: REVIEWER_ID,
       uatReviewId: UAT_REVIEW_NODE_ID,
@@ -1880,7 +1948,7 @@ describe("full production release verifier", () => {
     );
 
     expect(result).toMatchObject({
-      schema: "com.mbmapps.quotepilot.production-release-evidence/v5",
+      schema: "com.mbmapps.quotepilot.production-release-evidence/v6",
       approvalMode: "solo-operator",
       attesterId: ATTESTER_ID,
       uatReviewerId: ATTESTER_ID,
@@ -2054,6 +2122,7 @@ describe("release UAT attestation validator", () => {
     "--staging-id", "dpl_immutable-123",
     "--checklist-digest", checklist.digest,
     "--checked-item-ids", checklist.itemIdsByTargetAndSmsProvider["firebase-all"].none.join(","),
+    "--role-qualification-json", JSON.stringify(makeRoleQualification()),
     "--confirmation", `ATTEST UAT ${RELEASE_SHA}`,
     "--output", "artifacts/release/uat-attestation.json"
   ];
@@ -2116,7 +2185,7 @@ describe("release UAT attestation validator", () => {
     });
 
     expect(receipt).toEqual({
-      schema: "com.mbmapps.quotepilot.release-uat-attestation/v4",
+      schema: "com.mbmapps.quotepilot.release-uat-attestation/v5",
       approvalMode: "independent-review",
       releaseSha: RELEASE_SHA,
       target: "firebase-all",
@@ -2131,6 +2200,15 @@ describe("release UAT attestation validator", () => {
         digest: checklist.digest,
         checkedItemIds: checklist.itemIdsByTargetAndSmsProvider["firebase-all"].none
       },
+      roleQualification: validateHostedRoleQualification(
+        JSON.stringify(makeRoleQualification()),
+        {
+          releaseSha: RELEASE_SHA,
+          target: "firebase-all",
+          candidateProfile: "staging-provider-acceptance",
+          stagingId: "dpl_immutable-123"
+        }
+      ),
       github: {
         repository: RELEASE_EVIDENCE_POLICY.repository.fullName,
         ref: "refs/heads/main",
@@ -2155,6 +2233,80 @@ describe("release UAT attestation validator", () => {
       now: NOW
     });
     expect(receipt.approvalMode).toBe("solo-operator");
+  });
+
+  test("binds distinct hosted role outcomes and the declared feature-gate profile", () => {
+    const receipt = buildReleaseUatReceipt(makeReceiptArgs(), {
+      env: makeReceiptEnv(),
+      root: process.cwd(),
+      now: NOW
+    });
+
+    expect(receipt.roleQualification).toMatchObject({
+      schema: "com.mbmapps.quotepilot.hosted-role-qualification/v1",
+      deploymentOrigin: "https://quotepilot-staging-20260804.web.app",
+      featureGateProfileIds: ["staging-provider-acceptance"],
+      roleResults: [
+        { role: "admin", outcome: "passed" },
+        { role: "sales", outcome: "passed" },
+        { role: "customer", outcome: "passed" },
+        { role: "cross-tenant", outcome: "denied" }
+      ]
+    });
+    expect(receipt.roleQualification.digest).toMatch(/^[0-9a-f]{64}$/);
+    expect(JSON.stringify(receipt)).not.toContain("admin-observation-01");
+  });
+
+  test("accepts the selected hosted provider origin and canonicalizes role order", () => {
+    const expected = {
+      releaseSha: RELEASE_SHA,
+      target: "vercel",
+      candidateProfile: "staging-safe-off",
+      stagingId: "dpl_vercel-123"
+    };
+    const evidence = makeRoleQualification({
+      ...expected,
+      deploymentOrigin: "https://quoteflow-preview-123.vercel.app"
+    });
+    const reordered = {
+      ...evidence,
+      roleResults: [...evidence.roleResults].reverse()
+    };
+
+    expect(validateHostedRoleQualification(JSON.stringify(evidence), expected).digest).toBe(
+      validateHostedRoleQualification(JSON.stringify(reordered), expected).digest
+    );
+  });
+
+  test.each([
+    [makeRoleQualification({ deploymentOrigin: "http://localhost:5173" }), /public HTTPS origin/i],
+    [makeRoleQualification({ deploymentOrigin: "https://unrelated.example.org" }), /does not match the selected candidate target/i],
+    [makeRoleQualification({ fixtureMode: true }), /cannot use a local fixture/i],
+    [makeRoleQualification({ authBypass: true }), /cannot use a local fixture/i],
+    [makeRoleQualification({ emulator: true }), /cannot use a local fixture/i],
+    [makeRoleQualification({ releaseSha: OTHER_SHA }), /different release candidate/i],
+    [makeRoleQualification({ featureGateProfiles: [] }), /one exact candidate feature-gate profile/i],
+    [makeRoleQualification({ roleResults: makeRoleQualification().roleResults.slice(1) }), /requires exactly admin, sales, customer, and cross-tenant/i],
+    [makeRoleQualification({
+      roleResults: makeRoleQualification().roleResults.map((result) => (
+        result.role === "cross-tenant" ? { ...result, outcome: "passed" } : result
+      ))
+    }), /deny cross-tenant access/i],
+    [makeRoleQualification({
+      roleResults: makeRoleQualification().roleResults.map((result) => (
+        result.role === "sales"
+          ? { ...result, observationId: "admin-observation-01" }
+          : result
+      ))
+    }), /observation ids must be unique/i]
+  ])("rejects non-hosted or incomplete role qualification evidence %#", (evidence, expected) => {
+    expect(() => buildReleaseUatReceipt(makeReceiptArgs({
+      "role-qualification-json": JSON.stringify(evidence)
+    }), {
+      env: makeReceiptEnv(),
+      root: process.cwd(),
+      now: NOW
+    })).toThrow(expected);
   });
 
   test("rejects blocked or SMS-mismatched candidate profiles before human attestation", () => {

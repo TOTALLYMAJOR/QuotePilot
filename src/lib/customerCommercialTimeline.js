@@ -323,6 +323,8 @@ function addConversationMilestones(items, dedupeKeys, conversations, allowedQuot
 }
 
 function emptyBounds(limit, workspace = {}, allowedQuoteIds = new Set()) {
+  const unloadedVersionIds = (workspace?.versionPageInfo?.unloadedQuoteIds || [])
+    .map(safeOpaqueId).filter((quoteId) => quoteId && allowedQuoteIds.has(quoteId));
   const truncatedVersionIds = Array.isArray(workspace?.versionPageInfo?.truncatedQuoteIds)
     ? workspace.versionPageInfo.truncatedQuoteIds
         .map(safeOpaqueId)
@@ -338,6 +340,7 @@ function emptyBounds(limit, workspace = {}, allowedQuoteIds = new Set()) {
     quoteReadLimit: Number(workspace?.quotePageInfo?.limit) || 0,
     versionReadTruncated: truncatedVersionIds.length > 0,
     versionReadTruncatedQuoteCount: new Set(truncatedVersionIds).size,
+    versionReadUnloadedQuoteCount: new Set(unloadedVersionIds).size,
     versionPerQuoteLimit: Number(workspace?.versionPageInfo?.perQuoteLimit) || 0
   };
 }
@@ -403,7 +406,7 @@ export function buildCustomerCommercialTimeline(customerWorkspace = {}, { limit 
   const timelineItems = items.slice(0, resolvedLimit);
 
   return {
-    status: pageInfo.truncated
+    status: pageInfo.truncated || pageInfo.versionReadUnloadedQuoteCount > 0
       ? "partial"
       : timelineItems.length > 0
         ? "success"

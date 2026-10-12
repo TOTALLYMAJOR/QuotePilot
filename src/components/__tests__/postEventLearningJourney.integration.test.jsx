@@ -90,7 +90,7 @@ test.each(["recipe", "pack_conversion"])("Client overview disclosure to real %s 
   expect(container.querySelector(category === "recipe" ? "#ambient-library-title" : "#inventory-workspace-title")).not.toBeNull();
   expect(getLearningReview().confirmed).toBe(false);
   expect(button("Confirm this receipt")).toBeUndefined();
-  const command = category === "recipe" ? { kind: "publish_menu_recipe", menuItemId: "dinner", expectedCatalogRevision: 1, expectedRecipeRevision: 1, outputYield: "1", outputUnitId: "each", lines: [] } : { kind: "publish_pack_conversion", ingredientId: "chicken", expectedRevision: 0, packUnitId: "case", packLabel: "Case", baseUnitId: "lb", baseQuantity: "10", sourceLabel: "Operator verified label" };
+  const command = category === "recipe" ? { kind: "publish_menu_recipe", menuItemId: "dinner", expectedCatalogRevision: 1, expectedRecipeRevision: 1, outputYield: "1", outputUnitId: "each", lines: [], dependencyPreflightDigest: "8".repeat(64) } : { kind: "publish_pack_conversion", ingredientId: "chicken", expectedRevision: 0, packUnitId: "case", packLabel: "Case", baseUnitId: "lb", baseQuantity: "10", sourceLabel: "Operator verified label" };
   const receiptId = `iar_${"b".repeat(48)}`;
   mock.call.mockImplementation(async (payload) => ({ data: { ok: true, schemaVersion: 2, organizationId: "org-one", commandKind: command.kind, idempotent: false,
     receipt: { schemaVersion: 2, organizationId: "org-one", receiptId, requestId: payload.requestId, commandKind: command.kind, recordedAtISO: "2026-09-17T12:00:00.000Z" },
