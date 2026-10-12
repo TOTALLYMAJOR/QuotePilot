@@ -55,20 +55,33 @@ async function getPasswordResetCodes(request) {
     : [];
 }
 
+async function enterStaffWorkspace(page) {
+  const exploreButton = page.getByRole("button", { name: "Explore the workspace", exact: true });
+  const quoteButton = page
+    .getByRole("banner")
+    .getByRole("button", { name: "New quote", exact: true });
+  // Fresh sign-ins may require the native onboarding entry again.
+  await expect(exploreButton.or(quoteButton)).toBeVisible({ timeout: 45_000 });
+  if (await exploreButton.isVisible()) await exploreButton.click();
+  await expect(quoteButton).toBeVisible({ timeout: 45_000 });
+  return quoteButton;
+}
+
 async function signInAsStaff(page) {
   await page.goto("/app");
   const signInHeading = page.getByRole("heading", { name: "Staff Sign In" });
   const quoteButton = page
     .getByRole("banner")
     .getByRole("button", { name: "New quote", exact: true });
-  await expect(signInHeading.or(quoteButton)).toBeVisible({ timeout: 45_000 });
+  const exploreButton = page.getByRole("button", { name: "Explore the workspace", exact: true });
+  await expect(signInHeading.or(exploreButton).or(quoteButton)).toBeVisible({ timeout: 45_000 });
   if (await signInHeading.isVisible()) {
     await expect(signInHeading).toBeVisible();
     await page.getByLabel(/^Email$/i).fill(STAFF_EMAIL);
     await page.getByLabel(/^Password$/i).fill(STAFF_PASSWORD);
     await page.locator(".auth-actions").getByRole("button", { name: "Sign In" }).click();
   }
-  await expect(quoteButton).toBeVisible({ timeout: 45_000 });
+  await enterStaffWorkspace(page);
   await quoteButton.click();
   await expect(page.getByRole("combobox", { name: /^Event type\b/ })).toBeVisible({ timeout: 45_000 });
 }
@@ -144,18 +157,17 @@ test("switching authenticated principals destroys the prior tenant workspace sta
   await page.getByLabel(/^Email$/i).fill(STAFF_EMAIL);
   await page.getByLabel(/^Password$/i).fill(STAFF_PASSWORD);
   await page.locator(".auth-actions").getByRole("button", { name: "Sign In" }).click();
-  const restoredQuoteButton = page
-    .getByRole("banner")
-    .getByRole("button", { name: "New quote", exact: true });
-  await expect(restoredQuoteButton).toBeVisible({ timeout: 45_000 });
+  const restoredQuoteButton = await enterStaffWorkspace(page);
 
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await expect(page.getByText(`Editing quote ${CONVERSATION_QUOTE_NUMBER}`)).toHaveCount(0);
   await restoredQuoteButton.click();
   const restoredGuidedMode = page.getByRole("button", { name: "Guided mode" });
-  if (await restoredGuidedMode.isVisible()) {
-    await restoredGuidedMode.click();
-  }
+  await expect(restoredGuidedMode).toBeVisible({ timeout: 45_000 });
+  await restoredGuidedMode.click();
+  await expect(page.getByRole("textbox", { name: /Your name/i })).toBeVisible({
+    timeout: 45_000
+  });
   await expect(page.getByRole("combobox", { name: "Event type", exact: true })).toHaveValue("", {
     timeout: 45_000
   });
@@ -280,11 +292,5 @@ test("email-password staff can complete account recovery with the same on-screen
   await page.getByLabel(/^Email$/i).fill(STAFF_EMAIL);
   await page.getByLabel(/^Password$/i).fill(RECOVERED_PASSWORD);
   await page.locator(".auth-actions").getByRole("button", { name: "Sign In" }).click();
-  await expect(
-    page
-      .getByRole("banner")
-      .getByRole("button", { name: "New quote", exact: true })
-  ).toBeVisible({
-    timeout: 45_000
-  });
+  await enterStaffWorkspace(page);
 });

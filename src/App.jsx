@@ -1706,7 +1706,8 @@ export default function App({
     && authSession.platformAdmin
     && !String(authSession.organizationId || "").trim()
   );
-  const catalogReadRequired = adminOpen
+  const catalogReadRequired = authSession.isStaff
+    || adminOpen
     || importStudioOpen
     || [
       WORKSPACE_ROUTE_IDS.QUOTE_NEW,
@@ -1881,6 +1882,7 @@ export default function App({
   const [scheduleOpen, setScheduleOpen] = useState(false);
   const [integrationsOpen, setIntegrationsOpen] = useState(false);
   const [skipCatalogSetup, setSkipCatalogSetup] = useState(false);
+  const [skipCatalogSetupKey, setSkipCatalogSetupKey] = useState("");
   const [diagnosticsOpen, setDiagnosticsOpen] = useState(false);
   const [historyTarget, setHistoryTarget] = useState({ quoteId: "", reason: "" });
   const [dashboardOpen, setDashboardOpen] = useState(false);
@@ -6508,6 +6510,7 @@ export default function App({
   useEffect(() => {
     if (typeof window === "undefined" || !catalogSetupBypassKey) {
       setSkipCatalogSetup(false);
+      setSkipCatalogSetupKey("");
       return;
     }
     try {
@@ -6515,10 +6518,12 @@ export default function App({
     } catch {
       setSkipCatalogSetup(false);
     }
+    setSkipCatalogSetupKey(catalogSetupBypassKey);
   }, [catalogSetupBypassKey]);
   const setCatalogBypassState = useCallback((bypass) => {
     const nextBypass = Boolean(bypass);
     setSkipCatalogSetup(nextBypass);
+    setSkipCatalogSetupKey(catalogSetupBypassKey);
     if (typeof window === "undefined" || !catalogSetupBypassKey) return;
     try {
       if (nextBypass) {
@@ -6758,7 +6763,9 @@ export default function App({
   // Keep Catalog Admin inside the setup branch so it receives the setup-only
   // save guard and starter eligibility contract. Import Studio is rendered by
   // the ordinary workspace branch, so that overlay still suppresses the gate.
-  const shouldSuppressSetupGate = skipCatalogSetup || importStudioOpen;
+  const shouldSuppressSetupGate = (
+    skipCatalogSetupKey === catalogSetupBypassKey && skipCatalogSetup
+  ) || importStudioOpen;
   if (!catalogSetupComplete && !shouldSuppressSetupGate) {
     return (
       <div className="app-shell app-shell-neutral" style={appThemeVars}>
