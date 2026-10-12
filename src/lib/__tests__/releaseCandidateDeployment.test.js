@@ -33,6 +33,7 @@ import {
   isEnabledFirebaseSecretVersion,
   providerRequestHeaders,
   resolveGitHubToken,
+  retryFirebaseProviderReadback,
   validateFunctionsDependencyInstall,
   validateHostedManifest,
   vercelAutomationBypassToken,
@@ -787,6 +788,37 @@ describe("governed release candidate deployment", () => {
     expect(manifestUrl).toBe("https://candidate.example/release-candidate.json");
     expect(fetchCount).toBe(31);
     expect(waitCount).toBe(30);
+  });
+
+  test("retries bounded Firebase provider readback while deployed revisions converge", async () => {
+    let readCount = 0;
+    let waitCount = 0;
+    const evidence = { functions: { functionCount: 152 } };
+    const result = await retryFirebaseProviderReadback({
+      readProviderEvidence: async () => {
+        readCount += 1;
+        if (readCount < 3) throw new Error("provider revision is still converging");
+        return evidence;
+      },
+      attempts: 3,
+      delayMs: 1,
+      wait: async () => { waitCount += 1; }
+    });
+    expect(result).toBe(evidence);
+    expect(readCount).toBe(3);
+    expect(waitCount).toBe(2);
+  });
+
+  test("preserves the last Firebase readback failure after the bounded retry window", async () => {
+    const errors = [new Error("first"), new Error("final")];
+    let readCount = 0;
+    await expect(retryFirebaseProviderReadback({
+      readProviderEvidence: async () => { throw errors[readCount++]; },
+      attempts: 2,
+      delayMs: 0,
+      wait: async () => {}
+    })).rejects.toBe(errors[1]);
+    expect(readCount).toBe(2);
   });
 
   test("builds a deterministic Vercel Build Output v3 payload without a runtime CLI", () => {

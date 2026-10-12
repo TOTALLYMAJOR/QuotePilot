@@ -1,6 +1,24 @@
 # Project Status
 
-Last updated: 2026-10-11 23:14:06 CDT
+Last updated: 2026-10-12 03:41:06 CDT
+
+## v0.21.0 staging candidate recovery — safe-off (October 12, 2026)
+
+Exact SHA `0d197d26c0090e8cf96d687dea474424b58a532d` passed protected
+`CI Quality` run `38214762094` and produced a verified Firebase
+`staging-provider-acceptance` deployment receipt. The interactive release
+process returned late, and its required same-SHA safe-off closeout observed one
+scheduled Function before provider convergence. No hosted UAT attestation was
+performed during that window. A bounded recovery reapplied the same source
+with safe-off configuration. Current provider readback validates all 152
+Functions with email, buyer access, and operational staffing authority off;
+the hosted manifest identifies the same SHA with `staging-safe-off`; and the
+deployed Firestore Rules hash matches tracked source. The guarded safe-off
+receipt remains `partial` because receipt states are forward-only and the
+initial readback failed. Source now retries only post-deploy provider readback
+for up to one minute before retaining a partial result; it does not repeat a
+provider mutation. Fresh exact-head CI and another governed staging window are
+required before merge or production promotion.
 
 ## v0.21.0 integration qualification — local candidate (October 11, 2026)
 

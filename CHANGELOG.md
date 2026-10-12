@@ -1,10 +1,23 @@
 # Changelog
 
-Last updated: 2026-10-11 23:14:06 CDT
+Last updated: 2026-10-12 03:41:06 CDT
 
 All notable project changes are documented in this file.
 
 ## Unreleased — Current candidate refinements
+
+- Make Firebase candidate closeout tolerate bounded provider convergence
+  without weakening readback. Exact SHA
+  `0d197d26c0090e8cf96d687dea474424b58a532d` produced a verified
+  `staging-provider-acceptance` receipt, but its immediate same-SHA safe-off
+  closeout observed one scheduled Function before the provider returned a
+  valid active revision. The deployment reader now retries only the read-only
+  Hosting, Firestore Rules, and Functions verification for up to 13 attempts
+  across one minute, then preserves the final error and partial receipt. It
+  never repeats the provider mutation. The interrupted staging window received
+  no UAT attestation; independent recovery readback proves all 152 Functions
+  safe-off, the exact-SHA safe-off manifest, and exact Firestore Rules while
+  the guarded safe-off receipt remains truthfully partial.
 
 - Tighten the integrated v0.21.0 production graph without deleting capability.
   Default-off quote-completion, decision-packet, and analytics handlers now
