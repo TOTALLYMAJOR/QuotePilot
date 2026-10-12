@@ -1,10 +1,14 @@
 # Changelog
 
-Last updated: 2026-10-11 04:13:28 CDT
+Last updated: 2026-10-11 19:05:04 CDT
 
 All notable project changes are documented in this file.
 
 ## Unreleased — Current candidate refinements
+
+- Label the disposable route-performance emulator password as an explicit
+  non-secret test placeholder so the existing secret scan can qualify the
+  candidate without adding an exemption or weakening credential detection.
 
 - Repair local browser qualification fixtures after the public/workspace split:
   component harnesses explicitly load workspace styles, quote smoke setup waits

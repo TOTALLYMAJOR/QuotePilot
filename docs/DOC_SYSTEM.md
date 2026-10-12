@@ -1,6 +1,6 @@
 # Documentation System
 
-Last updated: 2026-10-10 19:54:09 CDT
+Last updated: 2026-10-11 19:05:04 CDT
 
 ## Purpose
 This repository uses a layered canonical documentation model.
@@ -282,6 +282,9 @@ only measured outcome evidence establishes catering value.
 
 ## Security Scan Note
 Documentation secret scanning blocks real token-like values and allows explicit placeholder values such as `<your_secret_here>`.
+The guarded disposable route-performance emulator uses an explicit test
+placeholder shared by its seed and browser sign-in; it is not a provider or
+production credential.
 
 Content scanners omit only worktree deletions confirmed by Git; staged new
 files remain in the tracked scan, and unreadable files still fail rather than
