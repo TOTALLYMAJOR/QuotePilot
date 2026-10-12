@@ -1,6 +1,6 @@
 # QuotePilot Product Intelligence System
 
-Last updated: 2026-10-11 22:51:19 CDT
+Last updated: 2026-10-11 22:57:06 CDT
 
 ## Quote-to-Confidence measurement extension
 
@@ -315,6 +315,15 @@ one atomic authoritative quote artifact set under a concurrent duplicate. This
 local receipt does not establish hosted Turnstile behavior, provider
 notification delivery, production data, accessibility, human acceptance, or a
 commercial outcome.
+
+The Quote-to-Confidence release integration repair remains recorded under
+`LED-022`. In the client closeout record, exact-source actuals now wait for the
+operator to open the supporting-detail disclosure. When event learning is
+enabled, its combined review owns that actuals read instead of mounting a
+second presentation of the same evidence. Focused local tests cover the closed
+disclosure, the opened learning journey, direct actuals review, deterministic
+Inventory draft expiry, and App/Legacy margin-comparison parity. This does not
+establish hosted behavior, human acceptance, or an outcome change.
 ## Traceability rule
 
 A material product change is outcome-traceable only when it links:

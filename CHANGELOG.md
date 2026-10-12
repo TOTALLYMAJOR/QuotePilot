@@ -1,10 +1,20 @@
 # Changelog
 
-Last updated: 2026-10-11 22:17:01 CDT
+Last updated: 2026-10-11 23:03:10 CDT
 
 All notable project changes are documented in this file.
 
 ## Unreleased — Current candidate refinements
+
+- Reconcile the combined release candidate's closeout-learning, Inventory
+  draft, and commercial-comparison seams. Exact-source actuals now wait for the
+  closeout supporting disclosure and are read once through the enabled learning
+  review; fixed-time Inventory tests retain their explicit clock; and App and
+  Legacy margin evidence tests isolate the intended memo. The workflow-pack
+  integration harness also uses a monotonic local server clock so parallel test
+  execution cannot create backwards evidence time. Focused local tests pass,
+  while protected CI, hosted UAT, deployment, and outcome evidence remain
+  separate.
 
 - Make Firebase journey qualification follow the active workspace presentation
   without weakening its authority checks. Wizard advancement now waits for an

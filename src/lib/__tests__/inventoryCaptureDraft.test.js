@@ -170,7 +170,7 @@ describe("inventory-capture-draft-v1", () => {
       .resolves.toMatchObject([{ draftId: "draft-a", lines: [{ countedQuantity: "13", note: "Second pass" }] }]);
     await expect(listInventoryCaptureDrafts({ ...scope, userId: "user-b", now: now + 2000 }, { store }))
       .resolves.toMatchObject([{ draftId: "foreign" }]);
-    await discardInventoryCaptureDraft({ ...scope, draftId: "draft-a", expectedDraftRevision: updated.draftRevision }, { store });
+    await discardInventoryCaptureDraft({ ...scope, draftId: "draft-a", now: now + 2500, expectedDraftRevision: updated.draftRevision }, { store });
     await expect(listInventoryCaptureDrafts({ ...scope, now: now + 3000 }, { store })).resolves.toEqual([]);
 
     await createInventoryCaptureDraft({ ...scope, draftId: "expired", now, lines: [] }, { store });
@@ -407,6 +407,7 @@ describe("inventory-capture-draft-v1", () => {
     await expect(updateInventoryCaptureDraft({
       ...scope,
       draftId: created.draftId,
+      now: now + 500,
       expectedDraftRevision: created.draftRevision,
       expectedLineRevision: created.lines[0].lineRevision,
       line: replacement
@@ -475,6 +476,7 @@ describe("inventory-capture-draft-v1", () => {
     await expect(discardInventoryCaptureDraft({
       ...scope,
       draftId: created.draftId,
+      now: now + 1500,
       expectedDraftRevision: created.draftRevision
     }, { store })).rejects.toMatchObject({ code: "conflict" });
     await expect(listInventoryCaptureDrafts({ ...scope, now: now + 2000 }, { store }))

@@ -19,7 +19,7 @@ const SCENARIO_ID = "scenario-175";
 function shellMarginEvidence(shell, context) {
   const source = readFileSync(new URL(`../../${shell}.jsx`, import.meta.url), "utf8");
   const start = source.indexOf(`  const ${shell === "LegacyApp" ? "proposedMargin" : "livingTwinMarginComparison"} = useMemo`);
-  const end = source.indexOf("  const inventoryRecipeExtension", start);
+  const end = source.indexOf("\n  useEffect(() =>", start);
   expect(start).toBeGreaterThan(0);
   expect(end).toBeGreaterThan(start);
   expect(source).toContain("marginComparison: livingTwinMarginComparison,");
