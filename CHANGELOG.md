@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-10-11 22:17:00 CDT
+Last updated: 2026-10-11 22:17:01 CDT
 
 All notable project changes are documented in this file.
 
@@ -11,8 +11,10 @@ All notable project changes are documented in this file.
   observed step transition before issuing another action; saved-quote evidence
   accepts the exact compatibility or Ambient workspace surface; and auth/rules
   assertions locate the same seeded quote and account controls in either
-  supported shell. This repairs CI timing and presentation assumptions while
-  preserving exact tenant, quote, pricing, delivery, and scope-leak checks.
+  supported shell. Identity evidence is read from the Ambient Workspace dialog
+  or the compatibility Account menu before catalog checks continue. This
+  repairs CI timing and presentation assumptions while preserving exact tenant,
+  quote, pricing, delivery, and scope-leak checks.
 
 - Stabilize native onboarding browser qualification without changing product
   authority: readiness waits accept the independently valid sign-in,
