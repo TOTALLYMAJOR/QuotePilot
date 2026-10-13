@@ -4,6 +4,7 @@ import { describe, expect, test } from "vitest";
 import {
   AMBIENT_OPPORTUNITIES_SURFACE_CONTRACT,
   AMBIENT_OPPORTUNITY_STREAM_MODEL,
+  buildCommercialPriorityContext,
   buildAmbientOpportunityStream
 } from "../ambientOpportunityStream";
 
@@ -92,6 +93,46 @@ describe("buildAmbientOpportunityStream", () => {
     expect(row.statusFacts.deposit.value).toBe("Deposit paid");
     expect(row.statusFacts.finalBalance.value).toBe("Balance paid");
     expect(new Set(Object.values(row.statusFacts).map((fact) => fact.value)).size).toBe(4);
+  });
+
+  test("projects saved commercial value without repricing and distinguishes zero from missing", () => {
+    const saved = buildCommercialPriorityContext(completeQuote({ totals: { total: 0 } }));
+    const missing = buildCommercialPriorityContext(completeQuote({ totals: {} }));
+    const invalid = buildCommercialPriorityContext(completeQuote({ totals: { total: -1 } }));
+
+    expect(saved.value).toMatchObject({
+      label: "Saved quote total",
+      available: true,
+      amount: 0,
+      display: "$0.00"
+    });
+    expect(saved.value.reason).toContain("does not reprice");
+    expect(missing.value).toMatchObject({
+      available: false,
+      amount: null,
+      display: "Value unavailable"
+    });
+    expect(invalid.value.available).toBe(false);
+    expect(Object.isFrozen(saved)).toBe(true);
+    expect(Object.isFrozen(saved.position.lifecycle)).toBe(true);
+  });
+
+  test("does not invent proposal readiness or commercial states without a saved quote identity", () => {
+    const missing = buildCommercialPriorityContext({
+      payment: {},
+      booking: {},
+      totals: {}
+    });
+
+    expect(missing.position.proposal).toMatchObject({
+      available: false,
+      value: "Not recorded",
+      complete: false,
+      gapCount: 0
+    });
+    expect(missing.position.booking.available).toBe(false);
+    expect(missing.position.deposit.available).toBe(false);
+    expect(missing.position.finalBalance.available).toBe(false);
   });
 
   test("keeps four momentum dimensions and permits a percentage only for proposal completeness", () => {

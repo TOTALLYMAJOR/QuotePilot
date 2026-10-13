@@ -1,5 +1,10 @@
 import { describe, expect, test } from "vitest";
-import { MARGIN_MODEL, buildMarginAdvisorCard, buildMarginPresentation } from "../marginPresentation";
+import {
+  MARGIN_MODEL,
+  buildMarginAdvisorCard,
+  buildMarginPresentation,
+  marginRequiresExpandedEvidence
+} from "../marginPresentation";
 
 const settings = {
   staffingChargeMode: "per_hour_per_staff",
@@ -209,5 +214,39 @@ describe("buildMarginAdvisorCard", () => {
   test("stays silent when margin itself is unavailable or absent", () => {
     expect(buildMarginAdvisorCard(null)).toBeNull();
     expect(buildMarginAdvisorCard({ available: false })).toBeNull();
+  });
+});
+
+describe("marginRequiresExpandedEvidence", () => {
+  test("compresses healthy or untargeted evidence", () => {
+    const healthy = buildMarginPresentation({ form, totals, catalog, settings });
+    const untargeted = buildMarginPresentation({
+      form,
+      totals,
+      catalog,
+      settings: { ...settings, targetMarginPct: undefined }
+    });
+
+    expect(marginRequiresExpandedEvidence(healthy)).toBe(false);
+    expect(marginRequiresExpandedEvidence(untargeted)).toBe(false);
+    expect(marginRequiresExpandedEvidence(null)).toBe(false);
+  });
+
+  test("expands missing evidence and recorded target misses", () => {
+    const unavailable = buildMarginPresentation({
+      form,
+      totals,
+      catalog: { ...catalog, packages: [{ ...catalog.packages[0], costPpp: null }] },
+      settings
+    });
+    const belowTarget = buildMarginPresentation({
+      form,
+      totals,
+      catalog,
+      settings: { ...settings, targetMarginPct: 0.75 }
+    });
+
+    expect(marginRequiresExpandedEvidence(unavailable)).toBe(true);
+    expect(marginRequiresExpandedEvidence(belowTarget)).toBe(true);
   });
 });

@@ -1,14 +1,19 @@
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useId, useMemo, useRef, useState } from "react";
+import AdaptiveChoiceField from "./AdaptiveChoiceField";
+import DisabledActionReason from "./DisabledActionReason";
 import InlineValue from "./ambient/InlineValue";
 import DigitRoll from "./DigitRoll";
+import DeliveryProposal from "./DeliveryProposal";
 import { currency } from "../lib/quoteCalculator";
 import { normalizeBrandLogoUrl } from "../lib/brandLogoUrl";
 import { normalizeProposalDocumentFontScale } from "../lib/proposalDocumentPreferences";
 import { detectBreakdownValueChanges, MAX_EVENT_HOURS, MIN_EVENT_HOURS, normalizeEventHours } from "../lib/wizardUi";
-import { buildMarginPresentation } from "./marginPresentation";
+import { buildMarginPresentation, marginRequiresExpandedEvidence } from "./marginPresentation";
 import { playCue } from "./soundKit";
+import { buildQuoteCompletionProjection } from "../lib/quoteCompletionProjection";
 import {
   buildCompositionLine,
+  buildCommercialWorkbenchModel,
   buildExperienceModel,
   buildExperienceSectionStatus,
   buildGuestChangeConsequences,
@@ -29,6 +34,13 @@ import {
 } from "./proposalComposerPresentation";
 import "./proposalComposer.css";
 
+const LivingCommercialTwin = lazy(() => import("./LivingCommercialTwin"));
+const QUOTE_COMPLETION_BUILD_ENABLED = import.meta.env.MODE === "test"
+  || import.meta.env.VITE_QUOTE_COMPLETION_COMMAND_PATH_ENABLED === "true";
+const QuoteCompletionCommandPath = QUOTE_COMPLETION_BUILD_ENABLED
+  ? lazy(() => import("./QuoteCompletionCommandPath"))
+  : null;
+
 // Margin stays behind the same default-off gate LiveBreakdown uses; the
 // composer never introduces a wider margin surface than the wizard had.
 const PILOT_MARGINS_ENABLED = ["1", "true", "yes", "on"].includes(
@@ -36,7 +48,76 @@ const PILOT_MARGINS_ENABLED = ["1", "true", "yes", "on"].includes(
 );
 
 const FLASH_CLEAR_MS = 620;
+
+export function QuoteEditorModeSurface({ composerActive = false, composerSurface = null, children }) {
+  return composerActive ? composerSurface : children;
+}
+
 const ACTIVITY_LOG_LIMIT = 30;
+
+const SAVE_BLOCKER_RECOVERY_TARGETS = Object.freeze({
+  "guest-count": Object.freeze({ domainId: "event", targetSelector: '[data-ambient-action-id="pc-edit-guests"]', activate: true }),
+  "event-type": Object.freeze({ domainId: "event", targetSelector: '#proposal-event-type, [aria-labelledby="proposal-event-type-label"]' }),
+  "event-date": Object.freeze({ domainId: "event", targetSelector: '[data-ambient-action-id="pc-edit-date"]', activate: true }),
+  "event-name": Object.freeze({ domainId: "event", targetSelector: '[data-ambient-action-id="pc-edit-event-name"]', activate: true }),
+  venue: Object.freeze({ domainId: "event", targetSelector: '[data-ambient-action-id="pc-edit-venue"]', activate: true }),
+  "client-name": Object.freeze({ domainId: "customer", targetSelector: '[data-ambient-action-id="pc-edit-client-name"]', activate: true }),
+  "client-email": Object.freeze({ domainId: "customer", targetSelector: '[data-ambient-action-id="pc-edit-client-email"]', activate: true }),
+  "client-email-format": Object.freeze({ domainId: "customer", targetSelector: '[data-ambient-action-id="pc-edit-client-email"]', activate: true }),
+  "menu-selection": Object.freeze({
+    domainId: "experience",
+    targetSelector: '[data-testid="pc-edit-menu"]',
+    activate: true,
+    editor: "menu",
+    focusSelector: "#pc-menu-search"
+  }),
+  "pilot-scenario-review": Object.freeze({
+    domainId: "commercials",
+    targetSelector: '[data-ambient-pilot-scenario-review="available"]'
+  }),
+  "draft-intent-review": Object.freeze({
+    domainId: "experience",
+    targetSelector: '[data-ambient-draft-intent-review="package_menu"]'
+  }),
+  "change-impact-review": Object.freeze({
+    domainId: "commercials",
+    targetSelector: '[data-capability-id="commercial-scenario-workbench"] .csw-review-button'
+  }),
+  "change-impact-authorization": Object.freeze({
+    domainId: "commercials",
+    targetSelector: '[data-capability-id="cwf-15c-commercial-change-authority"]'
+  })
+});
+
+export function buildSaveBlockerRecovery(blocker = {}) {
+  const blockerId = String(blocker?.id || "").trim();
+  const target = SAVE_BLOCKER_RECOVERY_TARGETS[blockerId];
+  return target ? { blockerId, ...target } : null;
+}
+
+function nextUiFrame(callback) {
+  if (typeof window !== "undefined" && typeof window.requestAnimationFrame === "function") {
+    return window.requestAnimationFrame(callback);
+  }
+  return setTimeout(callback, 0);
+}
+
+function focusRecoveryTarget(selector, { activate = false, focusSelector = "" } = {}) {
+  const target = document.querySelector(selector);
+  if (!target) return false;
+  target.scrollIntoView?.({ behavior: "smooth", block: "center" });
+  const focusable = target.matches?.("button, input, select, textarea, [tabindex]")
+    ? target
+    : target.querySelector?.('button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])');
+  focusable?.focus?.({ preventScroll: true });
+  if (activate && typeof focusable?.click === "function") {
+    focusable.click();
+    if (focusSelector) {
+      nextUiFrame(() => document.querySelector(focusSelector)?.focus?.({ preventScroll: true }));
+    }
+  }
+  return true;
+}
 
 const ACTIVITY_FIELD_LABELS = {
   eventTypeId: "Event type",
@@ -111,7 +192,7 @@ function SectionHeading({ id, eyebrow, title, complete, status = null }) {
   } : null);
   return (
     <header className="pc-section-head">
-      <p className="pc-eyebrow" id={id}>{eyebrow}</p>
+      <h2 className="pc-eyebrow" id={id}>{eyebrow}</h2>
       <div className="pc-section-title-row">
         {title ? <h3 className="pc-section-title">{title}</h3> : null}
         {resolvedStatus ? (
@@ -139,6 +220,32 @@ function PcSelect({ label, value, onChange, children, hint }) {
       {hint ? <small className="pc-field-hint">{hint}</small> : null}
     </div>
   );
+}
+
+function buildChoiceSet(items, {
+  currentValue = "",
+  getValue = (item) => item?.id,
+  getLabel = (item) => item?.name
+} = {}) {
+  const seenValues = new Set();
+  const options = (Array.isArray(items) ? items : [])
+    .map((item) => ({
+      value: String(getValue(item) ?? "").trim(),
+      label: String(getLabel(item) ?? "").trim()
+    }))
+    .filter((option) => {
+      if (!option.value || !option.label || seenValues.has(option.value)) return false;
+      seenValues.add(option.value);
+      return true;
+    });
+  const selectedValue = String(currentValue || "").trim();
+  const stale = Boolean(selectedValue && !options.some((option) => option.value === selectedValue));
+  return {
+    stale,
+    options: stale && options.length > 0
+      ? [{ value: selectedValue, label: `${selectedValue} (no longer available)`, disabled: true }, ...options]
+      : options
+  };
 }
 
 function PcQuietInput({ label, value, onChange, hint, type = "text", inputMode, placeholder }) {
@@ -301,67 +408,7 @@ function ClientPreviewDialog({
   );
 }
 
-export function buildDraftSaveBlockers({
-  form = {},
-  totals = {},
-  catalogLoading = false,
-  selectedMenuItemCount = 0,
-  quoteEditUnavailable = false,
-  pilotScenarioReviewPending = false,
-  draftIntentReviewPending = false,
-  changeImpactReviewRequired = false,
-  changeImpactAuthorizationRequired = false
-} = {}) {
-  const blockers = [];
-  const add = (id, message) => blockers.push({ id, message });
-  const email = String(form.email || "").trim();
-
-  if (catalogLoading) {
-    add("catalog-loading", "Wait for the current catalog to finish loading.");
-  }
-  if (quoteEditUnavailable) {
-    add("quote-edit-loading", "Reload the saved quote before editing or saving it.");
-  }
-  if (pilotScenarioReviewPending) {
-    add("pilot-scenario-review", "Resolve the pending Pilot scenario review.");
-  }
-  if (draftIntentReviewPending) {
-    add("draft-intent-review", "Resolve the pending Package or Menu review.");
-  }
-  if (changeImpactReviewRequired) {
-    add("change-impact-review", "Build and review a current Change Impact simulation.");
-  } else if (changeImpactAuthorizationRequired) {
-    add("change-impact-authorization", "Authorize and apply governed dependencies from Change Impact.");
-  }
-  if (Math.max(0, Number(totals.guests) || 0) <= 0) {
-    add("guest-count", "Set a guest count above zero.");
-  }
-  if (!String(form.name || "").trim()) {
-    add("client-name", "Add the client name.");
-  }
-  if (!email) {
-    add("client-email", "Add the client email.");
-  } else if (!/^\S+@\S+\.\S+$/.test(email)) {
-    add("client-email-format", "Correct the client email format.");
-  }
-  if (!String(form.eventTypeId || "").trim()) {
-    add("event-type", "Choose an event type.");
-  }
-  if (!String(form.date || "").trim()) {
-    add("event-date", "Add the event date.");
-  }
-  if (!String(form.eventName || "").trim()) {
-    add("event-name", "Add the event name.");
-  }
-  if (!String(form.venue || "").trim()) {
-    add("venue", "Add the venue.");
-  }
-  if (Math.max(0, Number(selectedMenuItemCount) || 0) < 1) {
-    add("menu-selection", "Select at least one menu item.");
-  }
-
-  return blockers;
-}
+export { buildDraftSaveBlockers } from "./proposalSaveReadiness";
 
 export function buildSaveActionModel({
   saveBlockers = [],
@@ -409,22 +456,34 @@ export default function ProposalComposer({
   onTemplateChange,
   onEventTypeChange,
   onSaveQuote,
+  onQuoteCompletionSave = null,
   onOpenCompare,
   onGuidedMode,
   reviewSurfaces = null,
   statusNotes = null,
   changeImpactSurface = null,
+  livingCommercialTwin = null,
+  deliveryPlanningEvidence = null,
+  deliveryPlanningOperatorId = "",
+  onDeliveryPlanningHandoff = null,
   impactWatch = null,
   isAdmin = false,
-  onOpenCatalogPricing = null
+  onOpenCatalogPricing = null,
+  quoteCompletionCommandPathEnabled = false,
+  quoteCompletionConfiguredActions = null,
+  quoteCompletionCommand = null,
+  onQuoteCompletionNavigate = null
 }) {
   const [menuEditorOpen, setMenuEditorOpen] = useState(false);
   const [ratesEditorOpen, setRatesEditorOpen] = useState(false);
   const [menuQuery, setMenuQuery] = useState("");
+  const [openMenuGroups, setOpenMenuGroups] = useState(() => new Set());
+  const [marginDetailOpen, setMarginDetailOpen] = useState(false);
   const [experienceEditorOpen, setExperienceEditorOpen] = useState(false);
   const [rentalEditorOpen, setRentalEditorOpen] = useState(false);
   const [enhancementEditorOpen, setEnhancementEditorOpen] = useState(false);
   const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [activeDomain, setActiveDomain] = useState("event");
   const [pulseOpen, setPulseOpen] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [guestAnchor, setGuestAnchor] = useState(null);
@@ -432,11 +491,60 @@ export default function ProposalComposer({
   const [liveNote, setLiveNote] = useState("");
   // Session-only running log of the changes made to this draft — a working
   // memory for the operator, not a record; saved history stays in versions.
-  const [activityOpen, setActivityOpen] = useState(true);
+  const [activityOpen, setActivityOpen] = useState(false);
   const [activityLog, setActivityLog] = useState([]);
   const activityIdRef = useRef(0);
   const saveReadinessRef = useRef(null);
   const pendingSaveReviewFocusRef = useRef(false);
+
+  const eventTypeChoices = buildChoiceSet(eventTypes, {
+    currentValue: form.eventTypeId
+  });
+  const templateChoices = buildChoiceSet([
+    { id: "custom", name: "Custom" },
+    ...(eventTemplates || [])
+  ], {
+    currentValue: form.eventTemplateId || "custom"
+  });
+  const taxRegionChoices = buildChoiceSet(settings?.taxRegions, {
+    currentValue: form.taxRegion,
+    getLabel: (region) => `${region?.name || region?.id} (${Math.round(Number(region?.rate || 0) * 1000) / 10}%)`
+  });
+  const seasonChoices = buildChoiceSet([
+    { id: "auto", name: "Auto detect" },
+    ...(settings?.seasonalProfiles || [])
+  ], {
+    currentValue: form.seasonProfileId || "auto"
+  });
+  const setupRecoveryAction = typeof onOpenCatalogPricing === "function"
+    ? { label: "Open Library setup", onClick: onOpenCatalogPricing }
+    : { label: "Review guided setup", onClick: onGuidedMode };
+
+  useEffect(() => {
+    if (
+      eventTypeChoices.options.length === 1
+      && !eventTypeChoices.stale
+      && String(form.eventTypeId || "") !== eventTypeChoices.options[0].value
+    ) {
+      onEventTypeChange(eventTypeChoices.options[0].value);
+    }
+    if (
+      taxRegionChoices.options.length === 1
+      && !taxRegionChoices.stale
+      && String(form.taxRegion || "") !== taxRegionChoices.options[0].value
+    ) {
+      onFieldChange("taxRegion", taxRegionChoices.options[0].value);
+    }
+  }, [
+    eventTypeChoices.options,
+    eventTypeChoices.stale,
+    form.eventTypeId,
+    form.taxRegion,
+    onEventTypeChange,
+    onFieldChange,
+    taxRegionChoices.options,
+    taxRegionChoices.stale
+  ]);
 
   const currentSaveBlockers = Array.isArray(saveBlockers)
     ? saveBlockers.filter((blocker) => blocker && String(blocker.message || "").trim())
@@ -461,6 +569,46 @@ export default function ProposalComposer({
     saveLabel,
     saveDisabled
   });
+  const quoteCompletion = useMemo(() => QUOTE_COMPLETION_BUILD_ENABLED ? buildQuoteCompletionProjection({
+    quote: editingQuote || {},
+    readiness,
+    saveBlockers: currentSaveBlockers,
+    configuredActions: quoteCompletionConfiguredActions,
+    livingOpportunity: livingCommercialTwin?.projection || livingCommercialTwin,
+    draftDirty: quoteDirty || !editingQuote?.id,
+    command: quoteCompletionCommand || {
+      state: saving
+        ? "loading"
+        : /fail|error|unable/i.test(String(saveMessage || ""))
+          ? "failure"
+          : String(saveMessage || "").trim()
+            ? "success"
+            : "idle",
+      message: saveMessage
+    }
+  }) : null, [
+    currentSaveBlockers,
+    editingQuote,
+    livingCommercialTwin,
+    quoteCompletionCommand,
+    quoteCompletionConfiguredActions,
+    quoteDirty,
+    readiness,
+    saveMessage,
+    saving
+  ]);
+  const saveActionDisabledReason = saveAction.disabled
+    ? String(saveDisabledReason || "").trim()
+      || (saving
+        ? "Wait for the current save to finish."
+        : "Saving is unavailable from the current quote state.")
+    : "";
+  const compareActionDisabled = catalogLoading || !String(form.pkg || "").trim();
+  const compareActionDisabledReason = !compareActionDisabled
+    ? ""
+    : catalogLoading
+      ? "Wait for the current catalog to finish loading."
+      : "Choose a package before comparing scenarios.";
 
   const logActivity = (label) => {
     activityIdRef.current += 1;
@@ -472,7 +620,33 @@ export default function ProposalComposer({
     setActivityLog((current) => [entry, ...current].slice(0, ACTIVITY_LOG_LIMIT));
   };
 
-  const requestSave = () => {
+  const requestSave = QUOTE_COMPLETION_BUILD_ENABLED ? (options = {}) => {
+    const commandRunner = options?.command === true;
+    setPulseOpen(true);
+    if (saveAction.mode === "review") {
+      pendingSaveReviewFocusRef.current = true;
+      return {
+        state: "recovery",
+        message: "Review the named draft requirements before saving.",
+        recovery: { label: "Review save requirements" }
+      };
+    }
+    const saveHandler = commandRunner && typeof onQuoteCompletionSave === "function"
+      ? onQuoteCompletionSave
+      : onSaveQuote;
+    if (typeof saveHandler !== "function") {
+      return {
+        state: "recovery",
+        message: "The governed save action is not available here.",
+        recovery: { label: "Review save requirements" }
+      };
+    }
+    const result = saveHandler();
+    if (!commandRunner && result && typeof result.catch === "function") {
+      result.catch(() => {});
+    }
+    return result;
+  } : () => {
     setPulseOpen(true);
     if (saveAction.mode === "review") {
       pendingSaveReviewFocusRef.current = true;
@@ -503,6 +677,17 @@ export default function ProposalComposer({
     [completeness.experience, editingQuote?.id, touchedFields?.pkg, touchedFields?.style]
   );
   const staffing = useMemo(() => buildStaffingRecommendation(form), [form]);
+  const workbench = useMemo(
+    () => buildCommercialWorkbenchModel({
+      form,
+      totals,
+      catalog,
+      completeness,
+      blockers: currentSaveBlockers,
+      staffing
+    }),
+    [form, totals, catalog, completeness, currentSaveBlockers, staffing]
+  );
   const watching = useMemo(
     () => buildWatchingList({ form, totals, readiness, staffing }),
     [form, totals, readiness, staffing]
@@ -583,6 +768,98 @@ export default function ProposalComposer({
 
   const flashAttr = (key) => (flashKeys.has(key) ? "on" : undefined);
 
+  const openDomain = (domainId) => {
+    setActiveDomain(domainId);
+    if (domainId !== "experience") {
+      setExperienceEditorOpen(false);
+      setMenuEditorOpen(false);
+      setRentalEditorOpen(false);
+      setEnhancementEditorOpen(false);
+    }
+    window.requestAnimationFrame?.(() => {
+      document.querySelector(`[data-workbench-panel="${domainId}"]`)?.focus({ preventScroll: true });
+    });
+  };
+
+  const revealSaveBlocker = (blocker) => {
+    const recovery = buildSaveBlockerRecovery(blocker);
+    if (!recovery) return;
+    setPulseOpen(false);
+    openDomain(recovery.domainId);
+    if (recovery.editor === "menu") {
+      const selectedIds = new Set((form.menuItems || []).map(String));
+      const initialGroups = (menuSections || [])
+        .filter((section, index) => index === 0 || (section?.items || [])
+          .some((item) => selectedIds.has(String(item?.id))))
+        .map((section) => String(section?.id ?? section?.name));
+      setOpenMenuGroups(new Set(initialGroups));
+      setMenuEditorOpen(true);
+    }
+    nextUiFrame(() => {
+      focusRecoveryTarget(recovery.targetSelector, {
+        activate: recovery.activate && !recovery.editor,
+        focusSelector: recovery.focusSelector
+      });
+      if (recovery.editor && recovery.focusSelector) {
+        nextUiFrame(() => {
+          const editorTarget = document.querySelector(recovery.focusSelector);
+          editorTarget?.scrollIntoView?.({ behavior: "smooth", block: "center" });
+          editorTarget?.focus?.({ preventScroll: true });
+        });
+      }
+    });
+  };
+
+  const runQuoteCompletionAction = QUOTE_COMPLETION_BUILD_ENABLED ? async (action) => {
+    if (action?.kind === "resolve_field") {
+      const blockerId = String(action.id || "").replace(/^resolve:/u, "");
+      const blocker = currentSaveBlockers.find((item) => String(item?.id || "") === blockerId);
+      if (blocker) {
+        revealSaveBlocker(blocker);
+      } else if (action.destination?.selector) {
+        setPulseOpen(false);
+        if (action.destination.domainId) openDomain(action.destination.domainId);
+        nextUiFrame(() => focusRecoveryTarget(action.destination.selector, {
+          activate: action.destination.activate,
+          focusSelector: action.destination.focusSelector
+        }));
+      }
+      return { state: "recovery", message: action.reason };
+    }
+    if (action?.kind === "save_revision") {
+      const result = await requestSave({ command: true });
+      if (!result || ["failure", "failed", "recovery", "stale", "cancelled"].includes(
+        String(result?.state || result?.status || "").trim().toLowerCase()
+      )) {
+        return result || {
+          state: "recovery",
+          message: "The exact revision was not confirmed as saved.",
+          recovery: { label: "Try saving again" }
+        };
+      }
+      return { state: "success", message: "The exact revision was saved." };
+    }
+    if (action?.kind === "recover_evidence") {
+      const target = document.querySelector('[data-capability-id="commercial-scenario-workbench"]');
+      if (target) {
+        target.scrollIntoView?.({ behavior: "smooth", block: "start" });
+        const focusTarget = target.querySelector(
+          "button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex='-1'])"
+        ) || target;
+        if (focusTarget === target && !target.hasAttribute("tabindex")) target.setAttribute("tabindex", "-1");
+        focusTarget.focus?.({ preventScroll: true });
+        return { state: "success", message: "Opened the current commercial evidence." };
+      }
+    }
+    if (typeof onQuoteCompletionNavigate === "function") {
+      return onQuoteCompletionNavigate(action);
+    }
+    return {
+      state: "recovery",
+      message: action?.reason || "The exact proposal destination is not available here.",
+      recovery: { label: "Try exact destination again" }
+    };
+  } : null;
   const commitField = (field) => (value) => {
     onFieldChange(field, value);
     logActivity(`${ACTIVITY_FIELD_LABELS[field] || field} → ${activityValue(value)}`);
@@ -856,6 +1133,10 @@ export default function ProposalComposer({
     }
   ];
   const proposalPolishReadyCount = proposalPolishItems.filter((item) => item.state === "ready").length;
+  const marginNeedsAttention = marginRequiresExpandedEvidence(margin);
+  useEffect(() => {
+    setMarginDetailOpen(marginNeedsAttention);
+  }, [marginNeedsAttention]);
 
   const pulseBody = (
     <>
@@ -885,6 +1166,41 @@ export default function ProposalComposer({
           <p className="pc-pulse-note">{margin.targetNote}</p>
         ) : null}
       </div>
+
+      {workbench.blockerTargets.length ? (
+        <div className="pc-pulse-block pc-truth-blockers" data-testid="commercial-truth-blockers">
+          <p className="pc-eyebrow">Actionable blockers</p>
+          <ul>
+            {workbench.blockerTargets.map((blocker) => (
+              <li key={blocker.id || blocker.message}>
+                <button
+                  type="button"
+                  onClick={() => revealSaveBlocker(blocker)}
+                  disabled={!buildSaveBlockerRecovery(blocker)}
+                >
+                  <span>{blocker.message}</span>
+                  <small>
+                    {buildSaveBlockerRecovery(blocker)
+                      ? `Fix in ${workbench.domains.find((domain) => domain.id === blocker.domainId)?.label}`
+                      : "Waiting for current evidence"}
+                  </small>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
+      {consequences ? (
+        <div className="pc-pulse-block" data-testid="commercial-truth-consequence">
+          <p className="pc-eyebrow">Current consequence</p>
+          <p>
+            Guests changed from {consequences.from || "—"} to {consequences.to}; the total moved by{" "}
+            <ImpactTag delta={consequences.totalDelta} />.
+          </p>
+          <button type="button" className="pc-watch-link" onClick={() => openDomain("event")}>Review guest change</button>
+        </div>
+      ) : null}
 
       {composition.length ? (
         <div className="pc-pulse-block">
@@ -954,52 +1270,66 @@ export default function ProposalComposer({
       </div>
 
       {margin ? (
-        <div
+        <details
           className="pc-pulse-block pc-margin-cost"
           data-testid="pc-margin-cost"
-          data-state={margin.available ? "ready" : "unavailable"}
+          data-state={!margin.available ? "unavailable" : marginNeedsAttention ? "attention" : "ready"}
+          open={marginDetailOpen}
+          onToggle={(event) => setMarginDetailOpen(event.currentTarget.open)}
         >
-          <div className="pc-pulse-block-head">
+          <summary className="pc-pulse-block-head">
             <p className="pc-eyebrow">Cost &amp; margin</p>
-            <small>Staff-only</small>
+            <small>{marginNeedsAttention ? "Review · Staff-only" : "Healthy · Staff-only"}</small>
+          </summary>
+          <div className="pc-margin-detail">
+            {margin.available ? (
+              <>
+                <dl>
+                  <div>
+                    <dt>Revenue scope</dt>
+                    <dd>{currency(margin.revenue)}</dd>
+                  </div>
+                  <div>
+                    <dt>Recorded cost</dt>
+                    <dd>{currency(margin.cost)}</dd>
+                  </div>
+                  <div>
+                    <dt>Margin</dt>
+                    <dd>{(margin.marginPct * 100).toFixed(1)}%</dd>
+                  </div>
+                  <div>
+                    <dt>Target</dt>
+                    <dd>{margin.target === null || margin.target === undefined ? "Not set" : `${Math.round(margin.target * 100)}%`}</dd>
+                  </div>
+                </dl>
+                <p>{margin.targetNote || margin.note}</p>
+              </>
+            ) : (
+              <>
+                <p>{margin.note}</p>
+                {margin.missing?.length ? (
+                  <ul className="pc-margin-missing">
+                    {margin.missing.map((item) => <li key={item}>{item}</li>)}
+                  </ul>
+                ) : null}
+              </>
+            )}
           </div>
-          {margin.available ? (
-            <>
-              <dl>
-                <div>
-                  <dt>Revenue scope</dt>
-                  <dd>{currency(margin.revenue)}</dd>
-                </div>
-                <div>
-                  <dt>Recorded cost</dt>
-                  <dd>{currency(margin.cost)}</dd>
-                </div>
-                <div>
-                  <dt>Margin</dt>
-                  <dd>{(margin.marginPct * 100).toFixed(1)}%</dd>
-                </div>
-                <div>
-                  <dt>Target</dt>
-                  <dd>{margin.target === null || margin.target === undefined ? "Not set" : `${Math.round(margin.target * 100)}%`}</dd>
-                </div>
-              </dl>
-              <p>{margin.targetNote || margin.note}</p>
-            </>
-          ) : (
-            <>
-              <p>{margin.note}</p>
-              {margin.missing?.length ? (
-                <ul className="pc-margin-missing">
-                  {margin.missing.map((item) => <li key={item}>{item}</li>)}
-                </ul>
-              ) : null}
-            </>
-          )}
-        </div>
+        </details>
       ) : null}
 
       <div className="pc-pulse-block pc-draft-activity">
         <p className="pc-eyebrow">Draft activity</p>
+        {QUOTE_COMPLETION_BUILD_ENABLED && quoteCompletionCommandPathEnabled && QuoteCompletionCommandPath ? (
+          <Suspense fallback={<p className="status-strip" role="status">Loading quote completion…</p>}>
+            <QuoteCompletionCommandPath
+              enabled
+              projection={quoteCompletion}
+              onAction={runQuoteCompletionAction}
+              surface="proposal_composer"
+            />
+          </Suspense>
+        ) : (
         <div
           className="pc-save-readiness"
           data-state={saveReadinessState}
@@ -1018,7 +1348,18 @@ export default function ProposalComposer({
             <ul className="pc-save-blockers" aria-label="Reasons this draft cannot be saved yet">
               {currentSaveBlockers.map((blocker) => (
                 <li key={blocker.id || blocker.message} data-testid="pc-save-blocker">
-                  {blocker.message}
+                  <span>{blocker.message}</span>
+                  {buildSaveBlockerRecovery(blocker) ? (
+                    <button
+                      type="button"
+                      className="pc-save-blocker-action"
+                      onClick={() => revealSaveBlocker(blocker)}
+                      aria-label={`Fix now: ${blocker.message}`}
+                      data-testid={`pc-save-blocker-action-${blocker.id}`}
+                    >
+                      Fix now
+                    </button>
+                  ) : null}
                 </li>
               ))}
             </ul>
@@ -1030,6 +1371,7 @@ export default function ProposalComposer({
             </div>
           ) : null}
         </div>
+        )}
         <button
           type="button"
           className="pc-section-action pc-activity-toggle"
@@ -1058,25 +1400,39 @@ export default function ProposalComposer({
       </div>
 
       <div className="pc-pulse-actions">
-        <button
-          type="button"
-          className="pc-cta"
-          onClick={requestSave}
-          disabled={saveAction.disabled}
-          title={saveAction.disabled && saveDisabledReason ? saveDisabledReason : undefined}
-          data-testid="pc-save"
-        >
-          {saveAction.label}
+        <button type="button" className="pc-ghost" onClick={() => setPreviewOpen(true)}>
+          Preview client view
         </button>
-        {compareEnabled ? (
+        {!(QUOTE_COMPLETION_BUILD_ENABLED && quoteCompletionCommandPathEnabled) ? <DisabledActionReason
+          id="proposal-pulse-save-disabled-reason"
+          reason={saveActionDisabledReason}
+          grouped
+        >
           <button
             type="button"
-            className="pc-ghost"
-            onClick={onOpenCompare}
-            disabled={catalogLoading || !String(form.pkg || "").trim()}
+            className="pc-cta"
+            onClick={requestSave}
+            disabled={saveAction.disabled}
+            data-testid="pc-save"
           >
-            Compare scenarios
+            {saveAction.label}
           </button>
+        </DisabledActionReason> : null}
+        {compareEnabled ? (
+          <DisabledActionReason
+            id="proposal-pulse-compare-disabled-reason"
+            reason={compareActionDisabledReason}
+            grouped
+          >
+            <button
+              type="button"
+              className="pc-ghost"
+              onClick={onOpenCompare}
+              disabled={compareActionDisabled}
+            >
+              Compare scenarios
+            </button>
+          </DisabledActionReason>
         ) : null}
       </div>
     </>
@@ -1108,28 +1464,39 @@ export default function ProposalComposer({
             {header.saveState.label}
           </p>
           <div className="pc-header-actions">
-            <button
-              type="button"
-              className="pc-cta pc-compact"
-              onClick={requestSave}
-              disabled={saveAction.disabled}
-              title={saveAction.disabled && saveDisabledReason ? saveDisabledReason : undefined}
-              data-testid="pc-save-header"
+            {!(QUOTE_COMPLETION_BUILD_ENABLED && quoteCompletionCommandPathEnabled) ? <DisabledActionReason
+              id="proposal-header-save-disabled-reason"
+              reason={saveActionDisabledReason}
+              grouped
             >
-              {saveAction.label}
-            </button>
+              <button
+                type="button"
+                className="pc-cta pc-compact"
+                onClick={requestSave}
+                disabled={saveAction.disabled}
+                data-testid="pc-save-header"
+              >
+                {saveAction.label}
+              </button>
+            </DisabledActionReason> : null}
             <button type="button" className="pc-ghost" onClick={() => setPreviewOpen(true)}>
               Preview client view
             </button>
             {compareEnabled ? (
-              <button
-                type="button"
-                className="pc-ghost"
-                onClick={onOpenCompare}
-                disabled={catalogLoading || !String(form.pkg || "").trim()}
+              <DisabledActionReason
+                id="proposal-header-compare-disabled-reason"
+                reason={compareActionDisabledReason}
+                grouped
               >
-                Compare scenarios
-              </button>
+                <button
+                  type="button"
+                  className="pc-ghost"
+                  onClick={onOpenCompare}
+                  disabled={compareActionDisabled}
+                >
+                  Compare scenarios
+                </button>
+              </DisabledActionReason>
             ) : null}
             <button type="button" className="pc-ghost" onClick={onGuidedMode} data-testid="pc-guided-mode">
               Guided mode
@@ -1138,11 +1505,62 @@ export default function ProposalComposer({
         </div>
       </header>
 
+      {livingCommercialTwin ? (
+        <Suspense fallback={<div className="pc-surface-note">Preparing scenario intelligence…</div>}>
+          <LivingCommercialTwin {...livingCommercialTwin} />
+        </Suspense>
+      ) : null}
+
+      <DeliveryProposal
+        form={form}
+        catalog={catalog}
+        settings={settings}
+        editingQuote={editingQuote}
+        staffingEvidence={deliveryPlanningEvidence?.staffing || null}
+        inventoryEvidence={deliveryPlanningEvidence?.inventory || null}
+        operatorId={deliveryPlanningOperatorId}
+        onHandoff={onDeliveryPlanningHandoff}
+      />
+
       <div className="pc-columns">
+        <nav className="pc-quote-plan" aria-label="Quote plan" data-testid="commercial-workbench-plan">
+          <div className="pc-quote-plan-head">
+            <p className="pc-eyebrow">Quote plan</p>
+            <span>{workbench.domains.filter((domain) => domain.status === "complete").length}/5 ready</span>
+          </div>
+          <ol>
+            {workbench.domains.map((domain, index) => (
+              <li key={domain.id} data-state={domain.status}>
+                <button
+                  type="button"
+                  aria-current={activeDomain === domain.id ? "step" : undefined}
+                  onClick={() => openDomain(domain.id)}
+                  data-testid={`workbench-domain-${domain.id}`}
+                  data-workbench-domain-status={domain.status}
+                >
+                  <span className="pc-domain-index" aria-hidden="true">{index + 1}</span>
+                  <span className="pc-domain-copy">
+                    <strong>{domain.label}</strong>
+                    <small>{domain.summary}</small>
+                  </span>
+                  <span className="pc-domain-state">
+                    {domain.blockerCount > 0
+                      ? `${domain.blockerCount} blocker${domain.blockerCount === 1 ? "" : "s"}`
+                      : domain.status === "complete"
+                        ? "Ready"
+                        : domain.status === "attention"
+                          ? "Review"
+                          : "In progress"}
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ol>
+        </nav>
         <div className="pc-document" data-testid="pc-document">
           {reviewSurfaces}
 
-          {consequences ? (
+          {!livingCommercialTwin && consequences ? (
             <aside className="pc-consequences" aria-label="Guest count consequences" data-testid="pc-consequences">
               <p className="pc-eyebrow">Guests {consequences.from || "—"} → {consequences.to}</p>
               <div className="pc-consequence-grid">
@@ -1187,15 +1605,23 @@ export default function ProposalComposer({
             </aside>
           ) : null}
 
-          <article className="pc-sheet">
+          <article
+            className="pc-sheet"
+            aria-label="Living proposal document"
+            data-active-domain={activeDomain}
+            data-testid="commercial-workbench-object"
+          >
             {proposalIntroTitle || proposalIntroMessage ? (
               <section className="pc-proposal-note" aria-label="Proposal introduction">
                 {proposalIntroTitle ? <p className="pc-eyebrow">{proposalIntroTitle}</p> : null}
                 {proposalIntroMessage ? <p className="pc-proposal-note-copy">{proposalIntroMessage}</p> : null}
               </section>
             ) : null}
-            <section className="pc-section" aria-labelledby="pc-sec-event">
+            <section className="pc-section" aria-labelledby="pc-sec-event" data-workbench-panel="event" tabIndex={-1}>
               <SectionHeading id="pc-sec-event" eyebrow="Event" complete={completeness.event} />
+              <p className="pc-domain-summary" data-testid="pc-event-summary">
+                {workbench.domains.find((domain) => domain.id === "event")?.summary}
+              </p>
               <div className="pc-inline-grid">
                 <InlineValue
                   className="pc-inline"
@@ -1206,16 +1632,28 @@ export default function ProposalComposer({
                   editActionId="pc-edit-event-name"
                 />
                 <div className="pc-inline pc-inline-static">
-                  <PcSelect
+                  <AdaptiveChoiceField
+                    id="proposal-event-type"
                     label="Event type"
+                    options={eventTypeChoices.options}
                     value={form.eventTypeId || ""}
-                    onChange={(value) => onEventTypeChange(value)}
-                  >
-                    <option value="">Choose event type</option>
-                    {(eventTypes || []).map((item) => (
-                      <option key={item.id} value={item.id}>{item.name}</option>
-                    ))}
-                  </PcSelect>
+                    onChange={(event) => onEventTypeChange(event.target.value)}
+                    placeholder="Choose event type"
+                    emptyReason={eventTypeChoices.stale
+                      ? `The saved event type “${form.eventTypeId}” is no longer available. The draft value is preserved until setup is repaired.`
+                      : "No event types are available for this workspace."}
+                    recoveryAction={setupRecoveryAction}
+                    fieldState={eventTypeChoices.stale ? { evidence: "stale", editability: "draft" } : undefined}
+                    fieldStateDetails={eventTypeChoices.stale ? {
+                      reason: "This draft references an event type outside the current workspace set.",
+                      recoveryAction: {
+                        label: "Choose a current event type",
+                        onClick: () => document.getElementById("proposal-event-type")?.focus()
+                      }
+                    } : {}}
+                    singleChoiceDetail="This is the only event type currently available to this workspace."
+                    className="pc-select"
+                  />
                 </div>
                 <InlineValue
                   className="pc-inline"
@@ -1287,7 +1725,7 @@ export default function ProposalComposer({
               </label>
             </section>
 
-            <section className="pc-section" aria-labelledby="pc-sec-client">
+            <section className="pc-section" aria-labelledby="pc-sec-client" data-workbench-panel="customer" tabIndex={-1}>
               <SectionHeading id="pc-sec-client" eyebrow="Client" complete={completeness.client} />
               <div className="pc-inline-grid">
                 <InlineValue
@@ -1329,9 +1767,9 @@ export default function ProposalComposer({
               </div>
             </section>
 
-            <section className="pc-section" aria-labelledby="pc-sec-experience">
+            <section className="pc-section" aria-labelledby="pc-sec-experience" data-workbench-panel="experience" tabIndex={-1}>
               <SectionHeading id="pc-sec-experience" eyebrow="Experience" status={experienceSectionStatus} />
-              <h4 className="pc-experience-title">{experience.title}</h4>
+              <h3 className="pc-experience-title">{experience.title}</h3>
               <p className="pc-experience-blurb">{experience.blurb}</p>
               {experience.facts.length ? (
                 <ul className="pc-fact-row">
@@ -1341,6 +1779,7 @@ export default function ProposalComposer({
               <button
                 type="button"
                 className="pc-section-action"
+                data-testid="pc-edit-experience"
                 aria-expanded={experienceEditorOpen}
                 onClick={() => setExperienceEditorOpen((open) => !open)}
               >
@@ -1407,7 +1846,7 @@ export default function ProposalComposer({
               ) : null}
             </section>
 
-            <section className="pc-section" aria-labelledby="pc-sec-menu">
+            <section className="pc-section" aria-labelledby="pc-sec-menu" data-workbench-panel="experience">
               <SectionHeading id="pc-sec-menu" eyebrow="Menu" complete={completeness.menu} />
               {menuLoading ? <p className="pc-muted">Loading the menu for this event type…</p> : null}
               {menuError ? <p className="pc-error" role="alert">{menuError}</p> : null}
@@ -1437,7 +1876,17 @@ export default function ProposalComposer({
                 type="button"
                 className="pc-section-action"
                 aria-expanded={menuEditorOpen}
-                onClick={() => setMenuEditorOpen((open) => !open)}
+                onClick={() => {
+                  if (!menuEditorOpen) {
+                    const selectedIds = new Set((form.menuItems || []).map(String));
+                    const initialGroups = (menuSections || [])
+                      .filter((section, index) => index === 0 || (section?.items || [])
+                        .some((item) => selectedIds.has(String(item?.id))))
+                      .map((section) => String(section?.id ?? section?.name));
+                    setOpenMenuGroups(new Set(initialGroups));
+                  }
+                  setMenuEditorOpen((open) => !open);
+                }}
                 data-testid="pc-edit-menu"
               >
                 {menuEditorOpen ? "Close menu editor" : "Edit menu →"}
@@ -1447,6 +1896,7 @@ export default function ProposalComposer({
                   <label className="pc-quiet-field pc-menu-search">
                     <span className="pc-field-label">Search menu</span>
                     <input
+                      id="pc-menu-search"
                       type="search"
                       value={menuQuery}
                       placeholder="Find a dish…"
@@ -1464,46 +1914,71 @@ export default function ProposalComposer({
                       </button>.
                     </p>
                   ) : null}
-                  {menuEditorSections.map((section) => (
-                    <div key={section.id} className="pc-editor-group">
-                      <p className="pc-menu-course">{section.name}</p>
-                      <ul className="pc-choice-list">
-                        {section.items.map((item) => (
-                          <li key={item.id}>
-                            <label className="pc-choice">
-                              <input
-                                type="checkbox"
-                                checked={item.selected}
-                                onChange={() => toggleCatalogSelection("menuItems", "menuItemQuantities", item.id, item.name)}
-                              />
-                              <span className="pc-choice-copy">
-                                <strong>{item.name}</strong>
-                                <ImpactTag delta={item.delta} />
-                              </span>
-                            </label>
-                            {item.selected ? (
-                              <input
-                                className="pc-qty"
-                                type="number"
-                                min={1}
-                                aria-label={`${item.name} quantity`}
-                                value={Number((form.menuItemQuantities || {})[item.id]) > 0
-                                  ? Math.round(Number(form.menuItemQuantities[item.id]))
-                                  : ""}
-                                placeholder="auto"
-                                onChange={(event) => setSelectionQuantity("menuItems", "menuItemQuantities", item.id, event.target.value, item.name)}
-                              />
-                            ) : null}
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  ))}
+                  {menuEditorSections.map((section) => {
+                    const forcedOpen = Boolean(menuQuery.trim());
+                    const sectionOpen = forcedOpen || openMenuGroups.has(section.id);
+                    const selectedCount = section.items.filter((item) => item.selected).length;
+                    return (
+                      <details
+                        key={section.id}
+                        className="pc-editor-group pc-menu-editor-group"
+                        open={sectionOpen}
+                        onToggle={(event) => {
+                          const isOpen = event.currentTarget.open;
+                          if (forcedOpen) return;
+                          setOpenMenuGroups((current) => {
+                            if (isOpen === current.has(section.id)) return current;
+                            const next = new Set(current);
+                            if (isOpen) next.add(section.id);
+                            else next.delete(section.id);
+                            return next;
+                          });
+                        }}
+                      >
+                        <summary>
+                          <span>{section.name}</span>
+                          <small>
+                            {selectedCount > 0 ? `${selectedCount} selected · ` : ""}{section.items.length} option{section.items.length === 1 ? "" : "s"}
+                          </small>
+                        </summary>
+                        <ul className="pc-choice-list">
+                          {section.items.map((item) => (
+                            <li key={item.id}>
+                              <label className="pc-choice">
+                                <input
+                                  type="checkbox"
+                                  checked={item.selected}
+                                  onChange={() => toggleCatalogSelection("menuItems", "menuItemQuantities", item.id, item.name)}
+                                />
+                                <span className="pc-choice-copy">
+                                  <strong>{item.name}</strong>
+                                  <ImpactTag delta={item.delta} />
+                                </span>
+                              </label>
+                              {item.selected ? (
+                                <input
+                                  className="pc-qty"
+                                  type="number"
+                                  min={1}
+                                  aria-label={`${item.name} quantity`}
+                                  value={Number((form.menuItemQuantities || {})[item.id]) > 0
+                                    ? Math.round(Number(form.menuItemQuantities[item.id]))
+                                    : ""}
+                                  placeholder="auto"
+                                  onChange={(event) => setSelectionQuantity("menuItems", "menuItemQuantities", item.id, event.target.value, item.name)}
+                                />
+                              ) : null}
+                            </li>
+                          ))}
+                        </ul>
+                      </details>
+                    );
+                  })}
                 </div>
               ) : null}
             </section>
 
-            <section className="pc-section" aria-labelledby="pc-sec-staffing">
+            <section className="pc-section" aria-labelledby="pc-sec-staffing" data-workbench-panel="staffing" tabIndex={-1}>
               <SectionHeading id="pc-sec-staffing" eyebrow="Staffing" complete={completeness.staffing} />
               <div className="pc-inline-grid pc-inline-grid-tight">
                 <InlineValue
@@ -1636,7 +2111,7 @@ export default function ProposalComposer({
               ) : null}
             </section>
 
-            <section className="pc-section" aria-labelledby="pc-sec-rentals">
+            <section className="pc-section" aria-labelledby="pc-sec-rentals" data-workbench-panel="experience">
               <SectionHeading id="pc-sec-rentals" eyebrow="Rentals" complete={null} />
               {rentalRows.length ? (
                 <ul className="pc-rental-list">
@@ -1699,7 +2174,7 @@ export default function ProposalComposer({
               ) : null}
             </section>
 
-            <section className="pc-section" aria-labelledby="pc-sec-enhancements">
+            <section className="pc-section" aria-labelledby="pc-sec-enhancements" data-workbench-panel="experience">
               <SectionHeading id="pc-sec-enhancements" eyebrow="Enhancements" complete={null} />
               {selectedAddonEntries.length ? (
                 <ul className="pc-enhancement-list">
@@ -1761,7 +2236,7 @@ export default function ProposalComposer({
               ) : null}
             </section>
 
-            <section className="pc-section pc-section-investment" aria-labelledby="pc-sec-investment">
+            <section className="pc-section pc-section-investment" aria-labelledby="pc-sec-investment" data-workbench-panel="commercials" tabIndex={-1}>
               <SectionHeading id="pc-sec-investment" eyebrow="Investment" complete={completeness.investment} />
               <div className="pc-investment-lede">
                 <p className="pc-investment-total" data-pc-flash={flashAttr("total")} data-testid="pc-investment-total">
@@ -1792,37 +2267,65 @@ export default function ProposalComposer({
               >
                 <summary>Advanced pricing</summary>
                 <div className="pc-advanced-grid">
-                  <PcSelect
+                  <AdaptiveChoiceField
+                    id="proposal-event-template"
                     label="Event template"
+                    options={templateChoices.options}
                     value={form.eventTemplateId || "custom"}
-                    onChange={(value) => onTemplateChange(value)}
-                  >
-                    <option value="custom">Custom</option>
-                    {(eventTemplates || []).map((template) => (
-                      <option key={template.id} value={template.id}>{template.name}</option>
-                    ))}
-                  </PcSelect>
-                  <PcSelect
+                    onChange={(event) => onTemplateChange(event.target.value)}
+                    emptyReason="No proposal templates are available for this workspace."
+                    recoveryAction={setupRecoveryAction}
+                    fieldState={templateChoices.stale ? { evidence: "stale", editability: "draft" } : undefined}
+                    fieldStateDetails={templateChoices.stale ? {
+                      reason: "The draft keeps its historical template identity until you choose a current template or Custom.",
+                      recoveryAction: {
+                        label: "Choose a current template",
+                        onClick: () => document.getElementById("proposal-event-template")?.focus()
+                      }
+                    } : {}}
+                    singleChoiceDetail="Custom is the only proposal template currently available."
+                    className="pc-select"
+                  />
+                  <AdaptiveChoiceField
+                    id="proposal-tax-region"
                     label="Tax region"
+                    options={taxRegionChoices.options}
                     value={form.taxRegion || ""}
-                    onChange={(value) => onFieldChange("taxRegion", value)}
-                  >
-                    {(settings.taxRegions || []).map((region) => (
-                      <option key={region.id} value={region.id}>
-                        {region.name} ({Math.round(Number(region.rate || 0) * 1000) / 10}%)
-                      </option>
-                    ))}
-                  </PcSelect>
-                  <PcSelect
+                    onChange={(event) => onFieldChange("taxRegion", event.target.value)}
+                    emptyReason={taxRegionChoices.stale
+                      ? `The saved tax region “${form.taxRegion}” is no longer available. The draft value is preserved and pricing remains blocked.`
+                      : "No tax regions are configured, so authoritative tax cannot be calculated."}
+                    recoveryAction={setupRecoveryAction}
+                    fieldState={taxRegionChoices.stale ? { evidence: "stale", editability: "draft" } : undefined}
+                    fieldStateDetails={taxRegionChoices.stale ? {
+                      reason: "This tax region is outside the current workspace configuration.",
+                      recoveryAction: {
+                        label: "Choose a current tax region",
+                        onClick: () => document.getElementById("proposal-tax-region")?.focus()
+                      }
+                    } : {}}
+                    singleChoiceDetail="This is the only tax region configured for this workspace."
+                    className="pc-select"
+                  />
+                  <AdaptiveChoiceField
+                    id="proposal-season-profile"
                     label="Season profile"
+                    options={seasonChoices.options}
                     value={form.seasonProfileId || "auto"}
-                    onChange={(value) => onFieldChange("seasonProfileId", value)}
-                  >
-                    <option value="auto">Auto detect</option>
-                    {(settings.seasonalProfiles || []).map((season) => (
-                      <option key={season.id} value={season.id}>{season.name}</option>
-                    ))}
-                  </PcSelect>
+                    onChange={(event) => onFieldChange("seasonProfileId", event.target.value)}
+                    emptyReason="No season profiles are available for this workspace."
+                    recoveryAction={setupRecoveryAction}
+                    fieldState={seasonChoices.stale ? { evidence: "stale", editability: "draft" } : undefined}
+                    fieldStateDetails={seasonChoices.stale ? {
+                      reason: "The draft keeps its historical season profile until you choose a current profile or Auto detect.",
+                      recoveryAction: {
+                        label: "Choose a current season profile",
+                        onClick: () => document.getElementById("proposal-season-profile")?.focus()
+                      }
+                    } : {}}
+                    singleChoiceDetail="Auto detect is the only season choice currently available."
+                    className="pc-select"
+                  />
                   <PcQuietInput
                     label="Travel (round-trip miles)"
                     type="number"
@@ -1869,9 +2372,10 @@ export default function ProposalComposer({
           className={`pc-pulse${pulseOpen ? " is-open" : ""}`}
           aria-label="Quote Pulse"
           data-testid="pc-pulse"
+          data-commercial-truth="true"
         >
           <div className="pc-pulse-head">
-            <p className="pc-eyebrow">Quote Pulse</p>
+            <p className="pc-eyebrow">Commercial truth</p>
             <button type="button" className="pc-ghost pc-pulse-close" onClick={() => setPulseOpen(false)}>
               Close
             </button>
@@ -1888,14 +2392,36 @@ export default function ProposalComposer({
         ) : null}
       </div>
 
-      <div className="pc-mobile-bar">
+      <div className="pc-mobile-bar" data-testid="pc-mobile-save-bar">
         <p className="pc-mobile-total">
           <DigitRoll value={currency(investment.total)} />
           {investment.perGuest !== null ? <small>{currency(investment.perGuest)} / guest</small> : null}
         </p>
-        <button type="button" className="pc-cta pc-compact" onClick={() => setPulseOpen(true)}>
-          Review quote →
-        </button>
+        <div className="pc-mobile-actions">
+          {!quoteCompletionCommandPathEnabled ? <DisabledActionReason
+            id="proposal-mobile-save-disabled-reason"
+            reason={saveActionDisabledReason}
+            grouped
+          >
+            <button
+              type="button"
+              className="pc-cta pc-compact"
+              onClick={requestSave}
+              disabled={saveAction.disabled}
+              data-testid="pc-save-mobile"
+            >
+              {saveAction.label}
+            </button>
+          </DisabledActionReason> : null}
+          <button
+            type="button"
+            className="pc-mobile-details"
+            onClick={() => setPulseOpen(true)}
+            data-testid="pc-quote-details-mobile"
+          >
+            Quote details
+          </button>
+        </div>
       </div>
 
       <ClientPreviewDialog

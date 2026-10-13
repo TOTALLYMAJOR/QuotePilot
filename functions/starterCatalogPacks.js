@@ -40,7 +40,10 @@ const PACK_PRICING_SETTING_KEYS = Object.freeze([
   "staffingRateTypes",
   "defaultStaffingRateType",
   "seasonalProfiles",
-  "defaultSeasonProfile"
+  "defaultSeasonProfile",
+  "verticalPack",
+  "eventTemplates",
+  "configurationRules"
 ]);
 const UNCONFIGURED_PRICING_SETTINGS = Object.freeze({
   perMileRateMinor: 0,
@@ -312,6 +315,63 @@ function withPackProvenance(collectionName, data, pack, nowISO) {
   };
 }
 
+function buildCommercialStarterConfiguration(pack, collections) {
+  const eventTypeId = collections.eventTypes[0]?.id || "";
+  const eventTemplates = collections.catalogPackages.map((entry) => ({
+    id: `starter-${pack.id}-${entry.id}`,
+    name: `${entry.data.name} starting point`,
+    templateVersion: "commercial-template-v1",
+    verticalType: "catering",
+    eventTypeId,
+    pkg: entry.id,
+    addons: [...(entry.data.includedAddonIds || [])],
+    rentals: [...(entry.data.includedRentalIds || [])],
+    menuItems: [...(entry.data.includedMenuItemIds || [])],
+    provenance: {
+      source: PACK_SOURCE,
+      starterPackId: pack.id,
+      starterPackVersion: Number(pack.version || 1)
+    }
+  }));
+  const configurationRules = collections.catalogPackages.length
+    ? [{
+        id: `starter-${pack.id}-offer-review`,
+        ruleVersion: "configuration-rule-v1",
+        type: "recommendation",
+        conditions: [{ path: "event.demandQuantity", operator: "gte", value: 0 }],
+        effect: {
+          operator: "recommend",
+          target: "selection.offerRef",
+          value: collections.catalogPackages[0].id
+        },
+        reason: "Disabled starter example. Review the business policy before enabling any recommendation.",
+        severity: "info",
+        verticalScope: "catering",
+        enabled: false,
+        provenance: {
+          source: PACK_SOURCE,
+          starterPackId: pack.id,
+          starterPackVersion: Number(pack.version || 1)
+        }
+      }]
+    : [];
+  return {
+    verticalPack: {
+      id: "catering",
+      version: "vertical-pack-v1",
+      starterPackId: pack.id,
+      starterPackVersion: Number(pack.version || 1),
+      offerRefs: collections.catalogPackages.map((entry) => entry.id),
+      templateRefs: eventTemplates.map((template) => template.id),
+      ruleRefs: configurationRules.map((rule) => rule.id),
+      pricingPolicyRefs: ["catering-pricing-v2"],
+      resourcePolicyRefs: ["catering-staffing"]
+    },
+    eventTemplates,
+    configurationRules
+  };
+}
+
 function buildStarterCatalogPackDocuments(packId, {
   packVersion = null,
   nowISO = new Date().toISOString(),
@@ -392,7 +452,8 @@ function buildStarterCatalogPackDocuments(packId, {
 
   const controlledSettings = {
     ...starterCatalogPackData.commonSettings,
-    ...pack.settings
+    ...pack.settings,
+    ...buildCommercialStarterConfiguration(pack, collections)
   };
   const settingsBaselineHashes = Object.fromEntries(
     PACK_PRICING_SETTING_KEYS.map((key) => [key, hashValue(controlledSettings[key])])

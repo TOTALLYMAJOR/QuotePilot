@@ -105,7 +105,6 @@ function parseArgs(argv) {
 
 export function buildProducers(sourceDocument = {}) {
   const organizationSettings = sourceDocument.organizationSettings || {};
-  const consumptionRecords = sourceDocument.actualConsumption || {};
   return producerRegistry([
     // No settlement source is passed, so this stays inert behind the Connect
     // stopping point. See evidence/src/producers/payoutProducer.mjs.
@@ -118,9 +117,7 @@ export function buildProducers(sourceDocument = {}) {
       { missing }
     ),
     guarded(
-      createConsumptionProducer({
-        readConsumption: (record) => consumptionRecords[record.quoteId] || null
-      }),
+      createConsumptionProducer(),
       { missing }
     )
   ]);

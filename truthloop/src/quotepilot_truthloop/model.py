@@ -238,9 +238,15 @@ class ActualConsumption:
 class OverrunThresholds:
     """Operator-declared tolerance before an overrun is worth an operator's time."""
 
-    labor_basis_points: int = 1_000
-    purchasing_basis_points: int = 1_000
-    minimum_cents: int = 2_500
+    labor_basis_points: int = 0
+    purchasing_basis_points: int = 0
+    minimum_cents: int = 0
+    declared_by: str = ""
+    declared_at_iso: str = ""
+
+    @property
+    def declared(self) -> bool:
+        return bool(self.declared_by and self.declared_at_iso)
 
 
 @dataclass(frozen=True)
@@ -299,6 +305,7 @@ class CommercialRecord:
     cost_basis: CostBasis = field(default_factory=CostBasis)
     actual_consumption: ActualConsumption = field(default_factory=ActualConsumption)
     overrun_thresholds: OverrunThresholds = field(default_factory=OverrunThresholds)
+    overrun_policy_evidence: EvidenceSection | None = None
     #: Current organization catalog revision, for staleness comparison.
     current_catalog_revision: int = -1
     #: Whether the event date has passed at evaluation time. Supplied by the

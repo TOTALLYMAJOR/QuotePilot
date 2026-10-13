@@ -1,5 +1,7 @@
 # CWF-16 Design QA
 
+Last updated: 2026-09-04 23:41:46 CDT
+
 ## Inputs
 
 - Source concept: `docs/design/cwf-16-event-workspace-concept.png`
@@ -69,3 +71,18 @@ Intentional source-to-build differences:
 - Playwright recorded no page errors or console errors during the full route interaction.
 
 Final result: passed
+
+## Client 360 presentation convergence addendum
+
+The selected relationship-led composition is implemented over the existing
+Customer 360 DTO and exact-arrival behavior. Identity and the supported next
+decision lead; existing Client, Opportunity, Proposal, and Event facts form the
+relationship spine; and recorded lifecycle/request history follows. A
+same-quote, same-timestamp request and conversation summary is presented once.
+Conversations, source detail, additional opportunities, and the detailed record
+remain progressively disclosed. Focused unit coverage passes 16/16 and the
+390/768/1440 Chromium-admin matrix passes 3/3 with no persisted quote/history
+change, no horizontal overflow, 44px targets, layout containment, and zero
+scoped axe violations. The selected visual and exact implementation were
+inspected together at a local 9.5/10. No customer, activity, urgency, route,
+lifecycle, message, payment, booking, provider, or mutation authority changed.

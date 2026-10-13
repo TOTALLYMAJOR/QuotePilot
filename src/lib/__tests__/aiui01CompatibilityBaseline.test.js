@@ -66,7 +66,7 @@ describe("AIUI-01 machine-readable compatibility baseline", () => {
     }
   });
 
-  test("keeps admin-only Catalog, Imports, and Staff absent for sales", () => {
+  test("keeps admin-only Catalog, Imports, Inventory, and Staff absent for sales", () => {
     for (const profile of AIUI01_FLAG_PROFILES) {
       const flags = resolveAiui01Flags(profile.gates);
       expect(flags.profileId).toBe(profile.id);
@@ -90,16 +90,33 @@ describe("AIUI-01 machine-readable compatibility baseline", () => {
 
     const admin = AIUI01_ROLES.find(({ id }) => id === "admin");
     const sales = AIUI01_ROLES.find(({ id }) => id === "sales");
-    expect(admin.routeAuthority).toEqual(["catalog", "imports", "staff"]);
+    expect(admin.routeAuthority).toEqual(["catalog", "imports", "inventory", "staff"]);
     expect(sales.routeAuthority).toEqual([]);
     expect(admin.quoteAuthority).toEqual(["proposal", "payment", "booking", "delete"]);
     expect(sales.quoteAuthority).toEqual(["proposal"]);
+
+    const inventoryFlags = resolveAiui01Flags({
+      VITE_CUSTOMER_CENTERED_WORKSPACE_ENABLED: "true",
+      VITE_INVENTORY_AUTHORITY_ENABLED: "true"
+    });
+    expect(getAiui01SurfaceExpectation("inventory", { role: "admin", flags: inventoryFlags }))
+      .toMatchObject({
+        available: true,
+        outcome: "surface",
+        probe: '[data-capability-id="inventory-workspace"]'
+      });
+    expect(getAiui01SurfaceExpectation("inventory", { role: "sales", flags: inventoryFlags }))
+      .toMatchObject({ available: false, outcome: "not-found" });
+    expect(getAiui01SurfaceExpectation("inventory", {
+      role: "admin",
+      flags: resolveAiui01Flags({ VITE_INVENTORY_AUTHORITY_ENABLED: "true" })
+    })).toMatchObject({ available: false, outcome: "not-found" });
   });
 
   test("classifies every shell control and binds each primary route action to an inventoried destination", () => {
     const targetIds = new Set(AIUI01_SURFACES.map(({ id }) => id));
     const routeActions = AIUI01_SHELL_ACTIONS.filter(({ classification }) => classification === "primary_route");
-    expect(routeActions).toHaveLength(13);
+    expect(routeActions).toHaveLength(14);
     for (const action of routeActions) {
       expect(targetIds.has(action.targetSurfaceId), action.id).toBe(true);
       expect(["header", "operations"]).toContain(action.entry);
@@ -204,6 +221,7 @@ describe("AIUI-01 machine-readable compatibility baseline", () => {
       AIUI01_GATES.workspace,
       AIUI01_GATES.ambient,
       AIUI01_GATES.operationalStaffing,
+      AIUI01_GATES.inventoryAuthority,
       ...AIUI01_GATES.productionPilot,
       ...AIUI01_GATES.localOnlyPilot
     ]) {

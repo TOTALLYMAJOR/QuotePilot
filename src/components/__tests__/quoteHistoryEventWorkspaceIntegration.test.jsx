@@ -2,15 +2,22 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
 import { act } from "react-dom/test-utils";
-import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
+import { ambientQuoteAdministrationArrivalInput } from "../../App";
+import {
+  createWorkspaceArrivalHandoff,
+  parseWorkspaceArrivalHandoff
+} from "../../lib/workspaceArrivalContract";
 
 const mocks = vi.hoisted(() => ({
+  deleteQuote: vi.fn(),
   getEventTypes: vi.fn(),
   getQuoteHistory: vi.fn()
 }));
 
 vi.mock("../../lib/quoteStore", async () => ({
   ...(await vi.importActual("../../lib/quoteStore")),
+  deleteQuote: mocks.deleteQuote,
   getQuoteHistory: mocks.getQuoteHistory
 }));
 
@@ -19,12 +26,11 @@ vi.mock("../../lib/menuService", async () => ({
   getEventTypes: mocks.getEventTypes
 }));
 
-import {
-  isExactQuoteAdministrationArrival,
-  QuoteHistoryView
-} from "../QuoteHistoryModal";
-
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+
+let isExactQuoteAdministrationArrival;
+let commercialConsequenceRevisionMatchesQuote;
+let QuoteHistoryView;
 
 const QUOTE = Object.freeze({
   id: "quote-event-route",
@@ -45,8 +51,59 @@ const QUOTE = Object.freeze({
   updatedAtISO: "2026-08-09T12:00:00.000Z"
 });
 
+const ACCEPTED_QUOTE = Object.freeze({
+  ...QUOTE,
+  status: "accepted",
+  activeVersionId: "v0017",
+  portalKey: "portal-key",
+  portalIssuedAtISO: "2026-09-17T10:00:00.000Z",
+  portalDecision: Object.freeze({
+    decision: "accepted",
+    requestId: "acceptance-17",
+    submittedAtISO: "2026-09-17T10:30:00.000Z"
+  }),
+  acceptanceReceipt: Object.freeze({
+    receiptId: "acceptance-17",
+    quoteRevisionId: "v0017",
+    portalIssuedAtISO: "2026-09-17T10:00:00.000Z",
+    acceptedAtISO: "2026-09-17T10:30:00.000Z"
+  }),
+  payment: Object.freeze({
+    depositStatus: "paid",
+    finalBalance: Object.freeze({ status: "unpaid" })
+  })
+});
+
+function acceptedRevisionArrival() {
+  const handoff = createWorkspaceArrivalHandoff(
+    ambientQuoteAdministrationArrivalInput(ACCEPTED_QUOTE.id, {
+      acceptedRevisionId: "v0017",
+      acceptanceReceiptId: "acceptance-17"
+    })
+  );
+  const url = new URL(handoff.navigation?.path || "/app/quotes", "https://quotepilot.local");
+  return {
+    handoff,
+    parsed: parseWorkspaceArrivalHandoff({
+      pathname: url.pathname,
+      search: url.search,
+      hash: "",
+      state: handoff.navigation?.state
+    })
+  };
+}
+
 let container;
 let root;
+
+beforeAll(async () => {
+  vi.stubEnv("VITE_AMBIENT_UI_ENABLED", "false");
+  ({
+    commercialConsequenceRevisionMatchesQuote,
+    isExactQuoteAdministrationArrival,
+    QuoteHistoryView
+  } = await import("../QuoteHistoryModal"));
+});
 
 async function settle() {
   await act(async () => {
@@ -71,11 +128,13 @@ function byText(label) {
 }
 
 beforeEach(() => {
+  vi.stubEnv("VITE_AMBIENT_UI_ENABLED", "false");
   Object.defineProperty(Element.prototype, "scrollIntoView", {
     configurable: true,
     value: vi.fn()
   });
   mocks.getEventTypes.mockReset().mockResolvedValue([]);
+  mocks.deleteQuote.mockReset().mockResolvedValue({ ok: true });
   mocks.getQuoteHistory.mockReset().mockResolvedValue({ source: "local", quotes: [QUOTE] });
   container = document.createElement("div");
   document.body.appendChild(container);
@@ -86,9 +145,145 @@ afterEach(() => {
   act(() => root.unmount());
   container.remove();
   delete Element.prototype.scrollIntoView;
+  vi.unstubAllEnvs();
 });
 
 describe("QuoteHistoryView event workspace integration", () => {
+  test("carries the decision packet pins through the actual App arrival and resolves the exact accepted quote", async () => {
+    const { handoff, parsed } = acceptedRevisionArrival();
+    expect(handoff).toMatchObject({
+      ok: true,
+      contract: {
+        object: { type: "customer-decision-artifact" },
+        focus: {
+          quoteId: ACCEPTED_QUOTE.id,
+          acceptedRevisionId: "v0017",
+          acceptanceReceiptId: "acceptance-17"
+        }
+      }
+    });
+    expect(parsed).toEqual(handoff);
+
+    mocks.getQuoteHistory.mockResolvedValue({ source: "firebase", quotes: [ACCEPTED_QUOTE] });
+    act(() => {
+      root.render(
+        <QuoteHistoryView
+          open
+          presentation="embedded"
+          focusQuoteId={ACCEPTED_QUOTE.id}
+          focusAction="administration"
+          currentUserRole="sales"
+          arrivalContext={parsed.contract}
+          onClose={() => {}}
+        />
+      );
+    });
+    await settle();
+    await act(async () => new Promise((resolve) => window.setTimeout(resolve, 50)));
+
+    expect(container.querySelector('[data-accepted-revision-arrival="recovery"]')).toBeNull();
+    expect(container.querySelector(`tr[data-quote-id="${ACCEPTED_QUOTE.id}"]`)).not.toBeNull();
+  });
+
+  test.each([
+    ["revision changed", { activeVersionId: "v0018" }, "accepted revision changed"],
+    ["receipt mismatched", {
+      acceptanceReceipt: { ...ACCEPTED_QUOTE.acceptanceReceipt, receiptId: "acceptance-18" }
+    }, "acceptance receipt no longer matches"]
+  ])("renders recovery instead of generic administration when the %s", async (_label, patch, reason) => {
+    const { handoff } = acceptedRevisionArrival();
+    expect(handoff.ok).toBe(true);
+    mocks.getQuoteHistory.mockResolvedValue({
+      source: "firebase",
+      quotes: [{ ...ACCEPTED_QUOTE, ...patch }]
+    });
+    act(() => {
+      root.render(
+        <QuoteHistoryView
+          open
+          presentation="embedded"
+          focusQuoteId={ACCEPTED_QUOTE.id}
+          focusAction="administration"
+          currentUserRole="sales"
+          arrivalContext={handoff.contract}
+          onClose={() => {}}
+        />
+      );
+    });
+    await settle();
+
+    const recovery = container.querySelector('[data-accepted-revision-arrival="recovery"]');
+    expect(recovery).not.toBeNull();
+    expect(recovery.textContent.toLowerCase()).toContain(reason);
+    expect(container.querySelector("table")).toBeNull();
+  });
+
+  test("keeps failed permanent-delete confirmation open with the exact failure", async () => {
+    mocks.deleteQuote.mockRejectedValueOnce(new Error("The approved delete could not be confirmed."));
+    act(() => {
+      root.render(
+        <QuoteHistoryView
+          open
+          presentation="embedded"
+          currentUserRole="admin"
+          canDeleteQuotes
+          onClose={() => {}}
+        />
+      );
+    });
+    await settle();
+
+    act(() => container.querySelector('[data-quote-action-id="delete"]').click());
+    expect(container.querySelector(".confirm-modal")).not.toBeNull();
+    await act(async () => {
+      byText("Confirm Delete").click();
+      await Promise.resolve();
+    });
+
+    expect(mocks.deleteQuote).toHaveBeenCalledWith(QUOTE.id, {
+      organizationId: "",
+      approvalRequestId: ""
+    });
+    expect(container.querySelector(".confirm-modal")).not.toBeNull();
+    expect(container.querySelector(".error-note")?.textContent)
+      .toContain("approved delete could not be confirmed");
+    expect(byText("Confirm Delete").disabled).toBe(false);
+  });
+
+  test("explains an unavailable event-type filter and retries it in place", async () => {
+    mocks.getEventTypes
+      .mockRejectedValueOnce(new Error("catalog unavailable"))
+      .mockResolvedValueOnce([{ id: "wedding", name: "Wedding" }]);
+    act(() => {
+      root.render(
+        <QuoteHistoryView
+          open
+          presentation="embedded"
+          currentUserRole="admin"
+          onClose={() => {}}
+        />
+      );
+    });
+    await settle();
+
+    const eventType = container.querySelector('[data-view-filter="event-type"]');
+    const eventTypeChoice = eventType.querySelector('[data-adaptive-choice-mode="empty"]');
+    const recovery = container.querySelector("#quote-event-type-filter-error");
+    expect(recovery).not.toBeNull();
+    expect(recovery.textContent).toContain("current selection is preserved");
+    expect(eventTypeChoice.getAttribute("aria-describedby")).toBe(recovery.id);
+
+    await act(async () => {
+      byText("Retry event types").click();
+      await Promise.resolve();
+    });
+    await settle();
+
+    expect(mocks.getEventTypes).toHaveBeenCalledTimes(2);
+    expect(container.querySelector("#quote-event-type-filter-error")).toBeNull();
+    expect(eventType.querySelector('option[value="wedding"]')?.textContent).toBe("Wedding");
+  });
+
   test("uses the quote detail route as an event record while preserving administration elsewhere", async () => {
     const onBackToQuotes = vi.fn();
     const onOpenSchedule = vi.fn();
@@ -181,6 +376,32 @@ describe("QuoteHistoryView event workspace integration", () => {
     expect(container.textContent).toContain("Showing 1 of 2 quotes");
   });
 
+  test("focuses the exact configured action received with an administration handoff", async () => {
+    act(() => {
+      root.render(
+        <QuoteHistoryView
+          open
+          presentation="embedded"
+          focusQuoteId={QUOTE.id}
+          focusAction="administration"
+          focusDestinationAction="edit"
+          currentUserRole="sales"
+          onClose={() => {}}
+          onBackToQuotes={() => {}}
+          onEditQuote={() => {}}
+        />
+      );
+    });
+    await settle();
+    await act(async () => {
+      await new Promise((resolve) => window.setTimeout(resolve, 50));
+    });
+
+    const exactAction = container.querySelector('[data-quote-action-id="edit"]');
+    expect(exactAction).not.toBeNull();
+    expect(document.activeElement).toBe(exactAction);
+  });
+
   test("accepts only an exact semantic Payment administration arrival", () => {
     const arrivalContext = {
       destination: "administration",
@@ -208,6 +429,34 @@ describe("QuoteHistoryView event workspace integration", () => {
         intentId: "review_proposal_controls"
       },
       focusQuoteId: QUOTE.id
+    })).toBe(false);
+  });
+
+  test.each([
+    ["customer-decision-artifact", "review_commercial_proposal_consequence"],
+    ["kitchen-beo", "review_kitchen_beo_consequence"]
+  ])("accepts an exact revision-bound %s commercial arrival", (objectType, intentId) => {
+    const arrivalContext = {
+      destination: "administration",
+      surfaceId: "quote-administration",
+      focusConsumerState: "supported",
+      object: { id: QUOTE.id, type: objectType },
+      intentId,
+      focus: {
+        quoteId: QUOTE.id,
+        sourceRevisionId: "revision-current",
+        proposedRevisionId: "revision-proposed"
+      }
+    };
+
+    expect(isExactQuoteAdministrationArrival({ arrivalContext, focusQuoteId: QUOTE.id })).toBe(true);
+    expect(commercialConsequenceRevisionMatchesQuote(arrivalContext, {
+      ...QUOTE,
+      activeVersionId: "revision-current"
+    })).toBe(true);
+    expect(commercialConsequenceRevisionMatchesQuote(arrivalContext, {
+      ...QUOTE,
+      activeVersionId: "revision-newer"
     })).toBe(false);
   });
 

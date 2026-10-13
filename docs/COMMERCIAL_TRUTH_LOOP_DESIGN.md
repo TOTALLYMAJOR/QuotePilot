@@ -1,6 +1,6 @@
 # Commercial Truth Loop: Design
 
-Last updated: 2026-08-23 20:57:00 CDT
+Last updated: 2026-09-05 15:46:32 CDT
 
 Architecture decision and authority boundary: `docs/COMMERCIAL_TRUTH_LOOP_ADR.md`.
 Implementation: `truthloop/`.
@@ -162,7 +162,7 @@ default. Two examples that matter:
 |---|---|---|
 | `payouts` | `payoutProducer.mjs` | `blocked_by_integration` (`stripe_connect_stopping_point`). It refuses any settlement source that does not declare itself authorized, so it cannot emit provider evidence by accident. |
 | `processorFeeSchedule` | `feeScheduleProducer.mjs` | `missing`, constraint `business_policy`. Reads an operator declaration with actor and timestamp; never derives a rate from observed payouts. |
-| `actualConsumption` | `consumptionProducer.mjs` | `not_applicable` before delivery, `missing` (constraint `engineering`) after. |
+| `actualConsumption` | `consumptionProducer.mjs` | Exact-source operator-declared costs, available only after all three category declarations are verified against immutable actuals receipts. Incomplete capture remains unavailable; the event date never supplies delivery or zero-cost evidence. |
 
 A producer that throws becomes a `missing` envelope naming the failed producer.
 A producer failure is a data-supply fact, not a crash, and the record stays
@@ -332,18 +332,34 @@ Exit codes: `0` fully reconciled, `1` findings present, `2` bundle unreadable.
 
 ## Not yet built
 
-The reader exists (`--firestore --organization <id>`), so the chain runs
-against a real database. What remains is producer coverage and one policy
-decision.
+The read-only reader can export verified operator-declared actual costs from the
+Event Operating Spine. It verifies the private acceptance, phase, actuals head,
+and category declaration receipts, then emits an allowlisted aggregate. Raw
+receipts remain private. Purchasing costs do not prove physical consumption;
+labor costs do not prove attendance or payroll; neither proves event delivery.
 
-Three evidence sections have no producer, and the coverage report names each
-blocker by class:
+The remaining evidence and policy blockers are explicit:
 
-| Section | Constraint | Why |
+| Section or policy | Constraint | Why |
 |---|---|---|
 | `payouts` | `integration` | No settlement store exists; the Connect program stops after hosted Sandbox UAT |
-| `processorFeeSchedule` | `business_policy` | The settings field does not exist and no organization has declared a schedule |
-| `actualConsumption` | `engineering` | No post-event labor or purchasing capture surface or schema exists |
+| `processorFeeSchedule` | `business_policy` | No declared organization fee schedule is available |
+| `overrunThresholds` | `business_policy` when absent | Available only from the exact workflow instance and its immutable tenant-published comparison policy |
+
+Overrun policy requires explicit integer `laborBasisPoints`,
+`purchasingBasisPoints`, and `minimumCents`, plus `declaredBy` and
+`declaredAtISO`. An explicit zero is valid; an omitted or null value cannot
+create a default. Complete cost capture can support realized-contribution
+comparison while an overrun comparison remains unverifiable. Structural
+coverage includes policy prerequisites and cannot count available costs alone
+as enough evidence for an overrun verdict. The optional
+`overrunPolicyEvidence` envelope preserves missing, contradictory, unsupported
+and other unavailable policy states separately from actual costs. When it is
+available, its value must exactly match top-level `overrunThresholds`; conflicting
+or unavailable envelopes cannot carry a tolerance. Policy provenance names the
+immutable instance/publication rather than the tenant's latest definition.
+Later publication or retirement does not change an existing instance's policy.
+The pure policy verifier gains no credentials, network access or write path.
 
 Because every rule must reach a verdict for a record to be `fullyReconciled`,
 and `processor_fee_discrepancy` requires both blocked payout evidence and an

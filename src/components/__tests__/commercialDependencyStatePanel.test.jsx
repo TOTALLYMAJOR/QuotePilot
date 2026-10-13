@@ -419,6 +419,49 @@ describe("CommercialDependencyStatePanel", () => {
     expect(client.reconcile).not.toHaveBeenCalled();
   });
 
+  test("opens the owning BEO and production-checklist workspaces without reconciling", async () => {
+    const openKitchenBeo = vi.fn();
+    const openProductionChecklist = vi.fn();
+    const beo = invalidation({
+      id: BEO_ID,
+      nodeId: "artifact.kitchen_beo",
+      nodeKind: "artifact",
+      classification: "STALE"
+    });
+    const productionPlan = invalidation({
+      id: `cci_${"9".repeat(48)}`,
+      nodeId: "artifact.production_plan",
+      nodeKind: "artifact",
+      classification: "STALE"
+    });
+    client.getState.mockResolvedValue(dependencyState("BLOCKED", {
+      invalidations: [beo, productionPlan],
+      totalInvalidationCount: 2,
+      openInvalidationCount: 2,
+      resolvedInvalidationCount: 0,
+      bounds: {
+        invalidationLimit: 64,
+        invalidationSetComplete: true,
+        returnedCount: 2,
+        truncated: false
+      }
+    }));
+
+    render({
+      onOpenKitchenBeo: openKitchenBeo,
+      onOpenProductionChecklist: openProductionChecklist
+    });
+    await settle();
+
+    act(() => container.querySelector('[data-capability-action="review-kitchen-beo"]').click());
+    act(() => container.querySelector('[data-capability-action="review-production-checklist"]').click());
+
+    expect(openKitchenBeo).toHaveBeenCalledOnce();
+    expect(openProductionChecklist).toHaveBeenCalledOnce();
+    expect(container.textContent).toContain("reconciliation remains a separate reviewed action");
+    expect(client.reconcile).not.toHaveBeenCalled();
+  });
+
   test("renders every literal canonical dependency read marker through exact reads", async () => {
     const initial = deferred();
     client.getState.mockReturnValueOnce(initial.promise);

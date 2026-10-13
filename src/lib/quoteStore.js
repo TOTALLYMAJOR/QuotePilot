@@ -2,6 +2,7 @@ import {
   collection,
   deleteDoc,
   doc,
+  documentId,
   getDoc,
   getDocFromServer,
   getDocs,
@@ -10,6 +11,7 @@ import {
   query,
   runTransaction,
   setDoc,
+  startAfter,
   updateDoc,
   writeBatch,
   where
@@ -40,7 +42,42 @@ import {
   PRODUCTION_CHECKLIST_IDS
 } from "./quoteWorkflow";
 import { normalizeDecisionRoomOptions } from "./customerDecisionRoom";
+import { deriveAttendanceState } from "../components/attendanceState";
+import {
+  attachBookingEvidencePresence,
+  attachPaymentEvidencePresence,
+  captureCommercialEvidencePresence,
+  restoreCommercialEvidenceSource
+} from "./commercialEvidencePresence";
+import { coalesceScopedRead } from "./scopedReadCoalescer";
 
+// Local demo storage has no server authority. Preserve reviewed evidence using
+// the same read-model schema; Firebase requests always go through quoteCreation.
+function localAttendancePlanning(form, { referenceId, versionId, actorUid, nowISO, existingEvent }) {
+  if (form.attendancePlanning === undefined) {
+    return existingEvent?.guests === Number(form.guests) && existingEvent?.attendance
+      ? { attendance: JSON.parse(JSON.stringify(existingEvent.attendance)) } : {};
+  }
+  const input = form.attendancePlanning;
+  const keys = ["kind", "value", "min", "max", "sourceType"];
+  if (!input || typeof input !== "object" || Array.isArray(input)
+    || Object.keys(input).length !== keys.length || keys.some((key) => !Object.hasOwn(input, key))
+    || input.sourceType !== "staff_intake" || !["exact", "approximate", "range"].includes(input.kind)
+    || !Number.isInteger(input.value) || input.value !== Number(form.guests)
+    || [input.min, input.max].some((value) => value !== null && !Number.isInteger(value))) {
+    throw new Error("Reviewed attendance planning must match the exact count and supported planning fields.");
+  }
+  const sourceReferenceId = `local:${referenceId}:${versionId}:planning`;
+  const attendance = {
+    schemaVersion: 1,
+    planning: { ...input, sourceReferenceId, observedAtISO: nowISO, recordedByUid: actorUid || "" },
+    confirmation: { state: "not_requested", requestedAtISO: "", dueDate: "", submittedCount: null,
+      sourceType: "", sourceReferenceId: "", submittedAtISO: "", submittedByRole: "", appliedRevisionId: "", commercialChangeReceiptId: "" },
+    commercialBasis: { source: "planning", sourceReferenceId, appliedRevisionId: versionId }
+  };
+  deriveAttendanceState({ quote: { activeVersionId: versionId, event: { guests: Number(form.guests), attendance } } });
+  return { attendance };
+}
 const LOCAL_QUOTES_KEY = "quoteWizard.quotes";
 const LOCAL_QUOTE_HISTORY_KEY = "quoteWizard.quoteHistory";
 const QUOTES_COLLECTION = "quotes";
@@ -72,15 +109,13 @@ const SERVER_SCOPED_PAYMENT_APPROVAL_ACTIONS = new Set([
   "send_final_balance_request"
 ]);
 const ACCEPT_QUOTE_PROPOSAL_CALLABLE = "acceptQuoteProposal";
+const QUOTE_ID_REQUIRED = "Quote id is required.";
+const QUOTE_NOT_FOUND = "Quote not found.";
 export const PROPOSAL_ACCEPTANCE_CONSENT_VERSION = "proposal-acceptance-v1";
 const EXPIRABLE_STATUSES = new Set(["draft", "sent", "viewed"]);
 const AVAILABILITY_CONFLICT_STATUSES = new Set(["accepted", "booked"]);
 const PAYMENT_STATUSES = ["unpaid", "sent", "paid", "refunded"];
-const FINAL_BALANCE_STATUSES = new Set([
-  "unpaid",
-  "sent",
-  "paid"
-]);
+const FINAL_BALANCE_STATUSES = new Set(["unpaid", "sent", "paid"]);
 const FINAL_BALANCE_CHECKOUT_STATES = new Set([
   "",
   "prepared",
@@ -276,7 +311,7 @@ function quoteWriteCollectionRef(organizationId = undefined, action = "quote wri
 function quoteWriteDocRef(quoteId, organizationId = undefined, action = "quote write") {
   const id = String(quoteId || "").trim();
   if (!id) {
-    throw new Error("Quote id is required.");
+    throw new Error(QUOTE_ID_REQUIRED);
   }
   return getOrganizationSubDocRef(QUOTES_COLLECTION, id, requireWriteOrganizationId(organizationId, action));
 }
@@ -295,7 +330,7 @@ function isMissingCallableError(error) {
 function quoteVersionsWriteCollectionRef(quoteId, organizationId = undefined, action = "quote version write") {
   const id = String(quoteId || "").trim();
   if (!id) {
-    throw new Error("Quote id is required.");
+    throw new Error(QUOTE_ID_REQUIRED);
   }
   const resolvedOrganizationId = requireWriteOrganizationId(organizationId, action);
   return collection(db, "organizations", resolvedOrganizationId, QUOTES_COLLECTION, id, QUOTE_VERSIONS_COLLECTION);
@@ -970,7 +1005,7 @@ function buildPortalSnapshot(quoteId, quote) {
     },
     status: normalizeStatus(quote.status),
     expiresAtISO: quote.expiresAtISO || addDaysISO(createdAtISO, DEFAULT_VALIDITY_DAYS),
-    payment: hydratePayment(quote.payment, quote.totals),
+    payment: materializePortalPayment(quote.payment, quote.totals),
     booking: {
       bookedAtISO: portalBooking.bookedAtISO,
       contractNumber: portalBooking.contractNumber,
@@ -1008,7 +1043,7 @@ async function ensureQuoteWriteTarget(
 ) {
   const id = String(quoteId || "").trim();
   if (!id) {
-    throw new Error("Quote id is required.");
+    throw new Error(QUOTE_ID_REQUIRED);
   }
 
   const resolvedOrganizationId = requireWriteOrganizationId(organizationId, action);
@@ -1027,7 +1062,7 @@ async function ensureQuoteWriteTarget(
       migratedFromLegacy: false
     };
   }
-  throw new Error("Quote not found.");
+  throw new Error(QUOTE_NOT_FOUND);
 }
 
 function resolvePersistedPricingSnapshot({
@@ -1152,6 +1187,26 @@ function moneyToRoundedCents(value) {
   return Number.isSafeInteger(cents) ? cents : 0;
 }
 
+function hydratedRecord(source, values) {
+  const payload = source && typeof source === "object" && !Array.isArray(source)
+    ? source
+    : {};
+  const hydrated = { ...payload };
+  Object.entries(values).forEach(([key, value]) => {
+    if (Object.prototype.hasOwnProperty.call(payload, key)) {
+      hydrated[key] = value;
+      return;
+    }
+    Object.defineProperty(hydrated, key, {
+      configurable: true,
+      enumerable: false,
+      value,
+      writable: true
+    });
+  });
+  return hydrated;
+}
+
 function hydrateFinalBalance(finalBalance, totals = {}) {
   const source = finalBalance && typeof finalBalance === "object" && !Array.isArray(finalBalance)
     ? finalBalance
@@ -1172,7 +1227,7 @@ function hydrateFinalBalance(finalBalance, totals = {}) {
   const rawCheckoutState = String(source.stripeCheckoutState || "").trim().toLowerCase();
   const checkoutGeneration = Number(source.checkoutGeneration);
   const currency = String(source.currency || "usd").trim().toLowerCase();
-  return {
+  return hydratedRecord(source, {
     amountCents,
     currency: /^[a-z]{3}$/.test(currency) ? currency : "usd",
     status,
@@ -1190,30 +1245,30 @@ function hydrateFinalBalance(finalBalance, totals = {}) {
         .map((value) => String(value || "").trim())
         .filter((value) => /^cs_[A-Za-z0-9_]+$/.test(value))
     )).slice(-20)
-  };
+  });
 }
 
 function hydratePayment(payment, totals = {}) {
   const payload = payment || {};
+  const evidencePresence = captureCommercialEvidencePresence({ payment: payload });
   const depositLink = (payload.depositLink || "").trim();
   const defaultStatus = depositLink ? "sent" : "unpaid";
-  return {
-    ...payload,
+  return attachPaymentEvidencePresence(hydratedRecord(payload, {
     depositLink,
     depositStatus: normalizePaymentStatus(payload.depositStatus || defaultStatus),
     depositConfirmedAtISO: payload.depositConfirmedAtISO || "",
     finalBalance: hydrateFinalBalance(payload.finalBalance, totals)
-  };
+  }), evidencePresence);
 }
 
 function hydrateBooking(booking) {
   const payload = booking || {};
+  const evidencePresence = captureCommercialEvidencePresence({ booking: payload });
   const sentAtISO = payload.confirmationSentAtISO || "";
   const confirmedAtISO = payload.confirmedAtISO || "";
   const inferredStatus = confirmedAtISO ? "confirmed" : sentAtISO ? "sent" : "pending";
   const confirmationStatus = normalizeBookingConfirmationStatus(payload.confirmationStatus || inferredStatus);
-  return {
-    ...payload,
+  return attachBookingEvidencePresence(hydratedRecord(payload, {
     bookedAtISO: payload.bookedAtISO || "",
     bookedByEmail: normalizeEmail(payload.bookedByEmail),
     staffLead: String(payload.staffLead || "").trim(),
@@ -1232,6 +1287,50 @@ function hydrateBooking(booking) {
         : {},
     kitchenCheckpoints: normalizeKitchenCheckpoints(payload.kitchenCheckpoints),
     productionChecklist: normalizeProductionChecklist(payload.productionChecklist)
+  }), evidencePresence);
+}
+
+function materializeBooking(booking) {
+  const hydrated = hydrateBooking(booking);
+  return {
+    ...hydrated,
+    bookedAtISO: hydrated.bookedAtISO,
+    bookedByEmail: hydrated.bookedByEmail,
+    staffLead: hydrated.staffLead,
+    staffAssignedAtISO: hydrated.staffAssignedAtISO,
+    contractNumber: hydrated.contractNumber,
+    contractConvertedAtISO: hydrated.contractConvertedAtISO,
+    contractConvertedByEmail: hydrated.contractConvertedByEmail,
+    confirmationStatus: hydrated.confirmationStatus,
+    confirmationSentAtISO: hydrated.confirmationSentAtISO,
+    confirmedAtISO: hydrated.confirmedAtISO,
+    confirmationUpdatedByEmail: hydrated.confirmationUpdatedByEmail,
+    availabilityCheckedAtISO: hydrated.availabilityCheckedAtISO,
+    availabilitySummary: hydrated.availabilitySummary,
+    kitchenCheckpoints: hydrated.kitchenCheckpoints,
+    productionChecklist: hydrated.productionChecklist
+  };
+}
+
+function materializePortalPayment(payment, totals = {}) {
+  const hydrated = hydratePayment(payment, totals);
+  const finalBalance = hydrated.finalBalance;
+  return {
+    ...hydrated,
+    depositLink: hydrated.depositLink,
+    depositStatus: hydrated.depositStatus,
+    depositConfirmedAtISO: hydrated.depositConfirmedAtISO,
+    finalBalance: {
+      amountCents: finalBalance.amountCents,
+      currency: finalBalance.currency,
+      status: finalBalance.status,
+      paymentLink: finalBalance.paymentLink,
+      confirmedAtISO: finalBalance.confirmedAtISO,
+      stripeSessionId: finalBalance.stripeSessionId,
+      stripeCheckoutState: finalBalance.stripeCheckoutState,
+      checkoutGeneration: finalBalance.checkoutGeneration,
+      knownStripeSessionIds: finalBalance.knownStripeSessionIds
+    }
   };
 }
 
@@ -1541,7 +1640,7 @@ function withLegacyReadDefaults(quote) {
 async function readQuoteById(quoteId, { serverOnly = false } = {}) {
   const id = String(quoteId || "").trim();
   if (!id) {
-    throw new Error("Quote id is required.");
+    throw new Error(QUOTE_ID_REQUIRED);
   }
 
   const nowISO = isoNow();
@@ -1575,7 +1674,7 @@ async function readQuoteById(quoteId, { serverOnly = false } = {}) {
   const existing = JSON.parse(localStorage.getItem(LOCAL_QUOTES_KEY) || "[]");
   const match = existing.find((quote) => quote.id === id);
   if (!match) {
-    throw new Error("Quote not found.");
+    throw new Error(QUOTE_NOT_FOUND);
   }
   return withLegacyReadDefaults(hydrateQuote(match, nowISO));
 }
@@ -1723,7 +1822,7 @@ export async function saveQuoteVersion(
 ) {
   const quote = await readQuoteById(quoteId);
   const timestamp = isoNow();
-  const localSnapshot = JSON.parse(JSON.stringify(quote));
+  const localSnapshot = JSON.parse(JSON.stringify(restoreCommercialEvidenceSource(quote)));
   const organizationCandidate = organizationId !== undefined ? organizationId : quote.organizationId;
   const resolvedOrganizationId = firebaseReady
     ? requireWriteOrganizationId(organizationCandidate, "saveQuoteVersion")
@@ -1862,7 +1961,7 @@ export async function saveQuoteVersion(
 export async function getQuoteVersionHistory(quoteId, { organizationId = undefined } = {}) {
   const id = String(quoteId || "").trim();
   if (!id) {
-    throw new Error("Quote id is required.");
+    throw new Error(QUOTE_ID_REQUIRED);
   }
 
   if (firebaseReady) {
@@ -1942,7 +2041,7 @@ export async function convertQuoteToContract({
 } = {}) {
   const id = String(quoteId || "").trim();
   if (!id) {
-    throw new Error("Quote id is required.");
+    throw new Error(QUOTE_ID_REQUIRED);
   }
 
   if (firebaseReady) {
@@ -2076,7 +2175,7 @@ export async function updateQuoteBookingConfirmation({
 } = {}) {
   const id = String(quoteId || "").trim();
   if (!id) {
-    throw new Error("Quote id is required.");
+    throw new Error(QUOTE_ID_REQUIRED);
   }
 
   const quote = await readQuoteById(id);
@@ -2154,7 +2253,7 @@ export async function recordQuoteIntegrationSync({
 } = {}) {
   const id = String(quoteId || "").trim();
   if (!id) {
-    throw new Error("Quote id is required.");
+    throw new Error(QUOTE_ID_REQUIRED);
   }
   const quote = await readQuoteById(id);
 
@@ -2256,7 +2355,7 @@ export async function syncQuoteToCrm({
 } = {}) {
   const id = String(quoteId || "").trim();
   if (!id) {
-    throw new Error("Quote id is required.");
+    throw new Error(QUOTE_ID_REQUIRED);
   }
   throw new Error(
     "Direct browser CRM sends are disabled. A server-authorized admin integration is required."
@@ -2287,9 +2386,18 @@ async function persistQuotePatch({
   const next = existing.map((item) => {
     if (item.id !== quoteId) return item;
     found = true;
-    return { ...item, updatedAtISO: nowISO, ...localPatch(item) };
+    const sourcePresence = captureCommercialEvidencePresence({
+      payment: item.payment,
+      booking: item.booking
+    });
+    const patched = { ...item, updatedAtISO: nowISO, ...localPatch(item) };
+    return restoreCommercialEvidenceSource({
+      ...patched,
+      payment: attachPaymentEvidencePresence({ ...(patched.payment || {}) }, sourcePresence),
+      booking: attachBookingEvidencePresence({ ...(patched.booking || {}) }, sourcePresence)
+    });
   });
-  if (!found) throw new Error("Quote not found.");
+  if (!found) throw new Error(QUOTE_NOT_FOUND);
   localStorage.setItem(LOCAL_QUOTES_KEY, JSON.stringify(next));
   return "local";
 }
@@ -2297,7 +2405,7 @@ async function persistQuotePatch({
 export async function updateQuoteBookingAssignment({ quoteId, staffLead = "" } = {}) {
   const id = String(quoteId || "").trim();
   if (!id) {
-    throw new Error("Quote id is required.");
+    throw new Error(QUOTE_ID_REQUIRED);
   }
   const quote = await readQuoteById(id);
   const nowISO = isoNow();
@@ -2327,7 +2435,7 @@ export async function updateQuoteBookingAssignment({ quoteId, staffLead = "" } =
 export async function updateQuoteKitchenCheckpoints({ quoteId, checkpoints = [] } = {}) {
   const id = String(quoteId || "").trim();
   if (!id) {
-    throw new Error("Quote id is required.");
+    throw new Error(QUOTE_ID_REQUIRED);
   }
   const quote = await readQuoteById(id);
   const nowISO = isoNow();
@@ -2357,7 +2465,7 @@ export async function updateQuoteProductionChecklist({
 } = {}) {
   const id = String(quoteId || "").trim();
   if (!id) {
-    throw new Error("Quote id is required.");
+    throw new Error(QUOTE_ID_REQUIRED);
   }
   const quote = await readQuoteById(id);
   const nowISO = isoNow();
@@ -2394,7 +2502,7 @@ export async function updateQuoteFollowUp({
 } = {}) {
   const id = String(quoteId || "").trim();
   if (!id) {
-    throw new Error("Quote id is required.");
+    throw new Error(QUOTE_ID_REQUIRED);
   }
   if (!FOLLOW_UP_STAGE_IDS.includes(stage)) {
     throw new Error("Invalid follow-up stage.");
@@ -2447,7 +2555,7 @@ export async function updateQuoteChangeRequestHandling({
 } = {}) {
   const id = String(quoteId || "").trim();
   if (!id) {
-    throw new Error("Quote id is required.");
+    throw new Error(QUOTE_ID_REQUIRED);
   }
   const normalizedRole = String(actorRole || "").trim().toLowerCase();
   if (!["admin", "sales"].includes(normalizedRole)) {
@@ -2524,7 +2632,7 @@ export async function updateQuoteChangeRequestHandling({
     let result = null;
     await runTransaction(db, async (transaction) => {
       const quoteSnap = await transaction.get(quoteRef);
-      if (!quoteSnap.exists()) throw new Error("Quote not found.");
+      if (!quoteSnap.exists()) throw new Error(QUOTE_NOT_FOUND);
       const quote = quoteSnap.data();
       if (
         quote.status === "deleted"
@@ -2565,7 +2673,7 @@ export async function updateQuoteChangeRequestHandling({
     item.id === id
     && normalizeOrganizationId(item.organizationId) === writeOrganizationId
   ));
-  if (quoteIndex < 0) throw new Error("Quote not found.");
+  if (quoteIndex < 0) throw new Error(QUOTE_NOT_FOUND);
   const quote = existing[quoteIndex];
   if (
     quote.status === "deleted"
@@ -2612,7 +2720,7 @@ export async function requestQuoteApproval({
 } = {}) {
   const id = String(quoteId || "").trim();
   if (!id) {
-    throw new Error("Quote id is required.");
+    throw new Error(QUOTE_ID_REQUIRED);
   }
   const normalizedRole = String(actorRole || "").trim().toLowerCase();
   if (!new Set(["sales", "admin"]).has(normalizedRole)) {
@@ -2990,6 +3098,7 @@ export async function submitQuote({
       venue: form.venue || "",
       venueAddress: form.venueAddress || "",
       guests: Number(form.guests || 0),
+      ...(!firebaseReady ? localAttendancePlanning(form, { referenceId: quoteNumber, versionId: "v0001", actorUid: ownerUid, nowISO }) : {}),
       hours: Number(form.hours || 0),
       servers: Number(form.servers || 0),
       chefs: Number(form.chefs || 0),
@@ -3249,7 +3358,7 @@ export async function updateQuote({
 }) {
   const id = String(quoteId || "").trim();
   if (!id) {
-    throw new Error("Quote id is required.");
+    throw new Error(QUOTE_ID_REQUIRED);
   }
   const expectedRevisionId = String(expectedActiveVersionId || "").trim();
   const selectedMenuItems = requireMenuSelection(form);
@@ -3457,6 +3566,7 @@ export async function updateQuote({
       venue: form.venue || "",
       venueAddress: form.venueAddress || "",
       guests: Number(form.guests || 0),
+      ...localAttendancePlanning(form, { referenceId: id, versionId: `v${String(Number(existing.latestVersionNumber || 0) + 1).padStart(4, "0")}`, actorUid: ownerUid, nowISO, existingEvent: existing.event }),
       hours: Number(form.hours || 0),
       servers: Number(form.servers || 0),
       chefs: Number(form.chefs || 0),
@@ -3646,7 +3756,7 @@ export async function rotateQuotePortalKey({
 } = {}) {
   const id = String(quoteId || "").trim();
   if (!id) {
-    throw new Error("Quote id is required.");
+    throw new Error(QUOTE_ID_REQUIRED);
   }
 
   const quote = await readQuoteById(id);
@@ -3757,6 +3867,24 @@ export async function rotateQuotePortalKey({
   };
 }
 
+const ALTERNATE_DRAFT_CUSTOMER_FIELDS = "name email phone organization";
+const ALTERNATE_DRAFT_EVENT_FIELDS = "name date time venue venueAddress guests hours servers chefs bartenders dietaryRestrictions style eventTypeId";
+const ALTERNATE_DRAFT_SELECTION_FIELDS = "packageId packageName packageInclusions addons rentals addonQuantities rentalQuantities menuItemQuantities addonSnapshots rentalSnapshots menuItems menuItemsSnapshot menuItemNames menuItemDetails milesRT payMethod eventTemplateId eventTypeId taxRegion seasonProfileId laborRateSnapshot bartenderRateTypeId staffingRateTypeId bartenderRateOverride serverRateOverride serverRateMixCsv chefRateMixCsv chefRateOverride";
+const ALTERNATE_DRAFT_TOTAL_FIELDS = "base addons rentals menu labor travel serviceFee tax total deposit serviceFeePctApplied taxRateApplied taxRegionId seasonProfileId";
+const ALTERNATE_DRAFT_QUOTE_META_FIELDS = "organizationName quotePreparedBy proposalIntroTitle proposalIntroMessage proposalClosingMessage brandName brandTagline brandLogoUrl documentFontScale brandPrimaryColor brandAccentColor brandDarkAccentColor brandBackgroundStart brandBackgroundMid brandBackgroundEnd brandCrew businessPhone businessEmail businessAddress acceptanceEmail includeDisposables disposablesNote depositNotice quoteValidityDays";
+const ALTERNATE_DRAFT_PRICING_AUTHORITY_FIELDS = "schemaVersion organizationId catalogSource catalogRevision confirmedCatalogRevision settingsFingerprintSha256";
+
+function cloneAllowedRecord(source, allowedFields) {
+  const record = source && typeof source === "object" && !Array.isArray(source) ? source : {};
+  const cloned = {};
+  allowedFields.split(" ").forEach((field) => {
+    if (Object.hasOwn(record, field) && record[field] !== undefined) {
+      cloned[field] = JSON.parse(JSON.stringify(record[field]));
+    }
+  });
+  return cloned;
+}
+
 export async function duplicateQuote(quoteId, { ownerUid = "", ownerEmail = "" } = {}) {
   const source = await readQuoteById(quoteId);
   const nowISO = isoNow();
@@ -3776,17 +3904,17 @@ export async function duplicateQuote(quoteId, { ownerUid = "", ownerEmail = "" }
     portalIssuedAtISO,
     nowISO
   );
-  const payment = hydratePayment(source.payment);
   const normalizedOwnerEmail = normalizeEmail(ownerEmail) || source.ownerEmail || "";
-  const { id: _sourceId, createdAt: _createdAt, ...sourceWithoutIdentity } = source;
+  const sourceSelection = source.selection || {};
+  const sourceIntegrations = source.integrations || {};
 
   const selection = {
-    ...(sourceWithoutIdentity.selection || {}),
-    addonQuantities: normalizeQuantityMap(sourceWithoutIdentity.selection?.addonQuantities),
-    rentalQuantities: normalizeQuantityMap(sourceWithoutIdentity.selection?.rentalQuantities),
-    menuItemQuantities: normalizeQuantityMap(sourceWithoutIdentity.selection?.menuItemQuantities),
-    menuItemsSnapshot: Array.isArray(sourceWithoutIdentity.selection?.menuItemsSnapshot)
-      ? sourceWithoutIdentity.selection.menuItemsSnapshot.map((item) => ({
+    ...cloneAllowedRecord(sourceSelection, ALTERNATE_DRAFT_SELECTION_FIELDS),
+    addonQuantities: normalizeQuantityMap(sourceSelection.addonQuantities),
+    rentalQuantities: normalizeQuantityMap(sourceSelection.rentalQuantities),
+    menuItemQuantities: normalizeQuantityMap(sourceSelection.menuItemQuantities),
+    menuItemsSnapshot: Array.isArray(sourceSelection.menuItemsSnapshot)
+      ? sourceSelection.menuItemsSnapshot.map((item) => ({
         id: String(item?.id || "").trim(),
         name: String(item?.name || "").trim() || String(item?.id || "").trim(),
         price: Number(item?.price || 0),
@@ -3794,8 +3922,8 @@ export async function duplicateQuote(quoteId, { ownerUid = "", ownerEmail = "" }
         quantity: Math.max(1, Math.round(toNumber(item?.quantity, 1)))
       }))
       : [],
-    menuItemDetails: Array.isArray(sourceWithoutIdentity.selection?.menuItemDetails)
-      ? sourceWithoutIdentity.selection.menuItemDetails.map((item) => ({
+    menuItemDetails: Array.isArray(sourceSelection.menuItemDetails)
+      ? sourceSelection.menuItemDetails.map((item) => ({
         id: String(item?.id || "").trim(),
         name: String(item?.name || "").trim() || String(item?.id || "").trim(),
         price: Number(item?.price || 0),
@@ -3807,57 +3935,55 @@ export async function duplicateQuote(quoteId, { ownerUid = "", ownerEmail = "" }
   };
 
   const payload = {
-    ...sourceWithoutIdentity,
     quoteNumber,
+    ...(String(source.customerId || "").trim()
+      ? { customerId: String(source.customerId).trim() }
+      : {}),
+    customer: cloneAllowedRecord(source.customer, ALTERNATE_DRAFT_CUSTOMER_FIELDS),
+    customerEmailKey: String(source.customerEmailKey || source.customer?.email || "").trim().toLowerCase(),
+    customerNameKey: normalizeCustomerNameKey(source.customerNameKey || source.customer?.name || ""),
+    eventTypeId: String(source.eventTypeId || sourceSelection.eventTypeId || source.event?.eventTypeId || "").trim(),
+    event: cloneAllowedRecord(source.event, ALTERNATE_DRAFT_EVENT_FIELDS),
+    selection,
+    decidableOptionsProjection: Array.isArray(source.decidableOptionsProjection)
+      ? normalizeDecisionRoomOptions(source.decidableOptionsProjection)
+      : [],
+    totals: cloneAllowedRecord(source.totals, ALTERNATE_DRAFT_TOTAL_FIELDS),
+    pricing: source.pricing && typeof source.pricing === "object"
+      ? normalizePricingOutput(source.pricing)
+      : undefined,
+    pricingCatalogAuthority: source.pricingCatalogAuthority
+      ? cloneAllowedRecord(source.pricingCatalogAuthority, ALTERNATE_DRAFT_PRICING_AUTHORITY_FIELDS)
+      : null,
+    quoteMeta: cloneAllowedRecord(source.quoteMeta, ALTERNATE_DRAFT_QUOTE_META_FIELDS),
+    source: String(source.source || "local").trim() || "local",
     portalKey,
     portalIssuedAtISO,
     portalExpiresAtISO,
     ownerUid: ownerUid || source.ownerUid || "",
     ownerEmail: normalizedOwnerEmail,
     organizationId,
+    duplicatedFromQuoteId: String(source.id || quoteId || "").trim(),
     status: "draft",
     deletedAtISO: "",
-    selection,
-    payment: {
-      ...payment,
-      depositStatus: payment.depositLink ? "sent" : "unpaid",
-      depositConfirmedAtISO: ""
-    },
-    booking: {
-      bookedAtISO: "",
-      bookedByEmail: "",
-      staffLead: "",
-      staffAssignedAtISO: "",
-      kitchenCheckpoints: [],
-      productionChecklist: [],
-      contractNumber: "",
-      contractConvertedAtISO: "",
-      contractConvertedByEmail: "",
-      confirmationStatus: "pending",
-      confirmationSentAtISO: "",
-      confirmedAtISO: "",
-      confirmationUpdatedByEmail: "",
-      availabilityCheckedAtISO: "",
-      availabilitySummary: {}
-    },
+    payment: materializePortalPayment({}, source.totals || {}),
+    booking: materializeBooking({}),
     workflow: {
       followUp: normalizeFollowUp({ stage: "new" }),
       approvalRequests: []
     },
     portalDecision: {},
     integrations: {
-      ...(sourceWithoutIdentity.integrations || {}),
+      retryLimit: Math.max(1, Math.round(toNumber(sourceIntegrations.retryLimit, source.quoteMeta?.integrationRetryLimit || 3))),
+      retention: Math.max(10, Math.round(toNumber(sourceIntegrations.retention, source.quoteMeta?.integrationAuditRetention || 50))),
+      providers: {},
       lastSyncAtISO: "",
       logs: []
     },
     createdAtISO: nowISO,
     updatedAtISO: nowISO,
     expiresAtISO,
-    lifecycle: {
-      draftAtISO: nowISO
-    },
-    activeVersionId: "",
-    latestVersionNumber: 0
+    lifecycle: { draftAtISO: nowISO }
   };
 
   if (firebaseReady) {
@@ -3972,6 +4098,126 @@ export async function getWorkflowAttentionSnapshot({ organizationId = "" } = {})
     source: "local",
     quotes: sortQuotesDesc(quotes)
   };
+}
+
+export function projectLocalEventScheduleQuotes({
+  quotes: sourceQuotes = [],
+  organizationId,
+  startDate,
+  endDate,
+  pageSize = 100,
+  observedAtISO = isoNow()
+} = {}) {
+  const scopedOrgId = normalizeOrganizationId(organizationId);
+  const quotes = (Array.isArray(sourceQuotes) ? sourceQuotes : [])
+    .filter((quote) => {
+      const eventDate = String(quote?.event?.date || "").trim();
+      return normalizeOrganizationId(quote?.organizationId) === scopedOrgId
+        && eventDate >= startDate
+        && eventDate <= endDate;
+    })
+    .sort((left, right) => (
+      String(left?.event?.date || "").localeCompare(String(right?.event?.date || ""))
+      || String(left?.id || "").localeCompare(String(right?.id || ""))
+    ))
+    .map((quote) => hydrateQuote(quote, observedAtISO));
+  return {
+    quotes,
+    source: "local",
+    interval: { startDate, endDate },
+    complete: true,
+    pageCount: quotes.length ? Math.ceil(quotes.length / pageSize) : 0
+  };
+}
+
+export async function getEventScheduleQuotes({
+  organizationId = "",
+  principalId = "",
+  startDate = "",
+  endDate = "",
+  pageSize = 100
+} = {}) {
+  const scopedOrgId = normalizeOrganizationId(organizationId);
+  if (!scopedOrgId) throw new Error("organizationId is required for schedule reads.");
+  const normalizedStartDate = String(startDate || "").trim();
+  const normalizedEndDate = String(endDate || "").trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/u.test(normalizedStartDate)) {
+    throw new Error("startDate is required in YYYY-MM-DD format for schedule reads.");
+  }
+  if (!/^\d{4}-\d{2}-\d{2}$/u.test(normalizedEndDate) || normalizedEndDate < normalizedStartDate) {
+    throw new Error("endDate must be an inclusive YYYY-MM-DD date on or after startDate.");
+  }
+  const requestedPageSize = Number(pageSize);
+  const boundedPageSize = Number.isInteger(requestedPageSize) && requestedPageSize > 0
+    ? Math.min(100, requestedPageSize)
+    : 100;
+  const interval = { startDate: normalizedStartDate, endDate: normalizedEndDate };
+
+  const read = async () => {
+    const nowISO = isoNow();
+    if (firebaseReady) {
+      const readableOrgId = requireReadOrganizationId(scopedOrgId, "schedule read");
+      const quotes = [];
+      let afterDate = "";
+      let afterId = "";
+      let pageCount = 0;
+      while (true) {
+        const constraints = [
+          where("event.date", ">=", normalizedStartDate),
+          where("event.date", "<=", normalizedEndDate),
+          orderBy("event.date"),
+          orderBy(documentId())
+        ];
+        if (afterId) constraints.push(startAfter(afterDate, afterId));
+        constraints.push(queryLimit(boundedPageSize));
+        const snapshot = await getDocs(query(quotesCollectionRef(readableOrgId), ...constraints));
+        if (!snapshot.docs.length) break;
+        pageCount += 1;
+        snapshot.docs.forEach((documentSnapshot) => {
+          const data = documentSnapshot.data();
+          const createdAtISO = data.createdAt?.toDate
+            ? data.createdAt.toDate().toISOString()
+            : data.createdAtISO;
+          quotes.push(hydrateQuote({
+            id: documentSnapshot.id,
+            ...data,
+            organizationId: normalizeOrganizationId(data.organizationId || readableOrgId),
+            createdAtISO: createdAtISO || nowISO
+          }, nowISO));
+        });
+        const lastDocument = snapshot.docs[snapshot.docs.length - 1];
+        const nextAfterDate = String(lastDocument.data()?.event?.date || "").trim();
+        const nextAfterId = lastDocument.id;
+        if (!nextAfterDate || (nextAfterDate === afterDate && nextAfterId === afterId)) {
+          throw new Error("Schedule page cursor did not advance.");
+        }
+        afterDate = nextAfterDate;
+        afterId = nextAfterId;
+        if (snapshot.docs.length < boundedPageSize) break;
+      }
+      return { quotes, source: "firebase", interval, complete: true, pageCount };
+    }
+
+    const existing = JSON.parse(localStorage.getItem(LOCAL_QUOTES_KEY) || "[]");
+    return projectLocalEventScheduleQuotes({
+      quotes: existing,
+      organizationId: scopedOrgId,
+      startDate: normalizedStartDate,
+      endDate: normalizedEndDate,
+      pageSize: boundedPageSize,
+      observedAtISO: nowISO
+    });
+  };
+
+  return String(principalId || "").trim()
+    ? coalesceScopedRead({
+        organizationId: scopedOrgId,
+        principalId,
+        operation: "schedule.visible-interval",
+        arguments: { ...interval, pageSize: boundedPageSize },
+        read
+      })
+    : read();
 }
 
 export async function getQuoteHistory(filters = {}) {
@@ -4090,7 +4336,10 @@ export async function getQuoteHistory(filters = {}) {
     for (const quoteId of autoExpiredIds) {
       await saveQuoteVersion(quoteId);
     }
-    localStorage.setItem(LOCAL_QUOTES_KEY, JSON.stringify(nextQuotes));
+    localStorage.setItem(
+      LOCAL_QUOTES_KEY,
+      JSON.stringify(nextQuotes.map((quote) => restoreCommercialEvidenceSource(quote)))
+    );
   }
 
   const filteredQuotes = applyQuoteHistoryFilters(nextQuotes, {
@@ -4108,12 +4357,12 @@ export async function getQuoteHistory(filters = {}) {
 
 export async function updateQuoteStatus(quoteId, status) {
   if (!quoteId) {
-    throw new Error("Quote id is required.");
+    throw new Error(QUOTE_ID_REQUIRED);
   }
 
   const id = String(quoteId || "").trim();
   if (!id) {
-    throw new Error("Quote id is required.");
+    throw new Error(QUOTE_ID_REQUIRED);
   }
   const nowISO = isoNow();
   const nextStatus = normalizeStatus(status);
@@ -4161,7 +4410,9 @@ export async function updateQuoteStatus(quoteId, status) {
     const existing = JSON.parse(localStorage.getItem(LOCAL_QUOTES_KEY) || "[]");
     const next = existing.map((quote) => {
       if (quote.id !== id) return quote;
-      const booking = hydrateBooking(quote.booking);
+      const booking = quote.booking && typeof quote.booking === "object"
+        ? { ...quote.booking }
+        : {};
       return {
         ...quote,
         status: nextStatus,
@@ -4177,7 +4428,10 @@ export async function updateQuoteStatus(quoteId, status) {
         lifecycle: lifecycleObject(nextStatus, nowISO, quote.lifecycle)
       };
     });
-    localStorage.setItem(LOCAL_QUOTES_KEY, JSON.stringify(next));
+    localStorage.setItem(
+      LOCAL_QUOTES_KEY,
+      JSON.stringify(next.map((quote) => restoreCommercialEvidenceSource(quote)))
+    );
   }
 
   return {
@@ -4194,7 +4448,7 @@ export async function updateQuoteStatus(quoteId, status) {
 export async function reopenQuote(id) {
   const quoteId = String(id || "").trim();
   if (!quoteId) {
-    throw new Error("Quote id is required.");
+    throw new Error(QUOTE_ID_REQUIRED);
   }
 
   const quote = await readQuoteById(quoteId);
@@ -4361,7 +4615,7 @@ export async function deleteQuote(id, {
 } = {}) {
   const quoteId = String(id || "").trim();
   if (!quoteId) {
-    throw new Error("Quote id is required.");
+    throw new Error(QUOTE_ID_REQUIRED);
   }
 
   if (firebaseReady) {
@@ -4390,7 +4644,7 @@ export async function deleteQuote(id, {
   const existing = JSON.parse(localStorage.getItem(LOCAL_QUOTES_KEY) || "[]");
   const exists = existing.some((item) => item.id === quoteId);
   if (!exists) {
-    throw new Error("Quote not found.");
+    throw new Error(QUOTE_NOT_FOUND);
   }
   const next = existing.filter((item) => item.id !== quoteId);
   localStorage.setItem(LOCAL_QUOTES_KEY, JSON.stringify(next));
@@ -4427,7 +4681,7 @@ export async function getPortalQuote(portalKey) {
     return {
       portalKey: key,
       ...portalData,
-      payment: hydratePayment(portalData.payment, portalData.totals || {
+      payment: materializePortalPayment(portalData.payment, portalData.totals || {
         total: portalData.total,
         deposit: portalData.deposit
       }),
@@ -4438,7 +4692,7 @@ export async function getPortalQuote(portalKey) {
   const existing = JSON.parse(localStorage.getItem(LOCAL_QUOTES_KEY) || "[]");
   const quote = existing.find((item) => item.portalKey === key);
   if (!quote) {
-    throw new Error("Quote not found.");
+    throw new Error(QUOTE_NOT_FOUND);
   }
   const snapshot = buildPortalSnapshot(quote.id, quote);
   const portalValidity = assertPortalTokenActive(snapshot, nowISO);
@@ -4565,7 +4819,7 @@ export async function updatePortalDecision({
   const existing = JSON.parse(localStorage.getItem(LOCAL_QUOTES_KEY) || "[]");
   const localTarget = existing.find((quote) => quote.portalKey === key);
   if (!localTarget) {
-    throw new Error("Quote not found.");
+    throw new Error(QUOTE_NOT_FOUND);
   }
   assertPortalTokenActive(localTarget, nowISO);
   const currentStatus = normalizeStatus(localTarget.status);
@@ -4608,8 +4862,12 @@ export async function updatePortalDecision({
         portalIssuedAtISO: localPortalIssuedAtISO,
         quoteNumber: String(localTarget.quoteNumber || "").trim(),
         currency: "USD",
-        totalMinor: Math.round(Number(localTarget.totals?.total || 0) * 100),
-        depositMinor: Math.round(Number(localTarget.totals?.deposit || 0) * 100),
+        totalMinor: Number.isSafeInteger(localTarget.totals?.totalCents)
+          ? localTarget.totals.totalCents
+          : Math.round(Number(localTarget.totals?.total || 0) * 100),
+        depositMinor: Number.isSafeInteger(localTarget.totals?.depositCents)
+          ? localTarget.totals.depositCents
+          : Math.round(Number(localTarget.totals?.deposit || 0) * 100),
         snapshotSha256: ""
       }
     : null;

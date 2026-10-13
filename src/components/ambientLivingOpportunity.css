@@ -50,6 +50,7 @@
   z-index: 8;
   top: 6rem;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
@@ -62,8 +63,28 @@
   backdrop-filter: blur(12px);
 }
 
+.ambient-calendar-handoff {
+  min-height: 44px;
+  border: 1px solid var(--ambient-hairline);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ambient-ink);
+  padding: 0.55rem 0.8rem;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 760;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.ambient-calendar-handoff:hover {
+  border-color: var(--ambient-gold-local);
+  background: color-mix(in srgb, var(--ambient-gold-local) 7%, transparent);
+}
+
 .ambient-opportunity-orientation {
   justify-content: flex-start;
+  flex: 1 1 240px;
   gap: 1rem;
   min-width: 0;
   color: var(--ambient-muted);
@@ -71,6 +92,47 @@
   font-weight: 760;
   letter-spacing: 0.1em;
   text-transform: uppercase;
+}
+
+.ambient-opportunity-context-summary {
+  display: flex;
+  flex: 0 1 auto;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.3rem 0.55rem;
+  min-width: 0;
+  margin: 0;
+  color: var(--ambient-muted);
+  font-size: 0.7rem;
+  line-height: 1.35;
+}
+
+.ambient-opportunity-context-summary > span + span::before {
+  margin-right: 0.55rem;
+  color: var(--ambient-hairline);
+  content: "·";
+}
+
+.ambient-opportunity-context-summary code {
+  overflow-wrap: anywhere;
+  color: var(--ambient-ink);
+  font: inherit;
+  font-weight: 760;
+}
+
+.ambient-opportunity-context-summary strong {
+  border-radius: 999px;
+  padding: 0.2rem 0.45rem;
+  background: rgba(112, 168, 137, 0.14);
+  color: #426e58;
+  font-size: 0.64rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.ambient-opportunity-context-summary[data-opportunity-draft-state="unsaved_preview"] strong {
+  background: rgba(199, 104, 85, 0.12);
+  color: #8a4639;
 }
 
 .ambient-opportunity-orientation strong {
@@ -352,7 +414,7 @@ button.ambient-event-logistics-value:focus-visible {
   gap: 0.18rem 0.8rem;
   margin-top: 0.6rem;
   padding: 0.7rem 0.85rem;
-  border-left: 3px solid var(--ambient-blue-local);
+  border-block: 1px solid color-mix(in srgb, var(--ambient-blue-local) 26%, var(--ambient-hairline));
   background: rgba(86, 126, 172, 0.07);
   color: var(--ambient-ink);
   font-size: 0.78rem;
@@ -543,7 +605,7 @@ button.ambient-event-logistics-value:focus-visible {
 }
 
 .ambient-object-row[data-scenario-state="stale"] {
-  box-shadow: inset 3px 0 0 var(--ambient-coral-local);
+  background: color-mix(in srgb, var(--ambient-coral-local) 7%, transparent);
 }
 
 .ambient-object-symbol {
@@ -692,7 +754,7 @@ button.ambient-event-logistics-value:focus-visible {
   display: grid;
   gap: 0.25rem;
   padding: 1rem;
-  border-left: 3px solid var(--ambient-teal-local);
+  border: 1px solid color-mix(in srgb, var(--ambient-teal-local) 28%, var(--ambient-hairline));
   background: rgba(35, 127, 120, 0.08);
 }
 
@@ -723,15 +785,15 @@ button.ambient-event-logistics-value:focus-visible {
   margin: 0;
   border-top: 1px solid var(--ambient-hairline);
   border-bottom: 1px solid var(--ambient-hairline);
-  box-shadow: inset 3px 0 0 var(--ambient-teal-local);
+  background: color-mix(in srgb, var(--ambient-teal-local) 4%, transparent);
 }
 
 .ambient-attendance-strip[data-tone="mint"] {
-  box-shadow: inset 3px 0 0 var(--ambient-mint-local);
+  background: color-mix(in srgb, var(--ambient-mint-local) 5%, transparent);
 }
 
 .ambient-attendance-strip[data-tone="coral"] {
-  box-shadow: inset 3px 0 0 var(--ambient-coral-local);
+  background: color-mix(in srgb, var(--ambient-coral-local) 5%, transparent);
 }
 
 .ambient-attendance-strip > div {
@@ -1070,7 +1132,7 @@ button.ambient-event-logistics-value:focus-visible {
   gap: 0.35rem;
   margin-top: 0.65rem;
   padding: 0.85rem;
-  border-left: 3px solid var(--ambient-mint-local);
+  border: 1px solid color-mix(in srgb, var(--ambient-mint-local) 30%, var(--ambient-hairline));
   background: rgba(112, 168, 137, 0.07);
 }
 
@@ -1329,9 +1391,9 @@ button.ambient-event-logistics-value:focus-visible {
 }
 
 @keyframes ambient-teal-reasoning {
-  0% { box-shadow: inset 3px 0 0 transparent; }
-  35% { box-shadow: inset 3px 0 0 var(--ambient-teal-local); }
-  100% { box-shadow: inset 3px 0 0 transparent; }
+  0% { background: transparent; }
+  35% { background: color-mix(in srgb, var(--ambient-teal-local) 10%, transparent); }
+  100% { background: transparent; }
 }
 
 @keyframes ambient-mint-resolution {
@@ -1389,8 +1451,22 @@ button.ambient-event-logistics-value:focus-visible {
     backdrop-filter: none;
   }
 
+  .ambient-opportunity-context-summary {
+    flex: 1 0 100%;
+    padding-top: 0.45rem;
+    border-top: 1px solid var(--ambient-hairline);
+  }
+
   .ambient-opportunity-context-bar .ambient-quick-updates-trigger--context {
     display: none;
+  }
+
+  .ambient-opportunity-context-bar .ambient-calendar-handoff {
+    display: none;
+  }
+
+  .ambient-mobile-remote > .ambient-calendar-handoff {
+    width: 100%;
   }
 
   .ambient-mobile-remote {
@@ -1457,11 +1533,11 @@ button.ambient-event-logistics-value:focus-visible {
   }
 
   .ambient-mobile-remote__signal > div[data-tone="coral"] {
-    box-shadow: inset 3px 0 0 var(--ambient-coral-local);
+    background: color-mix(in srgb, var(--ambient-coral-local) 6%, transparent);
   }
 
   .ambient-mobile-remote__signal > div[data-tone="mint"] {
-    box-shadow: inset 3px 0 0 var(--ambient-mint-local);
+    background: color-mix(in srgb, var(--ambient-mint-local) 6%, transparent);
   }
 
   .ambient-mobile-remote__signal dd {

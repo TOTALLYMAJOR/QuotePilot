@@ -1,16 +1,29 @@
 # QuotePilot by MBMApps
 
-Last updated: 2026-09-03 13:49:00 CDT
+Last updated: 2026-10-11 04:13:28 CDT
 
-Multi-tenant catering quote application built with React, Vite, Firebase, and jsPDF.
+QuotePilot is a multi-tenant catering commercial-operations system that turns
+changing customer intent into an explainable commercial commitment, current
+operational work, and defensible closeout without rewriting authoritative history.
 
 ## Quick Links
+- Product documentation map: [docs/DOCUMENTATION_MAP.md](docs/DOCUMENTATION_MAP.md)
+- Project charter: [docs/PROJECT_CHARTER.md](docs/PROJECT_CHARTER.md)
+- System-level PRD: [docs/PRODUCT_REQUIREMENTS.md](docs/PRODUCT_REQUIREMENTS.md)
+- System architecture: [docs/SYSTEM_ARCHITECTURE.md](docs/SYSTEM_ARCHITECTURE.md)
+- Acceptance standard: [docs/ACCEPTANCE_STANDARD.md](docs/ACCEPTANCE_STANDARD.md)
+- Data and interface contracts: [docs/DATA_INTERFACE_CONTRACTS.md](docs/DATA_INTERFACE_CONTRACTS.md)
+- Risk and assumption register: [docs/RISK_ASSUMPTION_REGISTER.md](docs/RISK_ASSUMPTION_REGISTER.md)
+- Architecture decision index: [docs/adr/README.md](docs/adr/README.md)
 - Canonical project state: [PROJECT_STATE.md](PROJECT_STATE.md)
 - Executive state: [docs/project/EXECUTIVE_STATE.md](docs/project/EXECUTIVE_STATE.md)
 - Live app: https://quotepilot.mbmapps.com
 - Firebase Hosting origin/fallback: https://tonicatering.web.app
 - Repository: https://github.com/TOTALLYMAJOR/quoteflow
 - Launch runbook: [docs/LAUNCH_RUNBOOK.md](docs/LAUNCH_RUNBOOK.md)
+- Commercial platform program: [docs/COMMERCIAL_PLATFORM_PROGRAM.md](docs/COMMERCIAL_PLATFORM_PROGRAM.md)
+- Pricing Constitution: [docs/PRICING_CONSTITUTION.md](docs/PRICING_CONSTITUTION.md)
+- Ingredient Inventory authority: [docs/INVENTORY_AUTHORITY_ADR.md](docs/INVENTORY_AUTHORITY_ADR.md)
 - Governed candidate deploy command: `npm run release:candidate:deploy` (fixed
   Firebase staging or Vercel preview only; checksum-verified Firebase binary,
   ADC Rules readback, direct Vercel APIs, and an explicit safe-off, bounded
@@ -20,6 +33,7 @@ Multi-tenant catering quote application built with React, Vite, Firebase, and js
 - Feature inventory and matrix: [docs/FEATURE_MATRIX.md](docs/FEATURE_MATRIX.md)
 - Design system: [docs/DESIGN_SYSTEM.md](docs/DESIGN_SYSTEM.md)
 - Design principles: [docs/DESIGN_PRINCIPLES.md](docs/DESIGN_PRINCIPLES.md)
+- Commercial workspace design contract: [docs/DESIGN-CONTRACT.md](docs/DESIGN-CONTRACT.md)
 - Event Messaging Station architecture: [docs/MESSAGING_STATION_ARCHITECTURE.md](docs/MESSAGING_STATION_ARCHITECTURE.md)
 - Customer-centered workspace plan: [docs/CUSTOMER_CENTERED_WORKSPACE_PLAN.md](docs/CUSTOMER_CENTERED_WORKSPACE_PLAN.md)
 - Post-competitive destination design: [docs/POST_COMPETITIVE_DESIGN.md](docs/POST_COMPETITIVE_DESIGN.md)
@@ -64,26 +78,25 @@ evidence paths, freshness, blocker references, and the single next proof event.
   authority.
 - `/app/quotes`, `/app/quotes/new`, `/app/quotes/:quoteId`, and
   `/app/quotes/:quoteId/edit`: routed Opportunities, sticky-mounted builder,
-  canonical connected Quote Workspace, and trusted edit entry points. The
-  exact quote route now leads with the approved dinner-table workspace over
-  saved tenant data, consolidated **Now**, **Opportunities**, **Clients**, and
-  role-safe **Library** orientation, visible completeness/save-health evidence,
-  and explicit handoffs to the unchanged editing, messaging, proposal,
-  payment, lifecycle, delivery, and recovery authorities. The explicit
-  `?view=administration` continuation and governed administration arrivals
-  retain the prior full control surface. The workspace composes existing quote/Workflow evidence plus the existing
-  proposal-readiness selector through one deterministic presentation contract;
-  it labels that result as proposal completeness and does not create an
-  event-wide readiness or data-authority contract. An independently default-off
-  Ambient build may expose tenant-isolated operational staffing inside the
-  selected quote's Staffing object. That authority has separate presentation,
-  server, and exact-tenant gates and does not change quoted labor, pricing,
-  booking, BEO, portal, payment, attendance, payroll, or readiness evidence.
+  Ambient-enabled Living Opportunity, and trusted edit entry points. The exact
+  quote route keeps identity, bounded condition and next action, sold scope,
+  commercial lifecycle, and contextual evidence together. The explicit
+  `?view=administration` continuation retains provider, payment, booking,
+  portal, contract, and other role-gated quote actions. The edit route owns
+  ordinary draft editing or the governed amendment flow for accepted/booked
+  work. Neither presentation creates event-wide readiness or new quote,
+  Staffing, Inventory, payment, BEO, or provider authority.
 - `/app/quote-workspace` and `/app/quote-workspace-concept`: authenticated
   admin/sales-only compatibility aliases for the canonical connected Quote
   Workspace. Existing bookmarks continue to work, but new exact-quote
   navigation uses `/app/quotes/:quoteId`; neither alias grants mutation or
   provider authority.
+- `/inquire/:slug`: share-only, `noindex` Guided Inquiry Page backed by an
+  immutable Inquiry Showcase publication. It collects event preferences
+  without prices or availability claims and creates only a server-owned
+  inquiry receipt. Administrators publish from **Library → Inquiry page**;
+  staff acknowledge, review catalog/identity drift, and convert from
+  **Opportunities** through the existing authoritative quote-creation path.
 - `/app/messages`: temporary-flagged staff Event Messaging Station. Each
   conversation remains segregated by its canonical quote/event, the inbox
   watches up to 50 same-tenant quote documents ordered by their body-free
@@ -110,17 +123,57 @@ evidence paths, freshness, blocker references, and the single next proof event.
 - `/staffing/respond?staffing=<signed-token>`: public bearer response for one
   exact staff assignment invitation. The link records accept or decline only;
   it does not establish attendance, hours, payroll, completion, or readiness.
-- `/app/schedule` and `/app/reporting`: temporary-flagged embedded operational
-  schedule and proof-safe commercial reporting workspaces.
-- `/app/operations`: Ambient Operations switchboard over existing daily,
-  business, and system routes. It adds no new backend authority.
+- `/app/operations`: canonical Calendar-first workspace for accepted/booked
+  operations. It composes the existing month/week schedule, conflicts,
+  capacity, staff-lead assignment, production checklist, and run-of-show
+  context without adding backend or live-telemetry authority. Month gives the
+  full primary canvas to the calendar and places selected context below. Week
+  uses a seven-day vertical time grid with start/duration geometry, collision
+  lanes, and a secondary detail rail. Phone widths use an agenda from those
+  same models. The converged Ambient primary navigation opens this Calendar
+  directly; the secondary Workspace & tools Operations group contains
+  **Operations**, **Clear the Deck**, and role-gated **Staff** without a
+  duplicate header menu.
+- `/app/inventory`: administrator ingredient stock, recorded purchase cost,
+  receiving, allocation, consumption, receipts, and bounded projections when
+  the browser, server, exact-tenant, role, and Firebase gates all permit it.
+  Library owns recipes and menu-cost editing; rentals remain sold quote scope,
+  not ingredient Inventory. The public Vercel frontend is older than the
+  v0.18.1 Inventory backend, so hosted browser availability and operator
+  acceptance remain separate evidence.
+- `/app/schedule`: compatibility path to the same Calendar capability. Event
+  and schedule deep routes remain reachable from their exact context or URL;
+  they are not duplicated in the Operations menu.
+- `/app/reporting`: temporary-flagged proof-safe commercial reporting
+  workspace. **Reporting Dashboard**, **Integrations Ops**, **Import Studio**,
+  and **Session Diagnostics** remain progressively disclosed Administration
+  tools, while **Workflow**, **Messages**, and **Pilot** remain Frequent tools.
+  These navigation changes are the current source contract; the public Vercel
+  edge is older, and hosted role behavior plus human acceptance remain pending.
 - `/app/catalog` and `/app/imports`: temporary-flagged embedded admin
   workspaces; the existing admin gate remains authoritative. A default-off
   Ambient build presents `/app/catalog` as **Library**, separating catalog
   choices from first-class event templates and opening each exact section or
   template inside the existing guarded editor. It adds no catalog read, save,
   pricing, revision, or role authority; browser-local evidence stays labeled as
-  local and the flag-off Catalog Admin remains the rollback path.
+  local and the flag-off Catalog Admin remains the rollback path. The Library's
+  first-quote menu action opens a menu-oriented Import Studio URL and offers a
+  header-only `quotepilot-menu-items-template.csv`; download and inspection do
+  not import, save, publish, establish cost evidence, or establish Inventory
+  readiness. When a reviewed catalog source is staged, QuotePilot binds
+  sanitized operator-declared file, source-kind, batch, type, and row context
+  into its shared-draft receipt and retains that provenance through publication;
+  the filename is context supplied by the operator, not provider attestation.
+  After a menu import, **Review catalog draft** opens the first exact accepted
+  receipt row in Menu review. It never guesses a record: an absent, stale, or
+  mismatched target produces recovery, and non-admin roles do not receive the
+  editor. Recorded cost is shown as operator-declared import context, not as a
+  recipe-derived cost or Inventory fact.
+  `npm run test:e2e:firebase:first-quote-activation` runs the disposable local
+  connected acceptance lane from starter publication through exact imported-row
+  review, a later catalog publication, and one server-authoritative saved quote.
+  It does not send or accept a proposal, book work, take payment, establish
+  recipe/physical-Inventory truth, or prove hosted or production behavior.
 - `/app/integrations` and `/app/diagnostics`: temporary-flagged embedded
   operational workspaces with their existing role and feature gates.
 - `/app/home`: compatibility path that replaces to `/app`.
@@ -146,16 +199,16 @@ authenticated hosted and human acceptance remain separate. See the
 for the delivery and evidence contract.
 
 ## Product Scope
-The current product direction is a customer-centered quote-to-booking workspace:
-Commercial Command Center, Customer Directory and Customer 360, routed Quotes,
-the Event Messaging Station, Workflow, Schedule, Reporting, and guarded
-administration, with the five-step quote builder retained as one focused
-commercial capability. The exact-token customer decision center remains the
-sole customer-facing experience.
+The current product direction is a customer-centered quote-to-booking and
+event-operations workspace: Now, Opportunities/Living Opportunity, Operations,
+Clients, Library, Workflow, Messaging, Inventory, Staffing, Reporting, and
+guarded administration. The five-step quote builder remains one focused
+commercial capability, and the exact-token proposal room remains the sole
+customer-facing decision experience.
 
-The live `v0.7.0` release promotes the reviewed customer-centered workspace,
-CWF-16 Event Workspace, Event Messaging Station, and all eight production pilot
-surfaces. QuotePilot also includes dynamic
+The public browser, Firebase backend, and source branch currently differ; see
+[`PROJECT_STATUS.md`](PROJECT_STATUS.md) before making a release claim.
+QuotePilot includes dynamic
 event-type menus, authoritative pricing, proposal export and decisions,
 tenant-locked customer/catalog CSV imports, separate deposit and final-balance
 rails in current source, public invoice-first buyer onboarding on the existing
@@ -186,6 +239,13 @@ Tenant safety mode:
 - Frontend: React 18 + Vite 7
 - Data/Auth: Firebase Firestore + Firebase Auth
 - Server runtime: Firebase Functions on Node.js 22 with modular Firebase Admin SDK APIs
+- Commercial architecture: shared Commercial / Operations Kernel -> Catering
+  Vertical Pack -> organization-scoped Tenant Configuration -> contextual
+  QuotePilot UX. Package and Event Template remain the natural catering terms;
+  Configurable Offer and Commercial Template are shared kernel contracts.
+- Pricing authority: browser preview plus revision-fenced server certification;
+  pricing-v1 remains historical evidence and pricing-v2 introduces exact
+  integer-minor-unit receipts and immutable price waterfalls.
 - Reconciliation tier: Python 3.11+ (`truthloop/`), standard library only, read-only,
   no credentials and no write path; see `docs/COMMERCIAL_TRUTH_LOOP_ADR.md`
 - Public custom domain: Vercel (`https://quotepilot.mbmapps.com`)
@@ -351,6 +411,14 @@ Optional:
   guided-selling/AI-assist gates, apply behavior, and autopilot semantics
   are unchanged. Purely presentational; not a deployment or acceptance
   decision.)
+- `VITE_INQUIRY_SHOWCASE_ENABLED` (default off. Exposes the Library Inquiry
+  Showcase, Opportunities inquiry queue, and `/inquire/:slug` browser
+  surfaces; the server `INQUIRY_SHOWCASE_ENABLED` gate and tenant publication
+  gate must also be enabled.)
+- `VITE_INQUIRY_TURNSTILE_SITE_KEY` (public site key used only for the
+  `public_inquiry_submit` action). The Functions runtime separately requires
+  `INQUIRY_TURNSTILE_SECRET`, `INQUIRY_TURNSTILE_HOSTNAMES`, and
+  `INQUIRY_RATE_LIMIT_SECRET`; do not reuse Buyer Access credentials.
 - `VITE_PILOT_CREATE_ENABLED` (default off. Renders the CREATE intake
   canvas above the new-quote builder: free text is structured by a
   deterministic browser-only extractor — no provider, no I/O, no invention;
@@ -416,6 +484,11 @@ Optional:
   No new callable, message field, catalog exposure, direct quote mutation, or
   trust boundary.)
 
+- `VITE_PILOT_MODEL_ENABLED` (default off. Exposes the Model assist control in
+  CREATE only when the server lane is independently enabled and provider-ready.
+  When false or absent, CREATE retains its deterministic Structure it workflow
+  and does not render a provider action.)
+
 - `INTENT_PARSER_ENABLED` / `INTENT_PARSER_PROVIDER` / `INTENT_PARSER_MODEL`
   (server env, all dormant by default: `false` / `none` / per-provider
   default. The owner-approved model-assisted intake lane; providers
@@ -423,10 +496,12 @@ Optional:
   `provider:model` candidate order from `INTENT_PARSER_MODEL` or the
   built-in defaults, trims the completion-token budget by request
   complexity, and may escalate once to the next configured candidate.
-  Enabling later requires creating the
+  Enabling requires creating the
   `INTENT_PARSER_OPENAI_KEY` and/or `INTENT_PARSER_ANTHROPIC_KEY` secrets
-  in Firebase Secret Manager and binding them to the parse callable when
-  it ships with the CREATE integration; until every piece exists, parsing
+  in Firebase Secret Manager and binding them only to the parse callable;
+  the OpenAI binding is present in the current source candidate. Until the
+  browser gate, server gate, provider, enabled secret, and provider account
+  capacity all exist, parsing
   fails closed with a named precondition and the deterministic browser
   extractor remains the availability floor. See
   `docs/INTENT_INTAKE_ADR.md`.)
@@ -472,6 +547,89 @@ npm run env:local:firebase -- --project tonicatering
 The command is create-only by default. If `.env.local` already exists, it
 refuses to overwrite it. An intentional replacement requires both `--replace`
 and the exact confirmation token printed by the command.
+
+### Founder-pilot realistic inventory population
+
+The fixed `ragnakok-realistic-v1` population gives the isolated staging and
+production founder-pilot tenant a useful catering dataset without creating a
+second menu, pricing, staffing, or commercial authority. It bootstraps the
+existing canonical catalog when records are absent, adds 130 creative menu
+items through the receipt-bound catalog import core, and publishes five stock
+locations, 132 ingredients, projected opening balances and cost bases, and 200
+versioned menu recipes through Inventory command receipts.
+
+The default mode is read-only:
+
+```bash
+npm run populate:inventory:ragnakok -- \
+  --project quotepilot-staging-20260804 \
+  --organization mm05366-sandbox
+
+npm run populate:inventory:ragnakok -- \
+  --project tonicatering \
+  --organization mm05366-sandbox
+```
+
+Apply requires `--apply` plus the exact `POPULATE <project> <organization>
+ragnakok-realistic-v1` confirmation printed by the dry run. The command is
+fixed to those two projects and that organization, resolves the canonical
+verified owner/admin, enables the tenant Inventory gate only in isolated
+staging, refuses to silently enable production, reuses matching canonical
+records, and is restart-safe through stable import and Inventory request
+identities.
+
+Every opening balance and supplier-labelled cost in this fixture is explicitly
+synthetic founder-pilot planning evidence—not a physical count, supplier
+acknowledgement, purchase order, or observed invoice. Replace it with real
+receiving/count evidence before live operational reliance. The catalog import
+advances `catalogRevision` and clears pricing confirmation, so **Catalog →
+Pricing setup** must be reviewed and confirmed again before authoritative quote
+saves.
+
+### Founder-pilot organization and operations twin
+
+After the realistic Inventory fixture is present, the dry-run-first
+`ragnakok-operations-v1` operation can complete the same exact tenant with a
+coherent commercial, operations, and coordination dataset: eight configurable
+Offers, eight add-ons, five rentals, eight Event Templates, four Configuration
+Rules, 20 richly described staff profiles with generated portraits, ten priced
+event quotes, eight staffing plans, four published workflow definitions, and
+six prepared event/workflow ledgers.
+
+```bash
+npm run populate:operations:ragnakok -- \
+  --project quotepilot-staging-20260804 \
+  --organization mm05366-sandbox \
+  --dry-run
+
+npm run populate:operations:ragnakok -- \
+  --project tonicatering \
+  --organization mm05366-sandbox \
+  --dry-run
+```
+
+Apply requires `--apply` and the exact `POPULATE OPERATIONS <project>
+<organization> ragnakok-operations-v1` confirmation printed by the dry run.
+The operation uses the existing catalog, server-pricing, quote/version,
+approval, Staffing, workflow-definition, and event-ledger authorities. It
+refuses non-fixture collisions and replays only records carrying its stable
+receipt identity. The 20 portrait files must already be published from
+`public/fixtures/ragnakok-staff/` before apply.
+
+Treat this as a privileged exact-tenant fixture migration, not an ordinary
+population script. It may enable the already-deployed Inventory and Staffing
+tenant settings and reconfirm the exact current catalog revision. Review and
+separately authorize those transitions before any hosted apply; preserve the
+dry-run, apply, and provider-readback receipts.
+
+All acceptance, provider-delivery, approval, qualification, availability, and
+performance examples are explicitly synthetic operating-twin evidence. They
+exercise app states; they do not prove customer consent, employee credentials,
+supplier action, provider delivery, settlement, physical inventory, or human
+acceptance. Publishing the fixture advances the catalog revision and records a
+new explicit pricing confirmation for that exact revision and verified tenant
+administrator; it does not change Commercial Change or Event Spine mutation
+gates.
 
 The root `.env.example` is for browser-safe `VITE_*` values only. Server-side
 Firebase Functions placeholders live in
@@ -603,6 +761,7 @@ server-owned gates:
 
 ```dotenv
 COMMERCIAL_CHANGE_AUTHORITY_ENABLED=false
+EVENT_OPERATING_SPINE_ENABLED=false
 OPERATIONAL_STAFFING_AUTHORITY_ENABLED=false
 REVENUE_AUTOPILOT_ENABLED=false
 REVENUE_AUTOPILOT_SENDS_ENABLED=false
@@ -611,6 +770,10 @@ NOTIFICATIONS_EMAIL_PROVIDER=none
 
 Commercial Change additionally requires the trusted tenant setting
 `commercialChangeAuthorityEnabled=true`; browser principals cannot enable it.
+Event Spine additionally requires `eventOperatingSpineEnabled=true`. In
+production, only the exact-tenant `ragnakok-operations` deployment profile may
+set both server gates true, and it couples them with enabled Staffing and
+Inventory authority; every other profile retains the false defaults above.
 Operational staffing independently requires the trusted tenant setting
 `operationalStaffingAuthorityEnabled=true`; administrators alone manage staff
 profiles, full private staff records, operator-recorded availability and staff
@@ -686,6 +849,8 @@ npm run test:e2e:ambient-release-gate
 npm run test:e2e:firebase
 npm run test:e2e:firebase:authoritative
 npm run test:e2e:firebase:starter-onboarding
+npm run test:e2e:firebase:first-quote-activation
+npm run test:e2e:firebase:guided-inquiry
 npm run build
 npm run test:truthloop
 npm run check:secrets
@@ -696,7 +861,27 @@ npm run check:docs:governance
 npm run check:capability-surfaces
 npm run check:perf:bundle
 npm run check:perf:cwv
+npm run test:perf:routes
+npm run calibrate:perf:routes
+npm run check:perf:routes
 ```
+
+The route-performance commands build an isolated production preview and use a
+disposable `demo-qp-routeperf` Auth/Firestore tenant with three read-only Functions
+emulator handlers (Firebase CLI and Java 21+ required). The temporary Functions
+source excludes local environment/secret files and all write endpoint exports.
+Per-run CLI configuration and fail-closed ADC discovery keep saved credentials
+out of the emulator process without changing the operator's credential files.
+Calibration collects five runs per route and proposes p75 plus 10% ceilings;
+the check evaluates three-run medians. Neither command deploys or changes
+committed budgets automatically. See [Performance Guardrails](docs/PERFORMANCE_GUARDRAILS.md)
+for the fixed profile, measured-byte boundary, and local-only evidence limits.
+The retained October 11 calibration passed 20 scenarios. Its first independent
+check passed all 12 browser scenarios but failed Inventory and quote-review
+timing ceilings. The final focus-repaired candidate passes all twelve visits
+and every unchanged ceiling; both receipts remain retained. Local route timing
+is qualified for that candidate, but branch-wide documentation governance still
+blocks release on 14 pre-existing timestamp debts. This is not hosted proof.
 
 `test:customer-centered-authority:emulator` is the reproducible Firebase
 Functions/Firestore trace for customer-centered mutation authority, including
@@ -903,6 +1088,28 @@ instruction if that browser is unavailable.
   - Proves the owner can choose a starter pack, see the populated menu, approve
     and save pricing, and reach `New Quote` only after the server records the
     exact current-revision confirmation receipt.
+  - Enables the governed Ambient and customer-centered workspace profiles so
+    the same lane also exercises the Library continuation into the existing
+    unsaved quote draft; navigation is not treated as a saved quote.
+- `npm run test:e2e:firebase:first-quote-activation`
+  - Starts with an authenticated owner, an empty quote history, and disposable
+    Auth, Firestore, and Functions emulators.
+  - Proves starter publication, routed menu import with current-section
+    discovery, exact receipt-bound shared-draft review, a later active catalog
+    revision, and one server-authoritative saved quote/version containing the
+    exact imported selection snapshot.
+  - Does not send or accept a proposal, book work, take payment, establish
+    recipe or physical-Inventory truth, or prove hosted/production behavior.
+- `npm run test:e2e:firebase:guided-inquiry`
+  - Starts disposable Auth, Firestore, and Functions emulators with two tenant
+    principals and an authoritative catalog, then exercises the callable
+    Inquiry lifecycle through publish, public submit/recovery, quota rejection,
+    acknowledgement, conversion preview, and atomic quote-draft conversion.
+  - Proves cross-tenant denial, exact publication pinning, idempotent recovery,
+    stale and paused rejection, quota rejection without inquiry authority
+    artifacts, and one authoritative artifact set under a concurrent duplicate.
+    It is local emulator evidence; hosted Turnstile, provider delivery,
+    production data, accessibility, human acceptance, and outcomes remain open.
 - `npm run test:operational-staffing:emulator`
   - Runs the operational-staffing authority matrix against disposable Auth,
     Firestore, and Functions emulators only.
@@ -1343,6 +1550,15 @@ Primary production deployment is manual-workflow-only:
   `backend`, or `all` surface to the fixed `tonicatering` project.
 - `Deploy Vercel Production` builds and promotes the exact release to the fixed
   `mbmapps/quoteflow` project and `quotepilot.mbmapps.com` production edge.
+- The protected `all-qualified-features` profile is the coordinated
+  founder-tenant path and is accepted only for Firebase `all` and Vercel. It
+  pins both compiled and server access to `mm05366-sandbox`; enables the
+  qualified workspace, Resend, Commercial Change, Event Spine, Staffing,
+  Inventory, Guided Inquiry, and review-only Model Assist; and keeps Buyer
+  Access, SMS, Revenue Autopilot sends, test bypasses, and hard App Check
+  enforcement off. It requires the dedicated Inquiry Turnstile public site key
+  plus enabled Secret Manager metadata for Inquiry, rate limiting, OpenAI, and
+  Resend before Firebase mutation. Deployment never publishes an Inquiry slug.
 - `Release UAT Attestation` remains available when a release needs a separately
   recorded human acceptance receipt. Its v4 receipt binds the exact tracked
   candidate profile and that profile's fixed SMS provider in addition to the
@@ -1364,6 +1580,16 @@ allowlisted human dispatcher. The same live evidence is checked again after
 the build and immediately before provider mutation. The Vercel token and the
 Firebase workload-identity ADC file are scoped to their final mutation steps;
 Firebase production rejects the legacy `FIREBASE_TOKEN` path.
+
+`v0.19.0` deployed the coordinated profile through Firebase workflow
+`34790618395` and Vercel workflow `34791516818` at exact SHA
+`bf9f48a00547e305fdf155c8d64bf3646198b705`. Provider readback proved the
+dedicated Inquiry widget configuration on both browser targets, active
+Inquiry/retention callables, and active `gpt-5-mini` Model Assist configuration;
+a fresh minimal OpenAI Responses probe returned HTTP 200. Deployment did not
+publish an Inquiry slug or prove a customer submission, authenticated model
+result, provider notification, retention deletion, accessibility, or human
+acceptance.
 
 The pre-merge candidate path is narrower than the production workflows. It
 uses the checksum-verified official Firebase v15.24.0 binary for every Firebase
@@ -1434,6 +1660,8 @@ the primary targets.
 - Skill index: [docs/SKILLS.md](docs/SKILLS.md)
 - Staff/admin operations guide: [docs/USER_MANUAL.md](docs/USER_MANUAL.md)
 - Feature inventory and implementation chronology: [docs/FEATURE_MATRIX.md](docs/FEATURE_MATRIX.md)
+- Commercial workspace design contract: [docs/DESIGN-CONTRACT.md](docs/DESIGN-CONTRACT.md)
+- Ingredient Inventory authority: [docs/INVENTORY_AUTHORITY_ADR.md](docs/INVENTORY_AUTHORITY_ADR.md)
 - Customer-centered workspace architecture: [docs/CUSTOMER_CENTERED_WORKSPACE_PLAN.md](docs/CUSTOMER_CENTERED_WORKSPACE_PLAN.md)
 - Customer identity/360 backend contract: [docs/CUSTOMER_WORKSPACE_BACKEND_HANDOFF.md](docs/CUSTOMER_WORKSPACE_BACKEND_HANDOFF.md)
 - Cloud/local orchestration blueprint: [docs/ORCHESTRATION_BLUEPRINT.md](docs/ORCHESTRATION_BLUEPRINT.md)
@@ -1442,3 +1670,116 @@ the primary targets.
 - Current operational state: [PROJECT_STATUS.md](PROJECT_STATUS.md)
 - Prioritized backlog: [DEV_TASKS.md](DEV_TASKS.md)
 - Change history: [CHANGELOG.md](CHANGELOG.md)
+
+### Event Operating Spine local acceptance
+
+The default-off `QP-TOM-020-A/B/C/D` phase, operator-work, declared-actuals and Replay slices share a disposable
+acceptance harness:
+
+```bash
+env -u DEBUG EVENT_OPERATING_SPINE_ENABLED=true npx firebase-tools --config firebase.e2e.json --project demo-event-operating-spine emulators:exec --only auth,firestore,functions "node scripts/event-operating-spine-emulator-acceptance.mjs"
+```
+
+This command must use the explicit `demo-event-operating-spine` emulator
+project. It creates synthetic local data only. The
+[Tenant Operating Model ADR](docs/TENANT_OPERATING_MODEL_ADR.md) owns the role,
+source, policy, online-only and rollout boundaries. Runtime and tenant gates
+remain off outside this disposable check; a passing harness does not activate
+a tenant or authorize deployment.
+
+For a local build of the actual Ambient Control Room and its default-off event
+panels, use all three build switches:
+
+```bash
+VITE_AMBIENT_UI_ENABLED=true VITE_CUSTOMER_CENTERED_WORKSPACE_ENABLED=true VITE_EVENT_OPERATING_SPINE_ENABLED=true npm run build -- --outDir output/tom-enabled-build
+```
+
+The default compatibility build selects the legacy application. Enabling only
+the event switch does not validate the Ambient event panels. The build switches
+do not enable server or tenant mutation authority.
+
+
+### Workflow configuration local acceptance
+
+The default-off tenant workflow Studio and event coordinator use the same
+Event Operating Spine environment and tenant gates. The disposable local
+acceptance script is `scripts/workflow-configuration-emulator-acceptance.mjs`.
+It accepts only demo projects and loopback emulator hosts and exercises real
+configuration/instance transactions. Runtime publication never enables a gate.
+See [Configuration Studio](docs/USER_MANUAL.md#tenant-workflow-configuration-studio)
+and the [accepted execution contract](docs/TENANT_OPERATING_MODEL_ADR.md#slices-e-and-f--versioned-coordination-and-configuration-studio).
+
+
+## Tenant Workflow Migration Inventory
+
+`scripts/event-workflow-migration-inventory.mjs` reads an explicitly named local
+private input bundle and emits a bounded advisory inventory:
+
+```bash
+node scripts/event-workflow-migration-inventory.mjs --input /secure/path/offline-proof.json > /tmp/tenant-workflow-inventory.json
+```
+
+Schema 2 inputs name one organization and an explicit four-pack subject cohort,
+with current source/native proof, retained publication/instance receipts and
+separate server/tenant gate observations. Inputs must be regular JSON files no
+larger than 16 MiB. The tool fails closed if proof cannot be verified. It has no network,
+credentials, application writes or apply mode. Keep private source bundles out
+of version control; exported inventory contains safe scope IDs, digests, pins
+and classifications. See the script's argument validation and the
+[Tenant Operating Model ADR](docs/TENANT_OPERATING_MODEL_ADR.md#phase-5--local-inventory-and-release-preparation)
+for source and proof boundaries. A report does not authorize migration; runtime
+commands recheck the current source and policy.
+
+The release tooling accepts the isolated `staging-event-operating-spine`
+profile for a deliberately selected candidate. It binds server and browser
+EventSpine flags and server Commercial Change Authority enforcement. EventSpine
+and Commercial Change each retain a separate tenant activation prerequisite;
+neither is enabled by publication or a candidate manifest. Existing
+release profiles retain their default-off contracts. Preparing or validating a
+candidate manifest does not deploy it, select a real tenant, activate a provider
+or establish operator acceptance. The real pilot tenant, bounded cohort,
+walkthrough and baseline remain explicit completion requirements. Use the
+[bounded pilot acceptance matrix](docs/acceptance/tenant-operating-model.md).
+
+## Local Tenant Workflow Rehearsal
+
+From the isolated local candidate with dependencies installed, run:
+
+```bash
+env -u DEBUG node scripts/tenant-operating-model-local-rehearsal.mjs
+```
+
+This launches fresh Auth, Firestore and Functions emulators, verifies all four
+workflow packs, seeds synthetic staff sign-in and starts the real app at
+`http://127.0.0.1:4174/app`. Java and the repository Firebase tooling are required;
+the configured emulator ports and port 4174 must be free. Use
+`event-admin@local.test` or `event-sales@local.test` with the emulator-only
+password printed by the launcher. A fresh password is generated for each
+disposable session. Ordinary authentication and role checks remain active. Ctrl+C
+stops the rehearsal; restarting creates a fresh disposable fixture. Do not use these synthetic credentials in hosted systems.
+
+If catalog onboarding appears, choose **Explore the workspace** as administrator.
+The verified rehearsal prepares a named event type and menu category before
+native catalog confirmation so sales can enter through normal readiness checks.
+Start with the printed **verified current-catalog booked amendment source** for
+a complete commercial example. Open Library → **Business workflows** when
+reviewing team configuration. The launcher
+prints exact event, quote and closeout links. Acceptance fixtures deliberately
+retire definitions after exercising publication and migration; existing pins
+remain readable. Publish a reviewed new version to use a fresh tenant policy.
+Use the printed verified current-catalog booked source for attendance amendments;
+legacy/changed-catalog terminal quotes remain blocked by native catalog authority.
+
+The seed uses native planners to prepare synthetic renewed acceptance and booking
+for an eligible amendment source while preserving its version, price, catalog
+authority and payment evidence. Provider sends are disabled. Synthetic delivery/acceptance fixtures establish
+local contracts only. This command does not push, deploy or activate a hosted
+tenant. The [pilot matrix](docs/acceptance/tenant-operating-model.md) separates
+this rehearsal from human, customer, hosted and provider acceptance.
+
+## RagnaKoK production workflow activation
+
+The tenant-scoped `ragnakok-workflows` Firebase profile is documented in the
+[launch runbook](docs/LAUNCH_RUNBOOK.md#ragnakok-tenant-workflow-release). It keeps
+global workflow authority off and admits only the approved production tenant;
+exact release CI, provider readback and tenant settings remain required.

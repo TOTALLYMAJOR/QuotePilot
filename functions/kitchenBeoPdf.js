@@ -16,6 +16,16 @@ function list(value) {
     : "-";
 }
 
+function operationalNoteTypeLabel(value) {
+  const labels = {
+    kitchen: "Kitchen",
+    venue: "Venue",
+    service: "Service",
+    staffing: "Staffing"
+  };
+  return labels[String(value || "").toLowerCase()] || "Operational";
+}
+
 function filenamePart(value, fallback) {
   const normalized = text(value, fallback)
     .replace(/[^A-Za-z0-9_.-]+/g, "-")
@@ -121,6 +131,17 @@ function renderKitchenBeoPdf({ payload, provenance } = {}) {
   row("Add-ons", list(payload.selections?.addons));
   row("Rentals", list(payload.selections?.rentals));
   rule();
+
+  const operationalNotes = Array.isArray(payload.operationalNotes?.notes)
+    ? payload.operationalNotes.notes
+    : [];
+  if (operationalNotes.length) {
+    heading("Operational instructions");
+    operationalNotes.forEach((note) => {
+      row(operationalNoteTypeLabel(note?.type), note?.text);
+    });
+    rule();
+  }
 
   heading("Kitchen checkpoints");
   const checkpoints = Array.isArray(payload.checkpoints) ? payload.checkpoints : [];

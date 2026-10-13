@@ -39,7 +39,7 @@ describe("catalog draft publication state bar", () => {
     expect(renderState({ status: "recovery" })).toContain('data-capability-state="recovery"');
   });
 
-  test("labels a failed synchronization as device-only and keeps publication disabled", () => {
+  test("explains a failed save in business terms and offers only the valid recovery", () => {
     const html = renderToStaticMarkup(
       <CatalogDraftStateBar
         draftState={{
@@ -50,10 +50,13 @@ describe("catalog draft publication state bar", () => {
         }}
       />
     );
-    expect(html).toContain("changes are device-only");
-    expect(html).toContain("These edits remain on this device");
-    expect(html).toContain("Review and publish catalog");
-    expect(html).toContain("disabled");
+    expect(html).toContain("Library changes are waiting to save");
+    expect(html).toContain("not in the shared draft and cannot be published yet");
+    expect(html).toContain("Try saving again");
+    expect(html).not.toContain("Check draft before publishing");
+    expect(html).not.toContain("Publish Library");
+    expect(html).toContain("Technical details");
+    expect(html).toContain("Sync failed — changes are device-only");
   });
 
   test("never labels a device-only or unpublished change as saved", () => {
@@ -65,5 +68,54 @@ describe("catalog draft publication state bar", () => {
     });
     expect(html).not.toContain("All changes saved");
     expect(html).not.toContain(">Saved<");
+  });
+
+  test("distinguishes an unavailable shared draft from a failed save", () => {
+    const publishedHtml = renderState({
+      status: "sync_failed",
+      deviceOnly: false,
+      changedRecordCount: 0,
+      error: "Failed to load the catalog setup draft."
+    });
+    expect(publishedHtml).toContain("Library draft is unavailable");
+    expect(publishedHtml).toContain("Published pricing remains active");
+    expect(publishedHtml).toContain("Try reconnecting");
+    expect(publishedHtml).not.toContain("could not be saved");
+
+    const localHtml = renderToStaticMarkup(
+      <CatalogDraftStateBar
+        draftState={{
+          status: "sync_failed",
+          deviceOnly: false,
+          changedRecordCount: 0,
+          error: "Failed to load the catalog setup draft."
+        }}
+        publishedCatalogAvailable={false}
+      />
+    );
+    expect(localHtml).toContain("Library is available in this workspace");
+    expect(localHtml).toContain("The shared draft cannot be reached from this source");
+    expect(localHtml).toContain("no shared catalog or pricing changed");
+  });
+
+  test("compresses healthy state and hides redundant technical detail", () => {
+    const html = renderState({ status: "idle", changedRecordCount: 0 });
+    expect(html).toContain("Published Library is active");
+    expect(html).not.toContain("Technical details");
+  });
+
+  test("does not claim shared publication from a local-only Library source", () => {
+    const html = renderToStaticMarkup(
+      <CatalogDraftStateBar
+        draftState={{ status: "idle", changedRecordCount: 3 }}
+        publishedCatalogAvailable={false}
+      />
+    );
+    expect(html).toContain("Library changes are in this workspace only");
+    expect(html).toContain("3 changes are available here");
+    expect(html).toContain("Publishing is unavailable from this source");
+    expect(html).not.toContain("Published Library is active");
+    expect(html).not.toContain("Check draft before publishing");
+    expect(html).not.toContain("Publish Library");
   });
 });

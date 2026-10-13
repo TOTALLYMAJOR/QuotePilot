@@ -1,14 +1,1537 @@
 # Changelog
 
-Last updated: 2026-09-03 13:49:00 CDT
+Last updated: 2026-10-12 03:41:06 CDT
 
 All notable project changes are documented in this file.
 
+## Unreleased — Current candidate refinements
+
+- Make Firebase candidate closeout tolerate bounded provider convergence
+  without weakening readback. Exact SHA
+  `0d197d26c0090e8cf96d687dea474424b58a532d` produced a verified
+  `staging-provider-acceptance` receipt, but its immediate same-SHA safe-off
+  closeout observed one scheduled Function before the provider returned a
+  valid active revision. The deployment reader now retries only the read-only
+  Hosting, Firestore Rules, and Functions verification for up to 13 attempts
+  across one minute, then preserves the final error and partial receipt. It
+  never repeats the provider mutation. The interrupted staging window received
+  no UAT attestation; independent recovery readback proves all 152 Functions
+  safe-off, the exact-SHA safe-off manifest, and exact Firestore Rules while
+  the guarded safe-off receipt remains truthfully partial.
+
+- Tighten the integrated v0.21.0 production graph without deleting capability.
+  Default-off quote-completion, decision-packet, and analytics handlers now
+  compile out of the Ambient production build, removing 6,197 bytes from the
+  first combined candidate. The remaining active integration measures
+  4,975,456 / 385,181 bytes, an exact 9,363-byte aggregate increase over
+  `f3ff212a` in the same local environment. The reviewed temporary ceiling is
+  4,978,120 / 445,422 bytes, preserving the prior 2,664-byte environment margin
+  with no percentage or future-growth allowance. Protected exact-PR CI, merge,
+  deployment, hosted UAT, adoption, and outcome evidence remain separate.
+  Concurrent analytics flush callers now share a contained provider-failure
+  result instead of exposing an unhandled rejection; queued events remain for
+  the existing retry path.
+
+- Reconcile the combined release candidate's closeout-learning, Inventory
+  draft, and commercial-comparison seams. Exact-source actuals now wait for the
+  closeout supporting disclosure and are read once through the enabled learning
+  review; fixed-time Inventory tests retain their explicit clock; and App and
+  Legacy margin evidence tests isolate the intended memo. The workflow-pack
+  integration harness also uses a monotonic local server clock so parallel test
+  execution cannot create backwards evidence time. Focused local tests pass,
+  while protected CI, hosted UAT, deployment, and outcome evidence remain
+  separate.
+
+- Make Firebase journey qualification follow the active workspace presentation
+  without weakening its authority checks. Wizard advancement now waits for an
+  observed step transition before issuing another action; saved-quote evidence
+  accepts the exact compatibility or Ambient workspace surface; and auth/rules
+  assertions locate the same seeded quote and account controls in either
+  supported shell. Identity evidence is read from the Ambient Workspace dialog
+  or the compatibility Account menu before catalog checks continue. This
+  repairs CI timing and presentation assumptions while preserving exact tenant,
+  quote, pricing, delivery, and scope-leak checks.
+
+- Stabilize native onboarding browser qualification without changing product
+  authority: readiness waits accept the independently valid sign-in,
+  onboarding, or workspace surfaces without a strict-locator collision; quote
+  setup selects its required menu item before advancing; and the role-permission
+  journey keeps a stable checkbox identity after selection. The focused
+  authoritative-pricing, Firebase authentication/rules, and role-permission
+  journeys pass locally; protected exact-SHA qualification remains separate.
+
+- Restore Firebase browser smoke entry through the native **Explore the
+  workspace** onboarding action before **New quote**. Bind that tab-scoped
+  choice to its exact tenant before allowing the workspace to render, so a
+  principal switch cannot briefly inherit another tenant's setup bypass or
+  previously loaded catalog projection.
+  Authentication and authoritative-pricing fixtures retain their tenant,
+  receipt, pricing, and portal assertions; post-invalidation onboarding is
+  checked in a fresh tab because same-tab reload intentionally restores the
+  documented session choice.
+
+- Label the disposable route-performance emulator password as an explicit
+  non-secret test placeholder so the existing secret scan can qualify the
+  candidate without adding an exemption or weakening credential detection.
+
+- Repair local browser qualification fixtures after the public/workspace split:
+  component harnesses explicitly load workspace styles, quote smoke setup waits
+  for catalog-backed controls, and geometry uses its required Ambient profile.
+  Isolate Ambient and compatibility Vite dependency caches. Preserve native
+  phone focus and the existing phone-card/tablet-table Inventory presentation.
+  Recenter the existing mobile stepper when lazy loading reattaches its rail;
+  save-flow tests wait for committed step changes before selecting controls.
+  Workflow → Edit quote now hands focus to the matching ready, visible editor
+  after lazy reveal, with stale-request and scheduled-frame cleanup.
+  Accessibility and typography browser fixtures wait for their actual task
+  surfaces before inspecting them; their assertions are unchanged. The fresh
+  full browser suite passes 90 scenarios with 314 profile-gated skips and zero
+  retries; 6,255 unit tests pass with 100 skips.
+  The route-performance lane now uses guarded disposable Auth/Firestore data,
+  real emulator sign-in, authority-generated Inventory projections, and three
+  secret-free read-only Functions handlers. Now reports fresh usable core
+  independently of unfinished or failed sibling reads; supplemental outcomes
+  retain degradation. Inventory cold arrivals now request the tenant settings
+  needed for eligibility, and ingredient pages reserve one lookahead record
+  inside the existing 200-record read bound. Failed browser runners or retained
+  browser errors cannot leave a passing receipt or generate a budget proposal.
+  Optional path-only network/CPU diagnostics are marked diagnostic-only and
+  rejected by calibration and qualification aggregation.
+  Retain all 20 successful calibration samples and reviewed p75-plus-10%
+  ceilings. The independent same-build check passes all 12 browser scenarios,
+  but Inventory and quote-review timing medians exceed their ceilings; retain
+  the failed receipt without raising budgets. The final focus-repaired candidate
+  passes all twelve visits and every unchanged ceiling; preserve both receipts.
+  Compatibility and Ambient bundles pass, with Ambient at 4,964,850 bytes
+  against its unchanged 4,968,757-byte ceiling; homepage Lighthouse also passes.
+  Branch-wide documentation governance remains blocked on 14 pre-existing
+  timestamp debts. This is local qualification, not hosted acceptance or a release.
+
+- Replace decorative one-sided status accents in Living Opportunity and
+  Operations with restrained hairlines, full-state borders, and subtle state
+  washes while preserving exact stale, attention, conflict, and selected-day
+  meaning. Retain the attendance alert rail, calendar-event color bar, and
+  reduced-motion-safe drag landing feedback as narrowly documented design
+  exceptions. This is local source and lint evidence, not hosted or human visual
+  acceptance.
+
+- Deliver the local QuotePilot progressive-performance and operability tranche:
+  public video sources attach only after an explicit action and respect motion/
+  data preferences; public, sign-in, workspace, and quote-workflow code/styles
+  have narrower boundaries; authenticated reads publish independently, page or
+  coalesce within exact principal scope, and expose route-stage marks. The
+  workspace adds responsive navigation/field geometry, route identities,
+  focus-safe disclosures, visible disabled reasons, exact commercial-consequence
+  handoffs, bounded Inventory traces, and sequential multi-line receiving over
+  the existing singular receipt authority. Release UAT v5 now requires
+  exact-candidate hosted admin, sales, customer, and cross-tenant evidence and
+  rejects local fixtures, emulators, and auth bypass. Local focused, browser,
+  build, rules, governance, and bundle checks support these bounded claims; the
+  current Ambient bundle is 4,964,683 bytes, 4,074 below the unchanged exception
+  ceiling. Inventory physical count, tenant-wide shortage projection, inbound
+  supply authority, valuation policy, passing authenticated route qualification,
+  hosted role qualification, deployment, and human acceptance remain open.
+
+- Add administrator-only, on-disclosure ingredient traceability with stable
+  bounded movement pages, verified receipt summaries, exact event-plan
+  commitments, local partial/error recovery, and focus-preserving retry. Add
+  an exact recipe-dependency review before Library or direct fixture
+  publication; the unchanged command must carry the server-issued digest and
+  is transactionally rechecked. Focused source checks cover scope, revision,
+  cursor, reconciliation, stale-response, and recovery boundaries; a disposable
+  Firebase-emulator run passes the repaired direct recipe and cost preflights.
+  This is an unreleased local candidate: the matching Firestore index is not deployed,
+  and no hosted, production, human, accessibility, physical-count, valuation,
+  procurement, readiness, or outcome proof is claimed.
+
+- Compile production JSX through React 18 createElement/Fragment bindings to
+  reduce emitted boilerplate, preserving automatic JSX for development/tests.
+  Ambient saves 151,178 raw JavaScript bytes against the matching CI-flag
+  baseline; both Ambient and compatibility now pass unchanged bundle budgets.
+  Differential tests cover key/ref/children, defaults, and spread evaluation
+  semantics. No feature, authority, visual direction, or runtime-speed change
+  is claimed.
+
+- Skip Git-confirmed deleted files during secret/document content scans while
+  retaining deletion governance, missing-canonical-document checks, and genuine
+  read failures. Eight scanner regression cases pass locally.
+- Reduce compatibility quote-workspace dependencies to its displayed event
+  identity and guest summary. The production artifact sheds 218,954 raw
+  JavaScript bytes and passes its existing budget; 55 focused tests preserve
+  display behavior. That slice left Ambient 18,394 bytes above its unchanged
+  budget; the production JSX follow-up above resolves that excess.
+  These are local artifact and test results, not measured loading-time gains.
+
+- Harden nested diagnostic-context redaction before serialization, including
+  arrays and sparse indexes, circular values, excessive nesting, accessors, and failed serializers.
+  Preserve the existing bounded event shape without adding a dependency.
+- Defer the staff application until authentication resolves, load quote-builder
+  presentation on entry through recoverable boundaries with per-import retries, and separate public
+  assets from manually grouped workspace modules. Existing portal precedence,
+  missing-configuration recovery, tenant and role checks remain authoritative.
+  Catalog settings retain their existing workspace-wide loading gate because
+  route eligibility and feature controls depend on that authority.
+- Load Client 360 proposal histories only when opened, with at most four active
+  history requests, exact-scope disposal, and per-history retry. Private email
+  controls settle separately from histories. Publish Now and Reporting reads
+  independently while keeping unfinished, unavailable, and empty states distinct.
+  These are unreleased local source changes; timing gains, hosted behavior,
+  production, accessibility, human acceptance, and outcomes need separate proof.
+
+- Expand the dedicated local accessibility lane from a contrast-only axe check
+  to the WCAG 2.0, 2.1, and 2.2 A/AA rules supported by axe, while retaining
+  the existing desktop/mobile text-size, target-size, overflow, and font-loading
+  checks. The expanded scan found and repaired the phone-width quote step rail,
+  which is now a named, keyboard-focusable scroll region in both current and
+  legacy shells. Add `npm run test:accessibility` as the focused entry point.
+  This is local automated evidence only; assistive-technology and human testing
+  remain required.
+
+- Reconcile current state, capability, performance, product-intelligence, and
+  operator documentation to QPR-005 source head
+  `dc3cdb1a33c6f75c3cff993f4a4bd9db382bf6c6`. This records source/local
+  evidence only; QPR-007 exact-head validation, push, CI, deployment, hosted,
+  provider, production, accessibility, human, and outcome proof remain open.
+
+- Replace the remaining internal **Decision Debt** label in ordinary Staff read
+  and Living Opportunity final-count copy with **pending decision review** and
+  **final-count decision** language. Internal `decisionDebt` identities,
+  Workflow routing, server bounds, and attendance/commercial authority remain
+  unchanged. Focused language and component tests pass locally; hosted,
+  assistive-technology, human-comprehension, usage, and outcome proof remain
+  open.
+
+- Orient the Library's first-quote menu-import continuation to a reload-stable
+  Import Studio route and a deterministic, header-only canonical CSV template.
+  The template maps menu item, existing event type and menu section, customer
+  price, recorded item cost, pricing type, and active state without embedding
+  catalog IDs or sample records. Download, upload, inspection, staging, save,
+  publication, customer price, recorded cost, recipe/menu-cost evidence, and
+  physical Inventory readiness remain distinct states. Focused component/model
+  tests and local 390/768/1440 route checks prove the exact handoff, template
+  filename, page containment, unchanged local catalog, and zero axe violations.
+  The route now supplies its main landmark and heading hierarchy, labels the
+  file control, and makes the horizontally scrollable progress rail keyboard-
+  focusable. Catalog imports now bind sanitized, operator-declared source file,
+  type, batch, and row context into the exact preflight and save receipt, retain
+  it through shared-draft merges and publication lineage, and stamp it on the
+  active catalog record without treating it as business content for conflict
+  hashes. Legacy changes remain compatible, and partial or invalid provenance
+  fails before draft authority. A staged or reconciled menu-item receipt now
+  carries its first exact accepted row into the administrator Library editor,
+  clears incompatible menu filters, and focuses that record. Missing, stale,
+  cross-batch, incomplete, or non-admin requests fail closed without choosing a
+  substitute item. The review labels recorded cost—including zero—as an
+  operator-declared value rather than recipe evidence, and keeps staged items
+  outside recipe attachment until publication. Focused client/server tests
+  cover this path. A disposable connected Firebase-emulator lane now starts
+  from an empty quote history, publishes the starter foundation, discovers the
+  current menu sections during routed import, stages one receipt-bound menu
+  item into the shared draft, opens that exact item for review, publishes the
+  next catalog revision, and saves one server-authoritative quote/version that
+  retains the exact imported selection snapshot. This is local automated proof
+  only: proposal delivery, customer acceptance, booking, payment, recipe truth,
+  physical Inventory, hosted/production behavior, assistive-technology use,
+  human acceptance, activation timing, and outcomes remain open.
+
+- Add a disposable Firebase-emulator Guided Inquiry acceptance lane covering
+  cross-tenant callable denial, exact active-publication reads, paused and stale
+  submission rejection, idempotent content-free recovery, tenant/IP quotas
+  without inquiry authority writes, stale conversion rejection, and one atomic
+  quote/customer/portal/version/receipt artifact set under a concurrent
+  duplicate. This is local automated evidence only; hosted Turnstile, provider
+  notification, production data, accessibility, human acceptance, and outcome
+  proof remain open.
+
+- Align the Library's semantic and keyboard order with its phone/tablet visual
+  hierarchy: quote readiness now precedes the long catalog in the DOM, while
+  explicit desktop grid placement preserves the selected catalog-left,
+  readiness-right 67/33 composition. Component and 390/768/1440 browser checks
+  cover semantic order, focusable-control order, responsive geometry, and axe;
+  hosted, assistive-technology, human-comprehension, and outcome proof remain
+  open.
+
+- Repair the phone-width Inventory evidence table as a named, keyboard-
+  focusable contained-scroll region. The instruction remains visible wherever
+  the intentional seven-axis table can overflow, including the capped desktop
+  surface, and fixed column layout keeps the final purchase-pack column fully
+  inspectable at maximum scroll. Component-browser checks at 390/768/1440 cover
+  page containment, keyboard scrolling, complete final-column visibility, and
+  forced-colors focus width and color. Complementary route tests prove local
+  fallback cannot self-enable Inventory without tenant authority and that an
+  authenticated Firebase-emulator administrator with the tenant gate can render
+  the same seven-axis table. Hosted, production, assistive-technology, human-
+  comprehension, and outcome proof stay open.
+- Continue quote-ready administrators and sales staff from Library into the
+  existing guarded new-quote draft path. The action explicitly states that it
+  opens an unsaved draft, remains hidden from unauthorized roles, and does not
+  report navigation as quote creation, save, completion, publication, or send.
+  A disposable Firebase-emulator administrator journey now reads the
+  authoritative organization quote IDs immediately before the action, proves
+  the baseline is empty, and proves the identical empty set remains after the
+  new-quote route opens.
+  At tablet and phone widths, readiness now precedes the long Library catalog so
+  the continuation remains discoverable without changing the desktop rail.
+- Make first-quote readiness the primary Business Setup Center outcome. A
+  current published catalog that can create quotes now says so even when cost
+  evidence, starting points, or provider setup remain incomplete; those items
+  stay visible as secondary improvements, and provider connection is scoped to
+  provider-backed actions rather than presented as a quote-creation blocker.
+  Its aggregate machine-readable state now distinguishes fully `ready` setup
+  from `quote-ready` setup with nonblocking follow-up, while preserving the
+  separate quote-readiness authority and action.
+  No quote, publication, proposal send, or provider outcome is created by this
+  presentation change.
+- Bind the existing repository changelog and accepted ADR history into the
+  Proofloom control-plane manifest. Proofloom now fails validation if either
+  record authority disappears; the binding does not create a parallel log or
+  imply release, deployment, or human acceptance.
+- Repair the administrator's starter-catalog journey so the open Library editor
+  adopts the exact server-staged draft before review, while keeping pricing
+  confirmation exclusively inside the publish authority. Firebase-emulator
+  acceptance now covers starter, bypass, import, and manual setup plus the
+  current opportunity-first authoritative quote path; this is local automated
+  evidence, not hosted, production, provider, human, or outcome proof.
+- Add dependency-ordered `QPI-*` delivery packets to the canonical backlog.
+  Each packet names its catering actors, `JRN-*` journey stages, `CAP-*`
+  requirements, acceptance criteria, and required evidence classes; the journey
+  ledger links back to those packets. Stripe Connect is explicitly deferred and
+  excluded from the active dependency graph without changing its stopping-point
+  authority or ordinary payment acceptance.
+- Enforce the repository's Codebase Memory graph-first retrieval protocol with
+  a repository-local Codex hook. Supported source-read and edit routes now
+  remain blocked until the exact project, current index, and material coverage
+  checks run in order; session-start context preserves the same stop rule after
+  resume or compaction. Hook trust review and specialized-tool limitations
+  remain explicit rather than being described as universal enforcement.
+- Add a versioned layered evaluation manifest and dependency-free receipt
+  runner. Authority/integrity, AI grounding, journey continuity, recovery,
+  telemetry, operator outcomes, and human accessibility remain independent
+  dimensions; automated checks emit candidate-bound immutable local receipts,
+  while manual and higher evidence classes remain explicitly unproven.
+- Refine the staff login into one recovery-first access path: one dominant
+  sign-in action, explicit registration context, visible password guidance and
+  reveal control, and an inline email recovery state when password reset cannot
+  begin. Authentication, tenant, role, and email-verification authority remain
+  unchanged; focused component checks are local evidence only, while responsive
+  browser, hosted authentication, and human acceptance remain pending.
+
+## Unreleased — Quote-to-Confidence local candidate
+
+- Keep the six default-off Quote-to-Confidence capabilities out of disabled
+  bundles with compile-time gates and lazy presentation boundaries. Exact
+  config-free local matrix builds measure 3,657,288 / 385,181 bytes for
+  compatibility and 4,962,837 / 446,522 bytes for Ambient. The exact
+  production CI environments measure 3,657,606 / 385,181 and 4,963,155 /
+  446,541 bytes respectively; exact-PR CI run `35265592125` confirmed the
+  compatibility result. The temporary exception is pinned to those larger
+  literal production-matrix artifacts without percentage or future-growth
+  headroom.
+
+- Fence cancelled capture rollback to its exact persisted line-claim revision, leaving newer reconciliation claims and their replacement protection untouched.
+
+- Stop subsequent mobile count requests when the account, organization, location, role, or capture gates change; retain any already-started line outcome in its original device draft. Permit reviewed empty-shortage rebases and independent cancellation, with resolution read from the backend. Share exact recorded-cost comparison preparation across App and the enabled Legacy decision surface.
+
+- Require presentation-only capability contracts to own no callable exports; read and mutation authorities retain their complete lifecycle contracts, enforced by downgrade rejection tests.
+
+- Bind each new presentation surface to its own asserted state contract. Preserve malformed versus contradictory learning evidence, reload parent accepted sources on refresh, and report category aggregates with unavailable zero-denominator rates.
+
+- Add separately default-off quote completion, decision packet, exception-first Inventory, internal supply planning, mobile count capture, and post-event learning gates. The completion command points to one existing field or action; comparison and accepted handoff retain exact revision and receipt references.
+- Add server-owned internal supply-plan draft, approval, rebase and cancellation receipts, with transactionally current shortage/source evidence. Add authoritative revision-fenced physical stock counts; neither capability contacts suppliers, places orders, reserves expected supply, or changes commercial policy.
+- Add seven-day native IndexedDB shelf drafts for an already-loaded app, per-line exact-request reconciliation and retained conflicts. Offline is device persistence, not server persistence or cold-start support.
+- Add read-only accepted-event learning with separate attendance, ingredient, correction, saved-cost-basis and financial rows. Recommendations route to existing authorities. Only a matching recipe/pack publication receipt plus explicit operator confirmation creates an applied observation; template/workflow application tracking and event-bound receiving remain blocked by integration.
+- Reconcile capability/field-state contracts and Product Intelligence measurement obligations. Local source and automated evidence do not establish hosted, provider, production, human acceptance, adoption, or catering outcomes.
+
+All notable project changes are documented in this file.
+
+## Unreleased — Event and Commercial activation receipt correction- Enforce the Product Intelligence System with a fail-closed structural and
+  change-impact validator in `lane:core`. Task plans now classify explicit
+  catering-value/product-intelligence work correctly, emit the required actor,
+  job, improvement, outcome/metric, guardrail, and evidence fields, and require
+  the index plus release/experiment ledger. The PR template exposes the same
+  declaration, while mechanical work requires an explicit not-applicable
+  rationale instead of an invented catering benefit.
+- Add the canonical QuotePilot Product Intelligence System: eight linked
+  catering-value artifacts covering outcomes, user capabilities, metric
+  definitions, privacy-bounded observation signals, baseline/target policy,
+  owner/customer journeys, quality guardrails, and a release/experiment ledger.
+  Existing analytics and authority records are mapped as implemented,
+  derivable, partial, or not yet observable; proposed targets remain pending
+  owner acceptance and no new runtime telemetry or outcome claim is implied.
+- Repair the connected Firebase authentication and tenant-isolation browser
+  acceptance suite to use the unambiguous header **New quote** control, the
+  quote-builder **Account** identity surface, and the routed Quote/Conversation
+  workspaces after the Calm Four shell migration.
+- Extend the exact-tenant `ragnakok-realistic-v1` population operation with a
+  revision-fenced, idempotent margin-cost seed. It copies only complete,
+  current Inventory recipe-cost projections onto otherwise uncosted
+  fixture-owned menu rows, preserves every selling price, excludes
+  operator/unclassified rows, records explicit synthetic provenance, advances
+  the catalog revision once, and binds pricing confirmation to the resolved
+  verified tenant administrator. Rows without recipe evidence remain uncosted
+  and margin continues to fail closed.
+- Make candidate preflight verify enabled Secret Manager metadata for every
+  Google Calendar and Model Assist binding before it can reserve an immutable
+  receipt or attempt a Firebase mutation. The preflight still never reads or
+  creates secret values, and the same names are rejected from Functions
+  dotenv and runtime plaintext evidence.
+- Reconcile the combined commercial test contract with the exact server-bound
+  Inventory and attendance preview payload, and keep advanced pricing-source
+  assertions stable when independent cost-evidence warnings are also present.
+- Keep the revision-bound Kitchen BEO handoff visible in both supported event
+  workspace presentations, including its explicit local no-receipt boundary,
+  and make arrival focus tolerant of environments without `scrollIntoView`.
+- Move the default-off Create intake implementation behind a recoverable lazy
+  boundary, reducing the local complete-flag Workspace chunk from 461,976 to
+  432,767 bytes while preserving its draft-only authority and explicit loading
+  and recovery states. Reproduce clean committed HEAD under the same flag
+  matrix, record that it already exceeded the preceding exception, and pin the
+  Ambient aggregate exception to the exact-source 4,968,733-byte graph with a
+  4,968,757-byte ceiling
+  without widening the unchanged 445,422-byte largest-chunk ceiling. This is
+  source/local bundle evidence only; exact-PR CI, Core Web Vitals, hosted,
+  production, and human-acceptance proof remain open.- Recalibrate the existing expiring graph-specific bundle exception to the
+  literal combined-candidate CI matrices: 3,652,845 / 385,181 bytes for
+  compatibility and 4,947,989 / 445,422 bytes for Ambient. The ceilings add no
+  future-growth allowance; exact-PR CI, Core Web Vitals, hosted timing, and
+  human acceptance remain separate gates.
+
+- Add **Library → Delivery** as the governed activation-authoring path for the
+  staffed-buffet pilot. Administrators can review versioned Blueprint,
+  quantity-policy, and purchasing-pack source, bind an exact Blueprint revision
+  to an active Offer, and enable Delivery Planning only after validation. The
+  save path rejects invalid published declarations, stale or ambiguous
+  references, missing menu components, malformed work blocks, invalid guest
+  bounds, and mismatched purchasing-pack units. The editor invents no ratios or
+  production policy, and a checked draft is not described as saved, hosted, or
+  human accepted.
+- Include the Library's separately loaded menu inventory when validating a
+  Delivery Planning draft. Valid component IDs now pass the same publication
+  checks whether menu records live in the catalog shell or the managed Menu
+  workspace; the validation snapshot is transient and does not duplicate or
+  persist menu authority.
+- Let actions launched from the Workspace & tools drawer continue through that
+  drawer's own browser-navigation guard. Workflow, Messages, Pilot, Operations,
+  Clear the Deck, Inventory, and Staff now reach their existing role-safe
+  routes while Back still dismisses the overlay without changing route.
+- Add the safe-off Delivery Planning Phase 1 source slice. Offers and Event
+  Templates can preserve exact Delivery Blueprint references; published
+  tenant-declared quantity policies compile staffed-buffet work blocks,
+  production output, ingredient demand, and exact-evidence-bound purchasing
+  quantities into a session-only Delivery Proposal inside quote creation.
+  Missing policy, policy bounds, required components, retained override
+  conflicts, and late domain results fail visibly. Optional removal and
+  deliberate overrides remain session-only and recoverable. The surface keeps
+  Commercial, Production, Staffing, Inventory, and Purchasing evidence
+  separate, never changes pricing or quote save eligibility, and performs no
+  assignment, allocation, ordering, publication, provider, BEO, or readiness
+  action. Focused compiler/component tests are local automated evidence;
+  tenant configuration, connected domain evidence, routed handoffs, rendered
+  responsive proof, CI, hosted use, human acceptance, and the 30% pilot outcome
+  remain open.
+
+- Make the populated client profile progressively available instead of
+  withholding the relationship overview behind retained proposal-history and
+  private email-control reads. The exact customer record and bounded linked
+  opportunities now load in parallel and render first; proposal-version reads
+  and the Revenue Autopilot control projection then settle concurrently behind
+  an explicit loading or recoverable partial state. Initial supplemental
+  failure keeps the exact client and current opportunities visible, while a
+  later refresh continues to preserve the last completed profile.
+
+- Reframe the existing session-only Commercial Scenario Workbench as a
+  production-grade Commercial Decision Surface. The responsive hierarchy now
+  moves from the Current commitment through the proposed scenario to one
+  support answer and four ordered consequence clauses:
+  Commercial, People, Supply, and Execution. Exact quote totals, staffing gaps,
+  and ingredient shortages remain bound to their existing records; margin is
+  labeled unavailable without an exact paired model, BEO remains a review
+  dependency rather than a regeneration claim, and final-count impact is
+  explicitly not checked. Current/Scenario comparison and the explanation for
+  the answer remain available without exposing internal source, revision, or
+  authority terminology. Compare Current, Scenario B, Review change, and
+  Discard reuse the existing temporary scenario actions and introduce no new
+  persistence or apply path. Focused unit and Playwright coverage exercise the
+  real saved-quote editor at 390, 768, 1008, and 1440 CSS-pixel viewports; this
+  is source/local candidate evidence only, not hosted, production-data, or
+  human-acceptance proof.
+
+- Add a revision-bound Google Calendar event-copy workflow to Integrations Ops
+  and the focused Operations event. An administrator connects an independently
+  consented primary calendar, then deliberately publishes, updates, checks, or
+  removes one narrow copy of an exact accepted/booked quote revision. Stable
+  provider IDs, accepted-snapshot verification, ETag fences, one-use OAuth
+  state, encrypted refresh tokens, one serialized connection-mutation lease,
+  connection-generation binding, replay-safe dispatch ownership, private
+  callable-owned records, cleanup-before-disconnect, and exact uncertain
+  revocation retry prevent duplicate, stranded, or silent overwrites. An
+  uncertain exchange requires explicit review of Google third-party access
+  before another authorization attempt. An unverified revocation-only grant can
+  be revoked without falsely claiming that older retained copies were cleaned.
+  Expired authorization recovery replaces only unused pending attempts,
+  converts interrupted exchanges to named uncertainty, activates only a
+  previously verified retained grant, and routes any unverified grant to
+  explicit revocation. Rejected credentials can also be revoked without
+  concealing prior copies that require cleanup after reconnection.
+  The callback extends a bounded exchange lease beyond its explicit runtime
+  ceiling before contacting Google, and a late uncertain grant can bind only to
+  its exact unreplaced recovery record, so an expired authorization window
+  cannot race active token work. Disabling
+  publishing keeps credential revocation available when provider cleanup is
+  configured and explicitly retains any external event copies.
+  Calendar
+  receives only event title or quote reference, time, tenant time zone, venue,
+  and private ownership fingerprints—never attendees, customer/staff contact,
+  menu, dietary, pricing, payment, notes, BEO, or checklist content; free-text
+  title/venue may still identify a customer and default visibility follows the
+  selected calendar's sharing policy. This is a
+  source/local candidate; provider consent, Secret Manager bindings, hosted
+  behavior, live Calendar mutation, and human acceptance remain unproven.
+- Add revision-bound Event operational notes inside the trusted Kitchen BEO
+  workspace. Same-tenant staff can record typed internal or BEO-visible
+  instructions, correct them with immutable prior/result receipts, explicitly
+  review the retained journal after a quote revision changes, and reach one
+  Event-brief review action when newer notes supersede the recorded checklist
+  time. Only the verified content-only visible projection enters the server PDF
+  and versioned BEO fingerprint; internal notes, actors, and history stay out.
+- Bind proposed Staffing change intelligence to the server's actual private
+  prospective quote revision and the exact Commercial Change receipt. The
+  response carries aggregate role evidence only: same-window comparisons may
+  reuse confirmed counts, changed timing and stale plans withhold coverage, and
+  an absent plan establishes zero assignments. It writes no Staffing plan,
+  assignment, invitation, schedule fence, pricing, authorization, or quote.
+- Keep saved-window staffing evidence from becoming a false proposed-coverage
+  claim. When an edited event changes date, start time, or duration, Fulfillment
+  preserves Current coverage and the proposed role requirement but marks the
+  Working need unverified until availability and conflicts are evaluated for
+  that window; no assignment, invitation, price, or quote state changes.
+- Coordinate eligible Quote Edit Inventory evidence with the authoritative
+  Commercial Change simulation. Inventory now evaluates the private
+  server-built prospective quote revision in a read-only transaction, accepts
+  only explicit kitchen output quantities, and returns a separately receipt-
+  bound observation. Missing or failed Inventory evidence stays visible and
+  cannot alter pricing, authorization, allocation, ordering, or quote state.
+- Turn stale Kitchen BEO and production-plan invalidations into exact recovery
+  actions. Operators can open the current quote's Kitchen BEO or event
+  production checklist directly from Commercial Change Intelligence; neither
+  handoff regenerates an artifact, changes checklist state, nor reconciles the
+  invalidation without a separate reviewed action.
+- Make blocked quote saves recoverable in place: each supported blocker now
+  opens and focuses its exact event, customer, or menu control instead of
+  leaving the operator to search the proposal. Tablet and mobile surfaces put
+  the real save-or-review action in the sticky bar and keep Quote details as a
+  secondary action; neither blocker review nor navigation changes quote,
+  pricing, revision, or publication authority.
+- Complete Attendance Slice F through the existing post-event closeout
+  authority. Same-tenant staff can record or correct one 1–400 actual count
+  after the tenant-local closeout date with a required source type/note,
+  compare-and-set revision, idempotent request identity, server actor/time, and
+  immutable prior/result receipt. The server revalidates the exact accepted
+  version and acceptance receipt transactionally; Firestore keeps the journal
+  and receipts callable-only.
+- Expose the bounded exact-source attendance projection in Customer 360, Event
+  Focus, and the Control Room Actuals boundary. Priced guests remain separate;
+  mismatched accepted-source evidence is labeled stale and withholds the count.
+  The record never reprices, invoices, refunds, settles, changes staffing/BEO,
+  advances event phase, completes closeout, sends a message, or establishes
+  Replay. This is source/local evidence only; deployment, hosted authenticated
+  use, production records, provider outcomes, and human acceptance remain open.
+- Make the Commercial Scenario Workbench comparison responsive and evidence-
+  explicit. Wide layouts compare Current with every session alternative;
+  stacked layouts compare Current with the selected scenario and its exact
+  difference. Exact, retained, updating, and unevaluated projections remain
+  distinct, and no new apply or persistence authority is introduced.
+- Turn the Library overview into a bounded read-only decision index by bringing
+  normalized Offer, Menu, Service, Rental, Template, Pricing, and Rule context
+  forward from the existing organization-scoped catalog projection. The full
+  editors remain the only mutation path, partial Menu evidence stays
+  unavailable, and the readiness rail remains the sole ranked setup action.
+- Replace full latest-page rereads after a server-confirmed conversation signal
+  with compound-cursor delta catch-up. The callable returns only bodies newer
+  than the last loaded `(createdAtMs, messageId)`, follows bounded continuation
+  pages during a burst, revalidates authority on every page, retains already
+  loaded history, and emits an aggregate-only catch-up duration observation.
+- Reduce first-open conversation work from as many as 500 returned bodies to
+  the latest 50, with a deterministic validated cursor and explicit **Load
+  older messages** recovery for additional history. Every page retains the
+  callable's initial and final authority checks. Aggregate browser performance
+  marks now expose route-usable, inbox-visible, and thread-interactive duration
+  without recording tenant, quote, customer, portal, message, or body identity.
+- Speed up repeated Messaging Station thread opens without creating a second
+  conversation authority. Concurrent exact-identity body loads now share one
+  callable request; up to 25 normalized results remain in application memory
+  for 30 seconds. Manual and live-signal refreshes bypass retained results, and
+  a confirmed send invalidates the thread cache before the next open.
+- Turn Library setup into an ordered first-quote activation path across
+  business basics, offers and menu, selling price, and optional cost visibility.
+  The first unfinished milestone owns the action, an existing-menu path opens
+  the established Import Studio, and detailed readiness remains available
+  without implying that imported data is published or that missing cost blocks
+  quoting.
+- Restore the Ambient Now review ledger's usable desktop, tablet, and mobile
+  width by removing a stale priority-number grid left after that numbered
+  presentation was retired. Priority identity, saved commercial context,
+  consequence, and its one continuation now stay together without overlap;
+  responsive browser coverage rejects collapsed review rows.
+## v0.19.0 coordinated Inquiry and Model Assist production release - 2026-09-13
+
+- Published protected PR `#145` as exact tagged `main` SHA
+  `bf9f48a00547e305fdf155c8d64bf3646198b705` (`v0.19.0`) after its nine PR
+  checks and exact-main CI run `34787753902` attempt 2 passed. Governed Firebase
+  workflow `34790618395` deployed Hosting, Firestore, and all 142 then-current
+  Functions; governed Vercel workflow `34791516818` promoted immutable
+  deployment `quoteflow-bgq2wztfk-mbmapps.vercel.app`.
+- Activated the protected `all-qualified-features` release profile for the
+  qualified staff workspace, Inquiry Showcase, and review-only Model Assist
+  presentation, bound to organization `mm05366-sandbox`. Buyer Access, owner
+  SMS, Revenue Autopilot sends, local/test bypasses, and hard App Check remained
+  closed. Model output remained low-confidence, confirm-before-apply, stateless,
+  and non-authoritative.
+- Provider readback proved both public origins, reviewed Inquiry and Turnstile
+  configuration, 142 active `us-central1` Functions, the hourly purge scheduler,
+  and `parseIntentDraft` using OpenAI `gpt-5-mini` with its managed secret. It
+  did not prove a published Inquiry slug, real customer submission,
+  model-authored operator outcome, notification delivery, retention deletion,
+  accessibility, human acceptance, or commercial outcomes.
+- Protected workflow `34551712371` also bound the founder-tenant activation to
+  exact current Firebase and safe-off Vercel receipts and read back Commercial
+  Change and Event Spine as enabled only for `mm05366-sandbox`; this established
+  evidence and did not mutate quote, event, provider, payment, or completion
+  state.
+
+## v0.18.2 public release and operating-twin population - 2026-09-10
+
+- Published tag `v0.18.2` at exact SHA
+  `3fb1443bb6e394133340ede3716548c92b24beea` after exact-main CI run
+  `34530609347`, then deployed the safe-off Vercel production profile through
+  workflow `34532297958`. The protected workflow verified the public edge and
+  promoted immutable deployment `quoteflow-c8t2j8jk0-mbmapps.vercel.app` to
+  `https://quotepilot.mbmapps.com`.
+- Applied and read back `ragnakok-operations-v1` for exact organization
+  `mm05366-sandbox` in isolated staging and production. Both environments now
+  contain the 20 generated portrait-backed staff fixtures, ten event quotes,
+  eight Staffing plans, four workflow definitions, and six event/workflow
+  ledgers, with Inventory and Staffing enabled and catalog pricing confirmed.
+  Post-apply dry runs reported zero event quotes left to create.
+- Kept Commercial Change and Event Spine mutation gates off. All fixture
+  acceptances, qualifications, performance history, approvals, and delivery
+  fields remain synthetic and are not customer, employee, provider, supplier,
+  settlement, revenue, or human-acceptance evidence.
+
+## Operating-twin customer claim provenance correction - 2026-09-10
+
+- Correct the privileged operating-twin loader to use the canonical trusted
+  quote-projection provenance for its derived customer-email claim while
+  retaining separate synthetic fixture provenance on every populated record.
+  The loader persists only the authority-owned claim patch. Quote claim
+  validation remains unchanged and fail-closed. Complete receipt-backed
+  synthetic staff pairs are now replay-safe after an interrupted population;
+  incomplete or non-fixture pairs still fail closed.
+
+## Ambient staffing release-fixture lifecycle - 2026-09-10
+
+- Pinned the Ambient accessibility fixture to an explicit future quote expiry
+  so its enabled staffing-recommendation contract remains deterministic instead
+  of silently aging into the correctly restricted expired lifecycle.
+
+## Documentation governance baseline correction - 2026-09-10
+
+- Corrected local committed-diff validation so documentation timestamps are
+  compared with the selected diff range baseline instead of the current
+  commit, matching the behavior used in CI.
+
 This changelog is backfilled from git history and will be maintained going forward.
+
+## Unreleased — documentation authority reconciliation
+
+- Reconcile current operational docs around the split evidence surface:
+  `v0.16.6` public Vercel frontend, `v0.18.1` Firebase Functions, `v0.16.3`
+  Firebase Hosting fallback, live synthetic founder Inventory population, and
+  the later local operating-twin branch.
+- Define current application placement for Living Opportunity, Quote
+  administration, governed edit, Operations, Inventory, Library, Staff, and
+  Customer 360. Mark the CWF-16 Event Workspace suite as historical foundation
+  and compatibility provenance rather than the ordinary Ambient exact route.
+- Reconcile Inventory Phases 2–8 as merged/backend-deployed while preserving
+  public-browser and human-acceptance gaps. Record the operating-twin loader as
+  a privileged exact-tenant migration because it can change tenant gates and
+  pricing confirmation.
+- Reduce Project Status and Dev Tasks to their canonical current/open roles,
+  refresh the machine state and project indexes, register the Design Contract,
+  and make documentation governance require a valid timestamp across the full
+  governed Markdown corpus while retaining changed-file advancement checks.
+
+## Unreleased — realistic founder-pilot operating twin
+
+- Add a second, dry-run-first, confirmation-gated population operation that
+  composes the existing commercial, quote, approval, Staffing, workflow, and
+  event authorities for the same exact founder-pilot tenant. Its coherent
+  `ragnakok-operations-v1` fixture contains eight configurable Offers, eight
+  add-ons, five rentals, eight Event Templates, four Configuration Rules, 20
+  rich staff records, ten priced event quotes, eight Staffing plans, four
+  published workflow definitions, and six prepared event/workflow ledgers.
+- Add 20 generated, non-person staff portraits as public app assets. Every
+  fixture acceptance, provider-delivery field, approval, qualification,
+  availability claim, and performance history is marked synthetic and is not
+  customer, employee, provider, supplier, settlement, or human-acceptance
+  proof. Commercial Change and Event Spine mutation gates remain unchanged.
+- Preserve the three-layer architecture: Offers, pricing, margin, and quote
+  revisions remain Commercial truth; event commitments, Staffing, and
+  Inventory remain Operational truth; workflows and approvals coordinate those
+  authorities without replacing them.
+
+- Add a fixed, dry-run-first, confirmation-gated population operation for the
+  exact `mm05366-sandbox` tenant in isolated staging and production. The
+  versioned fixture adds 130 creative catering menu items, five kitchen stock
+  locations, 132 ingredient definitions, explicit synthetic opening and cost
+  projections, and 200 versioned recipes. It composes the existing catalog
+  import and Inventory command/receipt authorities; it does not create a
+  parallel menu, pricing, staffing, commercial, or supplier authority.
+- Preserve the requested Chicken Alfredo decision scenario as fixture math:
+  `0.4 lb × 175 guests = 70 lb` against a `64 lb` projected opening balance,
+  producing a six-pound shortage. `Supplier B` remains a clearly labelled
+  synthetic cost-source assumption, not supplier acknowledgement or a purchase
+  action.
+- Treat catalog population as a commercial consequence: every newly applied
+  menu batch advances the catalog revision and clears pricing confirmation for
+  deliberate operator review before authoritative quote saves.
+- Apply and read back the fixture in both exact live targets. Isolated staging
+  verifies 525 menu items, 132 ingredients, 132 stock states, 132 cost states,
+  and 200 recipe/menu-cost projections at catalog revision 23. Production
+  verifies 538 menu items with the same 132/132/132/200 Inventory counts at
+  catalog revision 60; its pre-existing Chicken identity and stock location
+  were preserved. Both pricing confirmations are intentionally false pending
+  human review.
+
+## v0.18.1 — Inventory callable hotfix
+
+- Correct the Inventory callable transport policy exposed by the first
+  production stock-location attempt. `getInventoryWorkspace`,
+  `applyInventoryCommand`, and `previewEventInventory` now explicitly monitor
+  App Check instead of enforcing it while both approved production browser
+  builds still leave their App Check provider off pending registration. The
+  verified-email, same-tenant staff/admin, runtime, tenant-setting, revision,
+  idempotency, immutable-receipt, and direct-browser-write boundaries are
+  unchanged. A deployment-safety test prevents hard enforcement from returning
+  before the browser can issue the required token. Exact-main CI run
+  `34430375712` passed, and Firebase production deployment run `34431964494`
+  deployed release SHA `8bada8d16300a9f897df5f7a640e07b4830ab7ce`
+  and verified all 128 active Functions on the `ragnakok-operations` profile.
+  A successful operator retry and human acceptance remain separate evidence.
+
+## v0.18.0 — Capability realization
+
+- Add the explicit `ragnakok-operations` Firebase production profile and
+  protected tenant operators needed to promote the complete operating model
+  without granting unrelated tenants access. The profile binds the exact
+  `mm05366-sandbox` workflow scope, enables the Staffing and Inventory server
+  gates, and applies that same exact-organization runtime fence to Inventory
+  callables and invalidation triggers. It leaves buyer access, Revenue Autopilot sends, SMS, and Stripe
+  Connect unchanged. Separate update-only operators verify the exact tagged
+  all-surface deployment before changing the Staffing, Inventory, or coupled
+  Commercial Change and Event Spine tenant fields, then require provider
+  readback. Source alone is not deployment or tenant-activation evidence.
+- Isolate the new Commercial Scenario, Inventory, and fulfillment modules in a
+  dedicated production chunk. The compatibility build's largest JavaScript
+  chunk falls from 559,531 to 385,181 bytes without increasing its 399,665-byte
+  ceiling. The temporary convergence exception records the resulting
+  3,497,562-byte total, an 18,848-byte (0.54%) measured increase for the new
+  capability rather than an unbounded allowance. The Ambient profile records
+  its corresponding exact 4,596,639-byte total while retaining the existing
+  435,565-byte largest-chunk ceiling; its measured largest chunk is 391,912
+  bytes.
+
+- Evolve the static Living Commercial Twin into the first-slice **Commercial
+  Scenario Workbench**. The saved **Current** commitment is immutable while an
+  operator may edit a whole guest count from 1–400, which creates **Scenario
+  A**, duplicate it once as **Scenario B**, switch among the three session-only
+  views without page navigation, and discard either temporary alternative.
+  Each working scenario is bound to a unique `scenarioId`, exact
+  `baseQuoteRevisionId`, monotonic `generation`, deterministic `inputDigest`,
+  exact whole `guestCount`, and creation time. Cached projections restore
+  instantly on scenario switch;
+  while a newer generation recomputes, the last accepted result may remain
+  visible only as explicitly retained evidence. Exact scope matching prevents
+  a late Commercial or Inventory response from painting a newer scenario.
+  Changing a non-guest draft or ingredient-selection input rotates the bounded
+  scenario context, clears A/B and their caches, and rejects queued work from
+  the prior context. Current non-guest drafts use the same exact five-field
+  preview envelope. A failed consequence read waits for an explicit retry;
+  only a transport-uncertain recovery reuses its simulation request identity,
+  while definitive rejection or stale success starts a new request. The
+  full-width, container-responsive three-zone interface reacts in place with
+  current/working quoted value,
+  deposit, ingredient cost, People, Supply, and Kitchen BEO consequences.
+  Healthy evidence recedes, while the first exact inventory constraint can
+  expand its demand/shortfall explanation and offer the exact safe-through
+  guest count only when revision-bound boundary evidence supports it. The
+  existing deeply frozen `fulfillmentProjection-v1` still composes People and
+  Supply without merging Commercial, Staffing, or Inventory authority. One
+  restored Layer-3 `FulfillmentIntelligence` presenter now owns that projection's
+  user-facing rendering; the Workbench no longer carries a competing inline
+  Fulfillment presenter. Above the People/Supply read model,
+  `fulfillment-decision-answer-v1` may compose an exact guest-count preview,
+  exact ingredient shortage and menu contribution, proposed quote total,
+  Staffing effect, Kitchen BEO effect, and an optional current revision-bound
+  `inventory-sourcing-preview-v1`. The normal application currently supplies
+  no sourcing preview, so no supplier or “best resolution” is invented. Even
+  when a unique declared-policy match is supplied, it is advice rather than
+  stock, reservation, purchase order, supplier confirmation, or procurement,
+  and it cannot turn Supply coverage current. The preview must also match the
+  proposed Inventory event-requirement revision, projection digest, scenario
+  fingerprint, and exact shortage quantity. Its purchasable pack quantity stays
+  distinct from the quantity that covers the shortfall. Proposed quote total
+  is labeled quoted value rather than earned or preserved revenue. “Current
+  assignments cover” appears only from complete current People evidence; BEO
+  review appears only from its exact projected effect. The answer remains **Unverifiable**
+  unless both People and Supply evidence are current and complete. While an old
+  projection is retained during recomputation, supplier, staffing, value, BEO,
+  and related decision actions are withheld until the exact active scenario
+  returns.
+  Staffing may show current coverage and evidence-backed resilience, and an
+  exact empty plan is current zero-assignment evidence without a fabricated
+  plan or receipt; unsupported future headroom remains **Not verified**. The
+  People rail hands off to the exact quote record for staffing detail.
+  Exploration owns no
+  persistence, provider, network, pricing, staffing, inventory, BEO, or apply
+  authority; **Review for commitment** is a separate handoff to the governed
+  amendment path, and no scenario is called best without an explicit objective.
+  Screenshots and focused browser behavior are local deterministic fixture
+  evidence only, not deployment, production-data, provider, UAT, or human
+  acceptance.
+- Refound staff creation around the real minimum operational identity. An admin
+  can add a display name plus one or more roles through the existing safe-profile
+  command with `active:true` and empty availability, receive the immutable
+  profile receipt, and reconcile an ambiguous response using the identical
+  request. A definitive rejection instead locks the retained draft until the
+  operator explicitly clears that local attempt without replay; a later
+  deliberate submit receives a fresh request identity. The flow no longer
+  fabricates event-wide availability or a private
+  record. Rostered, Contactable, Schedulable, Cost-aware, Credential-aware, and
+  Enriched are derived independently, so missing optional contact, availability,
+  rate, or qualification data is neutral until a specific workflow requires it.
+  These additions are source/local evidence only; they do not prove deployment,
+  hosted behavior, provider outcomes, production data, or human acceptance.
+- Correct two unchanged capability review revisions that were advanced without
+  corresponding surface changes. This restores truthful branch-diff governance
+  without changing either the Operations Audit or Steward capability.
+- Add Ingredient Inventory Phase 8: Event Preflight and the currently selected
+  Operations event now compose the same two exact metadata-aware ingredient
+  projection listeners into three independent physical-allocation, menu-cost,
+  and execution facts. A saved availability observation never passes as a
+  commitment; only a current reservation or a matching settled execution can
+  satisfy physical inventory. Quantity intelligence remains grouped by unit,
+  cost incompleteness does not invalidate physical allocation, and actual COGS
+  remains unavailable without a declared valuation policy. Calendar rows do
+  not each create listeners, and no tenant-wide or inbound-supply insight is
+  invented from absent authority. The feature-enabled Preflight browser lane
+  now verifies the ingredient-only unknown states, accessibility, and viewport
+  containment at 390, 768, and 1440 pixels without retaining equipment scope.
+- Add Ingredient Inventory Phase 7: the accepted/booked event Control Room now
+  records complete fractional consumption and waste totals against the pinned
+  immutable ingredient plan. One Firestore transaction settles the event hold,
+  preserves every other commitment, changes on-hand stock exactly once, writes
+  immutable execution and movement evidence, and publishes a separate exact
+  metadata-aware execution projection. Full-replacement corrections apply only
+  their physical delta; zero-net consumed/waste reclassification creates
+  evidence without a stock movement. Quantity variance and saved-planning-basis
+  cost comparison remain separate from explicitly unavailable authoritative
+  actual COGS while multi-observation valuation policy is unresolved.
+- Add Ingredient Inventory Phase 6: exact quote, recipe, and menu-cost source
+  transitions now invalidate only bounded dependent event projections while
+  preserving immutable requirements, historical estimates, and active holds.
+  A receipt-producing reconcile command releases the retained hold and
+  reallocates the current recorded requirement atomically through the same
+  shared consumable fences. Demand, cost, availability, and allocation carry
+  independent freshness, and Commercial Change composes saved exact-document
+  evidence with a read-only scenario preview to show ingredient-cost and stock
+  consequences without changing commercial authorization, selling price, or
+  publication behavior.
+- Add Ingredient Inventory Phase 5: confirmed receiving appends immutable
+  physical and exact known-or-unknown purchase-cost evidence, while shared
+  date-independent ingredient/location fences coordinate accepted/booked event
+  allocations without changing on-hand stock. Transactions recheck current
+  commercial, recipe, requirement, plan, stock, and fence authority; competing
+  events receive only the safe maximum, partial plans preserve their holds and
+  can top up after receiving, and release changes commitment only. Exact
+  metadata-aware ingredient and event projections keep on-hand, committed,
+  available, pending receipt, server-confirmed allocation, shortage, and
+  uncertain recovery distinct. Later receipt costs cannot silently replace an
+  existing planning basis or invent a valuation policy.
+- Add Ingredient Inventory Phase 4: a pure deterministic compiler turns exact
+  saved menu selections, explicit recipe-output quantities, pinned recipe and
+  cost observations, and server-derived event timing into immutable event
+  ingredient requirements. Quote Edit presents independent physical-demand,
+  projected-cost, and consumable-availability rails, previews without writing,
+  records only through the administrator callable, and listens to the exact
+  projection document with metadata-aware stale/cached/pending recovery. Shared
+  ingredients aggregate without losing menu provenance; package inclusions are
+  not double-counted; guest count and billing quantities are never guessed into
+  portions; no allocation, stock movement, selling-price change, or COGS claim
+  occurs in this slice.
+- Add Ingredient Inventory Phase 3: exact same-dimension units, immutable
+  operator-declared purchase-pack conversions, catalog-revision-fenced menu
+  recipes, pure rational recipe costing, bounded reverse dependencies, and
+  materialized per-menu cost projections. Inventory exposes pack management;
+  Library attaches recipes to canonical menu-item IDs and reads a bounded
+  realtime summary plus an exact active-item projection with explicit complete, partial, unavailable, invalid, stale,
+  cached, pending, and uncertain states. Ingredient cost changes reproject only
+  dependent menus, while physical stock, selling price, and manual catalog cost
+  remain separate authorities. Dirty and unresolved recipe outcomes retain the
+  active Library context until publication, reconciliation, or explicit reset,
+  including after a newer realtime recipe revision arrives.
+- Correct the default-off Inventory Authority to its owner-directed ingredient
+  objective. The active Phase 2 now preserves the organization, transaction,
+  ledger, revision, receipt, and authorization substrate while replacing
+  reusable-equipment assumptions with fractional ingredient stock, independent
+  recorded purchase-cost evidence, bounded materialized projections, and an
+  early operator workflow reachable from both supported production build
+  graphs when its exact default-off gates are enabled. The corrected plan makes immutable ingredient demand
+  the shared dependency of independent menu-costing and stock-availability
+  rails and reserves a later slice for Commercial Change intelligence. The
+  demo-only emulator acceptance proves real callable authentication and App
+  Check, shared Firestore contention, replay-safe opening stock, request-ID
+  substitution rejection, and stock/cost independence. The
+  interrupted Library-to-equipment policy, interval availability, and equipment
+  workspace drafts are removed from active scope; no tenant, deployment,
+  migration, or production authority is activated.
+- Establish Phase 1 of the default-off Inventory Authority: stable locations
+  and resource definitions, immutable reasoned physical movements, rebuildable
+  item/location bucket projections, unified idempotent command receipts,
+  transaction-fenced unit immutability, App Check protected callables, and
+  browser-denied canonical Firestore records. This is local source evidence;
+  no tenant, deployment, or production inventory authority is activated. This
+  commit remains an honest historical checkpoint; its equipment-specific
+  semantics are superseded by the ingredient-first correction above.
+- Add schema-v2 task planning and the repository-local
+  `catering-domain-intelligence` skill. Domain-relevant agent work now preserves
+  its existing execution profile while selecting current QuotePilot authorities
+  and the smallest advisory catering reference slices, then reconsiders a
+  provisional action before implementation. Deterministic routing proof,
+  fresh-agent expertise evaluation, and human acceptance remain separate.
+- Add QP-UXR-001 Governed Commercial Amendment to eligible Quote Edit records:
+  the exact current commitment, reversible proposal, semantic differences,
+  authoritative consequence simulation, required authority, governed apply,
+  preserved historical truth, named invalidation, uncertain-outcome
+  reconciliation, focused amendment receipt, and next valid action now read as
+  one workflow. Existing pricing, revision, Commercial Change, payment,
+  acceptance, booking, BEO, staffing, and dependency authorities remain owners;
+  terminal commitments remain locked.
+- Add QP-UXR-002 Clear the Deck decision resolution. Exact pending approvals
+  and retained Decision Debt become business-readable decisions, retain their
+  context through the existing Workflow authority, confirm only after exact
+  same-organization readback, and fail closed against duplicate resolution when
+  an outcome is uncertain.
+- Add QP-UXR-003 Commercial Priority across Now and Opportunities. One shared
+  projection presents exact identity, recorded saved value, independent
+  lifecycle/proposal/booking/payment facts, supported consequence, and one
+  current action without repricing lists, inventing a score, or turning missing
+  evidence into zero or unpaid.
+- Add QP-UXR-004 Commitment-to-Execution across Events, Event Focus, Control
+  Room, exact Schedule continuation, and an explicit Replay boundary. It
+  composes the saved commitment, run of show, checklist, Workflow, BEO, and
+  staffing evidence without creating live-event, attendance, actuals,
+  completion, or event-wide readiness authority.
+- Add QP-UXR-005 Event Preflight inside the selected Control Room. It separates
+  satisfied facts, known attention, and unavailable truth from existing
+  authorities, provides one valid continuation, and never calculates a
+  readiness score or treats stale, partial, malformed, or missing evidence as a
+  pass.
+- Record QP-UXR-006 as **undefined / owner decision required**. No product
+  behavior is implemented or claimed; the bounded recommendation remains
+  unapproved in `docs/QP_UXR_002_006_OWNER_REVIEW.md`.
+- Preserve Quote Edit's existing Quote plan as a sticky left rail at 1440 and
+  compact-desktop 1008 widths, then adapt it to a horizontal domain navigator
+  at tablet and phone widths. A four-width browser contract now prevents the
+  domain context from disappearing while the proposal document is edited.
+- Keep the capability-surfacing gate deterministic as the governed Functions
+  entrypoint grows beyond Node's default child-process output buffer; the gate
+  still compares the full source and preserves every existing ownership check.
+- Preserve an enumerable safe-empty payment presentation when an alternate
+  draft is duplicated, while continuing to clear every source provider link,
+  confirmation, session identifier, and settlement artifact.
+- Align the Quote Composer browser contract with the governed amendment
+  workspace's proposal-and-consequence language.
+- Reconcile cross-feature browser fixtures with Event Preflight by recording
+  complete final-balance evidence only where the committed-event test intends
+  Schedule to remain the next valid action, and target exact disclosure copy
+  when multiple governed evidence sections are present.
+- Fence the Catalog Admin isolation browser check on completed saved-quote
+  hydration so slower CI runners verify the quote's actual event type rather
+  than the builder's transient pre-edit default.
+- These changes are implemented on the governed `v0.18.0` release candidate.
+  Production deployment, connected production-data behavior, provider outcomes,
+  assistive-technology review, and human acceptance remain separate until their
+  exact release evidence is recorded.
+
+## Unreleased — combined production candidate
+
+- Bind the refreshed Firebase browser fixture to the local-rehearsal capability
+  contract and make its seeder fail closed unless a `demo-*` project is backed
+  by loopback Auth and Firestore emulators.
+
+- Align the general browser release gate with stable quote-row identity and
+  the configured lifecycle control, and keep the Firebase conversation fixture
+  inside its real 30-day portal-validity window instead of relying on a fixed
+  issuance date that can silently expire.
+
+- Extend the approved RagnaKoK runtime scope to staffing actions and Revenue
+  Autopilot preparation; retain explicit policy setup and disabled scheduling
+  and automated sends. Other organizations remain denied.
+
+- Add a tenant-scoped RagnaKoK runtime profile with global flags off, exact
+  organization isolation, environment validation and per-Function readback.
+- Anchor field-state accessibility announcements within their own field so
+  wide import review tables scroll locally without expanding the mobile page.
+
+- Split the shared action-feedback model from the workspace entry bundle so
+  the combined UI stays within the existing chunk-size limit. Update Studio
+  interaction tests for the current workflow buttons and visible state labels.
+
+- Integrate the tenant operating model with the UX Convergence release and
+  the current field-state, governed-import and workflow-usability refinements.
+- Bring final-count requests into the eligible quote action, expose exact
+  closeout navigation and durable outcomes, and simplify the workflow Studio
+  and mobile inspection presentation while preserving native authority.
+- Preserve both Calendar capability gating and the workflow Studio entry in
+  the converged Library; combine the 122 native callable export inventory.
+- Retain the current governance, portfolio and Golden Lattice planning artifacts
+  without treating documentation or screenshots as production acceptance.
+
+## Unreleased — QP-TOM review preparation
+
+- Generate a fresh local-emulator login password for each disposable rehearsal
+  session, retaining the fixed demo-project and localhost checks.
+
+## Unreleased — QP-TOM local whole-app rehearsal
+
+- Add a one-command disposable demo rehearsal using real Auth, Firestore,
+  Functions and the full application with ordinary admin/sales login.
+- Seed explicitly synthetic current-catalog acceptance/booking through native
+  planners for a usable amendment source; preserve pricing, version and payment.
+- Print canonical app links, isolate local credentials and provider configuration,
+  and stop the owned app/emulator process chain through Ctrl+C.
+- Keep automated local rehearsal separate from human acceptance and any future
+  push, hosted tenant activation or provider communication.
+
+## Unreleased — QP-TOM local current-main reconciliation
+
+- Reconstruct the completed tenant model on current main while retaining its
+  catalog drafts, configured quote actions and provider controls.
+- Preserve exact current-catalog review evidence through attendance amendment
+  rebuilds; legacy/changed-catalog terminal sources remain blocked without writes.
+- Make all four packs discoverable under Library's Business workflows entry.
+- Retain every existing release profile's allowed keys and deployment batch
+  quota while composing the 121-export candidate with its isolated TOM profile.
+- Replace a fixed-delay Library arrival assertion with an observable UI wait.
+
+## Unreleased — QP-TOM-020 Four domain packs and qualification
+
+- Extend bounded tenant definitions with schema 2 domain policies while
+  preserving schema 1 seeds, receipts and existing instance pins.
+- Seal tenant approval policy and exact attendance submission references in
+  Commercial Change simulation, authorization and apply receipts. Existing
+  administrator approval requirements remain in force.
+- Persist reviewed attendance planning with server-stamped source provenance;
+  preserve approximate counts without inventing bounds or customer confirmation.
+- Expose all four bounded packs in Configuration Studio and their role-safe
+  domain panels, with exact uncertain-request recovery across pack selection.
+- Apply reviewed attendance amendments through the original commercial owner,
+  preserving paid/booking history and requiring renewed customer acceptance.
+- Keep native policy origin separate from a later migrated coordinator pin;
+  verify both and preserve canonical receipt bytes.
+- Add offline migration inventory and an isolated EventSpine staging profile;
+  tenant activation, hosted proof and moderated acceptance remain separate.
+- Qualify all four native owner workflows with real disposable emulators, then
+  import populated evidence through global disable and restore with identical
+  source hashes and retained receipts. Add a bounded real-pilot walkthrough.
+- Restore the existing compatibility bundle budget by excluding unused optional
+  jsPDF renderers and splitting the legacy portal chunk; no budget was raised.
+
+## Unreleased — QP-TOM-020-E/F Versioned coordination and Configuration Studio
+
+- Add immutable tenant workflow definitions, explicit seed evidence, draft and
+  publication previews, typed confirmation, retirement and exact request receipts.
+- Bind new event instances atomically to a definition while preserving fixed
+  operational authority. Add bounded task acknowledgements, complete-cost review,
+  due/escalation projections and separately previewed compatible migration.
+- Add the administrator Library Studio and staff event-policy surface with
+  guarded navigation, source/pin evidence and uncertain-outcome recovery.
+- Export comparison policy only from an exact pinned tenant publication; keep
+  policy availability independent from declared-cost availability and preserve
+  its reasons in reconciliation. No automatic messaging or provider activation.
+
+## Unreleased — QP-TOM-020-D Operational Replay and actual-cost evidence
+
+- Add bounded, anchored operational history across phase, checkpoint/issue,
+  and actual-cost receipts, with current authority checks and explicit refresh
+  when newer records exist. Reject gaps and retained evidence without a parent.
+- Export exact-source operator-declared costs only after explicit category
+  completeness and private receipt verification. Preserve incomplete evidence
+  and require declared overrun tolerances with actor/time evidence.
+- Compose current operational references through their existing domain reads;
+  local verification remains separate from hosted or human acceptance.
+
+## Unreleased — QP-TOM-020-C Declared operational actuals
+
+- Add exact-source operator-recorded labor, purchasing and other costs with
+  independent correction/void receipts and explicit category completeness.
+  Missing costs remain undeclared/partial; captured zero is never inferred.
+- Preserve phase/work history, role/tenant/source authority, bounded private
+  storage, and shared uncertainty recovery across all three command channels.
+- Leave physical consumption, payroll, payment, delivery and trusted export
+  unavailable unless their own evidence is established.
+
+## Unreleased — QP-TOM-020-B Event checkpoints and issues
+
+- Add fixed operator checkpoints and a bounded issue journal to Control Room,
+  with record/reopen and open/resolve/reopen receipts. The work journal binds
+  the exact accepted event and has its own policy and revision; existing phase
+  and commercial records remain authoritative and unchanged.
+- Keep admin writes and sales reads, strict text/capacity bounds, browser
+  collection denial and independent current authorization checks. Coordinate
+  uncertain phase and work requests through a shared browser guard while
+  preserving server transaction authority.
+- No actuals, full Replay, tenant workflow publication, provider actions,
+  deployment or tenant activation is included.
+
+## Unreleased — QP-TOM-020-A Event Operating Spine
+
+- Add a default-off, tenant-gated operational ledger bound to an exact booked
+  quote, immutable accepted version, and private acceptance receipt. Admins can
+  initialize and record sequential operational phases; sales staff can read the
+  bounded snapshot. Immutable request receipts support exact retry and reject
+  stale revisions or changed payloads.
+- Connect the existing Event Focus route to a role-safe Control Room with
+  explicit submission, uncertain-outcome, reconciliation, receipt and recovery
+  states. Direct browser ledger/receipt access and tenant-gate edits are denied.
+- Update the explicit callable inventory test and preserve identical synthetic
+  secret-rejection fixtures using runtime construction, clearing the existing
+  scanner false positives without changing scanner policy.
+- Record the delegated Phase 0 decisions in the Tenant Operating Model ADR.
+  This is the first local source slice: checkpoints, issues, actuals, full
+  Replay, tenant policy publication and Truth Loop export remain subsequent
+  work. No tenant activation, deployment, provider or human proof is implied.
 
 ## [Unreleased]
 
 ### Changed
+- Repaired the branded customer-portal browser fixture after its fixed issue
+  timestamp crossed the product's authoritative 30-day portal-validity limit
+  during exact-head CI run `33971452740`. The active fixture now uses the test
+  execution time while its explicit expired sibling continues to prove the
+  terminal recovery path. The focused real-browser case passes locally; no
+  portal validity, persistence, customer output, or payment behavior changed.
+- Hardened governed Firebase candidate deployment so a complete Functions
+  production dependency tree is verified before receipt reservation or any
+  provider mutation. The first `v0.17.0` provider-profile attempt at
+  `bba03f05cbb582ba3084b95f3a7b79e91be963f5` reached the guarded local Firebase
+  CLI boundary without `functions/node_modules`, retained its immutable partial
+  receipt, and requires a fresh published and CI-qualified SHA. The bounded
+  recovery is `npm ci --prefix functions`; no payment result or provider
+  acceptance is inferred from the failed attempt.
+- Established `quote-pilot-field-state-v1` as the governing five-axis field
+  contract for availability, origin, editability, persistence, and evidence.
+  Shared `FieldStateIndicator` and 0/1/many `AdaptiveChoiceField` primitives now
+  distinguish absence, provenance, draft/save/publication authority, and
+  failure/recovery without color-only meaning. The registered adoption
+  replaces false one-option selectors across quote setup, event templates,
+  Package Workspace, staffing, catalog recovery, Ambient menu selection, and
+  the Import Workbench. High-confidence interaction repairs also add
+  hover/pressed/focus-visible/reduced-motion treatment and visible recovery to
+  the audited Quote History, customer portal, Pilot, role authority, Ambient
+  client, catalog, and workspace-handoff actions. The machine contract,
+  explicit surface registry, checker, and `lane:core` wiring make future
+  relevant field changes fail closed when registered semantics drift or a
+  shared-primitive adopter is not registered.
+- Rebuilt the admin-only Import Studio surface as a readiness-gated Import
+  Workbench for customer/catalog CSV and searchable-PDF catalog sources. It now
+  exposes eight source-to-publication stages; seven supported record types;
+  row/page/excerpt provenance; a scan-ready view of every mapped value, resolved
+  ID, default, and field state; explicit 50-row review pages that keep every
+  inferred record reachable while preflight covers the full included set;
+  explicit unsupported-column, mapping,
+  relationship, invalid-coercion, and row-exclusion resolution; and an
+  exact-current-plan gate before mutation. Customer
+  preflight scans the tenant destination, projects duplicates, and partitions
+  up to 1,500 reviewed rows under both the 350-record and Firestore 500-write
+  ceilings. Every child mutation is bound to a short-lived tenant/actor server
+  preflight receipt, the full normalized SHA-256 plan, and its child index;
+  the receipt has a 15-minute issue window and its first accepted child activates
+  a 24-hour exact-session continuation. Stable identities preserve
+  partial/uncertain recovery, accepted child receipts can be resumed or undone
+  as an exact subset, and only an exact accepted child receipt can aggregate as
+  completed. Catalog records now
+  stage into the existing revision-fenced shared setup draft under an exact
+  tenant/batch/row/patch/generation fingerprint and remain
+  explicitly Saved/Draft—not Published—until normal Library review and
+  publication. Success-shaped catalog responses are rejected unless their
+  organization, revision/generation projection, complete patch identities, and
+  payloads match the reviewed plan. Durable server-only mutation receipts bind
+  the exact request, tenant, actor, fences, and normalized patch hash; publication
+  lineage can reconcile a lost response as still Staged or already Published
+  only while the exact accepted fields remain staged or active. The Published
+  presentation links to the active catalog and never offers draft undo.
+  Recovery now awaits the actual catalog read, retains a retry after read
+  failure, and offers an explicit release only for a definitive no-write
+  transaction abort. PDF parsing is lazy-loaded,
+  searchable-text-only, and heuristic;
+  its same-origin runtime has a separate exact file/byte/SHA-256 budget;
+  source/local tests and visual inspection do not claim hosted Firebase,
+  production, assistive-technology, or human acceptance.
+- Synchronized final acceptance expectations with the selected Operations and
+  Clients compositions without changing runtime behavior or authority. The
+  exact Now-to-Calendar test now addresses the focused event by its accessible
+  name, and the legacy Calm Four Clients assertion now verifies the selected
+  relationship-led heading instead of superseded presentation copy. Five
+  compatibility browser cases now retain the **Catalog Admin** entry-point
+  contract while addressing the selected **Library settings** dialog, opening
+  the intentionally disclosed Advanced policy and customer-facing brand groups
+  before editing, and asserting the real **Changes waiting to save** state
+  rather than misclassifying an unsaved local edit as a synchronization
+  failure. The corrected five-case CI-shaped matrix passes locally without any
+  runtime, catalog, pricing, persistence, or role-authority change. A same-day
+  branch/worktree reconciliation confirms all 30 UX Convergence
+  commits are present on this candidate and no other same-day commit exists
+  outside it; unrelated integration-checkout planning work and older
+  experimental worktrees remain excluded. Whole-candidate local qualification
+  passes 4,548 unit tests, the 526-module production build, the aggregate
+  release/CWV lane, 127 Truth Loop tests, 78 Firestore-rule tests, the 4-case
+  Firebase browser smoke, the 3-case authoritative-pricing browser suite, and
+  the corrected 71-case responsive route/authority matrix. These are
+  source/local results only; exact-head CI, hosted, provider, production,
+  recipient, assistive-technology, and human evidence remain separate.
+- Converged the existing exact-token **Customer Proposal Decision Center** into
+  the selected customer-facing half of Client 360 without adding a portal,
+  quote, pricing, decision, signature, payment, conversation, or route
+  authority. The event story now owns the broad canvas while one secondary rail
+  keeps decision status, total, required deposit, expiry, response choices,
+  mutation feedback, and the authority-gated question continuation together.
+  Event facts, package/menu, and compact optional additions remain client-
+  readable; price detail, planning assumptions, and tenant terms begin
+  collapsed. The public portal no longer inherits the absent staff sidebar's
+  236px desktop offset. All contextual question, reversible addition, explicit
+  acceptance/signature, payment, recovery, and exact-token handlers are reused.
+  Focused component coverage passes 49/49; the 390/768/1440 plus exact-source
+  1487x1058 Chromium matrix passes 5/5 with quote selection/totals/revision
+  equality, 44px targets, no overflow/clipping/collision, and zero axe
+  violations. The exact 1487x1058 source and implementation were inspected
+  together at a local **9.5/10 - GO**. This is local source evidence only;
+  exact-head CI, connected portal behavior, deployment, production data,
+  provider outcomes, recipient use, and human acceptance remain unclaimed.
+- Converged the existing **Clients** directory and Internal Client 360 into the
+  selected relationship-led composition without adding a customer record,
+  activity feed, urgency model, route, or mutation authority. The populated
+  directory now leads with purpose, one relationship in context, and one exact
+  **Review client** continuation. Client 360 presents the recorded customer
+  request as the next decision, the existing Client → Opportunity → Proposal →
+  Event evidence as a four-stage spine, the living opportunity as the active
+  object, and exact lifecycle/request evidence as recent relationship history.
+  A same-quote, same-time customer request and conversation summary appears once
+  rather than as duplicate activity. Consequence copy states only that no state
+  changes until review; it does not invent operational impact or urgency.
+  Conversations, additional opportunities, source detail, and the existing
+  detailed record remain available under disclosure. Focused unit coverage
+  passes 16/16 and the 390/768/1440 Chromium-admin route matrix passes 3/3 with
+  exact arrival, persisted-state equality, 44px targets, layout containment,
+  no horizontal overflow, and zero scoped axe violations. The selected
+  reference and exact 1440px implementation were inspected together at a local
+  **9.5/10 — GO**. This is local source evidence; exact-head CI, hosted data,
+  deployment, production behavior, assistive-technology use, and human
+  acceptance remain unclaimed.
+- Converged **Now** to the approved decision-ledger composition without adding
+  another work queue, event projection, payment state, or completion authority.
+  The masthead now names the highest-pressure recorded condition; **Needs you**
+  preserves the existing deterministic Workflow order while distinguishing true
+  urgency from general waiting and replacing decorative `01/02/03` ranks with
+  accessible ordinal context. Each item pairs the recorded situation with an
+  evidence-bounded consequence and its existing exact Workflow or Customer
+  continuation. The secondary column projects a compact seven-day horizon and
+  accepted/booked events from the existing Calendar inputs, with exact Calendar
+  handoff. The adaptive **Quiet progress** band shows only supported internal
+  completion receipts under **Recently handled** and existing pending/provider
+  payment states under **Waiting on others**; unresolved operator-owned money
+  actions remain separate **Commercial steps**. Desktop, tablet, and phone retain
+  one semantic order and no horizontal overflow. Local Chromium coverage passes
+  2/2 including exact Workflow/Calendar round trips, responsive captures, and
+  zero serious/critical axe violations. The exact 1487×1058 implementation and
+  selected visual were inspected together at a local **9.5/10 — GO**. This is a
+  local, unpushed presentation change; no hosted, provider, production, or human
+  acceptance is claimed.
+- Converged the existing role-safe **Library** to the selected Option 2
+  composition with Option 3 restraint. Desktop gives the broad commercial
+  ledger approximately two-thirds of the canvas and keeps unresolved setup in
+  a quieter secondary rail; mobile preserves the same ledger-first semantic
+  order. Existing Packages appear as **Offers**, Menu/Services/Rentals as
+  **Components**, Event Templates as quote starting points, and existing
+  Pricing and Configuration Rules as one policy group. The Offer editor now
+  uses a compact navigator and broad selected-offer workspace without a
+  permanent health rail; its primary summary retains derived margin while
+  detailed economics move under disclosure, and recorded choice groups project
+  read-only without implying browser authoring. Add-on and Rental editors expose
+  visible derived Usage with stable IDs under Technical details. Event Templates
+  are independently collapsible across eight business groups. Readable Rules
+  and safe structured controls precede Advanced JSON recovery; Pricing separates
+  Base pricing, Adjustments & context, Fees, Tax, and Deposit before Advanced
+  policy. Unresolved readiness expands while healthy evidence compresses; and
+  recovery copy states what cannot happen, what remains active, and the next
+  safe action. Sales can inspect the same objects and readiness outcomes
+  without repeated disabled administrator controls. **Your bundle** remains a
+  derived composition of the one quote draft. The readiness rail uses
+  supplemental semantic icons while text remains authoritative, ordinary text
+  stays at least 12px, one save/retry action owns recovery, and switching an
+  embedded editor tab synchronizes its breadcrumb/title without remounting or
+  dropping staged work. Local Chromium evidence passes Ambient Library 17/17
+  and Calm Four 10/10 with `VITE_OPERATIONAL_STAFFING_ENABLED=true`; exact
+  390/768/1440 captures and combined comparisons received a local visual-review
+  verdict of **9.5/10 — GO**. The exact rendered implementation is local commit
+  `b593fe4d2c45ff5db20bafe205461157952b9ab4`. No Bundle record, route,
+  lifecycle, save path, catalog authority, pricing authority, role authority,
+  or publication path was added. Exact-head CI measures 3,381,257 / 397,428
+  bytes for compatibility; exact-head CI measures 4,319,173 / 432,561 bytes
+  for Ambient. The active temporary exception is pinned to those larger
+  literal graphs with no future-growth headroom; the selected lazy Library
+  experience accounts for 45,724 and 61,440 aggregate bytes respectively. Full unit, build, focused
+  browser, capability/document governance, and local CWV checks pass. The
+  isolated checkout lacks the six Firebase web configuration values required
+  by `check:env`, so the aggregate release lane remains environment-blocked
+  rather than falsely green. This candidate is local and unpushed; no exact-head
+  CI, hosted result, deployment, production-data result, or human acceptance is
+  claimed.
+- Corrected Calendar-first Operations to the selected compositions on the
+  existing schedule authority. Month now gives the full horizontal canvas to
+  the month calendar and reveals the selected day, focused event, conflict
+  consequence, and collapsed operational domains beneath it. Week now renders
+  a seven-day time grid with a vertical time axis, event position and height
+  derived from start time and duration, visible collision lanes, and a
+  secondary contextual detail rail. Both presentations retain one selection,
+  event projection, and conflict model; phone widths retain the same-model
+  agenda rather than a third Calendar implementation. Operational detail begins
+  collapsed, comparison appears only inside the conflict workflow, and Tools
+  remains secondary. Derived conflicts have no manual resolved state; operators
+  correct authoritative date, time, duration, venue, guest-count, or lifecycle
+  inputs on the affected Opportunity and the existing conflict model recomputes
+  the result. The same slice fails Calendar closed when `eventSchedule` is disabled:
+  Operations leaves primary and secondary navigation, `/app/operations` and
+  `/app/schedule` do not render Calendar, and Now, Opportunity, Client, and Event
+  handoffs are withheld. Reporting remains independently gated by
+  `reportingDashboard`; People retains the existing administrator/staffing gate.
+  Local implementation commit `5dd97a20133b592f210d56e2454e699c17d45200`
+  passes the 12-case Operations browser matrix, including 390/768/1440 and
+  same-size 1487×1058 reference captures, serious/critical axe checks, exact
+  handoffs, capability gates, and authoritative staffing/checklist persistence.
+  Final local release qualification also passes 4,509 unit tests, both build
+  and bundle gates, documentation/capability governance, 127 Truth Loop tests,
+  and Lighthouse CWV. No deployment, hosted role result, provider outcome, or
+  human acceptance is claimed.
+- Promoted Calendar-first **Operations** into the Ambient primary orientation,
+  producing the intentionally bounded order **Now**, **Opportunities**,
+  **Operations**, **Clients**, and role-gated **Library**. Removed the duplicate
+  Ambient Operations header dropdown while retaining Operations, Clear the
+  Deck, and Staff in Workspace & tools; Frequent and progressive
+  Administration groups remain unchanged. Focused unit and local browser
+  coverage verifies the direct current route, desktop/mobile grouping,
+  responsive overflow and accessibility boundaries, compatibility navigation,
+  and admin/sales visibility. The existing compatibility bundle exception is
+  pinned to the exact 3,331,404-byte measured graph, an 860-byte aggregate
+  increase with no largest-chunk growth or percentage padding. Final local
+  qualification passes 4,499 unit tests, production build, project/env/secret/
+  workflow/capability/document governance, bundle, 127 Truth Loop tests,
+  Lighthouse CWV, 22 Workbench browser cases, 13 compatibility Proposal
+  Composer cases, and 9 Operations cases. The 238-criterion ledger resolves to
+  236 PASS, one NOT APPLICABLE, and exact-head CI UNVERIFIABLE. This local
+  source candidate has not been pushed, deployed, accepted in a hosted tenant,
+  or reviewed by a human.
+- Added a positive Workbench persistence golden path: a complete supported
+  draft saves into its Living Opportunity, reopens through Opportunities, edits
+  through the existing authority,
+  and saves again as the same quote, quote number, and portal identity while
+  advancing `v0001` to `v0002` with exactly two history records. Customer,
+  venue, guest, and Menu state survive the round trip. Together with the
+  already focused Guided, Pilot, scenario, blocker, long-Menu, margin, and
+  failure-recovery cases, this closes the local quote golden-path set without
+  adding another form, save, pricing, or persistence authority.
+- Certified contextual capability continuity across Workflow, Messages, Pilot,
+  Clear the Deck, Staff, Reporting, Administration, Library, Now, and exact
+  Opportunity/Calendar handoffs using 274 focused regressions plus bounded
+  Clear Deck interaction coverage. Removed the zero-consumer legacy Operations
+  switchboard and its dead CSS, and registered its Calendar-first replacement,
+  retirement condition, and route-preservation disposition. The canonical
+  feature inventory now classifies Workbench, Guided, compatibility quote
+  paths, Operations, Event Focus, Workflow, Messages, and Administration
+  explicitly. No business authority, live-event claim, route, or capability was
+  added or removed; this remains local and unpushed.
+- Consolidated the Ambient Operations menu into the Calendar-first daily
+  execution paths: **Operations**, **Clear the Deck**, and role-gated **Staff**.
+  Workflow, Messages, and Pilot remain Frequent tools; Reporting,
+  Integrations, Import, and Diagnostics remain progressive Administration;
+  exact Event Focus and Schedule compatibility remain directly reachable.
+  Focused shell tests and 9/9 real-route Operations cases now cover the
+  responsive Calendar, exact handoffs, conflict evidence, persisted staff and
+  checklist work, direct Event arrival, and Back/Forward continuity. This is a
+  local source candidate only; it has not been pushed, deployed, or accepted in
+  a hosted environment.
+- Certified the remaining Workbench behavioral boundaries without adding a
+  second authority: service style survives a Guided round-trip, explicit
+  staffing adoption reprices the canonical total, Pilot stays dormant until
+  relevant and previews before applying only to the dirty draft, and ordinary
+  save blockers still govern AI-assisted changes. A forced browser-local
+  persistence exception now has end-to-end evidence that no saved-success
+  claim or quote record is created while event, customer, and Menu work remain
+  intact and the exact failure promotes into save-readiness Attention. This is
+  focused local evidence only; no provider, hosted, or production claim is
+  made.
+- Refined the local-only Commercial Workbench presentation after rendered
+  desktop/mobile review: long Menus now use course-level disclosure with the
+  first and selected groups open, search reveals matching groups, Event starts
+  with a readable evidence-derived summary, semantic region/headings and 44px
+  controls are explicit, and healthy margin detail compresses while missing or
+  below-target evidence expands. Corrected the margin evidence boundary so
+  null/blank recorded costs remain missing rather than coercing to zero.
+  Focused model and real-browser coverage certifies first-viewport hierarchy,
+  blank/long states, keyboard focus, error association, reduced motion, and
+  phone-width Menu flow. No pricing, persistence, catalog, provider, or save
+  authority changed; this slice remains local and unpublished.
+- Certified the existing Compare Scenarios and common save-readiness paths
+  without widening runtime authority: scenario inspection remains isolated
+  until explicit application, focus returns to its invoker, both Workbench save
+  controls expose the same exact blockers, and quote-read, Pilot, intent,
+  impact-review, and authorization blockers remain fail-closed. This is a
+  focused local test/evidence slice only.
+- Continued the full 238-criterion UX convergence program as local-commit-only
+  work. Focused Workbench browser coverage now certifies unsaved Event/Menu
+  continuity across domains, canonical guest repricing and undo, retained
+  validation, explicit staffing recommendations, Rentals and Enhancements,
+  honest unsaved client preview with focus restoration, and collapsed-but-
+  retained advanced pricing. Publication, merge, deployment, and final
+  exact-head qualification remain outside this slice.
+- Completed the local commercial-platform source candidate: new authoritative
+  calculations use integer-minor-unit pricing-v2 with deterministic half-up
+  line, service-fee, tax, deposit, and balance reconciliation; exact price
+  waterfalls and applied policy evidence are retained on the pricing receipt.
+  Explicit invalid tax/season references, malformed/overlapping fee tiers, and
+  ambiguous seasonal rules fail closed. A fixed-seed 5,000-case browser/server
+  differential suite requires exact cent and waterfall parity. Historical
+  pricing-v1 derivation remains explicitly versioned and unchanged.
+- Hardened proposal, stored quote, payment-ledger, and final-balance amount
+  provenance to prefer and cross-check authoritative `totalCents` and
+  `depositCents`. Stripe identity, idempotency, settlement, and provider
+  authority are unchanged. Library now distinguishes Offers, Components,
+  Templates, Pricing, and Rules, and existing versioned catering starter packs
+  derive template/rule seeds while preserving manifest identity, customization
+  fences, and the required post-install pricing review.
+- Split commercial publication validation from the startup route graph. The
+  compatibility profile remains below its prior largest-chunk ceiling; its
+  temporary total-JavaScript exception is widened by exactly 19,424 bytes to
+  the measured 3,330,544-byte candidate for the shared commercial kernel.
+- Added one shared commercial-platform core used by the browser and deployable
+  Functions graph. Existing Packages now adapt to Configurable Offers with
+  optional bounded choice groups; server pricing validates every choice and
+  rejects browser-only selection claims. Existing Event Templates adapt to
+  Commercial Templates with explicit-field preservation and deterministic
+  shallow-module collision reporting. Bounded declarative Configuration Rules
+  accept only enumerated condition/effect operators, detect conflicting
+  mandatory outcomes, and never mutate quotes. Library catalog editing can
+  stage rule JSON, while the existing revision and pricing-confirmation path
+  remains the only publication boundary.
+- Began the reconciled Commercial Platform refinement on the existing UX
+  convergence branch. Added the accepted Kernel -> Vertical Pack -> Tenant
+  Configuration -> Contextual UX decision, the canonical Pricing Constitution,
+  an ordered compatibility-first delivery program, and an 80-case named
+  pricing-v1 Golden Corpus with a frozen output digest. This slice changes no
+  runtime pricing, catalog, payment, provider, or quote authority; it records
+  the current v1 behavior and known policy defects before pricing-v2 semantics.
+- Added the frozen QuotePilot UX Convergence Contract repository copy and an
+  AC-001–AC-238 execution-evidence ledger. The ledger records verdicts and
+  implementation classifications without changing any frozen claim.
+- Evolved the existing Proposal Composer into a presentation-only Commercial
+  Workbench with Event, Customer, Experience, Staffing, and Commercials
+  domains and a reordered Commercial Truth rail. The same App-owned form,
+  calculation, Menu/staffing editors, Guided mode, explicit save/version path,
+  and client-safe Preview remain authoritative. Replaced the `/app/operations`
+  switchboard presentation with the existing Calendar capability, added a
+  same-model mobile agenda, retained `/app/schedule`, and added exact
+  Now/Living Opportunity/Calendar handoffs. No Firebase, pricing, persistence,
+  lifecycle, staffing, catalog, provider, or live-telemetry authority changed.
+  Every existing contextual and secondary navigation entry remains reachable;
+  the later local convergence slice promotes Operations into the five-item
+  primary orientation after its focused local gate. Local and CI evidence do
+  not claim deployment, hosted behavior, production readiness, or human
+  acceptance. The compatibility bundle's
+  existing temporary exception is pinned to the exact CI measurement of
+  3,311,120 total JavaScript bytes (largest chunk 393,416 bytes), a 1,120-byte
+  increase for the new presentation and handoff surfaces with no percentage
+  headroom; the existing removal plan and expiry remain unchanged.
+  The correction is local-only by owner instruction. The draft PR remains at
+  pre-correction SHA `30b6fcd48aa881d83150149eeb942e2d07dd89f8`, whose
+  exact-head run `33902068474` failed that prior ceiling; consequently
+  that earlier Operations promotion was not authorized at that checkpoint.
+  The complete local `lane:release:cwv` passed against the corrected ceiling,
+  but local success did not substitute for that checkpoint's exact-head CI
+  gate.
+- Released annotated tag `v0.16.6` at exact commit
+  `a350b72a1c6968be80c7c07ef9079084ceba0b07` after exact-main CI run
+  `33889897821` passed every required job. Governed Vercel production run
+  `33890996339` deployed that exact frontend release to immutable deployment
+  `https://quoteflow-9wdl5n6bb-mbmapps.vercel.app`, rebound
+  `https://quotepilot.mbmapps.com`, and verified the public production routes.
+  The Firebase backend remains on v0.16.5 with its existing `email-active`
+  provider configuration because this release changed no Functions, rules,
+  indexes, or provider settings. This receipt proves source, CI, production
+  deployment, and public-edge availability; an ordinary customer proposal send
+  still requires separate provider-acceptance, delivery or bounce, inbox,
+  message-review, and human-acceptance evidence.
+- Added and hardened a state-aware configured-quote action compiler and migrated the quote administration row onto one ranked primary/recovery action while grouping subordinate capabilities under **More**. The v2 compiler now incorporates the surface's real provider setup, approval, rebook, conversation, in-flight mutation, and recovery readiness; the rail renders only compiled visible actions and enforces their compiled disabled state, so presentation cannot silently widen or contradict action authority. Draft edits read **Edit draft**, sent/viewed changes read **Revise quote**, tracked provider dispatch reads **Send proposal**, provider acceptance is evidence rather than a disabled command, and payment/contract/recovery actions use outcome language. **Create alternate draft** declares its separate-record consequence before creation, opens the created draft, and the browser-local fallback projects only named customer, event, selection, pricing, and proposal-presentation fields while excluding nested provider, credential, acceptance, rebooking, delivery, payment, integration, and booking proof. Its successful save creates and tests the new draft's own immutable `v0001` identity. The quote number opens its workspace, Firebase lifecycle management exposes explicit **Expire quote** instead of a generic selector, and exact workflow deep links open **More** before focusing a secondary approved action. Final-balance ranking mirrors the existing booked-contract + verified paid-deposit + stored-balance prerequisites, sent/viewed records without current delivery evidence recover through tracked resend instead of conversation, and an executable accepted-quote progression outranks a concurrently blocked preferred action. Existing Firebase, Stripe, portal, approval, and contract authority is unchanged; local/CI evidence does not claim hosted, provider, production, or human acceptance.
+- Released annotated tag `v0.16.5` at exact commit
+  `ad3517b39109b91dd735ee3700e8c79a4e2ca956` after exact-main CI run
+  `33818617920` passed. Governed Firebase production run `33820173249`
+  deployed 102 active `us-central1` Functions on the `email-active` profile;
+  governed Vercel production run `33822596844` deployed the same release to
+  `quotepilot.mbmapps.com`. One verified platform administrator then used the
+  deployed Integrations Ops control exactly once for the controlled
+  `flightcontrol@quietpilot.us` recipient. QuotePilot returned
+  `provider_accepted`, locked the request, and recorded one bounded Operations
+  Audit receipt; independent Resend readback for the exact provider message
+  reported `delivered`. Recipient inbox confirmation, message-content review,
+  ordinary quote/onboarding email behavior, and human acceptance remain open.
+  Firebase rollback authority remains
+  `4f329180f0864ebadb0383930f969a3767f8d9db`; Vercel rollback authority remains
+  `c8800838c03ce9db49fe1034c529c8363c8bf27c`.
+- Added a verified-platform-admin Resend acceptance test to Integrations Ops.
+  It accepts only an exactly confirmed controlled `quietpilot.us` recipient,
+  supplies server-owned non-customer content, persists a private request before
+  one provider call, binds a stable provider idempotency key, refuses reuse of
+  the same request, and locks ambiguous outcomes against resend. The direct UI
+  receipt exposes the provider message ID and acceptance time; Operations Audit
+  records the bounded action without that identifier. The User Manual and
+  Launch Runbook now require fourteen explicit source, authority, one-call,
+  privacy, provider, inbox, non-mutation, and evidence criteria. Focused server,
+  audit, and component coverage passes 11/11. Its browser adapter remains in
+  the already-lazy Integrations Ops boundary; exact CI-flag builds pin the
+  reviewed temporary ceilings to 3,306,709 / 395,916 bytes for compatibility
+  and 4,172,754 / 429,923 bytes for Ambient, with no percentage headroom. This
+  source entry does not claim deployment, a provider request, delivery, inbox
+  receipt, or human acceptance.
+- Promoted annotated tag `v0.16.4` at exact-main commit
+  `4f329180f0864ebadb0383930f969a3767f8d9db` to the production Firebase
+  backend with governed run `33808086707` after exact-main CI run
+  `33806999323` passed. Complete workflow and independent readback proved 101
+  active `us-central1` Functions on the `email-active` profile with Resend
+  selected, while SMS, buyer access, Commercial Change, staffing authority,
+  and both Revenue Autopilot gates remain off. Public production routes remain
+  healthy. No outbound email was sent, so provider acceptance, delivery/bounce,
+  inbox receipt, and human review remain separate open evidence gates; the
+  prior secret version and v0.16.3 backend receipt are retained for recovery.
+- Added a fail-closed `email-active` Firebase production release profile for
+  the approved Resend sender. It is limited to `backend`/`all`, derives
+  `NOTIFICATIONS_EMAIL_PROVIDER=resend` from the immutable workflow input, and
+  requires complete active-Functions readback against that exact profile.
+  Hosting-only and Vercel releases reject it; SMS, buyer access, Commercial
+  Change, staffing authority, and both Revenue Autopilot gates remain off.
+  The launch contract now separates secret installation, deployment,
+  QuotePilot provider acceptance, Resend delivery/bounce, inbox receipt, and
+  human review through ten non-negotiable acceptance criteria. This source
+  change does not claim a deployment or outbound email occurred.
 - Added a Firebase-only `staging-provider-acceptance` release-candidate profile
   for controlled v0.16.3 qualification. It begins from verified safe-off
   Functions readback; enables the approved Resend sender, generic and buyer
@@ -343,6 +1866,14 @@ This changelog is backfilled from git history and will be maintained going forwa
   so legacy payment records do not gain an empty `finalBalance` field and fail
   the existing exact payment-evidence rule. Payment, role, tenant, portal,
   version-authorship, and immutable-history protections remain unchanged.
+- Added an evidence-led, first-person portfolio case study and self-contained
+  seven-image package for QuotePilot. The narrative presents the product as a
+  demonstration of product strategy, state and authority modeling, UX,
+  full-stack systems work, human-led AI collaboration, and proof-boundary
+  release discipline. Two new editorial images are explicitly labeled as
+  generated metaphors; five repository product images retain source and
+  implementation status in a separate asset guide. This documentation-only
+  addition changes no application behavior or release claim.
 - Closed the final interaction and evidence-language drifts against the
   approved v0.16 contract:
   the standard workspace utility trigger now exposes the exact accessible name
@@ -3299,9 +4830,9 @@ This changelog is backfilled from git history and will be maintained going forwa
   rollback evidence, and typed target confirmation. Independent-review mode
   remains available for team-owned repositories.
 
-- QuotePilot email now supports the approved interim sender
-  `QuotePilot by MBMApps <quotepilot@leaguepilot.us>`, reusing the existing
-  provider-verified Resend domain without deleting or disrupting that domain.
+- QuotePilot email now supports the approved sender
+  `QuotePilot by MBMApps <quotepilot@quietpilot.us>`, using the
+  provider-verified `quietpilot.us` Resend domain.
   The restricted production key is held in Firebase Secret Manager; live email
   remains disabled until the governed Functions release and accepted,
   delivered, and inbox evidence are complete.

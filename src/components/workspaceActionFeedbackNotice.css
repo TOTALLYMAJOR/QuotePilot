@@ -34,6 +34,14 @@
   margin: 0;
 }
 
+.workspace-continuity-stack > .workspace-action-feedback .workspace-action-feedback__identity {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.workspace-continuity-stack > .workspace-action-feedback .workspace-action-feedback__identity > * {
+  grid-column: 1;
+}
+
 .workspace-action-feedback__identity {
   min-width: 0;
   display: grid;

@@ -30,6 +30,7 @@ async function seedAmbientOpportunity(page) {
       latestVersionNumber: 1,
       createdAtISO: "2026-08-11T12:00:00.000Z",
       updatedAtISO: "2026-08-11T12:00:00.000Z",
+      expiresAtISO: "2099-12-31T23:59:59.000Z",
       customer: {
         name: "Maya Bennett",
         email: "maya@example.test",

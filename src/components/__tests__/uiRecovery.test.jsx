@@ -78,9 +78,10 @@ describe("recoverable lazy surfaces", () => {
   test("wires every public route and workspace tool through an independent boundary", () => {
     const mainSource = readSource("../../main.jsx");
     const appSource = readSource("../../App.jsx");
+    const compatibilityAppSource = readSource("../../LegacyApp.jsx");
     const workspaceBoundarySource = readSource("../WorkspaceSurfaceBoundary.jsx");
 
-    expect(mainSource.match(/<LazyPublicRoute/g)).toHaveLength(5);
+    expect(mainSource.match(/<LazyPublicRoute/g)).toHaveLength(6);
     expect(readSource("../WorkspaceRoute.jsx"))
       .toContain("mountFirebaseEmailActionPage(node)");
     expect(mainSource).toContain("const RevenueAutopilotUnsubscribePage = createRecoverableLazy(");
@@ -121,6 +122,10 @@ describe("recoverable lazy surfaces", () => {
     expect(appSource).not.toContain("WorkspaceModalFallback");
     expect(appSource).toContain('from "./components/WorkspaceSurfaceBoundary"');
     expect(appSource).not.toContain("function WorkspaceLazyTool(");
+    expect(compatibilityAppSource).toContain('from "./components/WorkspaceSurfaceBoundary"');
+    expect(compatibilityAppSource).not.toContain("function WorkspaceLazyTool(");
+    expect(compatibilityAppSource).not.toContain("function WorkspaceLazyRoute(");
+    expect(compatibilityAppSource).not.toContain("function useStickyMount(");
     expect(workspaceBoundarySource).toContain("export function WorkspaceLazyTool(");
     expect(workspaceBoundarySource).toContain("export function WorkspaceLazyRoute(");
     expect(workspaceBoundarySource).toContain("export function WorkspaceToolSurface(");
@@ -136,15 +141,16 @@ describe("recoverable lazy surfaces", () => {
     expect(recoverySource).not.toMatch(/\{\s*(?:error|this\.state\.error)\.(?:message|stack)/);
   });
 
-  test("keeps Ambient Opportunities recovery ahead of legacy Quote History diagnostics", () => {
+  test("keeps Ambient Opportunities read recovery while surfacing mutation failures", () => {
     const historySource = readSource("../QuoteHistoryModal.jsx");
 
     expect(historySource).toContain(
       '{!AMBIENT_UI_ENABLED && <details className="staff-evidence-disclosure workspace-data-details">'
     );
     expect(historySource).toContain(
-      '{state.error && !AMBIENT_UI_ENABLED && <p className="error-note" role="alert">{state.error}</p>}'
+      '{state.error && (!AMBIENT_UI_ENABLED || state.error !== state.readError) && ('
     );
+    expect(historySource).toContain('<p className="error-note" role="alert">{state.error}</p>');
     expect(historySource).toContain("<AmbientOpportunitiesStream");
   });
 

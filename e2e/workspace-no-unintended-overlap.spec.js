@@ -48,6 +48,17 @@ const AMBIENT_ROUTE_AUDITS = Object.freeze({
       ":scope > p:last-child"
     ]
   }),
+  [WORKSPACE_ROUTE_IDS.OPERATIONS]: Object.freeze({
+    id: "operations",
+    heading: "Operations",
+    headingSelector: "#event-schedule-title",
+    initialFocusSelector: "#event-schedule-title",
+    focusReservePx: 0,
+    surfaceSelector: '[data-testid="operations-calendar"][data-operations-mode="calendar-first"]',
+    registerSurface: true,
+    groupRootSelector: ".schedule-card > .modal-head",
+    groupSelectors: ["#event-schedule-title", ".right-actions"]
+  }),
   [WORKSPACE_ROUTE_IDS.CUSTOMER_LIST]: Object.freeze({
     id: "clients-customers",
     heading: "Relationships, in context.",
@@ -1129,52 +1140,39 @@ test.describe("Cross-app no-unintended-overlap gate", () => {
   }
 
   for (const viewport of VIEWPORTS) {
-    test(`opened header menus stay contained and restore focus at ${viewport.width}px`, async ({ page }) => {
+    test(`Ambient secondary tools stay contained without duplicating Operations at ${viewport.width}px`, async ({ page }) => {
       await page.setViewportSize(viewport);
       await page.goto("/app");
       await expect(page.locator("#now-heading")).toHaveText("Today, in clear view.", { timeout: 30_000 });
-      if (viewport.width <= 640) {
-        const trigger = page.getByRole("button", { name: "Workspace and tools", exact: true });
-        await trigger.click();
-        const dialog = page.getByRole("dialog", { name: "Workspace & tools" });
-        await expect(dialog).toBeVisible();
-        await expectContainedTransientGeometry(page, {
-          id: "header-workspace-tools",
-          surfaceSelector: ".workspace-tools-dialog",
-          triggerSelector: ".workspace-tools-trigger[aria-expanded='true']",
-          expectedDeclaration: "data-layout-overlap-allowed",
-          allowScrollEdgeClipping: true,
-          centerScrollableControls: true,
-          peerGroups: [{
-            rootSelector: ".workspace-tools-dialog__header",
-            childSelector: ":scope > *"
-          }]
-        });
-        await page.keyboard.press("Escape");
-        await expect(dialog).toHaveCount(0);
-        await expect(trigger).toBeFocused();
-        return;
+      await expect(page.locator('.ambient-primary-navigation [data-ambient-orientation="operations"]')).toHaveCount(1);
+      await expect(page.locator('.header-menu-trigger').filter({ hasText: "Operations" })).toHaveCount(0);
+      await expect(page.getByRole("menu", { name: "Operations" })).toHaveCount(0);
+
+      const trigger = page.getByRole("button", { name: "Workspace and tools", exact: true });
+      await trigger.click();
+      const dialog = page.getByRole("dialog", { name: "Workspace & tools" });
+      await expect(dialog).toBeVisible();
+      await expect(dialog.locator('[data-workspace-tools-group="frequent"]')).toContainText("Workflow");
+      await expect(dialog.locator('[data-workspace-tools-group="operations"]')).toContainText("Clear the Deck");
+      await expect(dialog.getByRole("button", { name: "Show administration tools" })).toBeVisible();
+      await expectContainedTransientGeometry(page, {
+        id: "header-workspace-tools",
+        surfaceSelector: ".workspace-tools-dialog",
+        triggerSelector: ".workspace-tools-trigger[aria-expanded='true']",
+        expectedDeclaration: "data-layout-overlap-allowed",
+        allowScrollEdgeClipping: true,
+        centerScrollableControls: true,
+        peerGroups: [{
+          rootSelector: ".workspace-tools-dialog__header",
+          childSelector: ":scope > *"
+        }]
+      });
+      if (viewport.width === 1440) {
+        await captureTransientProof(page, "workspace-no-overlap-workspace-tools-1440.png");
       }
-      const menuNames = ["Operations"];
-      for (const menuName of menuNames) {
-        const trigger = page.getByRole("button", { name: menuName, exact: true });
-        await trigger.click();
-        const menu = page.getByRole("menu", { name: menuName });
-        await expect(menu).toBeVisible();
-        await expectContainedTransientGeometry(page, {
-          id: `header-${menuName.toLowerCase()}`,
-          surfaceSelector: `[role="menu"][aria-label="${menuName}"]`,
-          triggerSelector: ".header-menu-trigger[aria-expanded='true']",
-          expectedDeclaration: "aria-haspopup",
-          peerGroups: [{ childSelector: ":scope > [role='menuitem']" }]
-        });
-        if (viewport.width === 1440 && menuName === "Operations") {
-          await captureTransientProof(page, "workspace-no-overlap-header-operations-1440.png");
-        }
-        await page.keyboard.press("Escape");
-        await expect(menu).toHaveCount(0);
-        await expect(trigger).toBeFocused();
-      }
+      await page.keyboard.press("Escape");
+      await expect(dialog).toHaveCount(0);
+      await expect(trigger).toBeFocused();
     });
 
     test(`global Pilot context stays exact, contained, and focus-safe at ${viewport.width}px`, async ({ page }) => {

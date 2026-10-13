@@ -1,0 +1,30 @@
+{
+  "schemaVersion": "optional-tool-budget-v1",
+  "recordedAt": "2026-09-05",
+  "tools": [
+    {
+      "id": "pdf-import-parser",
+      "distributionDirectory": "vendor/pdfjs-5.7.284",
+      "loadBoundary": "Import Workbench PDF inspection only",
+      "maxRuntimeBytes": 1667684,
+      "maxSingleRuntimeAssetBytes": 1232303,
+      "requiredFiles": [
+        {
+          "path": "LICENSE",
+          "bytes": 10174,
+          "sha256": "0d542e0c8804e39aa7f37eb00da5a762149dc682d7829451287e11b938e94594"
+        },
+        {
+          "path": "pdf.min.mjs",
+          "bytes": 435381,
+          "sha256": "b0fc97331dc1fc03c4a381ebdd88f751a4d12de4ec97fa1faf18bb37721a4b5b"
+        },
+        {
+          "path": "pdf.worker.min.mjs",
+          "bytes": 1232303,
+          "sha256": "52fadd5b81b6abd1eb665bab0c3749a8ad6a293fcb6ee9d9e0309f29d4f82619"
+        }
+      ]
+    }
+  ]
+}

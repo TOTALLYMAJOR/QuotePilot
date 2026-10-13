@@ -19,12 +19,37 @@
   font-size: 13px;
   font-weight: 750;
   cursor: pointer;
+  transition:
+    transform var(--motion-fast, 140ms) var(--ease-out-soft, ease-out),
+    box-shadow var(--motion-fast, 140ms) var(--ease-out-soft, ease-out),
+    color var(--motion-fast, 140ms) ease,
+    background-color var(--motion-fast, 140ms) ease,
+    border-color var(--motion-fast, 140ms) ease;
 }
 
-.ambient-quick-updates-trigger:hover,
+.ambient-quick-updates-trigger:hover:not(:disabled),
 .ambient-quick-updates-trigger:focus-visible {
   color: #fff;
   background: var(--tone-gold-3, #8d611a);
+}
+
+.ambient-quick-updates-trigger:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 5px 14px rgba(31, 32, 35, 0.12);
+}
+
+.ambient-quick-updates-trigger:active:not(:disabled) {
+  transform: translateY(0);
+  box-shadow: none;
+}
+
+.ambient-quick-updates-trigger:disabled {
+  color: var(--tone-ink-4, #6b6e74);
+  background: var(--surface-inset, #f4f4f2);
+  border-color: var(--tone-line, #e4e4e0);
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
 }
 
 .ambient-quick-updates-trigger:focus-visible {
@@ -102,6 +127,12 @@
 .qup-library-action button {
   min-height: 44px;
   font: inherit;
+  transition:
+    transform var(--motion-fast, 140ms) var(--ease-out-soft, ease-out),
+    box-shadow var(--motion-fast, 140ms) var(--ease-out-soft, ease-out),
+    color var(--motion-fast, 140ms) ease,
+    background-color var(--motion-fast, 140ms) ease,
+    border-color var(--motion-fast, 140ms) ease;
 }
 
 .qup-close {
@@ -125,8 +156,17 @@
 
 .qup-close:disabled {
   color: var(--tone-ink-4, #6b6e74);
+  background: var(--surface-inset, #f4f4f2);
   border-color: var(--tone-line, #e4e4e0);
   cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.qup-close:hover:not(:disabled) {
+  background: var(--surface-inset, #f4f4f2);
+  transform: translateY(-1px);
+  box-shadow: 0 5px 14px rgba(31, 32, 35, 0.1);
 }
 
 .qup-body {
@@ -249,6 +289,15 @@
 .qup-library-action button:disabled {
   color: var(--tone-ink-4, #6b6e74);
   cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.qup-accordion-trigger:hover:not(:disabled),
+.qup-library-action button:hover:not(:disabled) {
+  color: var(--tone-gold-3, #8d611a);
+  background: rgba(141, 97, 26, 0.06);
+  transform: translateY(-1px);
 }
 
 .qup-accordion-trigger > span:not(.qup-icon, .qup-disclosure),
@@ -456,6 +505,13 @@
   border: 1px solid var(--tone-gold-3, #8d611a);
 }
 
+.qup-primary:hover:not(:disabled) {
+  background: #75500f;
+  border-color: #75500f;
+  transform: translateY(-1px);
+  box-shadow: 0 5px 14px rgba(31, 32, 35, 0.14);
+}
+
 .qup-primary--full {
   width: 100%;
 }
@@ -466,18 +522,48 @@
   border: 1px solid var(--tone-gold-3, #8d611a);
 }
 
+.qup-secondary:hover:not(:disabled) {
+  color: #75500f;
+  background: rgba(141, 97, 26, 0.07);
+  border-color: #75500f;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(31, 32, 35, 0.09);
+}
+
 .qup-danger {
   color: #9d3d28;
   background: transparent;
   border: 1px solid #c95c40;
 }
 
+.qup-danger:hover:not(:disabled) {
+  color: #7f2f20;
+  background: #fff1ed;
+  border-color: #9d3d28;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(127, 47, 32, 0.1);
+}
+
+.qup-close:active:not(:disabled),
+.qup-primary:active:not(:disabled),
+.qup-secondary:active:not(:disabled),
+.qup-danger:active:not(:disabled),
+.qup-accordion-trigger:active:not(:disabled),
+.qup-task-action:active:not(:disabled),
+.qup-library-action button:active:not(:disabled) {
+  transform: translateY(0);
+  box-shadow: none;
+}
+
 .qup-primary:disabled,
-.qup-secondary:disabled {
+.qup-secondary:disabled,
+.qup-danger:disabled {
   color: var(--tone-ink-4, #6b6e74);
   background: var(--surface-inset, #f4f4f2);
   border-color: var(--tone-line, #e4e4e0);
   cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
 }
 
 .qup-close:focus-visible,
@@ -632,6 +718,18 @@
   .qup-progress-mark {
     animation: none;
   }
+
+  .ambient-quick-updates-trigger,
+  .qup-close,
+  .qup-primary,
+  .qup-secondary,
+  .qup-danger,
+  .qup-accordion-trigger,
+  .qup-task-action,
+  .qup-library-action button {
+    transition: none;
+    transform: none !important;
+  }
 }
 
 @media (forced-colors: active) {
@@ -642,10 +740,52 @@
 
   .qup-drawer,
   .qup-dismissal-guard,
+  .ambient-quick-updates-trigger,
   .qup-close,
   .qup-primary,
   .qup-secondary,
-  .qup-danger {
-    border: 1px solid CanvasText;
+  .qup-danger,
+  .qup-accordion-trigger,
+  .qup-task-action,
+  .qup-library-action button {
+    color: ButtonText;
+    background: ButtonFace;
+    border: 1px solid ButtonText;
+  }
+
+  .ambient-quick-updates-trigger:hover:not(:disabled),
+  .qup-close:hover:not(:disabled),
+  .qup-primary:hover:not(:disabled),
+  .qup-secondary:hover:not(:disabled),
+  .qup-danger:hover:not(:disabled),
+  .qup-accordion-trigger:hover:not(:disabled),
+  .qup-task-action:hover:not(:disabled),
+  .qup-library-action button:hover:not(:disabled) {
+    color: Highlight;
+    border-color: Highlight;
+  }
+
+  .ambient-quick-updates-trigger:focus-visible,
+  .qup-close:focus-visible,
+  .qup-primary:focus-visible,
+  .qup-secondary:focus-visible,
+  .qup-danger:focus-visible,
+  .qup-accordion-trigger:focus-visible,
+  .qup-task-action:focus-visible,
+  .qup-library-action button:focus-visible,
+  .qup-field select:focus-visible {
+    outline: 2px solid Highlight;
+  }
+
+  .ambient-quick-updates-trigger:disabled,
+  .qup-close:disabled,
+  .qup-primary:disabled,
+  .qup-secondary:disabled,
+  .qup-danger:disabled,
+  .qup-accordion-trigger:disabled,
+  .qup-task-action:disabled,
+  .qup-library-action button:disabled {
+    color: GrayText;
+    border-color: GrayText;
   }
 }

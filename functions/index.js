@@ -1,3 +1,4 @@
+const { tenantWorkflowRuntimeEnabled } = require("./tenantWorkflowRuntime");
 const functions = require("firebase-functions/v1");
 const { initializeApp } = require("firebase-admin/app");
 const { getAuth } = require("firebase-admin/auth");
@@ -55,6 +56,7 @@ const {
   projectCustomerIdentityToImmutableVersion,
   sanitizeQuoteCreationRequest
 } = require("./quoteCreation");
+const inquiryShowcase = require("./inquiryShowcase");
 const {
   RebookQuoteDraftError,
   assertRebookCurrentEventDate,
@@ -72,12 +74,25 @@ const {
   assertPostEventCloseoutMatchesSource,
   buildPostEventCloseoutPolicySnapshot,
   buildPostEventCloseoutRecord,
+  normalizePostEventActualAttendanceRequest,
   normalizePostEventCloseoutActionRequest,
   normalizePostEventCloseoutPolicyRefreshRequest,
   planPostEventCloseoutAction,
+  planPostEventActualAttendance,
   planPostEventCloseoutPolicyRefresh,
   resolvePostEventCloseoutSource
 } = require("./postEventCloseout");
+const eventOperations = require("./eventOperations");
+const eventOperatingWork = require("./eventOperatingWork");
+const eventOperatingActuals = require("./eventOperatingActuals");
+const eventOperatingHistory = require("./eventOperatingHistory");
+const eventOperationalNotes = require("./eventOperationalNotes");
+const workflowDefinitions = require("./workflowDefinitions");
+const workflowExecution = require("./workflowExecution");
+const eventWorkflowAdapter = require("./eventWorkflowAdapter");
+const workflowPackAdapters = require("./workflowPackAdapters");
+const quoteAttendance = require("./quoteAttendance");
+const googleCalendarIntegration = require("./googleCalendarIntegration");
 const commercialDependencyGraphCore = require("./commercialDependencyGraphCore.cjs");
 const {
   KITCHEN_BEO_FRESHNESS_STATES,
@@ -253,12 +268,16 @@ const {
 const {
   OperationalStaffingRuntimeError,
   assertOperationalStaffingAuthorityEnabled,
+  authorityState: operationalStaffingAuthorityState,
   buildOperationalStaffingSnapshotEnvelope,
+  buildProjectedOperationalStaffingObservation,
   buildSnapshotScheduleFenceRefs,
   dedupeScheduleFenceAssignments,
   deriveCanonicalOperationalStaffingEvidence,
   emptyScheduleFence
 } = require("./operationalStaffingRuntime");
+const { createInventoryAuthorityRuntime } = require("./inventoryAuthority");
+const { createEventSupplyActionPlanRuntime } = require("./eventSupplyActionPlanCore.cjs");
 const {
   STAFF_DIRECTORY_AUTHORITY_VERSION,
   StaffDirectoryAuthorityError,
@@ -320,11 +339,13 @@ const {
 const {
   PORTAL_CONVERSATION_RATE_LIMIT,
   PORTAL_CONVERSATION_RATE_WINDOW_MS,
+  PORTAL_CONVERSATION_PAGE_SIZE,
   PORTAL_CONVERSATION_TOTAL_MESSAGE_LIMIT,
   PortalConversationError,
   assertPortalConversationActivation,
   assertPortalConversationTotal,
   buildPortalConversationActor,
+  buildPortalConversationPage,
   buildPortalConversationMessage,
   buildPortalConversationRateKey,
   buildPortalConversationRequestKey,
@@ -374,12 +395,115 @@ const {
   isPortalRecoveryToken,
   resolvePortalRecoveryContact
 } = require("./portalRecovery");
+const {
+  RESEND_ACCEPTANCE_SCHEMA_VERSION,
+  RESEND_ACCEPTANCE_STATES,
+  ResendAcceptanceError,
+  buildResendAcceptancePayload,
+  classifyResendAcceptanceFailure,
+  normalizeResendAcceptanceRequest,
+  projectResendAcceptanceReceipt
+} = require("./resendAcceptanceTest");
 
 initializeApp();
 
 const auth = getAuth();
 const db = getFirestore();
 const REGION = "us-central1";
+const inventoryAuthorityGlobalEnabled = (organizationId) =>
+  tenantWorkflowRuntimeEnabled("INVENTORY_AUTHORITY_ENABLED", organizationId);
+const inventoryAuthorityRuntime = createInventoryAuthorityRuntime({
+  db,
+  FieldValue,
+  HttpsError: functions.https.HttpsError,
+  assertStaff,
+  normalizeOrganizationId,
+  isOrganizationRecordActive,
+  globalEnabled: inventoryAuthorityGlobalEnabled,
+  logger: functions.logger
+});
+const eventSupplyActionPlanRuntime = createEventSupplyActionPlanRuntime({
+  db,
+  FieldValue,
+  HttpsError: functions.https.HttpsError,
+  assertStaff,
+  normalizeOrganizationId,
+  isOrganizationRecordActive,
+  globalEnabled: inventoryAuthorityGlobalEnabled,
+  logger: functions.logger
+});
+exports.getInventoryWorkspace = functions
+  .runWith({ enforceAppCheck: false })
+  .region(REGION)
+  .https.onCall((data, context) => inventoryAuthorityRuntime.getInventoryWorkspace(data, context));
+exports.applyInventoryCommand = functions
+  .runWith({ enforceAppCheck: false })
+  .region(REGION)
+  .https.onCall((data, context) => inventoryAuthorityRuntime.applyInventoryCommand(data, context));
+exports.getEventSupplyActionPlan = functions
+  .runWith({ enforceAppCheck: false })
+  .region(REGION)
+  .https.onCall((data, context) => eventSupplyActionPlanRuntime.getEventSupplyActionPlan(data, context));
+exports.applyEventSupplyActionPlanCommand = functions
+  .runWith({ enforceAppCheck: false })
+  .region(REGION)
+  .https.onCall((data, context) => eventSupplyActionPlanRuntime.applyEventSupplyActionPlanCommand(data, context));
+exports.previewEventInventory = functions
+  .runWith({ enforceAppCheck: false })
+  .region(REGION)
+  .https.onCall((data, context) => inventoryAuthorityRuntime.previewEventInventory(data, context));
+exports.invalidateEventIngredientsOnQuoteChange = functions
+  .runWith({ failurePolicy: true })
+  .region(REGION)
+  .firestore.document("organizations/{organizationId}/quotes/{quoteId}")
+  .onUpdate((change, context) => {
+    if (!inventoryAuthorityGlobalEnabled(context.params.organizationId)) return null;
+    return inventoryAuthorityRuntime.invalidateEventIngredientsForQuoteChange({
+      organizationId: context.params.organizationId,
+      quoteId: context.params.quoteId,
+      beforeActiveVersionId: change.before.data()?.activeVersionId,
+      afterActiveVersionId: change.after.data()?.activeVersionId
+    });
+  });
+exports.invalidateEventIngredientsOnRecipeChange = functions
+  .runWith({ failurePolicy: true })
+  .region(REGION)
+  .firestore.document("organizations/{organizationId}/inventoryRecipeHeads/{menuItemId}")
+  .onWrite((change, context) => {
+    if (!inventoryAuthorityGlobalEnabled(context.params.organizationId)) return null;
+    const before = change.before.exists ? change.before.data() : null;
+    const after = change.after.exists ? change.after.data() : null;
+    if (!after || before?.recipeRevisionId === after.recipeRevisionId) return null;
+    return inventoryAuthorityRuntime.invalidateEventIngredientsForMenuChange({
+      organizationId: context.params.organizationId,
+      menuItemId: context.params.menuItemId,
+      changeKind: "recipe",
+      beforeSourceDigest: before?.recipeRevisionId || "",
+      afterSourceDigest: after.recipeRevisionId
+    });
+  });
+exports.invalidateEventIngredientsOnMenuCostChange = functions
+  .runWith({ failurePolicy: true })
+  .region(REGION)
+  .firestore.document("organizations/{organizationId}/inventoryMenuCostProjections/{menuItemId}")
+  .onWrite((change, context) => {
+    if (!inventoryAuthorityGlobalEnabled(context.params.organizationId)) return null;
+    const before = change.before.exists ? change.before.data() : null;
+    const after = change.after.exists ? change.after.data() : null;
+    const beforeCostResultDigest = before?.cost?.resultDigest;
+    const afterCostResultDigest = after?.cost?.resultDigest;
+    if (!before || !after || before.recipeRevisionId !== after.recipeRevisionId
+      || before.sourceDigest === after.sourceDigest
+      || !beforeCostResultDigest || !afterCostResultDigest
+      || beforeCostResultDigest === afterCostResultDigest) return null;
+    return inventoryAuthorityRuntime.invalidateEventIngredientsForMenuChange({
+      organizationId: context.params.organizationId,
+      menuItemId: context.params.menuItemId,
+      changeKind: "cost",
+      beforeSourceDigest: beforeCostResultDigest,
+      afterSourceDigest: afterCostResultDigest
+    });
+  });
 const ROLES_COLLECTION = "userRoles";
 const ORGANIZATIONS_COLLECTION = "organizations";
 const TENANT_DOMAINS_COLLECTION = "tenantDomains";
@@ -392,7 +516,7 @@ const ORGANIZATION_TOMBSTONES_COLLECTION = "organizationTombstones";
 const SMS_PROVIDERS = new Set(["pingram", "twilio", "none"]);
 const EMAIL_PROVIDERS = new Set(["resend", "none"]);
 const APPROVED_EMAIL_FROM_NAME = "QuotePilot by MBMApps";
-const APPROVED_EMAIL_FROM_EMAIL = "quotepilot@leaguepilot.us";
+const APPROVED_EMAIL_FROM_EMAIL = "quotepilot@quietpilot.us";
 const QUOTES_COLLECTION = "quotes";
 const QUOTE_APPROVAL_EXECUTIONS_COLLECTION = "quoteApprovalExecutions";
 const PRIVATE_PAYMENT_DISPATCHES_COLLECTION = "privatePaymentDispatches";
@@ -408,12 +532,26 @@ const OPERATIONAL_STAFFING_PLANS_COLLECTION = "eventStaffingPlans";
 const OPERATIONAL_STAFFING_FENCES_COLLECTION = "staffingScheduleFences";
 const PORTAL_COLLECTION = "customerPortalQuotes";
 const CUSTOMER_EMAIL_CLAIMS_COLLECTION = "customerEmailClaims";
+const INQUIRY_SHOWCASES_COLLECTION = "inquiryShowcases";
+const INQUIRY_VERSIONS_COLLECTION = "versions";
+const INQUIRY_RECEIPTS_COLLECTION = "receipts";
+const CUSTOMER_INQUIRIES_COLLECTION = "customerInquiries";
+const INQUIRY_SLUGS_COLLECTION = "inquirySlugs";
+const INQUIRY_REQUESTS_COLLECTION = "publicInquiryRequests";
+const INQUIRY_RATE_LIMITS_COLLECTION = "inquiryRateLimits";
+const INQUIRY_DELETION_RECEIPTS_COLLECTION = "inquiryDeletionReceipts";
 const CUSTOMER_IMPORT_BATCH_KIND = "customer";
 const CUSTOMER_IMPORT_SOURCE = "import_studio";
 const CUSTOMER_IMPORT_TYPE = "customers";
+const CUSTOMER_IMPORT_PREFLIGHTS_COLLECTION = "customerImportPreflights";
+const CUSTOMER_IMPORT_PREFLIGHT_KIND = "customer_import_preflight";
+const CUSTOMER_IMPORT_PREFLIGHT_VALIDITY_MS = 15 * 60 * 1000;
+const CUSTOMER_IMPORT_SESSION_CONTINUATION_MS = 24 * 60 * 60 * 1000;
 const CUSTOMER_IMPORT_MAX_RECORDS = 350;
+const CUSTOMER_IMPORT_MAX_SESSION_RECORDS = 1500;
 const CUSTOMER_IMPORT_MAX_DUPLICATE_SCAN_RECORDS = 2000;
 const CUSTOMER_IMPORT_MAX_TRANSACTION_WRITES = 500;
+const CUSTOMER_IMPORT_FIXED_TRANSACTION_WRITES = 2;
 const PORTAL_CONVERSATION_MESSAGES_COLLECTION = "portalConversationMessages";
 const PORTAL_CONVERSATION_REQUESTS_COLLECTION = "portalConversationRequests";
 const PORTAL_CONVERSATION_RATE_LIMITS_COLLECTION = "portalConversationRateLimits";
@@ -421,6 +559,7 @@ const PORTAL_CONVERSATION_STATE_COLLECTION = "portalConversationState";
 const POST_EVENT_CLOSEOUTS_COLLECTION = "postEventCloseouts";
 const KITCHEN_BEO_ARTIFACTS_COLLECTION = "kitchenBeoArtifacts";
 const KITCHEN_BEO_RECEIPTS_COLLECTION = "kitchenBeoGenerationReceipts";
+const EVENT_OPERATIONAL_NOTES_COLLECTION = "eventOperationalNotes";
 const KITCHEN_BEO_RECEIPT_HISTORY_SCHEMA_VERSION = 1;
 const KITCHEN_BEO_RECEIPT_HISTORY_LIMIT = 10;
 const COMMERCIAL_CHANGE_SIMULATIONS_COLLECTION = "commercialChangeSimulations";
@@ -451,8 +590,15 @@ const OWNER_SMS_RATE_LIMITS_COLLECTION = "ownerSmsRateLimits";
 const OWNER_SMS_ORGANIZATION_STATE_COLLECTION = "ownerSmsOrganizationState";
 const OWNER_SMS_PROVIDER_CONTROLS_COLLECTION = "ownerSmsProviderControls";
 const OWNER_SMS_OUTBOX_COLLECTION = "ownerSmsOutbox";
+const RESEND_ACCEPTANCE_RECEIPTS_COLLECTION = "resendAcceptanceReceipts";
 const BUYER_ACCESS_ORDERS_COLLECTION = "buyerAccessOrders";
 const BUYER_ACCESS_RATE_LIMITS_COLLECTION = "buyerAccessRateLimits";
+const GOOGLE_CALENDAR_CONNECTIONS_COLLECTION = "googleCalendarConnections";
+const GOOGLE_CALENDAR_OAUTH_STATES_COLLECTION = "googleCalendarOAuthStates";
+const GOOGLE_CALENDAR_EVENT_LINKS_COLLECTION = "googleCalendarEventLinks";
+const GOOGLE_CALENDAR_OPERATIONS_COLLECTION = "googleCalendarOperations";
+const GOOGLE_CALENDAR_OAUTH_CALLBACK_TIMEOUT_SECONDS = 60;
+const GOOGLE_CALENDAR_OAUTH_EXCHANGE_LEASE_MS = 75_000;
 const STRIPE_SECRET_NAME = "STRIPE_SECRET_KEY";
 const STRIPE_WEBHOOK_SECRET_NAME = "STRIPE_WEBHOOK_SECRET";
 const RESEND_API_KEY_SECRET_NAME = "RESEND_API_KEY";
@@ -467,6 +613,12 @@ const BUYER_ACCESS_STRIPE_SECRET_NAME = "BUYER_ACCESS_STRIPE_SECRET_KEY";
 const BUYER_ACCESS_STRIPE_WEBHOOK_SECRET_NAME = "BUYER_ACCESS_STRIPE_WEBHOOK_SECRET";
 const BUYER_ACCESS_TURNSTILE_SECRET_NAME = "BUYER_ACCESS_TURNSTILE_SECRET";
 const BUYER_ACCESS_RATE_LIMIT_SECRET_NAME = "BUYER_ACCESS_RATE_LIMIT_SECRET";
+const INQUIRY_TURNSTILE_SECRET_NAME = "INQUIRY_TURNSTILE_SECRET";
+const INQUIRY_RATE_LIMIT_SECRET_NAME = "INQUIRY_RATE_LIMIT_SECRET";
+const GOOGLE_CALENDAR_OAUTH_CLIENT_ID_SECRET_NAME = "GOOGLE_CALENDAR_OAUTH_CLIENT_ID";
+const GOOGLE_CALENDAR_OAUTH_CLIENT_SECRET_NAME = "GOOGLE_CALENDAR_OAUTH_CLIENT_SECRET";
+const GOOGLE_CALENDAR_OAUTH_STATE_SECRET_NAME = "GOOGLE_CALENDAR_OAUTH_STATE_SECRET";
+const GOOGLE_CALENDAR_TOKEN_ENCRYPTION_KEY_SECRET_NAME = "GOOGLE_CALENDAR_TOKEN_ENCRYPTION_KEY";
 const kitchenBeoAuthority = createKitchenBeoAuthority({
   graphCore: commercialDependencyGraphCore
 });
@@ -1275,13 +1427,15 @@ function configBoolean(path, fallback = false) {
   return value === "true" || value === "1" || value === "yes";
 }
 
-function getRevenueAutopilotGlobalControl(nowISO = new Date().toISOString()) {
+function getRevenueAutopilotGlobalControl(nowISO = new Date().toISOString(), organizationId = "") {
   const email = getEmailConfig();
   const providerConfigured = email.provider === "resend"
     && Boolean(email.resendApiKey)
     && email.senderApproved;
   return {
-    enabled: configBoolean("revenue_autopilot.enabled", false),
+    enabled: tenantWorkflowRuntimeEnabled("REVENUE_AUTOPILOT_ENABLED", organizationId, {
+      ...process.env, REVENUE_AUTOPILOT_ENABLED: configBoolean("revenue_autopilot.enabled", false) ? "true" : "false"
+    }),
     sendsEnabled: configBoolean("revenue_autopilot.sends_enabled", false),
     provider: {
       evidenceId: `provider_${createHash("sha256")
@@ -1927,7 +2081,7 @@ async function readRevenueAutopilotExecutionAuthority({
     organizationId,
     customerId
   });
-  const global = getRevenueAutopilotGlobalControl(nowISO);
+  const global = getRevenueAutopilotGlobalControl(nowISO, organizationId);
   const canonical = {
     quote,
     portal: revenueAutopilotPortalEvidence({
@@ -2091,7 +2245,7 @@ async function reconcileRevenueAutopilotReplyAttentionForQuote({
       organizationId,
       quoteId,
       evidence: { conversation: evidence },
-      global: getRevenueAutopilotGlobalControl(nowISO),
+      global: getRevenueAutopilotGlobalControl(nowISO, organizationId),
       tenantPolicy,
       activeAttention: activeAttentionSnap?.exists
         ? { attentionId: activeAttentionSnap.id, ...(activeAttentionSnap.data() || {}) }
@@ -9218,6 +9372,30 @@ exports.deleteOrganizationWorkspace = functions.region(REGION).https.onCall(asyn
   };
 });
 
+async function deleteConvertedInquiriesForQuote({ organizationId, quoteId } = {}) {
+  const inquiries = await db.collection(ORGANIZATIONS_COLLECTION).doc(organizationId)
+    .collection(CUSTOMER_INQUIRIES_COLLECTION)
+    .where("conversion.quoteId", "==", normalizeText(quoteId))
+    .limit(10)
+    .get();
+  let deleted = 0;
+  for (const inquirySnap of inquiries.docs) {
+    const inquiry = inquirySnap.data() || {};
+    const requestRecords = await db.collection(INQUIRY_REQUESTS_COLLECTION)
+      .where("inquiryId", "==", inquiry.inquiryId || inquirySnap.id)
+      .limit(10)
+      .get();
+    const deletionReceipt = inquiryShowcase.contentFreeDeletionReceipt(inquiry, new Date().toISOString());
+    await db.recursiveDelete(inquirySnap.ref);
+    const batch = db.batch();
+    requestRecords.docs.forEach((requestRecord) => batch.delete(requestRecord.ref));
+    batch.set(db.collection(INQUIRY_DELETION_RECEIPTS_COLLECTION).doc(inquiryReceiptId("inquiry_deleted", `${organizationId}|${inquiry.inquiryId || inquirySnap.id}`)), { ...deletionReceipt, createdAt: FieldValue.serverTimestamp() });
+    await batch.commit();
+    deleted += 1;
+  }
+  return { deleted };
+}
+
 exports.hardDeleteQuote = functions.region(REGION).https.onCall(async (data, context) => {
   const requestedOrganizationId = normalizeOrganizationId(data?.organizationId);
   const quoteId = normalizeText(data?.quoteId);
@@ -9363,6 +9541,7 @@ exports.hardDeleteQuote = functions.region(REGION).https.onCall(async (data, con
       fallbackPortalKey: claim.portalKey
     });
     await db.recursiveDelete(quoteRef);
+    await deleteConvertedInquiriesForQuote({ organizationId, quoteId });
     const completedAtISO = new Date().toISOString();
     const result = {
       portalSnapshotsDeleted: portalCleanup.deleted,
@@ -9484,13 +9663,47 @@ function customerImportText(value, maxLength = 500) {
   return String(value ?? "").trim().slice(0, maxLength);
 }
 
+function customerImportBoundedText(value, {
+  field,
+  maxLength,
+  rowNumber = null
+} = {}) {
+  const text = String(value ?? "").trim();
+  if (text.length > maxLength) {
+    const location = rowNumber !== null && Number.isSafeInteger(Number(rowNumber))
+      ? `row ${Number(rowNumber)} `
+      : "";
+    throw new CustomerImportError(
+      "invalid-argument",
+      `Customer import ${location}${field} exceeds ${maxLength} characters. Shorten it and run server preflight again.`
+    );
+  }
+  return text;
+}
+
+function normalizeCustomerImportFileName(value) {
+  return customerImportBoundedText(value, {
+    field: "file name",
+    maxLength: 240
+  });
+}
+
 function customerImportNameKey(value) {
   return customerImportText(value, 160).toLowerCase().replace(/\s+/g, " ");
 }
 
 function normalizeCustomerImportBatchId(value) {
-  const batchId = customerImportText(value, 128);
+  const batchId = String(value ?? "").trim();
   return /^[A-Za-z0-9_-]{20,128}$/.test(batchId) ? batchId : "";
+}
+
+function createCustomerImportPreflightId() {
+  return `customer_preflight_${randomUUID().replace(/-/g, "")}`;
+}
+
+function normalizeCustomerImportPreflightId(value) {
+  const preflightId = String(value ?? "").trim().toLowerCase();
+  return /^customer_preflight_[a-f0-9]{32}$/.test(preflightId) ? preflightId : "";
 }
 
 function stableCustomerImportValue(value) {
@@ -9549,8 +9762,16 @@ function customerImportDocumentId(data = {}) {
 
 function sanitizeCustomerImportRecord(input = {}, rowNumber = 0) {
   const source = input && typeof input === "object" ? input : {};
-  const name = customerImportText(source.name, 160);
-  const email = normalizeEmail(customerImportText(source.email, 254));
+  const name = customerImportBoundedText(source.name, {
+    field: "name",
+    maxLength: 160,
+    rowNumber
+  });
+  const email = normalizeEmail(customerImportBoundedText(source.email, {
+    field: "email",
+    maxLength: 254,
+    rowNumber
+  }));
   if (!name && !email) {
     throw new CustomerImportError(
       "invalid-argument",
@@ -9566,9 +9787,21 @@ function sanitizeCustomerImportRecord(input = {}, rowNumber = 0) {
   const data = {
     name,
     email,
-    phone: customerImportText(source.phone, 80),
-    company: customerImportText(source.company || source.organization, 160),
-    notes: customerImportText(source.notes, 2_000),
+    phone: customerImportBoundedText(source.phone, {
+      field: "phone",
+      maxLength: 80,
+      rowNumber
+    }),
+    company: customerImportBoundedText(source.company || source.organization, {
+      field: "company",
+      maxLength: 160,
+      rowNumber
+    }),
+    notes: customerImportBoundedText(source.notes, {
+      field: "notes",
+      maxLength: 2_000,
+      rowNumber
+    }),
     nameKey: customerImportNameKey(name),
     emailKey: email
   };
@@ -9579,14 +9812,14 @@ function sanitizeCustomerImportRecord(input = {}, rowNumber = 0) {
   };
 }
 
-function normalizeCustomerImportRows(records = []) {
+function normalizeCustomerImportRows(records = [], { maxRecords = CUSTOMER_IMPORT_MAX_RECORDS } = {}) {
   if (!Array.isArray(records) || records.length === 0) {
     throw new CustomerImportError("invalid-argument", "No valid customer records are ready to import.");
   }
-  if (records.length > CUSTOMER_IMPORT_MAX_RECORDS) {
+  if (records.length > maxRecords) {
     throw new CustomerImportError(
       "resource-exhausted",
-      `Customer import batches are limited to ${CUSTOMER_IMPORT_MAX_RECORDS} records.`
+      `Customer import batches are limited to ${maxRecords} records.`
     );
   }
   return records.map((entry, index) => {
@@ -9603,12 +9836,254 @@ function normalizeCustomerImportRows(records = []) {
   });
 }
 
-function customerImportRequestHash({ fileName = "", rows = [] } = {}) {
+function customerImportRequestHash({ organizationId = "", fileName = "", rows = [] } = {}) {
   return customerImportHash({
+    organizationId: normalizeOrganizationId(organizationId),
     importType: CUSTOMER_IMPORT_TYPE,
-    fileName: customerImportText(fileName, 240),
+    fileName: normalizeCustomerImportFileName(fileName),
     rows: rows.map((row) => ({ rowNumber: row.rowNumber, data: row.data }))
   });
+}
+
+function customerImportChunkPlanHash(chunks = []) {
+  return customerImportHash(chunks.map((chunk) => ({
+    index: chunk.index,
+    sourceIndexes: chunk.sourceIndexes,
+    rowNumbers: chunk.rowNumbers,
+    recordCount: chunk.recordCount,
+    distinctEmailCount: chunk.distinctEmailCount,
+    maximumWrites: chunk.maximumWrites
+  })));
+}
+
+function bindCustomerImportBatchToPreflight({
+  organizationId = "",
+  fileName = "",
+  rows = [],
+  preflightId = "",
+  preflightPlanHash = "",
+  preflightRecords,
+  preflightChunkIndex,
+  preflightSessionId = "",
+  importBatchId = ""
+} = {}) {
+  const normalizedPreflightId = normalizeCustomerImportPreflightId(preflightId);
+  const normalizedPlanHash = String(preflightPlanHash ?? "").trim().toLowerCase();
+  const normalizedSessionId = normalizeCustomerImportBatchId(preflightSessionId);
+  const normalizedBatchId = normalizeCustomerImportBatchId(importBatchId);
+  if (
+    !normalizedPreflightId
+    || !/^[a-f0-9]{64}$/.test(normalizedPlanHash)
+    || !Array.isArray(preflightRecords)
+    || !Number.isSafeInteger(preflightChunkIndex)
+    || preflightChunkIndex < 0
+    || !normalizedSessionId
+  ) {
+    throw new CustomerImportError(
+      "invalid-argument",
+      "This customer import is missing its complete server preflight binding. Run preflight again."
+    );
+  }
+  const preflightRows = normalizeCustomerImportRows(preflightRecords, {
+    maxRecords: CUSTOMER_IMPORT_MAX_SESSION_RECORDS
+  });
+  const expectedPlanHash = customerImportRequestHash({
+    organizationId,
+    fileName,
+    rows: preflightRows
+  });
+  if (expectedPlanHash !== normalizedPlanHash) {
+    throw new CustomerImportError(
+      "failed-precondition",
+      "The customer rows or source file changed after server preflight. Run preflight again."
+    );
+  }
+  const chunks = buildCustomerImportChunkPlan(preflightRows);
+  const chunkIndex = preflightChunkIndex;
+  const expectedChunk = chunks[chunkIndex];
+  if (!expectedChunk) {
+    throw new CustomerImportError(
+      "invalid-argument",
+      "The requested customer import part is not present in the server preflight plan."
+    );
+  }
+  const expectedBatchId = chunks.length === 1
+    ? normalizedSessionId
+    : `${normalizedSessionId}_part_${String(chunkIndex + 1).padStart(3, "0")}`;
+  if (expectedBatchId.length > 128) {
+    throw new CustomerImportError(
+      "invalid-argument",
+      "The customer import session identity is too long for its server-issued chunk plan. Start a new import."
+    );
+  }
+  if (!normalizedBatchId || normalizedBatchId !== expectedBatchId) {
+    throw new CustomerImportError(
+      "failed-precondition",
+      "This customer import part is not bound to the expected session identity. Run server preflight again."
+    );
+  }
+  const expectedRows = expectedChunk.sourceIndexes.map((sourceIndex) => preflightRows[sourceIndex]);
+  const batchHash = customerImportHash(rows.map((row) => ({ rowNumber: row.rowNumber, data: row.data })));
+  const expectedBatchHash = customerImportHash(expectedRows.map((row) => ({
+    rowNumber: row.rowNumber,
+    data: row.data
+  })));
+  if (batchHash !== expectedBatchHash) {
+    throw new CustomerImportError(
+      "failed-precondition",
+      "This customer import part no longer matches the server preflight plan. Run preflight again."
+    );
+  }
+  return {
+    preflightId: normalizedPreflightId,
+    planHash: normalizedPlanHash,
+    chunkPlanHash: customerImportChunkPlanHash(chunks),
+    sourceCount: preflightRows.length,
+    chunkIndex,
+    chunkCount: chunks.length,
+    sessionId: normalizedSessionId,
+    expectedBatchId
+  };
+}
+
+function assertIssuedCustomerImportPreflight(snapshot, {
+  organizationId,
+  actorUid,
+  actorEmail,
+  fileName,
+  binding,
+  importBatchId,
+  requestHash,
+  nowISO,
+  allowExpired = false
+} = {}) {
+  if (!snapshot?.exists) {
+    throw new CustomerImportError(
+      "failed-precondition",
+      "The server-issued customer import preflight receipt is unavailable. Run preflight again."
+    );
+  }
+  const receipt = snapshot.data() || {};
+  const receiptActor = receipt.actor && typeof receipt.actor === "object" ? receipt.actor : {};
+  const completedChunks = receipt.completedChunks && typeof receipt.completedChunks === "object"
+    ? receipt.completedChunks
+    : {};
+  const completedChunkEntries = Object.entries(completedChunks);
+  const hasBoundSession = Boolean(receipt.sessionImportBatchId);
+  if (
+    receipt.schemaVersion !== 1
+    || receipt.kind !== CUSTOMER_IMPORT_PREFLIGHT_KIND
+    || !["issued", "in_progress", "completed"].includes(receipt.status)
+    || receipt.preflightId !== binding.preflightId
+    || receipt.organizationId !== organizationId
+    || receipt.importType !== CUSTOMER_IMPORT_TYPE
+    || receipt.fileName !== fileName
+    || receipt.planHash !== binding.planHash
+    || receipt.chunkPlanHash !== binding.chunkPlanHash
+    || Number(receipt.sourceCount) !== binding.sourceCount
+    || Number(receipt.chunkCount) !== binding.chunkCount
+    || receiptActor.uid !== actorUid
+    || normalizeEmail(receiptActor.email) !== normalizeEmail(actorEmail)
+    || (receipt.sessionImportBatchId && receipt.sessionImportBatchId !== binding.sessionId)
+  ) {
+    throw new CustomerImportError(
+      "failed-precondition",
+      "The customer import no longer matches its server-issued preflight receipt. Run preflight again."
+    );
+  }
+  const expiresAtMs = Date.parse(String(receipt.expiresAtISO || ""));
+  const issuedAtMs = Date.parse(String(receipt.issuedAtISO || ""));
+  const expiresAtTimestampMs = typeof receipt.expiresAt?.toMillis === "function"
+    ? receipt.expiresAt.toMillis()
+    : Number.NaN;
+  const sessionActivatedAtMs = Date.parse(String(receipt.sessionActivatedAtISO || ""));
+  const sessionExpiresAtMs = Date.parse(String(receipt.sessionExpiresAtISO || ""));
+  const sessionExpiresAtTimestampMs = typeof receipt.sessionExpiresAt?.toMillis === "function"
+    ? receipt.sessionExpiresAt.toMillis()
+    : Number.NaN;
+  const nowMs = Date.parse(String(nowISO || ""));
+  if (
+    !Number.isFinite(expiresAtMs)
+    || !Number.isFinite(issuedAtMs)
+    || !Number.isFinite(expiresAtTimestampMs)
+    || !Number.isFinite(nowMs)
+    || expiresAtTimestampMs !== expiresAtMs
+    || expiresAtMs - issuedAtMs !== CUSTOMER_IMPORT_PREFLIGHT_VALIDITY_MS
+  ) {
+    throw new CustomerImportError(
+      "failed-precondition",
+      "The server-issued customer import preflight has expired. Run preflight again."
+    );
+  }
+  const sessionEvidenceValid = hasBoundSession
+    && Number.isFinite(sessionActivatedAtMs)
+    && Number.isFinite(sessionExpiresAtMs)
+    && Number.isFinite(sessionExpiresAtTimestampMs)
+    && sessionExpiresAtTimestampMs === sessionExpiresAtMs
+    && sessionExpiresAtMs - sessionActivatedAtMs === CUSTOMER_IMPORT_SESSION_CONTINUATION_MS
+    && sessionActivatedAtMs >= issuedAtMs
+    && sessionActivatedAtMs <= expiresAtMs;
+  const completedEvidenceValid = completedChunkEntries.every(([key, value]) => {
+    const index = Number(key);
+    const expectedBatchId = binding.chunkCount === 1
+      ? receipt.sessionImportBatchId
+      : `${receipt.sessionImportBatchId}_part_${String(index + 1).padStart(3, "0")}`;
+    return Number.isSafeInteger(index)
+      && index >= 0
+      && index < binding.chunkCount
+      && value
+      && typeof value === "object"
+      && value.importBatchId === expectedBatchId
+      && /^[a-f0-9]{64}$/.test(String(value.requestHash || ""))
+      && Number.isFinite(Date.parse(String(value.completedAtISO || "")));
+  });
+  const statusEvidenceValid = receipt.status === "issued"
+    ? !hasBoundSession && completedChunkEntries.length === 0
+    : sessionEvidenceValid
+      && completedEvidenceValid
+      && completedChunkEntries.length > 0
+      && (
+        (receipt.status === "in_progress" && completedChunkEntries.length < binding.chunkCount)
+        || (receipt.status === "completed" && completedChunkEntries.length === binding.chunkCount)
+      );
+  if (!statusEvidenceValid) {
+    throw new CustomerImportError(
+      "failed-precondition",
+      "The server-issued customer import preflight has inconsistent session evidence. Run reconciliation before retrying."
+    );
+  }
+  if (
+    !allowExpired
+    && (
+      (!hasBoundSession && expiresAtMs <= nowMs)
+      || (hasBoundSession && sessionExpiresAtMs <= nowMs)
+    )
+  ) {
+    throw new CustomerImportError(
+      "failed-precondition",
+      hasBoundSession
+        ? "The customer import session continuation window has expired. Undo the partial session or start a new import."
+        : "The server-issued customer import preflight has expired. Run preflight again."
+    );
+  }
+  const completedChunk = completedChunks[String(binding.chunkIndex)];
+  if (completedChunk && (
+    completedChunk.importBatchId !== importBatchId
+    || completedChunk.requestHash !== requestHash
+  )) {
+    throw new CustomerImportError(
+      "already-exists",
+      "This server preflight chunk is already bound to a different customer import batch."
+    );
+  }
+  return {
+    receipt,
+    completedChunks,
+    completedChunk,
+    expiresAtISO: String(receipt.expiresAtISO || ""),
+    sessionActivatedAtISO: hasBoundSession ? String(receipt.sessionActivatedAtISO || "") : "",
+    sessionExpiresAtISO: hasBoundSession ? String(receipt.sessionExpiresAtISO || "") : ""
+  };
 }
 
 function customerImportResultFromReceipt(receipt = {}, { idempotentReplay = true } = {}) {
@@ -9622,6 +10097,12 @@ function customerImportResultFromReceipt(receipt = {}, { idempotentReplay = true
     createdRecords: Array.isArray(receipt.createdRecords) ? receipt.createdRecords : [],
     skippedRows: Array.isArray(receipt.skippedRows) ? receipt.skippedRows : [],
     status: customerImportText(receipt.status, 40) || "completed",
+    preflightId: normalizeCustomerImportPreflightId(receipt.preflightId),
+    preflightPlanHash: customerImportText(receipt.preflightPlanHash, 64),
+    preflightChunkIndex: Number.isSafeInteger(Number(receipt.preflightChunkIndex))
+      ? Number(receipt.preflightChunkIndex)
+      : null,
+    preflightSessionId: normalizeCustomerImportBatchId(receipt.preflightSessionId),
     idempotentReplay
   };
 }
@@ -9646,7 +10127,11 @@ function customerImportRollbackResultFromReceipt(receipt = {}, { idempotentRepla
 function assertCustomerImportReceiptIdentity(receipt = {}, {
   organizationId,
   importBatchId,
-  requestHash
+  requestHash,
+  preflightId,
+  preflightPlanHash,
+  preflightChunkIndex,
+  preflightSessionId
 } = {}) {
   if (
     receipt.batchKind !== CUSTOMER_IMPORT_BATCH_KIND
@@ -9656,6 +10141,10 @@ function assertCustomerImportReceiptIdentity(receipt = {}, {
     || receipt.importType !== CUSTOMER_IMPORT_TYPE
     || receipt.targetCollection !== "customers"
     || receipt.requestHash !== requestHash
+    || receipt.preflightId !== preflightId
+    || receipt.preflightPlanHash !== preflightPlanHash
+    || Number(receipt.preflightChunkIndex) !== Number(preflightChunkIndex)
+    || receipt.preflightSessionId !== preflightSessionId
   ) {
     throw new CustomerImportError(
       "already-exists",
@@ -9686,12 +10175,208 @@ function assertExistingCustomerImportIdentity(snapshot, organizationId) {
   return customerImportDuplicateKey(data);
 }
 
+function buildCustomerImportChunkPlan(rows = []) {
+  const chunks = [];
+  let current = null;
+  const startChunk = () => ({
+    index: chunks.length,
+    sourceIndexes: [],
+    rowNumbers: [],
+    recordCount: 0,
+    distinctEmailCount: 0,
+    maximumWrites: CUSTOMER_IMPORT_FIXED_TRANSACTION_WRITES,
+    emailKeys: new Set()
+  });
+  rows.forEach((row, sourceIndex) => {
+    if (!current) current = startChunk();
+    const emailKey = normalizeEmail(row?.data?.emailKey || row?.data?.email);
+    const addsEmail = emailKey && !current.emailKeys.has(emailKey) ? 1 : 0;
+    const nextRecords = current.recordCount + 1;
+    const nextEmails = current.distinctEmailCount + addsEmail;
+    if (
+      current.recordCount > 0
+      && (
+        nextRecords > CUSTOMER_IMPORT_MAX_RECORDS
+        || nextRecords + nextEmails + CUSTOMER_IMPORT_FIXED_TRANSACTION_WRITES
+          > CUSTOMER_IMPORT_MAX_TRANSACTION_WRITES
+      )
+    ) {
+      chunks.push(current);
+      current = startChunk();
+    }
+    if (emailKey) current.emailKeys.add(emailKey);
+    current.sourceIndexes.push(sourceIndex);
+    current.rowNumbers.push(row.rowNumber);
+    current.recordCount += 1;
+    current.distinctEmailCount = current.emailKeys.size;
+    current.maximumWrites = current.recordCount
+      + current.distinctEmailCount
+      + CUSTOMER_IMPORT_FIXED_TRANSACTION_WRITES;
+  });
+  if (current?.recordCount) chunks.push(current);
+  return chunks.map(({ emailKeys, ...chunk }, index) => ({ ...chunk, index }));
+}
+
+async function preflightCustomerImportBatchInternal({
+  organizationId = "",
+  fileName = "",
+  records = [],
+  actorUid = "",
+  actorEmail = "",
+  nowISO = new Date().toISOString()
+} = {}) {
+  const normalizedOrganizationId = normalizeOrganizationId(organizationId);
+  if (!normalizedOrganizationId) {
+    throw new CustomerImportError("invalid-argument", "organizationId is required.");
+  }
+  const normalizedFileName = normalizeCustomerImportFileName(fileName);
+  const normalizedActorUid = customerImportBoundedText(actorUid, {
+    field: "actor identity",
+    maxLength: 160
+  });
+  const normalizedActorEmail = normalizeEmail(customerImportBoundedText(actorEmail, {
+    field: "actor email",
+    maxLength: 254
+  }));
+  if (!normalizedActorUid) {
+    throw new CustomerImportError(
+      "failed-precondition",
+      "Customer import preflight requires an authenticated actor identity."
+    );
+  }
+  const issuedAtMs = Date.parse(nowISO);
+  if (!Number.isFinite(issuedAtMs)) {
+    throw new CustomerImportError("internal", "Customer import preflight time is invalid.");
+  }
+  const expiresAtISO = new Date(issuedAtMs + CUSTOMER_IMPORT_PREFLIGHT_VALIDITY_MS).toISOString();
+  const rows = normalizeCustomerImportRows(records, {
+    maxRecords: CUSTOMER_IMPORT_MAX_SESSION_RECORDS
+  });
+  const organizationRef = db.collection(ORGANIZATIONS_COLLECTION).doc(normalizedOrganizationId);
+  const customerCollectionRef = organizationRef.collection("customers");
+  const customerEmailClaimCollectionRef = organizationRef.collection(CUSTOMER_EMAIL_CLAIMS_COLLECTION);
+  const existingSnapshot = await customerCollectionRef
+    .limit(CUSTOMER_IMPORT_MAX_DUPLICATE_SCAN_RECORDS + 1)
+    .get();
+  if (existingSnapshot.docs.length > CUSTOMER_IMPORT_MAX_DUPLICATE_SCAN_RECORDS) {
+    throw new CustomerImportError(
+      "resource-exhausted",
+      `This destination has more than ${CUSTOMER_IMPORT_MAX_DUPLICATE_SCAN_RECORDS} customer records. Use a managed migration so duplicate checks remain complete.`
+    );
+  }
+
+  const existingKeys = new Map();
+  existingSnapshot.docs.forEach((snapshot) => {
+    const duplicateKey = assertExistingCustomerImportIdentity(snapshot, normalizedOrganizationId);
+    if (!duplicateKey) return;
+    const priorId = existingKeys.get(duplicateKey);
+    if (priorId && priorId !== snapshot.id) {
+      throw new CustomerImportError(
+        "failed-precondition",
+        "Multiple customer records already share the same normalized identity. Repair the collision before importing."
+      );
+    }
+    existingKeys.set(duplicateKey, snapshot.id);
+  });
+
+  const requestedEmailKeys = [...new Set(rows
+    .map((row) => normalizeEmail(row.data.emailKey || row.data.email))
+    .filter(Boolean))];
+  const claimRefs = requestedEmailKeys.map((emailKey) => (
+    customerEmailClaimCollectionRef.doc(customerEmailClaimDocumentId(emailKey))
+  ));
+  const claimSnapshots = [];
+  for (let offset = 0; offset < claimRefs.length; offset += 250) {
+    claimSnapshots.push(...await db.getAll(...claimRefs.slice(offset, offset + 250)));
+  }
+  claimSnapshots.forEach((snapshot, index) => {
+    if (!snapshot.exists) return;
+    const emailKey = requestedEmailKeys[index];
+    const binding = readCustomerEmailClaim(snapshot, normalizedOrganizationId, emailKey);
+    const existingCustomerId = existingKeys.get(`email:${emailKey}`);
+    if (!existingCustomerId || existingCustomerId !== binding.customerId) {
+      throw new CustomerImportError(
+        "failed-precondition",
+        "A customer email claim does not match the existing customer directory. Repair it before importing."
+      );
+    }
+  });
+
+  const seenKeys = new Set(existingKeys.keys());
+  const decisions = rows.map((row) => {
+    const duplicate = seenKeys.has(row.duplicateKey);
+    seenKeys.add(row.duplicateKey);
+    return {
+      rowNumber: row.rowNumber,
+      status: duplicate ? "skip" : "create",
+      ...(duplicate ? { reason: "duplicate" } : {})
+    };
+  });
+  const chunks = buildCustomerImportChunkPlan(rows);
+  const planHash = customerImportRequestHash({
+    organizationId: normalizedOrganizationId,
+    fileName: normalizedFileName,
+    rows
+  });
+  const chunkPlanHash = customerImportChunkPlanHash(chunks);
+  const preflightId = createCustomerImportPreflightId();
+  const preflightReceipt = {
+    schemaVersion: 1,
+    kind: CUSTOMER_IMPORT_PREFLIGHT_KIND,
+    preflightId,
+    organizationId: normalizedOrganizationId,
+    importType: CUSTOMER_IMPORT_TYPE,
+    fileName: normalizedFileName,
+    planHash,
+    chunkPlanHash,
+    sourceCount: rows.length,
+    chunkCount: chunks.length,
+    status: "issued",
+    completedChunks: {},
+    actor: {
+      uid: normalizedActorUid,
+      email: normalizedActorEmail
+    },
+    issuedAtISO: nowISO,
+    expiresAtISO,
+    createdAt: FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
+    expiresAt: Timestamp.fromDate(new Date(expiresAtISO))
+  };
+  await organizationRef
+    .collection(CUSTOMER_IMPORT_PREFLIGHTS_COLLECTION)
+    .doc(preflightId)
+    .set(preflightReceipt);
+  return {
+    ok: true,
+    status: "ready",
+    authority: "server_preflight",
+    organizationId: normalizedOrganizationId,
+    importType: CUSTOMER_IMPORT_TYPE,
+    preflightId,
+    planHash,
+    expiresAtISO,
+    observedAtISO: nowISO,
+    sourceCount: rows.length,
+    projectedCreateCount: decisions.filter((entry) => entry.status === "create").length,
+    projectedSkipCount: decisions.filter((entry) => entry.status === "skip").length,
+    destinationRecordCount: existingSnapshot.docs.length,
+    decisions,
+    chunks
+  };
+}
+
 async function createCustomerImportBatchInternal({
   organizationId = "",
   organizationName = "",
   fileName = "",
   records = [],
   importBatchId = "",
+  preflightId = "",
+  preflightPlanHash = "",
+  preflightRecords,
+  preflightChunkIndex,
+  preflightSessionId = "",
   actorUid = "",
   actorEmail = "",
   nowISO = new Date().toISOString()
@@ -9704,13 +10389,36 @@ async function createCustomerImportBatchInternal({
   if (!normalizedBatchId) {
     throw new CustomerImportError("invalid-argument", "A stable importBatchId is required.");
   }
+  const normalizedFileName = normalizeCustomerImportFileName(fileName);
+  const normalizedOrganizationName = customerImportBoundedText(organizationName, {
+    field: "organization name",
+    maxLength: 300
+  });
   const rows = normalizeCustomerImportRows(records);
-  const operationHash = customerImportRequestHash({ fileName, rows });
+  const preflightBinding = bindCustomerImportBatchToPreflight({
+    organizationId: normalizedOrganizationId,
+    fileName: normalizedFileName,
+    rows,
+    preflightId,
+    preflightPlanHash,
+    preflightRecords,
+    preflightChunkIndex,
+    preflightSessionId,
+    importBatchId: normalizedBatchId
+  });
+  const operationHash = customerImportRequestHash({
+    organizationId: normalizedOrganizationId,
+    fileName: normalizedFileName,
+    rows
+  });
   const organizationRef = db.collection(ORGANIZATIONS_COLLECTION).doc(normalizedOrganizationId);
   const customerCollectionRef = organizationRef.collection("customers");
   const customerEmailClaimCollectionRef = organizationRef
     .collection(CUSTOMER_EMAIL_CLAIMS_COLLECTION);
   const receiptRef = organizationRef.collection("importBatches").doc(normalizedBatchId);
+  const preflightRef = organizationRef
+    .collection(CUSTOMER_IMPORT_PREFLIGHTS_COLLECTION)
+    .doc(preflightBinding.preflightId);
   const emailClaimRefs = new Map();
   rows.forEach((row) => {
     const emailKey = normalizeEmail(row.data.emailKey || row.data.email);
@@ -9721,21 +10429,54 @@ async function createCustomerImportBatchInternal({
     );
   });
   return db.runTransaction(async (transaction) => {
-    const receiptSnapshot = await transaction.get(receiptRef);
+    const [receiptSnapshot, preflightSnapshot] = await Promise.all([
+      transaction.get(receiptRef),
+      transaction.get(preflightRef)
+    ]);
+    const preflightAuthority = assertIssuedCustomerImportPreflight(preflightSnapshot, {
+      organizationId: normalizedOrganizationId,
+      actorUid,
+      actorEmail,
+      fileName: normalizedFileName,
+      binding: preflightBinding,
+      importBatchId: normalizedBatchId,
+      requestHash: operationHash,
+      nowISO,
+      allowExpired: receiptSnapshot.exists
+    });
     if (receiptSnapshot.exists) {
       const receipt = receiptSnapshot.data() || {};
       assertCustomerImportReceiptIdentity(receipt, {
         organizationId: normalizedOrganizationId,
         importBatchId: normalizedBatchId,
-        requestHash: operationHash
+        requestHash: operationHash,
+        preflightId: preflightBinding.preflightId,
+        preflightPlanHash: preflightBinding.planHash,
+        preflightChunkIndex: preflightBinding.chunkIndex,
+        preflightSessionId: preflightBinding.sessionId
       });
-      if (receipt.status === "completed") return customerImportResultFromReceipt(receipt);
+      if (receipt.status === "completed" && preflightAuthority.completedChunk) {
+        return customerImportResultFromReceipt(receipt);
+      }
       throw new CustomerImportError(
         "failed-precondition",
-        "This customer import was already rolled back. Start a new import batch."
+        receipt.status === "rolled_back"
+          ? "This customer import was already rolled back. Start a new import batch."
+          : "The customer import receipt and preflight completion evidence disagree. Run reconciliation before retrying."
       );
     }
-    if (rows.length + emailClaimRefs.size + 1 > CUSTOMER_IMPORT_MAX_TRANSACTION_WRITES) {
+    if (preflightAuthority.completedChunk) {
+      throw new CustomerImportError(
+        "failed-precondition",
+        "The server preflight marks this chunk complete but its import receipt is missing. Run reconciliation before retrying."
+      );
+    }
+    if (
+      rows.length
+      + emailClaimRefs.size
+      + CUSTOMER_IMPORT_FIXED_TRANSACTION_WRITES
+      > CUSTOMER_IMPORT_MAX_TRANSACTION_WRITES
+    ) {
       throw new CustomerImportError(
         "resource-exhausted",
         "This customer import has too many email identities for one atomic batch. Split it into smaller files."
@@ -9875,17 +10616,30 @@ async function createCustomerImportBatchInternal({
       });
     });
 
+    const sessionActivatedAtISO = preflightAuthority.sessionActivatedAtISO || nowISO;
+    const sessionExpiresAtISO = preflightAuthority.sessionExpiresAtISO || new Date(
+      Date.parse(sessionActivatedAtISO) + CUSTOMER_IMPORT_SESSION_CONTINUATION_MS
+    ).toISOString();
     transaction.set(receiptRef, {
       schemaVersion: 3,
       batchKind: CUSTOMER_IMPORT_BATCH_KIND,
       operation: "customer_import",
       importBatchId: normalizedBatchId,
       organizationId: normalizedOrganizationId,
-      organizationName: customerImportText(organizationName, 300),
+      organizationName: normalizedOrganizationName,
       importType: CUSTOMER_IMPORT_TYPE,
       targetCollection: "customers",
-      fileName: customerImportText(fileName, 240),
+      fileName: normalizedFileName,
       requestHash: operationHash,
+      preflightId: preflightBinding.preflightId,
+      preflightPlanHash: preflightBinding.planHash,
+      preflightSourceCount: preflightBinding.sourceCount,
+      preflightChunkIndex: preflightBinding.chunkIndex,
+      preflightChunkCount: preflightBinding.chunkCount,
+      preflightSessionId: preflightBinding.sessionId,
+      preflightExpiresAtISO: preflightAuthority.expiresAtISO,
+      preflightSessionActivatedAtISO: sessionActivatedAtISO,
+      preflightSessionExpiresAtISO: sessionExpiresAtISO,
       status: "completed",
       sourceRows: rows.length,
       createdCount: createdRecords.length,
@@ -9901,6 +10655,26 @@ async function createCustomerImportBatchInternal({
       createdAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp()
     });
+    const completedChunks = {
+      ...preflightAuthority.completedChunks,
+      [String(preflightBinding.chunkIndex)]: {
+        importBatchId: normalizedBatchId,
+        requestHash: operationHash,
+        completedAtISO: nowISO
+      }
+    };
+    transaction.set(preflightRef, {
+      sessionImportBatchId: preflightBinding.sessionId,
+      sessionActivatedAtISO,
+      sessionExpiresAtISO,
+      sessionExpiresAt: Timestamp.fromDate(new Date(sessionExpiresAtISO)),
+      status: Object.keys(completedChunks).length === preflightBinding.chunkCount
+        ? "completed"
+        : "in_progress",
+      completedChunks,
+      updatedAtISO: nowISO,
+      updatedAt: FieldValue.serverTimestamp()
+    }, { merge: true });
     return {
       ...customerImportResultFromReceipt({
         importBatchId: normalizedBatchId,
@@ -9909,7 +10683,11 @@ async function createCustomerImportBatchInternal({
         skippedCount: skippedRows.length,
         createdRecords,
         skippedRows,
-        status: "completed"
+        status: "completed",
+        preflightId: preflightBinding.preflightId,
+        preflightPlanHash: preflightBinding.planHash,
+        preflightChunkIndex: preflightBinding.chunkIndex,
+        preflightSessionId: preflightBinding.sessionId
       }, { idempotentReplay: false })
     };
   });
@@ -10137,6 +10915,24 @@ function toCustomerImportHttpsError(error, fallbackMessage) {
   return new functions.https.HttpsError("internal", fallbackMessage);
 }
 
+exports.preflightCustomerImportBatch = functions.region(REGION).https.onCall(async (data, context) => {
+  const organizationId = normalizeOrganizationId(data?.organizationId);
+  const staff = assertAdminStaff(await assertStaff(context, {
+    expectedOrganizationId: organizationId
+  }));
+  try {
+    return await preflightCustomerImportBatchInternal({
+      organizationId: staff.organizationId,
+      fileName: data?.fileName,
+      records: data?.records,
+      actorUid: staff.uid,
+      actorEmail: staff.email
+    });
+  } catch (error) {
+    throw toCustomerImportHttpsError(error, "Failed to preflight customer records.");
+  }
+});
+
 exports.createCustomerImportBatch = functions.region(REGION).https.onCall(async (data, context) => {
   const organizationId = normalizeOrganizationId(data?.organizationId);
   const staff = assertAdminStaff(await assertStaff(context, {
@@ -10149,6 +10945,11 @@ exports.createCustomerImportBatch = functions.region(REGION).https.onCall(async 
       fileName: data?.fileName,
       records: data?.records,
       importBatchId: data?.importBatchId,
+      preflightId: data?.preflightId,
+      preflightPlanHash: data?.preflightPlanHash,
+      preflightRecords: data?.preflightRecords,
+      preflightChunkIndex: data?.preflightChunkIndex,
+      preflightSessionId: data?.preflightSessionId,
       actorUid: staff.uid,
       actorEmail: staff.email
     });
@@ -10681,9 +11482,6 @@ exports.recordProductAnalyticsEvents = functions.region(REGION).https.onCall(asy
   return { ok: true, ...result };
 });
 
-const OPERATIONAL_STAFFING_GLOBAL_AUTHORITY_ENABLED =
-  normalizeText(process.env.OPERATIONAL_STAFFING_AUTHORITY_ENABLED).toLowerCase() === "true";
-
 function operationalStaffingScope(data = {}, { requireQuote = true, requireStaff = false } = {}) {
   const organizationId = normalizeOrganizationId(data?.organizationId);
   const quoteId = normalizeText(data?.quoteId);
@@ -10769,7 +11567,7 @@ function assertOperationalStaffingQuote(quote, { organizationId, quoteId } = {})
   return activeQuoteRevisionId;
 }
 
-function assertOperationalStaffingStorageEnabled(settingsSnap) {
+function assertOperationalStaffingStorageEnabled(settingsSnap, organizationId) {
   if (!settingsSnap?.exists) {
     throw new OperationalStaffingRuntimeError(
       "failed-precondition",
@@ -10777,7 +11575,7 @@ function assertOperationalStaffingStorageEnabled(settingsSnap) {
     );
   }
   return assertOperationalStaffingAuthorityEnabled(
-    OPERATIONAL_STAFFING_GLOBAL_AUTHORITY_ENABLED,
+    tenantWorkflowRuntimeEnabled("OPERATIONAL_STAFFING_AUTHORITY_ENABLED", organizationId),
     settingsSnap.data() || {}
   );
 }
@@ -10842,7 +11640,7 @@ exports.getOperationalStaffingSnapshot = functions.region(REGION).https.onCall(a
         tx.get(refs.planRef),
         tx.get(profilesQuery)
       ]);
-      assertOperationalStaffingStorageEnabled(settingsSnap);
+      assertOperationalStaffingStorageEnabled(settingsSnap, scope.organizationId);
       if (!quoteSnap.exists) {
         throw new OperationalStaffingRuntimeError("not-found", "Quote not found.");
       }
@@ -10929,7 +11727,7 @@ exports.configureOperationalStaffProfile = functions.region(REGION).https.onCall
         tx.get(receiptRef),
         tx.get(refs.profileRef)
       ]);
-      assertOperationalStaffingStorageEnabled(settingsSnap);
+      assertOperationalStaffingStorageEnabled(settingsSnap, scope.organizationId);
       const planned = planOperationalStaffProfileCommand({
         request,
         currentProfile: profileSnap.exists ? profileSnap.data() || {} : null,
@@ -11058,7 +11856,7 @@ async function readStaffInvitationContext(tx, scope) {
     tx.get(refs.staffRecordRef),
     tx.get(versionRef)
   ]);
-  assertOperationalStaffingStorageEnabled(settingsSnap);
+  assertOperationalStaffingStorageEnabled(settingsSnap, scope.organizationId);
   if (!planSnap.exists || !profileSnap.exists || !recordSnap.exists || !versionSnap.exists) {
     throw new StaffInvitationAuthorityError(
       "failed-precondition",
@@ -11561,7 +12359,7 @@ exports.getStaffDirectory = functions.region(REGION).https.onCall(async (data, c
         tx.get(plansQuery),
         tx.get(invitationsQuery)
       ]);
-      assertOperationalStaffingStorageEnabled(settingsSnap);
+      assertOperationalStaffingStorageEnabled(settingsSnap, scope.organizationId);
       const profilesTruncated = profilesSnap.size > OPERATIONAL_STAFFING_MAX_STAFF_PROFILES;
       const recordsTruncated = recordsSnap.size > OPERATIONAL_STAFFING_MAX_STAFF_PROFILES;
       const assignmentsTruncated = plansSnap.size > 100;
@@ -11675,7 +12473,7 @@ exports.saveStaffRecord = functions.region(REGION).https.onCall(async (data, con
         tx.get(profileReceiptRef),
         tx.get(recordReceiptRef)
       ]);
-      assertOperationalStaffingStorageEnabled(settingsSnap);
+      assertOperationalStaffingStorageEnabled(settingsSnap, scope.organizationId);
       if (profileReceiptSnap.exists !== recordReceiptSnap.exists) {
         throw new StaffDirectoryAuthorityError(
           "data-loss",
@@ -11786,7 +12584,7 @@ exports.applyOperationalStaffingPlan = functions.region(REGION).https.onCall(asy
         tx.get(refs.settingsRef),
         tx.get(receiptRef)
       ]);
-      assertOperationalStaffingStorageEnabled(settingsSnap);
+      assertOperationalStaffingStorageEnabled(settingsSnap, scope.organizationId);
       if (receiptSnap.exists) {
         return planOperationalStaffingCommand({
           request,
@@ -11935,7 +12733,14 @@ exports.getOperationsAuditSnapshot = functions.region(REGION).https.onCall(async
   const organizationId = normalizeOrganizationId(data?.organizationId);
   const staff = assertAdminStaff(await assertStaff(context, { expectedOrganizationId: organizationId }));
   const organizationRef = db.collection(ORGANIZATIONS_COLLECTION).doc(staff.organizationId);
-  const [quotesSnap, executionsSnap, rolesSnap, settingsSnap, roleAuthorityReceiptsSnap] = await Promise.all([
+  const [
+    quotesSnap,
+    executionsSnap,
+    rolesSnap,
+    settingsSnap,
+    roleAuthorityReceiptsSnap,
+    resendAcceptanceReceiptsSnap
+  ] = await Promise.all([
     organizationRef.collection(QUOTES_COLLECTION).limit(500).get(),
     organizationRef.collection(QUOTE_APPROVAL_EXECUTIONS_COLLECTION).limit(200).get(),
     db.collection(ROLES_COLLECTION).where("organizationId", "==", staff.organizationId).limit(200).get(),
@@ -11943,12 +12748,14 @@ exports.getOperationsAuditSnapshot = functions.region(REGION).https.onCall(async
     db.collection(ORGANIZATION_ROLE_AUTHORITY_RECEIPTS_COLLECTION)
       .where("organizationId", "==", staff.organizationId)
       .limit(200)
-      .get()
+      .get(),
+    organizationRef.collection(RESEND_ACCEPTANCE_RECEIPTS_COLLECTION).limit(200).get()
   ]);
   const sourceTruncated = quotesSnap.size >= 500
     || executionsSnap.size >= 200
     || rolesSnap.size >= 200
-    || roleAuthorityReceiptsSnap.size >= 200;
+    || roleAuthorityReceiptsSnap.size >= 200
+    || resendAcceptanceReceiptsSnap.size >= 200;
   return {
     ok: true,
     source: "firebase",
@@ -11956,10 +12763,13 @@ exports.getOperationsAuditSnapshot = functions.region(REGION).https.onCall(async
     sampledQuotes: quotesSnap.size,
     sampledExecutions: executionsSnap.size,
     sampledRoleAuthorityReceipts: roleAuthorityReceiptsSnap.size,
+    sampledResendAcceptanceReceipts: resendAcceptanceReceiptsSnap.size,
     ...buildOperationsAuditSnapshot({
       quotes: quotesSnap.docs.map((doc) => ({ id: doc.id, ...doc.data() })),
       executions: executionsSnap.docs.map((doc) => ({ id: doc.id, ...doc.data() })),
       roleAuthorityReceipts: roleAuthorityReceiptsSnap.docs
+        .map((doc) => ({ id: doc.id, ...doc.data() })),
+      resendAcceptanceReceipts: resendAcceptanceReceiptsSnap.docs
         .map((doc) => ({ id: doc.id, ...doc.data() })),
       roles: rolesSnap.docs.map((doc) => ({ uid: doc.id, ...doc.data() })),
       settings: settingsSnap.exists ? settingsSnap.data() : {},
@@ -12370,13 +13180,22 @@ exports.getQuotePortalConversation = functions.region(REGION).https.onCall(async
     binding = await resolvePortalConversationBinding(input, context);
     const nowISO = new Date().toISOString();
     const firstScope = await readBoundPortalConversationScope({ binding, nowISO });
-    const messagesSnap = await firstScope.refs.messagesRef
-      .orderBy("createdAtMs", "asc")
-      .limit(PORTAL_CONVERSATION_TOTAL_MESSAGE_LIMIT)
+    const catchUp = Boolean(input.after);
+    let messagesQuery = firstScope.refs.messagesRef
+      .orderBy("createdAtMs", catchUp ? "asc" : "desc")
+      .orderBy(FieldPath.documentId(), catchUp ? "asc" : "desc");
+    if (input.after) {
+      messagesQuery = messagesQuery.startAfter(input.after.createdAtMs, input.after.messageId);
+    } else if (input.before) {
+      messagesQuery = messagesQuery.startAfter(input.before.createdAtMs, input.before.messageId);
+    }
+    const messagesSnap = await messagesQuery
+      .limit(PORTAL_CONVERSATION_PAGE_SIZE + 1)
       .get();
-    const messages = messagesSnap.docs
-      .map((snapshot) => projectPortalConversationMessage(snapshot.data() || {}))
-      .filter(Boolean);
+    const conversationPage = buildPortalConversationPage(messagesSnap.docs.map((snapshot) => ({
+      id: snapshot.id,
+      data: snapshot.data() || {}
+    })), { direction: catchUp ? "newer" : "older" });
 
     // A final authorization read prevents a token rotated while the message
     // query was in flight from receiving any quote-scoped history.
@@ -12390,7 +13209,9 @@ exports.getQuotePortalConversation = functions.region(REGION).https.onCall(async
         "The customer portal changed while the conversation loaded. Open the current link and try again."
       );
     }
-    return portalConversationResponse(finalScope, messages);
+    return portalConversationResponse(finalScope, conversationPage.messages, {
+      page: conversationPage.page
+    });
   } catch (err) {
     return throwPortalConversationFailure(err, "getQuotePortalConversation", binding);
   }
@@ -12570,7 +13391,7 @@ exports.sendQuotePortalConversationMessage = functions.region(REGION).https.onCa
         organizationId: binding.organizationId,
         quoteId: binding.quoteId,
         evidence: conversationEvidence,
-        global: getRevenueAutopilotGlobalControl(nowISO),
+        global: getRevenueAutopilotGlobalControl(nowISO, binding.organizationId),
         tenantPolicy,
         activeAttention: priorAttentionSnap?.exists
           ? { attentionId: priorAttentionSnap.id, ...(priorAttentionSnap.data() || {}) }
@@ -12667,16 +13488,15 @@ const COMMERCIAL_CHANGE_PERSISTED_EFFECTS_VERSION =
   "commercial-change-persisted-effects-v1";
 const COMMERCIAL_CHANGE_INVALIDATION_LIMIT = 64;
 const COMMERCIAL_DEPENDENCY_STATE_SCHEMA_VERSION = 1;
-const COMMERCIAL_CHANGE_GLOBAL_ENFORCEMENT_ENABLED =
-  normalizeText(process.env.COMMERCIAL_CHANGE_AUTHORITY_ENABLED).toLowerCase() === "true";
 
-function commercialChangeEnforcementState(settings = {}) {
+function commercialChangeEnforcementState(settings = {}, organizationId = "") {
+  const globalEnabled = tenantWorkflowRuntimeEnabled("COMMERCIAL_CHANGE_AUTHORITY_ENABLED", organizationId);
   const tenantEnabled = settings?.commercialChangeAuthorityEnabled === true;
   return {
-    authorityState: COMMERCIAL_CHANGE_GLOBAL_ENFORCEMENT_ENABLED && tenantEnabled
+    authorityState: globalEnabled && tenantEnabled
       ? "enforced"
       : "dormant",
-    globalEnabled: COMMERCIAL_CHANGE_GLOBAL_ENFORCEMENT_ENABLED,
+    globalEnabled,
     tenantEnabled
   };
 }
@@ -12759,6 +13579,9 @@ function commercialChangeRefs(organizationId, quoteId = "") {
     settingsRef: organizationRef.collection("settings").doc("config"),
     quoteRef: quoteId
       ? organizationRef.collection(QUOTES_COLLECTION).doc(quoteId)
+      : null,
+    staffingPlanRef: quoteId
+      ? organizationRef.collection(OPERATIONAL_STAFFING_PLANS_COLLECTION).doc(quoteId)
       : null,
     simulationsRef: organizationRef.collection(COMMERCIAL_CHANGE_SIMULATIONS_COLLECTION),
     authorizationsRef: organizationRef.collection(COMMERCIAL_CHANGE_AUTHORIZATIONS_COLLECTION),
@@ -13063,6 +13886,14 @@ function throwCommercialChangeFailure(error, operation, context = {}) {
 }
 
 exports.simulateCommercialQuoteChange = functions.region(REGION).https.onCall(async (data, context) => {
+  if (!data || Object.keys(data).some((key) => !["organizationId", "quoteId", "expectedActiveVersionId", "requestId", "form", "attendanceSubmissionReceiptId", "eventIngredientOutputs", "staffingObservationVersion"].includes(key))) throw new functions.https.HttpsError("invalid-argument", "Unsupported commercial simulation fields.");
+  if (data.staffingObservationVersion !== undefined && data.staffingObservationVersion !== "v1") {
+    throw new functions.https.HttpsError(
+      "invalid-argument",
+      "Unsupported commercial Staffing observation version."
+    );
+  }
+  const staffingObservationRequested = data.staffingObservationVersion === "v1";
   const organizationId = normalizeOrganizationId(data?.organizationId);
   const quoteId = normalizeText(data?.quoteId);
   const expectedActiveVersionId = normalizeText(data?.expectedActiveVersionId);
@@ -13098,10 +13929,11 @@ exports.simulateCommercialQuoteChange = functions.region(REGION).https.onCall(as
     });
     const refs = commercialChangeRefs(organizationId, quoteId);
     const result = await db.runTransaction(async (tx) => {
-      const [quoteSnap, settingsSnap, organizationSnap] = await Promise.all([
+      const [quoteSnap, settingsSnap, organizationSnap, staffingPlanSnap] = await Promise.all([
         tx.get(refs.quoteRef),
         tx.get(refs.settingsRef),
-        tx.get(refs.organizationRef)
+        tx.get(refs.organizationRef),
+        staffingObservationRequested ? tx.get(refs.staffingPlanRef) : Promise.resolve(null)
       ]);
       if (!quoteSnap.exists) {
         throw new CommercialChangeAuthorityError("not-found", "Quote not found.");
@@ -13119,6 +13951,7 @@ exports.simulateCommercialQuoteChange = functions.region(REGION).https.onCall(as
         catalogSource: pricingResult.catalogSource,
         settings: settingsSnap.data() || {}
       });
+      const workflowContext = await resolveCommercialWorkflowContext(tx, refs, staff, { nowISO, catalogAuthority: pricingResult.catalogAuthority, attendanceSubmissionReceiptId: data.attendanceSubmissionReceiptId || "" });
       const preview = buildCommercialChangeImpactPreviewSnapshots({
         organizationId,
         quoteId,
@@ -13129,6 +13962,7 @@ exports.simulateCommercialQuoteChange = functions.region(REGION).https.onCall(as
       });
       const evaluatedImpact = evaluateCommercialChangeImpact(preview);
       const projectedEditDocuments = buildTrustedQuoteEditDocuments({
+        attendanceAmendmentBinding: workflowContext.attendanceBinding || undefined,
         quoteId,
         quote,
         staff,
@@ -13142,16 +13976,49 @@ exports.simulateCommercialQuoteChange = functions.region(REGION).https.onCall(as
         },
         nowISO
       });
+      let staffingObservationResult = null;
+      if (staffingObservationRequested) {
+        const gate = operationalStaffingAuthorityState(
+          tenantWorkflowRuntimeEnabled("OPERATIONAL_STAFFING_AUTHORITY_ENABLED", organizationId),
+          settingsSnap.data() || {}
+        );
+        if (!gate.enabled) {
+          staffingObservationResult = {
+            state: "unavailable",
+            reasonCode: "operational_staffing_authority_disabled"
+          };
+        } else {
+          try {
+            staffingObservationResult = {
+              state: "available",
+              ...buildProjectedOperationalStaffingObservation({
+                organizationId,
+                quoteId,
+                expectedBaseQuoteRevisionId: expectedActiveVersionId,
+                projectedVersion: projectedEditDocuments.version,
+                currentPlan: staffingPlanSnap?.exists ? staffingPlanSnap.data() || {} : null,
+                settings: settingsSnap.data() || {}
+              })
+            };
+          } catch (error) {
+            functions.logger.warn("Commercial Staffing observation unavailable", {
+              organizationId,
+              quoteId,
+              code: normalizeText(error?.code).slice(0, 80)
+            });
+            staffingObservationResult = {
+              state: "unavailable",
+              reasonCode: "staffing_observation_unavailable"
+            };
+          }
+        }
+      }
       const proposed = commercialChangeAuthority.simulate({
         request: { requestId, organizationId, quoteId, expectedActiveVersionId },
         canonicalQuote: quote,
         proposedForm: sanitized.form,
         proposedPricing: pricingResult.pricing,
-        trustedContext: commercialChangeTrustedContext({
-          staff,
-          nowISO,
-          catalogAuthority: pricingResult.catalogAuthority
-        })
+        trustedContext: workflowContext.trustedContext
       });
       const receiptRef = refs.simulationsRef.doc(proposed.receipt.receiptId);
       const existingSnap = await tx.get(receiptRef);
@@ -13161,14 +14028,11 @@ exports.simulateCommercialQuoteChange = functions.region(REGION).https.onCall(as
           canonicalQuote: quote,
           proposedForm: sanitized.form,
           proposedPricing: pricingResult.pricing,
-          trustedContext: commercialChangeTrustedContext({
-            staff,
-            nowISO,
-            catalogAuthority: pricingResult.catalogAuthority
-          }),
+          trustedContext: workflowContext.trustedContext,
           existingReceipt: existingSnap.data()?.receipt
         })
         : proposed;
+      const coordinator = workflowContext.definition ? await prepareWorkflowPackObservation(tx, refs.organizationRef, { observation: workflowPackAdapters.quoteObservation({ authority: commercialChangeAuthority, simulationReceipt: planned.receipt, definition: workflowContext.definition }), definition: workflowContext.definition, actor: eventOperatingActor(staff, organizationId), requestId, nowISO }) : null;
       if (!existingSnap.exists) {
         tx.create(receiptRef, {
           organizationId,
@@ -13179,17 +14043,96 @@ exports.simulateCommercialQuoteChange = functions.region(REGION).https.onCall(as
           createdAt: FieldValue.serverTimestamp()
         });
       }
+      coordinator?.commit();
       return {
         planned,
         evaluatedImpact,
+        projectedVersion: projectedEditDocuments.version,
+        staffingObservationResult,
         persistedEffects: projectCommercialChangePersistedEffects({
           receipt: planned.receipt,
           quote,
           documents: projectedEditDocuments
         }),
-        enforcement: commercialChangeEnforcementState(settingsSnap.data() || {})
+        enforcement: commercialChangeEnforcementState(settingsSnap.data() || {}, staff.organizationId)
       };
     });
+    const inventoryObservationBase = {
+      schemaVersion: "commercial-change-inventory-observation-v1",
+      authority: "inventory_read_only_observation",
+      organizationId,
+      quoteId,
+      baseQuoteRevisionId: expectedActiveVersionId,
+      proposedQuoteRevisionId: normalizeText(result.projectedVersion?.versionId),
+      commercialSimulationReceiptId: normalizeText(result.planned.receipt?.receiptId),
+      commercialSimulationReceiptDigest: normalizeText(result.planned.receipt?.receiptDigest),
+      commercialPreviewRevisionId: normalizeText(result.planned.receipt?.proposedRevisionId),
+      observedAtISO: nowISO,
+      boundary: "Read-only Inventory evidence only; no stock, allocation, ordering, pricing, authorization, or quote mutation."
+    };
+    let inventoryObservation;
+    if (!Array.isArray(data.eventIngredientOutputs) || data.eventIngredientOutputs.length === 0) {
+      inventoryObservation = {
+        ...inventoryObservationBase,
+        state: "not_requested",
+        reasonCode: "explicit_output_quantities_required"
+      };
+    } else {
+      try {
+        const preview = await inventoryAuthorityRuntime.previewProjectedEventInventory({
+          organizationId,
+          quoteId,
+          expectedBaseQuoteRevisionId: expectedActiveVersionId,
+          projectedVersion: result.projectedVersion,
+          outputRows: data.eventIngredientOutputs
+        }, context);
+        inventoryObservation = {
+          ...inventoryObservationBase,
+          state: "available",
+          inputDigest: normalizeText(preview?.inputDigest),
+          preview
+        };
+      } catch (error) {
+        functions.logger.warn("Commercial Inventory observation unavailable", {
+          organizationId,
+          quoteId,
+          code: normalizeText(error?.code).slice(0, 80)
+        });
+        inventoryObservation = {
+          ...inventoryObservationBase,
+          state: "unavailable",
+          reasonCode: "inventory_observation_unavailable"
+        };
+      }
+    }
+    const staffingObservationBase = {
+      schemaVersion: "commercial-change-staffing-observation-v1",
+      authority: "operational_staffing_read_only_observation",
+      organizationId,
+      quoteId,
+      baseQuoteRevisionId: expectedActiveVersionId,
+      proposedQuoteRevisionId: normalizeText(result.projectedVersion?.versionId),
+      commercialSimulationReceiptId: normalizeText(result.planned.receipt?.receiptId),
+      commercialSimulationReceiptDigest: normalizeText(result.planned.receipt?.receiptDigest),
+      commercialPreviewRevisionId: normalizeText(result.planned.receipt?.proposedRevisionId),
+      observedAtISO: nowISO,
+      boundary: "Read-only aggregate Staffing evidence only; no person, assignment, invitation, schedule fence, payroll, pricing, authorization, or quote state was written or disclosed."
+    };
+    const staffingObservation = staffingObservationRequested
+      ? result.staffingObservationResult?.state === "available"
+        ? {
+          ...staffingObservationBase,
+          state: "available",
+          inputDigest: normalizeText(result.staffingObservationResult.inputDigest),
+          preview: result.staffingObservationResult.preview
+        }
+        : {
+          ...staffingObservationBase,
+          state: "unavailable",
+          reasonCode: normalizeText(result.staffingObservationResult?.reasonCode)
+            || "staffing_observation_unavailable"
+        }
+      : null;
     return {
       ok: true,
       storage: "firebase",
@@ -13202,6 +14145,8 @@ exports.simulateCommercialQuoteChange = functions.region(REGION).https.onCall(as
         result.planned.receipt,
         result.evaluatedImpact
       ),
+      inventoryObservation,
+      ...(staffingObservation ? { staffingObservation } : {}),
       persistedEffects: result.persistedEffects
     };
   } catch (error) {
@@ -13264,6 +14209,7 @@ exports.requestCommercialQuoteChangeAuthorization = functions.region(REGION).htt
         catalogAuthority,
         nowISO: requestedAtISO
       });
+      await resolveCommercialWorkflowContext(tx, refs, staff, { nowISO: requestedAtISO, catalogAuthority, simulation });
       if (!simulation.authorizationRequired) {
         throw new CommercialChangeAuthorityError(
           "failed-precondition",
@@ -13435,14 +14381,11 @@ exports.authorizeCommercialQuoteChange = functions.region(REGION).https.onCall(a
         catalogAuthority,
         nowISO: authorizedAtISO
       });
+      const workflowContext = await resolveCommercialWorkflowContext(tx, refs, staff, { nowISO: authorizedAtISO, catalogAuthority, simulation });
       const proposed = commercialChangeAuthority.authorize({
         simulationReceipt: simulation,
         request: { requestId, organizationId, quoteId },
-        trustedContext: commercialChangeTrustedContext({
-          staff,
-          nowISO: authorizedAtISO,
-          catalogAuthority
-        }),
+        trustedContext: workflowContext.trustedContext,
         current: {
           activeRevisionId: normalizeText(quote.activeVersionId || quote.versionMeta?.versionId),
           catalogAuthorityDigest: normalizeText(catalogAuthority.settingsFingerprintSha256),
@@ -13455,11 +14398,7 @@ exports.authorizeCommercialQuoteChange = functions.region(REGION).https.onCall(a
         ? commercialChangeAuthority.authorize({
           simulationReceipt: simulation,
           request: { requestId, organizationId, quoteId },
-          trustedContext: commercialChangeTrustedContext({
-            staff,
-            nowISO: authorizedAtISO,
-            catalogAuthority
-          }),
+          trustedContext: workflowContext.trustedContext,
           current: {
             activeRevisionId: normalizeText(quote.activeVersionId || quote.versionMeta?.versionId),
             catalogAuthorityDigest: normalizeText(catalogAuthority.settingsFingerprintSha256),
@@ -13468,6 +14407,7 @@ exports.authorizeCommercialQuoteChange = functions.region(REGION).https.onCall(a
           existingReceipt: authorizationSnap.data()?.receipt
         })
         : proposed;
+      const coordinator = workflowContext.definition ? await prepareWorkflowPackObservation(tx, refs.organizationRef, { observation: workflowPackAdapters.quoteObservation({ authority: commercialChangeAuthority, simulationReceipt: simulation, authorizationReceipt: planned.receipt, definition: workflowContext.definition }), definition: workflowContext.definition, actor: eventOperatingActor(staff, organizationId), requestId, nowISO: authorizedAtISO }) : null;
       if (!authorizationSnap.exists) {
         tx.create(authorizationRef, {
           organizationId,
@@ -13497,6 +14437,7 @@ exports.authorizeCommercialQuoteChange = functions.region(REGION).https.onCall(a
           updatedAt: FieldValue.serverTimestamp()
         });
       }
+      coordinator?.commit();
       return {
         planned,
         approval: approvalSnap.exists
@@ -14379,6 +15320,7 @@ async function createTrustedQuoteDraftInternal({
   expectedCustomerContact = null,
   rebooking = null,
   rebookSourceRequest = null,
+  inquiryConversion = null,
   requestedNowISO = ""
 }) {
   const sanitized = sanitizeQuoteCreationRequest({
@@ -14466,6 +15408,10 @@ async function createTrustedQuoteDraftInternal({
     sourceQuoteId,
     rebooking
   });
+  if (inquiryConversion) {
+    documents.quote.inquiryProvenance = inquiryConversion.provenance;
+    documents.version.snapshot.inquiryProvenance = inquiryConversion.provenance;
+  }
   const portalRef = db.collection(PORTAL_COLLECTION).doc(portalKey);
   const versionRef = quoteRef.collection("versions").doc(documents.version.versionId);
   const customerCollectionRef = db
@@ -14543,6 +15489,12 @@ async function createTrustedQuoteDraftInternal({
   const customerEmailClaimRef = organizationRef
     .collection(CUSTOMER_EMAIL_CLAIMS_COLLECTION)
     .doc(customerEmailClaimDocumentId(normalizedCustomerEmail));
+  const inquiryRef = inquiryConversion
+    ? organizationRef.collection(CUSTOMER_INQUIRIES_COLLECTION).doc(inquiryConversion.inquiryId)
+    : null;
+  const inquiryConversionReceiptRef = inquiryRef
+    ? inquiryRef.collection(INQUIRY_RECEIPTS_COLLECTION).doc(inquiryConversion.receiptId)
+    : null;
 
   const result = await db.runTransaction(async (tx) => {
     const [
@@ -14556,6 +15508,8 @@ async function createTrustedQuoteDraftInternal({
       expectedCustomerSnapshot,
       rebookSourceQuoteSnapshot,
       rebookSourceVersionSnapshot,
+      inquirySnapshot,
+      inquiryConversionReceiptSnapshot,
       transactionPricingSettingsSnapshot
     ] = await Promise.all([
       tx.get(quoteRef),
@@ -14568,6 +15522,8 @@ async function createTrustedQuoteDraftInternal({
       expectedCustomerRef ? tx.get(expectedCustomerRef) : Promise.resolve(null),
       rebookSourceQuoteRef ? tx.get(rebookSourceQuoteRef) : Promise.resolve(null),
       rebookSourceVersionRef ? tx.get(rebookSourceVersionRef) : Promise.resolve(null),
+      inquiryRef ? tx.get(inquiryRef) : Promise.resolve(null),
+      inquiryConversionReceiptRef ? tx.get(inquiryConversionReceiptRef) : Promise.resolve(null),
       tx.get(settingsRef)
     ]);
     if (!transactionPricingSettingsSnapshot.exists) {
@@ -14586,6 +15542,29 @@ async function createTrustedQuoteDraftInternal({
         "already-exists",
         "A generated quote identity collided. Retry quote creation."
       );
+    }
+    if (inquiryConversion) {
+      const currentInquiry = inquirySnapshot?.exists ? inquirySnapshot.data() || {} : null;
+      if (!currentInquiry) {
+        throw new QuoteCreationError("failed-precondition", "The inquiry no longer exists.");
+      }
+      if (inquiryConversionReceiptSnapshot?.exists) {
+        throw new QuoteCreationError("already-exists", "This inquiry conversion already has a receipt.");
+      }
+      if (
+        normalizeOrganizationId(currentInquiry.organizationId) !== organizationId
+        || normalizeText(currentInquiry.state) !== "acknowledged"
+        || Number(currentInquiry.revision || 0) !== inquiryConversion.expectedInquiryRevision
+        || Number(transactionPricingSettingsSnapshot.data()?.catalogRevision || 0) !== inquiryConversion.catalogRevisionAtReview
+        || normalizeText(currentInquiry.source?.publicationVersionId) !== inquiryConversion.provenance.publicationVersionId
+        || normalizeText(currentInquiry.source?.publicationDigest) !== inquiryConversion.provenance.publicationDigest
+        || normalizeText(currentInquiry.fields?.email).toLowerCase() !== normalizedCustomerEmail
+      ) {
+        throw new QuoteCreationError(
+          "aborted",
+          "The inquiry changed after conversion review. Review it again before creating a quote."
+        );
+      }
     }
     if (normalizedRebookSourceRequest) {
       if (!rebookSourceQuoteSnapshot?.exists || !rebookSourceVersionSnapshot?.exists) {
@@ -14643,6 +15622,15 @@ async function createTrustedQuoteDraftInternal({
       customerSnapshots,
       normalizedCustomerEmail
     );
+    if (
+      inquiryConversion?.identityChoice === "create_new"
+      && (claimBinding || emailMatchedCustomerDoc?.exists)
+    ) {
+      throw new QuoteCreationError(
+        "aborted",
+        "A customer identity appeared after conversion review. Review the identity choice again."
+      );
+    }
     if (claimBinding && !claimedCustomerSnapshot?.exists) {
       throw new QuoteCreationError(
         "failed-precondition",
@@ -14768,6 +15756,47 @@ async function createTrustedQuoteDraftInternal({
         ? { createdAt: FieldValue.serverTimestamp() }
         : {})
     }, { merge: true });
+    if (inquiryConversion) {
+      const conversionReceipt = {
+        schemaVersion: 1,
+        receiptType: "inquiry_converted",
+        receiptId: inquiryConversion.receiptId,
+        organizationId,
+        inquiryId: inquiryConversion.inquiryId,
+        conversionRequestId: inquiryConversion.conversionRequestId,
+        quoteId: quoteRef.id,
+        quoteVersionId: boundDocuments.result.activeVersionId,
+        publicationVersionId: inquiryConversion.provenance.publicationVersionId,
+        publicationDigest: inquiryConversion.provenance.publicationDigest,
+        catalogRevisionAtReview: inquiryConversion.catalogRevisionAtReview,
+        catalogAuthorityDigest: pricingResult.catalogAuthority.settingsFingerprintSha256,
+        resolutions: inquiryConversion.resolutions,
+        identityChoice: inquiryConversion.identityChoice,
+        convertedAtISO: nowISO,
+        convertedBy: {
+          uid: staff.uid,
+          email: normalizeEmail(staff.email),
+          role: normalizeText(staff.role).toLowerCase()
+        }
+      };
+      tx.update(inquiryRef, {
+        state: "converted",
+        revision: inquiryConversion.expectedInquiryRevision + 1,
+        convertedAtISO: nowISO,
+        deleteAtISO: "",
+        deleteAt: FieldValue.delete(),
+        conversion: {
+          quoteId: quoteRef.id,
+          receiptId: inquiryConversion.receiptId,
+          requestId: inquiryConversion.conversionRequestId
+        },
+        updatedAt: FieldValue.serverTimestamp()
+      });
+      tx.create(inquiryConversionReceiptRef, {
+        ...conversionReceipt,
+        createdAt: FieldValue.serverTimestamp()
+      });
+    }
     return boundDocuments.result;
   });
 
@@ -15098,7 +16127,14 @@ async function updateTrustedQuoteDraftInternal({
       }
     }
 
-    const documents = buildTrustedQuoteEditDocuments({
+    const workflowRefs = commercialChangeRefs(organizationId, quoteId);
+    const suppliedEnvelope = normalizeCommercialChangeApplyEnvelope(commercialChangeAuthorityInput);
+    const bindingSimulationSnap = suppliedEnvelope ? await tx.get(workflowRefs.simulationsRef.doc(suppliedEnvelope.simulationReceiptId)) : null;
+    const bindingSimulation = bindingSimulationSnap?.exists ? commercialChangeAuthority.validateSimulationReceipt(bindingSimulationSnap.data()?.receipt) : null;
+    const workflowContext = await resolveCommercialWorkflowContext(tx, workflowRefs, staff, { nowISO, catalogAuthority: pricingResult.catalogAuthority, simulation: bindingSimulation });
+    let workflowCoordinator = null;
+    const editInput = {
+      attendanceAmendmentBinding: workflowContext.attendanceBinding || undefined,
       quoteId,
       quote,
       staff,
@@ -15112,21 +16148,25 @@ async function updateTrustedQuoteDraftInternal({
         organizationName: normalizeText(organizationSnap.data()?.name)
       },
       nowISO
-    });
-    if (catalogReviewReceipt) {
-      documents.quotePatch.catalogRevisionReview = {
-        state: "updated_to_current_catalog",
-        receiptId: reviewReceiptId,
-        sourceQuoteVersionId: review.quoteVersionId,
-        reviewedCatalogRevision: review.currentCatalogRevision,
-        commercialInputsFrozen: false,
-        recordedAtISO: nowISO,
-        recordedByEmail: normalizeEmail(staff.email)
-      };
-      documents.version.snapshot.catalogRevisionReview = documents.quotePatch.catalogRevisionReview;
-    }
+    };
+    const applyCatalogReviewEvidence = (documents) => {
+      if (catalogReviewReceipt) {
+        documents.quotePatch.catalogRevisionReview = {
+          state: "updated_to_current_catalog",
+          receiptId: reviewReceiptId,
+          sourceQuoteVersionId: review.quoteVersionId,
+          reviewedCatalogRevision: review.currentCatalogRevision,
+          commercialInputsFrozen: false,
+          recordedAtISO: nowISO,
+          recordedByEmail: normalizeEmail(staff.email)
+        };
+        documents.version.snapshot.catalogRevisionReview = documents.quotePatch.catalogRevisionReview;
+      }
+      return documents;
+    };
+    let documents = applyCatalogReviewEvidence(buildTrustedQuoteEditDocuments(editInput));
     const enforcement = commercialChangeEnforcementState(
-      transactionPricingSettingsSnapshot.data() || {}
+      transactionPricingSettingsSnapshot.data() || {}, staff.organizationId
     );
     let commercialChangePlan = {
       authorityState: enforcement.authorityState,
@@ -15176,11 +16216,7 @@ async function updateTrustedQuoteDraftInternal({
         );
       }
       const canonicalQuote = { id: quoteId, ...quote };
-      const trustedContext = commercialChangeTrustedContext({
-        staff,
-        nowISO,
-        catalogAuthority: pricingResult.catalogAuthority
-      });
+      const trustedContext = workflowContext.trustedContext;
       assertCommercialChangeSimulationCurrent({
         simulationReceipt: existingSimulation,
         organizationId,
@@ -15328,11 +16364,7 @@ async function updateTrustedQuoteDraftInternal({
           "Commercial dependency evidence contains an unknown state and requires repair."
         );
       }
-      const trustedContext = commercialChangeTrustedContext({
-        staff,
-        nowISO,
-        catalogAuthority: pricingResult.catalogAuthority
-      });
+      const trustedContext = workflowContext.trustedContext;
       let simulationPlan;
       let authoritativeSimulationRef = simulationRef;
       let persistSimulation = false;
@@ -15409,7 +16441,7 @@ async function updateTrustedQuoteDraftInternal({
         }
       }
       if (
-        simulationPlan.receipt.authorizationRequired
+        (simulationPlan.receipt.approvalEvaluation?.impactApprovalRequired ?? simulationPlan.receipt.authorizationRequired)
           !== (evaluatedImpact.impact.counts.total > 0)
       ) {
         throw new CommercialChangeAuthorityError(
@@ -15468,6 +16500,30 @@ async function updateTrustedQuoteDraftInternal({
           ...applyInput,
           existingReceipt: existingApplySnap.data()?.receipt
         });
+      }
+      if (workflowContext.attendanceBinding) {
+        documents = applyCatalogReviewEvidence(buildTrustedQuoteEditDocuments({ ...editInput, attendanceAmendmentApplyReceiptId: applyPlan.receipt.receiptId }));
+        const binding = workflowContext.attendanceBinding;
+        const sourceIdentity = { organizationId, quoteId, sourceVersionId: binding.sourceVersionId, acceptanceReceiptId: binding.acceptanceReceiptId };
+        const attendanceRef = organizationRef.collection("quoteAttendance").doc(quoteAttendance.ledgerIdFor(sourceIdentity));
+        const submissionSnap = await tx.get(attendanceRef.collection("receipts").doc(binding.submissionReceiptId));
+        const submission = quoteAttendance.verifyReceipt(submissionSnap.data());
+        if (submission.receiptDigest !== binding.submissionReceiptDigest || submission.resultState.latestResponse.count !== binding.count) throw new CommercialChangeAuthorityError("data-loss", "The applied attendance response does not match its sealed receipt.");
+        const response = submission.resultState.latestResponse;
+        const requested = submission.resultState.currentRequest;
+        const attendance = { schemaVersion: 1,
+          planning: quote.event?.attendance?.planning || { kind: "unknown", value: null, min: null, max: null, sourceType: "legacy", sourceReferenceId: "", observedAtISO: "", recordedByUid: "" },
+          confirmation: { state: "applied", requestedAtISO: requested.requestedAtISO, dueDate: requested.dueDate, submittedCount: response.count,
+            sourceType: response.sourceType, sourceReferenceId: binding.submissionReceiptId, submittedAtISO: response.submittedAtISO,
+            submittedByRole: response.submittedByRole, appliedRevisionId: documents.version.versionId, commercialChangeReceiptId: applyPlan.receipt.receiptId },
+          commercialBasis: { source: "confirmation", sourceReferenceId: binding.submissionReceiptId, appliedRevisionId: documents.version.versionId } };
+        documents.quotePatch.event.attendance = attendance;
+        documents.version.snapshot.event.attendance = attendance;
+        documents.portal.attendanceAvailable = false;
+      }
+      if (workflowContext.definition) {
+        const observation = workflowPackAdapters.quoteObservation({ authority: commercialChangeAuthority, simulationReceipt: simulationPlan.receipt, authorizationReceipt, applyReceipt: applyPlan.receipt, definition: workflowContext.definition });
+        workflowCoordinator = await prepareWorkflowPackObservation(tx, organizationRef, { observation, definition: workflowContext.definition, actor: eventOperatingActor(staff, organizationId), requestId: applyRequestId, nowISO });
       }
       commercialChangePlan = {
         authorityState: enforcement.authorityState,
@@ -15690,6 +16746,7 @@ async function updateTrustedQuoteDraftInternal({
       customerProjection.customerId
     );
 
+    workflowCoordinator?.commit();
     tx.update(quoteRef, {
       ...boundDocuments.quotePatch,
       updatedAt: FieldValue.serverTimestamp()
@@ -16446,6 +17503,41 @@ function projectPostEventCloseoutToQuote(record = {}) {
   const reviewItems = record?.reviewItems && typeof record.reviewItems === "object"
     ? record.reviewItems
     : {};
+  const actual = record?.actualAttendance && typeof record.actualAttendance === "object"
+    ? record.actualAttendance
+    : null;
+  const actualAttendance = (
+    Number.isSafeInteger(actual?.revision)
+    && actual.revision > 0
+    && Number.isSafeInteger(actual?.count)
+    && actual.count >= 1
+    && actual.count <= 400
+    && new Set([
+      "staff_observed",
+      "customer_reported",
+      "venue_reported",
+      "imported_record"
+    ]).has(normalizeText(actual?.sourceType))
+    && normalizeText(actual?.note)
+    && normalizeText(actual?.recordedAtISO)
+    && /^closeout_attendance_[a-f0-9]{48}$/.test(normalizeText(actual?.sourceReferenceId))
+    && normalizeText(actual?.sourceReferenceId) === normalizeText(actual?.lastReceiptId)
+  ) ? {
+      schemaVersion: Number(actual.schemaVersion || 0),
+      revision: actual.revision,
+      count: actual.count,
+      sourceType: normalizeText(actual.sourceType),
+      note: normalizeText(actual.note).slice(0, 240),
+      sourceReferenceId: normalizeText(actual.sourceReferenceId),
+      recordedAtISO: normalizeText(actual.recordedAtISO),
+      recordedBy: actual.recordedBy && typeof actual.recordedBy === "object"
+        ? {
+            email: normalizeEmail(actual.recordedBy.email),
+            role: normalizeText(actual.recordedBy.role)
+          }
+        : null,
+      lastReceiptId: normalizeText(actual.lastReceiptId)
+    } : null;
   return {
     schemaVersion: Number(record.schemaVersion || 0),
     closeoutId: normalizeText(record.closeoutId),
@@ -16466,6 +17558,7 @@ function projectPostEventCloseoutToQuote(record = {}) {
       blockedReason: normalizeText(record.policy?.blockedReason)
     },
     state: normalizeText(record.state),
+    actualAttendance,
     reviewItems: Object.fromEntries(Object.entries(reviewItems).map(([code, item]) => [
       code,
       {
@@ -16660,6 +17753,7 @@ exports.convertQuoteToContract = functions.region(REGION).https.onCall(async (da
         id: quoteId
       };
       let closeoutRecord = null;
+      let closeoutCoordinator = null;
       let closeoutRef = null;
       let closeoutSnap = null;
       let closeoutProjection = projectUnavailablePostEventCloseoutToQuote({
@@ -16707,6 +17801,18 @@ exports.convertQuoteToContract = functions.region(REGION).https.onCall(async (da
         closeoutProjection = projectPostEventCloseoutToQuote(
           closeoutSnap.exists ? closeoutSnap.data() || {} : closeoutRecord
         );
+        if (!closeoutSnap.exists && closeoutRecord.policy.state === "configured"
+          && tenantWorkflowRuntimeEnabled("EVENT_OPERATING_SPINE_ENABLED", organizationRef.id) && settingsSnap.data()?.eventOperatingSpineEnabled === true) {
+          await assertEventOperatingTransactionAuthority(tx, organizationRef, staff, false);
+          const catalog = (await readWorkflowConfiguration(tx, organizationRef, "closeout_follow_up")).snapshot;
+          if (catalog.state === "published" && catalog.activeVersion?.schemaVersion === 2) {
+            const proof = workflowPackAdapters.buildCloseoutObservationProof({ source: closeoutSource, record: closeoutRecord });
+            closeoutCoordinator = await prepareWorkflowPackObservation(tx, organizationRef, {
+              observation: workflowPackAdapters.closeoutObservation({ proof, definition: catalog.activeVersion }), definition: catalog.activeVersion,
+              proof, actor: eventOperatingActor(staff, organizationId), nowISO: convertedAtISO,
+              requestId: `workflow-closeout-init-${workflowExecution.digest({ approvalRequestId, closeoutId: closeoutRecord.closeoutId }).slice(0, 48)}` });
+          }
+        }
       } catch (error) {
         if (!(error instanceof PostEventCloseoutError)) throw error;
         if (closeoutSnap?.exists) throw error;
@@ -16808,6 +17914,7 @@ exports.convertQuoteToContract = functions.region(REGION).https.onCall(async (da
         completedAtISO: convertedAtISO,
         result: response
       }));
+      closeoutCoordinator?.commit();
       if (closeoutRecord && closeoutRef && closeoutSnap && !closeoutSnap.exists) {
         tx.create(closeoutRef, {
           ...closeoutRecord,
@@ -16835,12 +17942,308 @@ exports.convertQuoteToContract = functions.region(REGION).https.onCall(async (da
   }
 });
 
+// Event operations owns recorded phase only. Accepted commercial truth remains
+// in the canonical booked quote, immutable version and private acceptance receipt.
+function eventOperatingActor(staff, organizationId, mutation = false) {
+  if (staff.principalOrganizationId !== organizationId) {
+    throw new eventOperations.EventOperationsError("permission-denied", "Event operations requires exact same-organization authority.");
+  }
+  return eventOperations.normalizeActor(staff, organizationId, mutation);
+}
+async function assertEventOperatingParentNotOrphaned(tx, ledgerRef, source) {
+  const organizationRef = db.collection(ORGANIZATIONS_COLLECTION).doc(source.organizationId);
+  const workflowRef = eventWorkflowInstanceRef(organizationRef, source);
+  const v2Ref = eventWorkflowInstanceRef(organizationRef, source, 2);
+  const [v2State, v2History, v2Proofs] = await Promise.all([tx.get(v2Ref), tx.get(v2Ref.collection("receipts").limit(1)), tx.get(v2Ref.collection("observations").limit(1))]);
+  if (v2State.exists || !v2History.empty || !v2Proofs.empty) throw new eventOperations.EventOperationsError("data-loss", "Version two workflow evidence has no phase parent.");
+  const [phaseHistory, workState, workHistory, actualsState, actualsHistory, workflowState, workflowHistory] = await Promise.all([
+    tx.get(ledgerRef.collection("receipts").limit(1)),
+    tx.get(ledgerRef.collection("workState").doc("current")),
+    tx.get(ledgerRef.collection("workReceipts").limit(1)),
+    tx.get(ledgerRef.collection("actualsState").doc("current")),
+    tx.get(ledgerRef.collection("actualsReceipts").limit(1)),
+    tx.get(workflowRef), tx.get(workflowRef.collection("receipts").limit(1))
+  ]);
+  if (!phaseHistory.empty || workState.exists || !workHistory.empty
+    || actualsState.exists || !actualsHistory.empty || workflowState.exists || !workflowHistory.empty) {
+    throw new eventOperations.EventOperationsError("data-loss", "Retained operational evidence has no initialized phase ledger.");
+  }
+}
+function workflowExactKeys(value, keys) {
+  if (!value || typeof value !== "object" || Array.isArray(value)
+    || Object.keys(value).length !== keys.length || keys.some((key) => !Object.hasOwn(value, key))) {
+    throw new eventOperations.EventOperationsError("invalid-argument", "Workflow request contains missing or unsupported fields.");
+  }
+}
+function workflowConfigurationScope(data, extra = []) {
+  workflowExactKeys(data, ["organizationId", "workflowKind", ...extra]);
+  eventOperations.normalizeScope({ organizationId: data.organizationId, quoteId: "workflow_configuration" });
+  if (!workflowDefinitions.RUNTIME_KINDS.includes(data.workflowKind)) throw new eventOperations.EventOperationsError("invalid-argument", "This workflow configuration kind is unavailable.");
+  return { organizationId: data.organizationId, workflowKind: data.workflowKind };
+}
+function workflowAssertRevision(expected, actual) {
+  if (!Number.isSafeInteger(expected) || expected < 0 || expected >= Number.MAX_SAFE_INTEGER) {
+    throw new eventOperations.EventOperationsError("invalid-argument", "A bounded expected workflow revision is required.");
+  }
+  if (expected !== actual) throw new eventOperations.EventOperationsError("aborted", "Workflow evidence changed. Refresh and preview again.");
+}
+async function workflowAuthorizedTransaction(context, organizationId, adminOnly, callback) {
+  const staff = await assertStaff(context, { expectedOrganizationId: organizationId });
+  const actor = eventOperatingActor(staff, organizationId, adminOnly);
+  const organizationRef = db.collection(ORGANIZATIONS_COLLECTION).doc(organizationId);
+  return db.runTransaction(async (tx) => {
+    await assertEventOperatingTransactionAuthority(tx, organizationRef, staff, adminOnly);
+    return callback(tx, organizationRef, actor);
+  });
+}
+async function readWorkflowConfiguration(tx, organizationRef, workflowKind = "event_execution") {
+  if (!workflowDefinitions.RUNTIME_KINDS.includes(workflowKind)) throw new eventOperations.EventOperationsError("invalid-argument", "This workflow kind is unsupported.");
+  const definitionRef = organizationRef.collection("workflowDefinitions").doc(workflowKind);
+  const headSnap = await tx.get(definitionRef);
+  const head = headSnap.exists ? headSnap.data() || {} : null;
+  let currentReceipt = null;
+  let activeVersion = null;
+  if (!head) {
+    const [versions, receipts] = await Promise.all([
+      tx.get(definitionRef.collection("versions").limit(1)),
+      tx.get(definitionRef.collection("lifecycleReceipts").limit(1))
+    ]);
+    if (!versions.empty || !receipts.empty) throw new eventOperations.EventOperationsError("data-loss", "Retained workflow definitions have no current catalog head.");
+  } else if (head.schemaVersion === 1) {
+    if (!/^workflow_definition_command_[a-f0-9]{48}$/.test(head.lastReceiptId || "")) throw new eventOperations.EventOperationsError("data-loss", "The definition lifecycle receipt reference is invalid.");
+    const receiptSnap = await tx.get(definitionRef.collection("lifecycleReceipts").doc(head.lastReceiptId));
+    currentReceipt = receiptSnap.exists ? receiptSnap.data() : null;
+    if (head.activeVersionId) {
+      if (!new RegExp(`^${workflowKind}_v(?:[1-9]|[1-4][0-9]|50)$`).test(head.activeVersionId)) throw new eventOperations.EventOperationsError("data-loss", "The active definition version reference is invalid.");
+      const versionSnap = await tx.get(definitionRef.collection("versions").doc(head.activeVersionId));
+      activeVersion = versionSnap.exists ? versionSnap.data() : null;
+    }
+  }
+  const snapshot = workflowDefinitions.projectDefinitionSnapshot({ organizationId: organizationRef.id, workflowKind, head, currentReceipt, activeVersion });
+  return { definitionRef, head, currentReceipt, activeVersion, snapshot };
+}
+function eventWorkflowInstanceRef(organizationRef, source, schemaVersion = 1) {
+  return organizationRef.collection("workflowInstances").doc(workflowExecution.instanceIdFor(eventWorkflowAdapter.eventSource(source, schemaVersion)));
+}
+async function assertWorkflowPinnedDefinition(tx, organizationRef, instance) {
+  const definition = workflowDefinitions.validatePublishedVersion(instance.definition, { allowSeed: true, workflowKind: instance.source.workflowKind });
+  if (!definition.seed) {
+    if (definition.organizationId !== organizationRef.id) throw new eventOperations.EventOperationsError("data-loss", "Workflow publication belongs to another tenant.");
+    const versionSnap = await tx.get(organizationRef.collection("workflowDefinitions").doc(instance.source.workflowKind).collection("versions").doc(definition.versionId));
+    if (!versionSnap.exists || workflowExecution.digest(versionSnap.data()) !== workflowExecution.digest(definition)) {
+      throw new eventOperations.EventOperationsError("data-loss", "The exact pinned workflow publication is unavailable or changed.");
+    }
+  }
+}
+async function readEventWorkflowInstance(tx, organizationRef, source) {
+  const candidates = [];
+  for (const schemaVersion of [1, 2]) {
+    const instanceRef = eventWorkflowInstanceRef(organizationRef, source, schemaVersion);
+    const snapshot = await tx.get(instanceRef);
+    if (!snapshot.exists) {
+      const [receipts, observations] = await Promise.all([tx.get(instanceRef.collection("receipts").limit(1)), tx.get(instanceRef.collection("observations").limit(1))]);
+      if (!receipts.empty || !observations.empty) throw new eventOperations.EventOperationsError("data-loss", "Retained workflow evidence has no current instance.");
+      candidates.push({ instanceRef, instance: null, currentReceipt: null });
+      continue;
+    }
+    const instance = snapshot.data() || {};
+    if (!/^workflow_command_[a-f0-9]{48}$/.test(instance.lastReceiptId || "")) throw new eventOperations.EventOperationsError("data-loss", "The coordinator receipt reference is invalid.");
+    const receiptSnap = await tx.get(instanceRef.collection("receipts").doc(instance.lastReceiptId));
+    const currentReceipt = receiptSnap.exists ? receiptSnap.data() : null;
+    workflowExecution.verifyInstance(eventWorkflowAdapter.eventSource(source, schemaVersion), instance, currentReceipt);
+    await assertWorkflowPinnedDefinition(tx, organizationRef, instance);
+    candidates.push({ instanceRef, instance, currentReceipt });
+  }
+  if (candidates.every((item) => item.instance)) throw new eventOperations.EventOperationsError("data-loss", "This exact event source has conflicting workflow bindings.");
+  return candidates.find((item) => item.instance) || candidates[0];
+}
+async function readEventWorkflowPhase(tx, organizationRef, source) {
+  const ledgerRef = organizationRef.collection("eventOperatingLedgers").doc(eventOperations.ledgerIdFor(source));
+  const ledgerSnap = await tx.get(ledgerRef);
+  if (!ledgerSnap.exists) {
+    await assertEventOperatingParentNotOrphaned(tx, ledgerRef, source);
+    return { ledgerRef, ledger: null, receipt: null, snapshot: null, domainRef: null };
+  }
+  const ledger = ledgerSnap.data() || {};
+  if (!/^event_ops_command_[a-f0-9]{48}$/.test(ledger.lastReceiptId || "")) throw new eventOperations.EventOperationsError("data-loss", "The phase receipt reference is invalid.");
+  const receiptSnap = await tx.get(ledgerRef.collection("receipts").doc(ledger.lastReceiptId));
+  const receipt = receiptSnap.exists ? receiptSnap.data() : null;
+  return { ledgerRef, ledger, receipt, snapshot: eventOperations.projectSnapshot(source, ledger, receipt),
+    domainRef: eventWorkflowAdapter.phaseReference(source, ledger, receipt) };
+}
+function assertWorkflowCurrentPhase(instance, phase) {
+  if (!phase.ledger || workflowExecution.digest(instance.domainRef) !== workflowExecution.digest(eventWorkflowAdapter.phaseReference(phase.ledger, phase.ledger, phase.receipt, instance.schemaVersion))) {
+    throw new eventOperations.EventOperationsError("data-loss", "The workflow binding does not match the current trusted event phase.");
+  }
+}
+function workflowEventRequest(data, extra = []) {
+  workflowExactKeys(data, ["organizationId", "quoteId", "sourceVersionId", "acceptanceReceiptId", ...extra]);
+  eventWorkflowAdapter.eventSource(data);
+  return { organizationId: data.organizationId, quoteId: data.quoteId, sourceVersionId: data.sourceVersionId, acceptanceReceiptId: data.acceptanceReceiptId };
+}
+function assertWorkflowExactSource(request, source) {
+  if (eventOperations.ledgerIdFor(request) !== eventOperations.ledgerIdFor(source)) throw new eventOperations.EventOperationsError("aborted", "The accepted event source changed. Refresh the workflow.");
+}
+function workflowDefinitionPublicReceipt(receipt) {
+  workflowDefinitions.verifyLifecycleReceipt(receipt);
+  return { receiptId: receipt.receiptId, requestId: receipt.requestId, command: receipt.request.command,
+    priorRevision: receipt.priorHead.revision, resultRevision: receipt.resultHead.revision, recordedAtISO: receipt.recordedAtISO,
+    versionId: receipt.publishedVersion?.versionId || (receipt.request.command === "retire" ? receipt.request.versionId : "") };
+}
+function eventWorkflowPublicReceipt(receipt) {
+  workflowExecution.verifyReceipt(receipt);
+  return { receiptId: receipt.receiptId, requestId: receipt.request.requestId, command: receipt.request.command,
+    priorRevision: receipt.priorRevision, resultRevision: receipt.resultRevision, recordedAtISO: receipt.recordedAtISO,
+    definitionPin: { ...receipt.resultInstance.definitionPin } };
+}
+
+function throwEventOperatingError(error) {
+  if (error instanceof eventOperations.EventOperationsError || error instanceof PostEventCloseoutError) {
+    throw new functions.https.HttpsError(error.code, error.message);
+  }
+  if (error instanceof functions.https.HttpsError) throw error;
+  functions.logger.error("Event operating command failed", { code: normalizeText(error?.code) });
+  throw new functions.https.HttpsError("internal", "Event operations could not confirm the result. Reconcile the same request before retrying.");
+}
+async function assertEventOperatingTransactionAuthority(tx, organizationRef, staff, mutation = false) {
+  const [roleSnap, organizationSnap, tombstoneSnap, settingsSnap] = await Promise.all([
+    tx.get(db.collection("userRoles").doc(staff.uid)),
+    tx.get(organizationRef),
+    tx.get(db.collection(ORGANIZATION_TOMBSTONES_COLLECTION).doc(staff.organizationId)),
+    tx.get(organizationRef.collection("settings").doc("config"))
+  ]);
+  const currentRole = roleSnap.data() || {};
+  if (!roleSnap.exists || currentRole.organizationId !== staff.organizationId || currentRole.role !== staff.role || (normalizeEmail(currentRole.email) && normalizeEmail(currentRole.email) !== staff.email)) {
+    throw new eventOperations.EventOperationsError("permission-denied", "Current same-organization staff authority changed. Sign in again.");
+  }
+  eventOperatingActor({ ...staff, role: currentRole.role, principalOrganizationId: currentRole.organizationId }, staff.organizationId, mutation);
+  if (!organizationSnap.exists || tombstoneSnap.exists || !isOrganizationRecordActive(organizationSnap.data())) {
+    throw new eventOperations.EventOperationsError("failed-precondition", "The organization is unavailable for event operations.");
+  }
+  eventOperations.assertEnabled(tenantWorkflowRuntimeEnabled("EVENT_OPERATING_SPINE_ENABLED", organizationRef.id), settingsSnap.data() || {});
+}
+async function readEventOperatingSource(tx, organizationRef, scope) {
+  const quoteRef = organizationRef.collection(QUOTES_COLLECTION).doc(scope.quoteId);
+  const quoteSnap = await tx.get(quoteRef);
+  if (!quoteSnap.exists) throw new eventOperations.EventOperationsError("not-found", "The booked quote is unavailable.");
+  const quote = { ...(quoteSnap.data() || {}), id: quoteSnap.id };
+  const sourceVersionId = normalizeText(quote.activeVersionId || quote.versionMeta?.versionId);
+  const acceptanceReceiptId = normalizeText(quote.acceptanceReceipt?.receiptId);
+  // Validate identifiers before using them to form document paths.
+  eventOperations.ledgerIdFor({ ...scope, sourceVersionId, acceptanceReceiptId });
+  const [versionSnap, acceptanceSnap] = await Promise.all([
+    tx.get(quoteRef.collection("versions").doc(sourceVersionId)),
+    tx.get(organizationRef.collection(PROPOSAL_ACCEPTANCE_RECEIPTS_COLLECTION).doc(acceptanceReceiptId))
+  ]);
+  if (!versionSnap.exists || !acceptanceSnap.exists) throw new eventOperations.EventOperationsError("failed-precondition", "Exact accepted source evidence is unavailable.");
+  return eventOperations.resolveSource({ ...scope, sourceQuote: quote, sourceVersion: { ...(versionSnap.data() || {}), id: versionSnap.id }, acceptanceReceiptDocument: acceptanceSnap.data() || {} });
+}
+exports.getEventOperatingSnapshot = functions.region(REGION).https.onCall(async (data, context) => {
+  try {
+    const scope = eventOperations.normalizeScope(data);
+    const staff = await assertStaff(context, { expectedOrganizationId: scope.organizationId });
+    eventOperatingActor(staff, scope.organizationId);
+    const organizationRef = db.collection(ORGANIZATIONS_COLLECTION).doc(scope.organizationId);
+    const snapshot = await db.runTransaction(async (tx) => {
+      await assertEventOperatingTransactionAuthority(tx, organizationRef, staff);
+      const source = await readEventOperatingSource(tx, organizationRef, scope);
+      const ledgerRef = organizationRef.collection("eventOperatingLedgers").doc(eventOperations.ledgerIdFor(source));
+      const ledgerSnap = await tx.get(ledgerRef);
+      if (!ledgerSnap.exists) {
+        await assertEventOperatingParentNotOrphaned(tx, ledgerRef, source);
+        return eventOperations.projectSnapshot(source);
+      }
+      const ledger = ledgerSnap.data() || {};
+      if (!/^event_ops_command_[a-f0-9]{48}$/.test(ledger.lastReceiptId || "")) throw new eventOperations.EventOperationsError("data-loss", "The latest phase receipt reference is invalid.");
+      const receiptSnap = await tx.get(ledgerRef.collection("receipts").doc(ledger.lastReceiptId));
+      return eventOperations.projectSnapshot(source, ledger, receiptSnap.exists ? receiptSnap.data() : null);
+    });
+    return { ok: true, storage: "firebase", ...scope, snapshot };
+  } catch (error) { return throwEventOperatingError(error); }
+});
+exports.applyEventOperatingCommand = functions.region(REGION).https.onCall(async (data, context) => {
+  try {
+    workflowExactKeys(data, ["organizationId", "quoteId", "sourceVersionId", "acceptanceReceiptId", "requestId", "command", "expectedLedgerRevision", "targetPhase"]);
+    const request = eventOperations.normalizeRequest(data);
+    const scope = eventOperations.normalizeScope(request);
+    const staff = await assertStaff(context, { expectedOrganizationId: scope.organizationId });
+    const actor = eventOperatingActor(staff, scope.organizationId, true);
+    const organizationRef = db.collection(ORGANIZATIONS_COLLECTION).doc(scope.organizationId);
+    const ledgerRef = organizationRef.collection("eventOperatingLedgers").doc(eventOperations.ledgerIdFor(request));
+    const receiptRef = ledgerRef.collection("receipts").doc(eventOperations.receiptIdFor(request));
+    const result = await db.runTransaction(async (tx) => {
+      await assertEventOperatingTransactionAuthority(tx, organizationRef, staff, true);
+      const candidates = [];
+      for (const schemaVersion of [1, 2]) {
+        const identity = eventWorkflowAdapter.eventSource(request, schemaVersion);
+        const ref = eventWorkflowInstanceRef(organizationRef, request, schemaVersion);
+        const receipt = ref.collection("receipts").doc(workflowExecution.receiptIdFor(identity, request.requestId));
+        const [instanceSnap, workflowReceiptSnap] = await Promise.all([tx.get(ref), tx.get(receipt)]);
+        candidates.push({ instanceRef: ref, workflowReceiptRef: receipt, instanceSnap, workflowReceiptSnap });
+      }
+      if (candidates.every((item) => item.instanceSnap.exists || item.workflowReceiptSnap.exists)) throw new eventOperations.EventOperationsError("data-loss", "Conflicting versioned workflow evidence exists for this phase command.");
+      const selected = candidates.find((item) => item.instanceSnap.exists || item.workflowReceiptSnap.exists) || candidates[0];
+      const { instanceRef, workflowReceiptRef, instanceSnap, workflowReceiptSnap } = selected;
+      const receiptSnap = await tx.get(receiptRef);
+      // Exact immutable paired success reconciles before current source/catalog freshness.
+      if (receiptSnap.exists) {
+        if (!instanceSnap.exists && !workflowReceiptSnap.exists) {
+          const history = await tx.get(instanceRef.collection("receipts").limit(1));
+          if (!history.empty) throw new eventOperations.EventOperationsError("data-loss", "Historical phase command has orphaned workflow evidence.");
+        }
+        const replay = eventWorkflowAdapter.planEventCommand({ request, actor, source: null,
+          phaseExistingReceipt: receiptSnap.data(), instance: instanceSnap.exists ? instanceSnap.data() : null,
+          workflowExistingReceipt: workflowReceiptSnap.exists ? workflowReceiptSnap.data() : null });
+        if (replay.workflowPlan) await assertWorkflowPinnedDefinition(tx, organizationRef, replay.workflowPlan.receipt.resultInstance);
+        if (replay.workflowPlan?.receipt.schemaVersion === 2 && request.command === "transition") await verifyEventConstraintOutcome(tx, instanceRef, replay.phasePlan.receipt);
+        return replay.phasePlan;
+      }
+      const source = await readEventOperatingSource(tx, organizationRef, scope);
+      assertWorkflowExactSource(request, source);
+      const phase = await readEventWorkflowPhase(tx, organizationRef, source);
+      const current = await readEventWorkflowInstance(tx, organizationRef, source);
+      if (current.instance) assertWorkflowCurrentPhase(current.instance, phase);
+      let definition = null;
+      if (request.command === "initialize") {
+        const configuration = (await readWorkflowConfiguration(tx, organizationRef)).snapshot;
+        if (!configuration.newInstanceEligible || !configuration.activeVersion) throw new eventOperations.EventOperationsError("failed-precondition", "Workflow configuration blocks new event initialization.");
+        definition = configuration.activeVersion;
+      }
+      const work = current.instance?.schemaVersion === 2 ? await readEventOperatingWorkState(tx, phase.ledgerRef, source) : null;
+      const planned = eventWorkflowAdapter.planEventCommand({ request, actor, source,
+        workState: work?.workState || null, workReceipt: work?.currentReceipt || null,
+        ledger: phase.ledger, phaseCurrentReceipt: phase.receipt,
+        instance: current.instance, workflowCurrentReceipt: current.currentReceipt,
+        workflowExistingReceipt: workflowReceiptSnap.exists ? workflowReceiptSnap.data() : null,
+        definition, nowISO: new Date().toISOString() });
+      let constraintProof = null;
+      if (current.instance?.schemaVersion === 2 && request.command === "transition") {
+        constraintProof = workflowPackAdapters.buildEventConstraintProof({ source, definition: current.instance.definition, ledger: phase.ledger, phaseReceipt: phase.receipt,
+          workState: work?.workState || null, workReceipt: work?.currentReceipt || null, resultReceipt: planned.phasePlan.receipt });
+        if ((await tx.get(current.instanceRef.collection("observations").doc(constraintProof.evidenceId))).exists) throw new eventOperations.EventOperationsError("data-loss", "This phase constraint proof already exists without its outcome.");
+      }
+      if (phase.ledger) tx.set(ledgerRef, planned.phasePlan.nextLedger);
+      else tx.create(ledgerRef, planned.phasePlan.nextLedger);
+      if (constraintProof) tx.create(current.instanceRef.collection("observations").doc(constraintProof.evidenceId), constraintProof);
+      tx.create(receiptRef, planned.phasePlan.receipt);
+      if (planned.workflowPlan) {
+        const targetRef = organizationRef.collection("workflowInstances").doc(planned.workflowPlan.nextInstance.instanceId);
+        if (current.instance) tx.set(targetRef, planned.workflowPlan.nextInstance);
+        else tx.create(targetRef, planned.workflowPlan.nextInstance);
+        tx.create(targetRef.collection("receipts").doc(planned.workflowPlan.receipt.receiptId), planned.workflowPlan.receipt);
+      }
+      return planned.phasePlan;
+    });
+    return { ok: true, storage: "firebase", ...scope, snapshot: result.snapshot, idempotent: result.idempotent, receipt: eventOperations.publicReceipt(result.receipt) };
+  } catch (error) { return throwEventOperatingError(error); }
+});
+
 exports.recordPostEventCloseoutReview = functions.region(REGION).https.onCall(async (data, context) => {
   let request;
   try {
     request = normalizePostEventCloseoutActionRequest(data);
   } catch (err) {
-    if (err instanceof PostEventCloseoutError) {
+    if (err instanceof PostEventCloseoutError || err instanceof eventOperations.EventOperationsError) {
       throw new functions.https.HttpsError(err.code, err.message);
     }
     throw err;
@@ -16883,6 +18286,10 @@ exports.recordPostEventCloseoutReview = functions.region(REGION).https.onCall(as
       }
       const quote = quoteSnap.data() || {};
       const closeout = closeoutSnap.data() || {};
+      const packSource = workflowPackAdapters.acceptedSource(closeout, "closeout_follow_up");
+      const existingPack = await readWorkflowPackInstance(tx, organizationRef, packSource);
+      const packEnabled = tenantWorkflowRuntimeEnabled("EVENT_OPERATING_SPINE_ENABLED", organizationRef.id) && settingsSnap.data()?.eventOperatingSpineEnabled === true;
+      if (packEnabled || existingPack.instance) await assertEventOperatingTransactionAuthority(tx, organizationRef, staff, false);
       if (
         normalizeOrganizationId(quote.organizationId) !== request.organizationId
         || normalizeText(closeout.organizationId) !== request.organizationId
@@ -16950,6 +18357,21 @@ exports.recordPostEventCloseoutReview = functions.region(REGION).https.onCall(as
       });
       const nextRecord = planned.nextRecord || workingRecord;
       const quoteProjection = projectPostEventCloseoutToQuote(nextRecord);
+      let coordinator = null;
+      if (packEnabled) {
+        const catalog = existingPack.instance ? null : (await readWorkflowConfiguration(tx, organizationRef, "closeout_follow_up")).snapshot;
+        const definition = existingPack.instance?.definition || (catalog?.state === "published" && catalog.activeVersion?.schemaVersion === 2 ? catalog.activeVersion : null);
+        if (definition) {
+          let proof;
+          if (planned.idempotent) {
+            const stored = await tx.get(existingPack.instanceRef.collection("observations").doc(planned.receipt.receiptId));
+            if (!stored.exists) throw new eventOperations.EventOperationsError("data-loss", "The closeout command is missing its paired adapter proof.");
+            proof = stored.data();
+          } else proof = workflowPackAdapters.buildCloseoutObservationProof({ source, priorRecord: workingRecord, record: nextRecord, actionReceipt: planned.receipt });
+          const observation = workflowPackAdapters.closeoutObservation({ proof, definition });
+          coordinator = await prepareWorkflowPackObservation(tx, organizationRef, { observation, definition, proof, actor: eventOperatingActor(staff, request.organizationId), requestId: request.requestId, nowISO });
+        }
+      }
 
       if (!receiptSnap.exists) {
         tx.create(receiptRef, {
@@ -16971,6 +18393,7 @@ exports.recordPostEventCloseoutReview = functions.region(REGION).https.onCall(as
         });
       }
 
+      coordinator?.commit();
       return {
         kind: planned.kind,
         idempotent: planned.idempotent,
@@ -17001,7 +18424,7 @@ exports.recordPostEventCloseoutReview = functions.region(REGION).https.onCall(as
     };
   } catch (err) {
     if (err instanceof functions.https.HttpsError) throw err;
-    if (err instanceof PostEventCloseoutError) {
+    if (err instanceof PostEventCloseoutError || err instanceof eventOperations.EventOperationsError) {
       throw new functions.https.HttpsError(err.code, err.message);
     }
     functions.logger.error("Post-event closeout review failed", {
@@ -17018,12 +18441,172 @@ exports.recordPostEventCloseoutReview = functions.region(REGION).https.onCall(as
   }
 });
 
+exports.recordPostEventActualAttendance = functions.region(REGION).https.onCall(async (data, context) => {
+  let request;
+  try {
+    request = normalizePostEventActualAttendanceRequest(data);
+  } catch (error) {
+    if (error instanceof PostEventCloseoutError) {
+      throw new functions.https.HttpsError(error.code, error.message);
+    }
+    throw error;
+  }
+  const staff = await assertStaff(context, {
+    expectedOrganizationId: request.organizationId
+  });
+  if (normalizeOrganizationId(staff.principalOrganizationId) !== request.organizationId) {
+    throw new functions.https.HttpsError(
+      "permission-denied",
+      "Actual attendance requires same-organization staff authority."
+    );
+  }
+
+  try {
+    const nowISO = new Date().toISOString();
+    const organizationRef = db
+      .collection(ORGANIZATIONS_COLLECTION)
+      .doc(request.organizationId);
+    const quoteRef = organizationRef.collection(QUOTES_COLLECTION).doc(request.quoteId);
+    const closeoutRef = organizationRef
+      .collection(POST_EVENT_CLOSEOUTS_COLLECTION)
+      .doc(request.closeoutId);
+    const receiptRef = closeoutRef
+      .collection("attendanceReceipts")
+      .doc(request.receiptId);
+    const result = await db.runTransaction(async (tx) => {
+      const [quoteSnap, closeoutSnap, receiptSnap] = await Promise.all([
+        tx.get(quoteRef),
+        tx.get(closeoutRef),
+        tx.get(receiptRef)
+      ]);
+      if (!quoteSnap.exists || !closeoutSnap.exists) {
+        throw new PostEventCloseoutError(
+          "not-found",
+          "The authoritative booked quote or closeout record is unavailable."
+        );
+      }
+      const quote = quoteSnap.data() || {};
+      const closeout = closeoutSnap.data() || {};
+      if (
+        normalizeOrganizationId(quote.organizationId) !== request.organizationId
+        || normalizeText(closeout.organizationId) !== request.organizationId
+        || normalizeText(closeout.quoteId) !== request.quoteId
+      ) {
+        throw new PostEventCloseoutError(
+          "permission-denied",
+          "The closeout record is outside this organization or quote scope."
+        );
+      }
+      const sourceVersionId = normalizeText(closeout.sourceVersionId);
+      const acceptanceReceiptDocumentId = normalizeText(closeout.acceptanceReceiptId);
+      if (!sourceVersionId || !acceptanceReceiptDocumentId) {
+        throw new PostEventCloseoutError(
+          "failed-precondition",
+          "The closeout record is missing its accepted proposal source or receipt."
+        );
+      }
+      const [sourceVersionSnap, acceptanceReceiptDocumentSnap] = await Promise.all([
+        tx.get(quoteRef.collection("versions").doc(sourceVersionId)),
+        tx.get(
+          organizationRef
+            .collection(PROPOSAL_ACCEPTANCE_RECEIPTS_COLLECTION)
+            .doc(acceptanceReceiptDocumentId)
+        )
+      ]);
+      if (!sourceVersionSnap.exists || !acceptanceReceiptDocumentSnap.exists) {
+        throw new PostEventCloseoutError(
+          "failed-precondition",
+          "The closeout accepted proposal source or private receipt is unavailable."
+        );
+      }
+      const source = resolvePostEventCloseoutSource({
+        organizationId: request.organizationId,
+        quoteId: request.quoteId,
+        sourceQuote: { id: quoteSnap.id, ...quote },
+        sourceVersion: {
+          id: sourceVersionSnap.id,
+          ...(sourceVersionSnap.data() || {})
+        },
+        acceptanceReceiptDocument: acceptanceReceiptDocumentSnap.data() || {}
+      });
+      const planned = planPostEventActualAttendance({
+        request: data,
+        record: closeout,
+        source,
+        actor: staff,
+        nowISO,
+        existingReceipt: receiptSnap.exists ? receiptSnap.data() || {} : null
+      });
+      const nextRecord = planned.nextRecord || closeout;
+      const quoteProjection = projectPostEventCloseoutToQuote(nextRecord);
+
+      if (!receiptSnap.exists) {
+        tx.create(receiptRef, {
+          ...planned.receipt,
+          createdAt: FieldValue.serverTimestamp()
+        });
+      }
+      if (planned.nextRecord) {
+        tx.set(closeoutRef, {
+          ...planned.nextRecord,
+          updatedAt: FieldValue.serverTimestamp()
+        }, { merge: true });
+        tx.update(quoteRef, {
+          "workflow.postEventCloseout": quoteProjection,
+          updatedAtISO: nowISO,
+          updatedAt: FieldValue.serverTimestamp()
+        });
+      }
+      return {
+        kind: planned.kind,
+        idempotent: planned.idempotent,
+        postEventCloseout: quoteProjection,
+        receipt: {
+          receiptId: normalizeText(planned.receipt.receiptId),
+          requestId: normalizeText(planned.receipt.requestId),
+          action: normalizeText(planned.receipt.action),
+          priorRevision: Number(planned.receipt.priorRevision),
+          resultRevision: Number(planned.receipt.resultRevision),
+          count: Number(planned.receipt.count),
+          sourceType: normalizeText(planned.receipt.sourceType),
+          recordedAtISO: normalizeText(planned.receipt.recordedAtISO),
+          recordedByEmail: normalizeEmail(planned.receipt.recordedBy?.email)
+        }
+      };
+    });
+    return {
+      ok: true,
+      storage: "firebase",
+      organizationId: request.organizationId,
+      quoteId: request.quoteId,
+      closeoutId: request.closeoutId,
+      ...result
+    };
+  } catch (error) {
+    if (error instanceof functions.https.HttpsError) throw error;
+    if (error instanceof PostEventCloseoutError) {
+      throw new functions.https.HttpsError(error.code, error.message);
+    }
+    functions.logger.error("Actual attendance recording failed", {
+      organizationId: request.organizationId,
+      quoteId: request.quoteId,
+      closeoutId: request.closeoutId,
+      actorUid: staff.uid,
+      error: normalizeText(error?.message)
+    });
+    throw new functions.https.HttpsError(
+      "internal",
+      "Failed to record actual attendance."
+    );
+  }
+});
+
 exports.refreshPostEventCloseoutConfiguration = functions.region(REGION).https.onCall(async (data, context) => {
   let request;
   try {
     request = normalizePostEventCloseoutPolicyRefreshRequest(data);
   } catch (error) {
-    if (error instanceof PostEventCloseoutError) {
+    if (error instanceof PostEventCloseoutError || error instanceof eventOperations.EventOperationsError) {
       throw new functions.https.HttpsError(error.code, error.message);
     }
     throw error;
@@ -17066,6 +18649,10 @@ exports.refreshPostEventCloseoutConfiguration = functions.region(REGION).https.o
       }
       const quote = quoteSnap.data() || {};
       const closeout = closeoutSnap.data() || {};
+      const packSource = workflowPackAdapters.acceptedSource(closeout, "closeout_follow_up");
+      const existingPack = await readWorkflowPackInstance(tx, organizationRef, packSource);
+      const packEnabled = tenantWorkflowRuntimeEnabled("EVENT_OPERATING_SPINE_ENABLED", organizationRef.id) && settingsSnap.data()?.eventOperatingSpineEnabled === true;
+      if (packEnabled || existingPack.instance) await assertEventOperatingTransactionAuthority(tx, organizationRef, staff, false);
       if (
         normalizeOrganizationId(quote.organizationId) !== request.organizationId
         || normalizeText(closeout.organizationId) !== request.organizationId
@@ -17119,6 +18706,22 @@ exports.refreshPostEventCloseoutConfiguration = functions.region(REGION).https.o
       });
       const nextRecord = planned.nextRecord || closeout;
       const quoteProjection = projectPostEventCloseoutToQuote(nextRecord);
+      let coordinator = null;
+      if (packEnabled) {
+        const catalog = existingPack.instance ? null : (await readWorkflowConfiguration(tx, organizationRef, "closeout_follow_up")).snapshot;
+        const definition = existingPack.instance?.definition || (catalog?.state === "published" && catalog.activeVersion?.schemaVersion === 2 ? catalog.activeVersion : null);
+        if (definition) {
+          let proof;
+          if (planned.idempotent) {
+            const stored = await tx.get(existingPack.instanceRef.collection("observations").doc(planned.receipt.receiptId));
+            if (!stored.exists) throw new eventOperations.EventOperationsError("data-loss", "The closeout refresh is missing its paired adapter proof.");
+            proof = stored.data();
+          } else proof = workflowPackAdapters.buildCloseoutObservationProof({ source, priorRecord: closeout, record: nextRecord, actionReceipt: planned.receipt });
+          const observation = workflowPackAdapters.closeoutObservation({ proof, definition });
+          coordinator = await prepareWorkflowPackObservation(tx, organizationRef, { observation, definition, proof,
+            actor: eventOperatingActor(staff, request.organizationId), requestId: request.requestId, nowISO });
+        }
+      }
 
       if (!receiptSnap.exists) {
         tx.create(receiptRef, {
@@ -17138,6 +18741,7 @@ exports.refreshPostEventCloseoutConfiguration = functions.region(REGION).https.o
         });
       }
 
+      coordinator?.commit();
       return {
         kind: planned.kind,
         idempotent: planned.idempotent,
@@ -17168,7 +18772,7 @@ exports.refreshPostEventCloseoutConfiguration = functions.region(REGION).https.o
     };
   } catch (error) {
     if (error instanceof functions.https.HttpsError) throw error;
-    if (error instanceof PostEventCloseoutError) {
+    if (error instanceof PostEventCloseoutError || error instanceof eventOperations.EventOperationsError) {
       throw new functions.https.HttpsError(error.code, error.message);
     }
     functions.logger.error("Post-event closeout configuration refresh failed", {
@@ -17185,9 +18789,243 @@ exports.refreshPostEventCloseoutConfiguration = functions.region(REGION).https.o
   }
 });
 
+function eventOperationalNotesRefs(organizationId, quoteId, receiptId = "") {
+  const organizationRef = db.collection(ORGANIZATIONS_COLLECTION).doc(organizationId);
+  const journalRef = organizationRef.collection(EVENT_OPERATIONAL_NOTES_COLLECTION).doc(quoteId);
+  return {
+    organizationRef,
+    quoteRef: organizationRef.collection(QUOTES_COLLECTION).doc(quoteId),
+    journalRef,
+    receiptRef: receiptId ? journalRef.collection("receipts").doc(receiptId) : null
+  };
+}
+
+function eventOperationalNotesSource({ organizationId, quoteId, quote = {} }) {
+  const sourceVersionId = normalizeText(
+    quote.activeVersionId || quote.versionMeta?.versionId
+  );
+  if (!sourceVersionId) {
+    throw new eventOperations.EventOperationsError(
+      "failed-precondition",
+      "A canonical active quote revision is required for operational notes."
+    );
+  }
+  if (normalizeOrganizationId(quote.organizationId) !== organizationId) {
+    throw new eventOperations.EventOperationsError(
+      "permission-denied",
+      "The operational-notes quote is outside the requested organization."
+    );
+  }
+  return { organizationId, quoteId, sourceVersionId };
+}
+
+function projectEventBriefReviewConsequences(quote = {}, snapshot = {}) {
+  const checklist = Array.isArray(quote.booking?.productionChecklist)
+    ? quote.booking.productionChecklist
+    : [];
+  const eventBrief = checklist.find((item) => normalizeText(item?.id) === "event-brief");
+  const completedAtISO = normalizeText(eventBrief?.completedAtISO);
+  const sourceUpdatedAtISO = normalizeText(snapshot.updatedAtISO);
+  if (
+    eventBrief?.completed === true
+    && Number.isFinite(Date.parse(completedAtISO))
+    && Number.isFinite(Date.parse(sourceUpdatedAtISO))
+    && sourceUpdatedAtISO > completedAtISO
+  ) {
+    return [{
+      code: "event_brief_review_required",
+      sourceUpdatedAtISO,
+      checklistCompletedAtISO: completedAtISO
+    }];
+  }
+  return [];
+}
+
+function throwEventOperationalNotesFailure(error, operation) {
+  if (error instanceof functions.https.HttpsError) throw error;
+  if (error instanceof eventOperations.EventOperationsError) {
+    throw new functions.https.HttpsError(error.code, error.message);
+  }
+  functions.logger.error(`${operation} failed`, {
+    error: normalizeText(error?.message).slice(0, 240)
+  });
+  throw new functions.https.HttpsError(
+    "internal",
+    "The authoritative event-notes operation did not complete."
+  );
+}
+
+exports.getEventOperationalNotesSnapshot = functions.region(REGION).https.onCall(async (data, context) => {
+  const organizationId = normalizeOrganizationId(data?.organizationId);
+  const staff = await assertStaff(context, { expectedOrganizationId: organizationId });
+  try {
+    const request = eventOperationalNotes.normalizeReadRequest(data);
+    if (staff.principalOrganizationId !== request.organizationId) {
+      throw new eventOperations.EventOperationsError(
+        "permission-denied",
+        "Operational notes require same-organization staff authority."
+      );
+    }
+    const refs = eventOperationalNotesRefs(request.organizationId, request.quoteId);
+    const result = await db.runTransaction(async (tx) => {
+      const [quoteSnap, journalSnap] = await Promise.all([
+        tx.get(refs.quoteRef),
+        tx.get(refs.journalRef)
+      ]);
+      if (!quoteSnap.exists) {
+        throw new eventOperations.EventOperationsError("not-found", "Quote not found.");
+      }
+      const quote = { id: request.quoteId, ...(quoteSnap.data() || {}) };
+      const source = eventOperationalNotesSource({
+        organizationId: request.organizationId,
+        quoteId: request.quoteId,
+        quote
+      });
+      if (source.sourceVersionId !== request.sourceVersionId) {
+        throw new eventOperations.EventOperationsError(
+          "aborted",
+          "The quote revision changed. Reload before reviewing operational notes."
+        );
+      }
+      const journal = journalSnap.exists ? journalSnap.data() || {} : null;
+      let latestReceipt = null;
+      if (journal) {
+        const lastReceiptId = normalizeText(journal.lastReceiptId);
+        if (!lastReceiptId) {
+          throw new eventOperations.EventOperationsError(
+            "data-loss",
+            "The operational-notes journal is missing its latest receipt pointer."
+          );
+        }
+        const receiptSnap = await tx.get(
+          refs.journalRef.collection("receipts").doc(lastReceiptId)
+        );
+        if (!receiptSnap.exists) {
+          throw new eventOperations.EventOperationsError(
+            "data-loss",
+            "The operational-notes journal receipt is unavailable."
+          );
+        }
+        latestReceipt = receiptSnap.data() || {};
+      }
+      const snapshot = eventOperationalNotes.projectStaffSnapshot({
+        source,
+        journal,
+        latestReceipt
+      });
+      return {
+        snapshot,
+        consequences: projectEventBriefReviewConsequences(quote, snapshot)
+      };
+    });
+    return {
+      ok: true,
+      storage: "firebase",
+      organizationId: request.organizationId,
+      quoteId: request.quoteId,
+      ...result
+    };
+  } catch (error) {
+    return throwEventOperationalNotesFailure(error, "getEventOperationalNotesSnapshot");
+  }
+});
+
+exports.applyEventOperationalNoteCommand = functions.region(REGION).https.onCall(async (data, context) => {
+  const organizationId = normalizeOrganizationId(data?.organizationId);
+  const staff = await assertStaff(context, { expectedOrganizationId: organizationId });
+  try {
+    const request = eventOperationalNotes.normalizeRequest(data);
+    if (staff.principalOrganizationId !== request.organizationId) {
+      throw new eventOperations.EventOperationsError(
+        "permission-denied",
+        "Operational notes require same-organization staff authority."
+      );
+    }
+    const requestedReceiptId = eventOperationalNotes.receiptIdFor(request);
+    const refs = eventOperationalNotesRefs(
+      request.organizationId,
+      request.quoteId,
+      requestedReceiptId
+    );
+    const recordedAtISO = new Date().toISOString();
+    const result = await db.runTransaction(async (tx) => {
+      const [quoteSnap, journalSnap, existingReceiptSnap] = await Promise.all([
+        tx.get(refs.quoteRef),
+        tx.get(refs.journalRef),
+        tx.get(refs.receiptRef)
+      ]);
+      if (!quoteSnap.exists) {
+        throw new eventOperations.EventOperationsError("not-found", "Quote not found.");
+      }
+      const quote = { id: request.quoteId, ...(quoteSnap.data() || {}) };
+      const source = eventOperationalNotesSource({
+        organizationId: request.organizationId,
+        quoteId: request.quoteId,
+        quote
+      });
+      const journal = journalSnap.exists ? journalSnap.data() || {} : null;
+      let currentReceipt = null;
+      if (journal && !existingReceiptSnap.exists) {
+        const lastReceiptId = normalizeText(journal.lastReceiptId);
+        if (!lastReceiptId) {
+          throw new eventOperations.EventOperationsError(
+            "data-loss",
+            "The operational-notes journal is missing its latest receipt pointer."
+          );
+        }
+        const currentReceiptSnap = await tx.get(
+          refs.journalRef.collection("receipts").doc(lastReceiptId)
+        );
+        if (!currentReceiptSnap.exists) {
+          throw new eventOperations.EventOperationsError(
+            "data-loss",
+            "The operational-notes journal receipt is unavailable."
+          );
+        }
+        currentReceipt = currentReceiptSnap.data() || {};
+      }
+      const planned = eventOperationalNotes.planCommand({
+        request,
+        actor: {
+          organizationId: request.organizationId,
+          uid: staff.uid,
+          role: staff.role
+        },
+        source,
+        journal,
+        currentReceipt,
+        existingReceipt: existingReceiptSnap.exists ? existingReceiptSnap.data() || {} : null,
+        nowISO: recordedAtISO
+      });
+      if (!planned.idempotent) {
+        tx.create(refs.receiptRef, planned.receipt);
+        tx.set(refs.journalRef, planned.nextJournal);
+      }
+      return {
+        idempotent: planned.idempotent,
+        snapshot: planned.snapshot,
+        receipt: eventOperationalNotes.publicReceipt(planned.receipt),
+        consequences: projectEventBriefReviewConsequences(quote, planned.snapshot)
+      };
+    });
+    return {
+      ok: true,
+      storage: "firebase",
+      organizationId: request.organizationId,
+      quoteId: request.quoteId,
+      ...result
+    };
+  } catch (error) {
+    return throwEventOperationalNotesFailure(error, "applyEventOperationalNoteCommand");
+  }
+});
+
 function kitchenBeoRefs(organizationId, quoteId, receiptId = "") {
   const organizationRef = db.collection(ORGANIZATIONS_COLLECTION).doc(organizationId);
   const artifactRef = organizationRef.collection(KITCHEN_BEO_ARTIFACTS_COLLECTION).doc(quoteId);
+  const operationalNotesRef = organizationRef
+    .collection(EVENT_OPERATIONAL_NOTES_COLLECTION)
+    .doc(quoteId);
   const dependencyStateRef = organizationRef
     .collection(COMMERCIAL_DEPENDENCY_STATE_COLLECTION)
     .doc(quoteId);
@@ -17199,6 +19037,7 @@ function kitchenBeoRefs(organizationId, quoteId, receiptId = "") {
     receiptRef: receiptId
       ? organizationRef.collection(KITCHEN_BEO_RECEIPTS_COLLECTION).doc(receiptId)
       : null,
+    operationalNotesRef,
     dependencyStateRef,
     invalidationsRef: dependencyStateRef.collection(COMMERCIAL_DEPENDENCY_INVALIDATIONS_COLLECTION),
     applyReceiptsRef: organizationRef.collection(COMMERCIAL_CHANGE_APPLY_RECEIPTS_COLLECTION),
@@ -17207,10 +19046,40 @@ function kitchenBeoRefs(organizationId, quoteId, receiptId = "") {
   };
 }
 
+function projectVerifiedOperationalNotesForBeo({
+  organizationId,
+  quoteId,
+  activeRevisionId,
+  journalRecord = null,
+  receiptRecord = null
+}) {
+  if (!journalRecord) {
+    return { projection: null, sourceReviewRequired: false };
+  }
+  const source = { organizationId, quoteId, sourceVersionId: activeRevisionId };
+  const snapshot = eventOperationalNotes.projectStaffSnapshot({
+    source,
+    journal: journalRecord,
+    latestReceipt: receiptRecord
+  });
+  if (snapshot.reasonCode === "source_revision_review_required") {
+    return { projection: null, sourceReviewRequired: true };
+  }
+  return {
+    projection: eventOperationalNotes.projectBeoProjection(journalRecord, {
+      organizationId,
+      quoteId,
+      activeRevisionId
+    }),
+    sourceReviewRequired: false
+  };
+}
+
 function throwKitchenBeoFailure(error, operation) {
   if (error instanceof functions.https.HttpsError) throw error;
   if (
     error instanceof KitchenBeoAuthorityError
+    || error instanceof eventOperations.EventOperationsError
     || error instanceof CommercialChangeAuthorityError
   ) {
     throw new functions.https.HttpsError(error.code, error.message);
@@ -17483,10 +19352,11 @@ async function readKitchenBeoReceiptHistory({
 
 async function readKitchenBeoStatus({ organizationId, quoteId, nowISO }) {
   const refs = kitchenBeoRefs(organizationId, quoteId);
-  const [quoteSnap, artifactSnap, invalidationsSnap] = await Promise.all([
+  const [quoteSnap, artifactSnap, invalidationsSnap, operationalNotesSnap] = await Promise.all([
     refs.quoteRef.get(),
     refs.artifactRef.get(),
-    refs.invalidationsRef.limit(101).get()
+    refs.invalidationsRef.limit(101).get(),
+    refs.operationalNotesRef.get()
   ]);
   if (!quoteSnap.exists) {
     throw new functions.https.HttpsError("not-found", "Quote not found.");
@@ -17496,6 +19366,32 @@ async function readKitchenBeoStatus({ organizationId, quoteId, nowISO }) {
     throw new functions.https.HttpsError("permission-denied", "Quote is outside your organization.");
   }
   const artifactPointer = artifactSnap.exists ? artifactSnap.data() || {} : null;
+  const activeRevisionId = normalizeText(quote.activeVersionId || quote.versionMeta?.versionId);
+  let operationalNotes = { projection: null, sourceReviewRequired: false };
+  if (operationalNotesSnap.exists) {
+    const journalRecord = operationalNotesSnap.data() || {};
+    const lastReceiptId = normalizeText(journalRecord.lastReceiptId);
+    if (!lastReceiptId) {
+      throw new eventOperations.EventOperationsError(
+        "data-loss",
+        "The operational-notes journal is missing its latest receipt pointer."
+      );
+    }
+    const receiptSnap = await refs.operationalNotesRef.collection("receipts").doc(lastReceiptId).get();
+    if (!receiptSnap.exists) {
+      throw new eventOperations.EventOperationsError(
+        "data-loss",
+        "The operational-notes journal receipt is unavailable."
+      );
+    }
+    operationalNotes = projectVerifiedOperationalNotesForBeo({
+      organizationId,
+      quoteId,
+      activeRevisionId,
+      journalRecord,
+      receiptRecord: receiptSnap.data() || {}
+    });
+  }
   const receiptHistory = await readKitchenBeoReceiptHistory({
     refs,
     artifactExists: artifactSnap.exists,
@@ -17523,8 +19419,29 @@ async function readKitchenBeoStatus({ organizationId, quoteId, nowISO }) {
       receiptHistory: receiptHistory.projection
     };
   }
+  if (operationalNotes.sourceReviewRequired) {
+    return {
+      quote,
+      status: projectKitchenBeoStatus({
+        schemaVersion: KITCHEN_BEO_STATUS_SCHEMA_VERSION,
+        authority: "server_derived",
+        state: KITCHEN_BEO_FRESHNESS_STATES.UNKNOWN,
+        observedAtISO: nowISO,
+        reasonCodes: ["operational_notes_source_revision_review_required"],
+        receiptId: normalizeText(receiptHistory.trustedCurrentReceipt?.receiptId),
+        receiptDependencyFingerprint: normalizeText(
+          receiptHistory.trustedCurrentReceipt?.dependencyFingerprint
+        ),
+        commercialSourceRevisionId: normalizeText(
+          receiptHistory.trustedCurrentReceipt?.commercialSourceRevisionId
+        )
+      }),
+      receiptHistory: receiptHistory.projection
+    };
+  }
   const status = kitchenBeoAuthority.deriveArtifactStatus({
     canonicalQuote: quote,
+    operationalNotes: operationalNotes.projection,
     trustedReceipt: receiptHistory.trustedCurrentReceipt,
     invalidations: invalidationsSnap.docs
       .map((snapshot) => ({ id: snapshot.id, ...(snapshot.data() || {}) }))
@@ -17667,11 +19584,51 @@ exports.generateKitchenBeo = functions.region(REGION).https.onCall(async (data, 
   try {
     const claimedAtISO = new Date().toISOString();
     const initialRefs = kitchenBeoRefs(organizationId, quoteId);
-    const initialQuoteSnap = await initialRefs.quoteRef.get();
+    const [initialQuoteSnap, initialOperationalNotesSnap] = await Promise.all([
+      initialRefs.quoteRef.get(),
+      initialRefs.operationalNotesRef.get()
+    ]);
     if (!initialQuoteSnap.exists) {
       throw new functions.https.HttpsError("not-found", "Quote not found.");
     }
     const canonicalQuote = { id: quoteId, ...(initialQuoteSnap.data() || {}) };
+    const activeRevisionId = normalizeText(
+      canonicalQuote.activeVersionId || canonicalQuote.versionMeta?.versionId
+    );
+    let initialOperationalNotes = { projection: null, sourceReviewRequired: false };
+    if (initialOperationalNotesSnap.exists) {
+      const journalRecord = initialOperationalNotesSnap.data() || {};
+      const lastReceiptId = normalizeText(journalRecord.lastReceiptId);
+      if (!lastReceiptId) {
+        throw new eventOperations.EventOperationsError(
+          "data-loss",
+          "The operational-notes journal is missing its latest receipt pointer."
+        );
+      }
+      const receiptSnap = await initialRefs.operationalNotesRef
+        .collection("receipts")
+        .doc(lastReceiptId)
+        .get();
+      if (!receiptSnap.exists) {
+        throw new eventOperations.EventOperationsError(
+          "data-loss",
+          "The operational-notes journal receipt is unavailable."
+        );
+      }
+      initialOperationalNotes = projectVerifiedOperationalNotesForBeo({
+        organizationId,
+        quoteId,
+        activeRevisionId,
+        journalRecord,
+        receiptRecord: receiptSnap.data() || {}
+      });
+    }
+    if (initialOperationalNotes.sourceReviewRequired) {
+      throw new eventOperations.EventOperationsError(
+        "failed-precondition",
+        "Review retained operational notes for the active quote revision before generating the Kitchen BEO."
+      );
+    }
     const trustedContext = {
       organizationId,
       quoteId,
@@ -17680,6 +19637,7 @@ exports.generateKitchenBeo = functions.region(REGION).https.onCall(async (data, 
     };
     const claim = kitchenBeoAuthority.buildGenerationClaim({
       canonicalQuote,
+      operationalNotes: initialOperationalNotes.projection,
       request: { requestId },
       trustedContext
     });
@@ -17710,14 +19668,16 @@ exports.generateKitchenBeo = functions.region(REGION).https.onCall(async (data, 
         transactionReceiptSnap,
         artifactSnap,
         dependencyStateSnap,
-        invalidationsSnap
+        invalidationsSnap,
+        transactionOperationalNotesSnap
       ] = await Promise.all([
         tx.get(refs.quoteRef),
         tx.get(refs.receiptRef),
         tx.get(refs.artifactRef),
         tx.get(refs.dependencyStateRef),
         tx.get(refs.invalidationsRef.orderBy(FieldPath.documentId())
-          .limit(COMMERCIAL_CHANGE_INVALIDATION_LIMIT + 1))
+          .limit(COMMERCIAL_CHANGE_INVALIDATION_LIMIT + 1)),
+        tx.get(refs.operationalNotesRef)
       ]);
       if (!transactionQuoteSnap.exists) {
         throw new KitchenBeoAuthorityError("not-found", "Quote not found.");
@@ -17735,8 +19695,45 @@ exports.generateKitchenBeo = functions.region(REGION).https.onCall(async (data, 
           "The Kitchen BEO quote is outside the requested organization."
         );
       }
+      const transactionActiveRevisionId = normalizeText(
+        transactionQuote.activeVersionId || transactionQuote.versionMeta?.versionId
+      );
+      let transactionOperationalNotes = { projection: null, sourceReviewRequired: false };
+      if (transactionOperationalNotesSnap.exists) {
+        const journalRecord = transactionOperationalNotesSnap.data() || {};
+        const lastReceiptId = normalizeText(journalRecord.lastReceiptId);
+        if (!lastReceiptId) {
+          throw new eventOperations.EventOperationsError(
+            "data-loss",
+            "The operational-notes journal is missing its latest receipt pointer."
+          );
+        }
+        const receiptSnap = await tx.get(
+          refs.operationalNotesRef.collection("receipts").doc(lastReceiptId)
+        );
+        if (!receiptSnap.exists) {
+          throw new eventOperations.EventOperationsError(
+            "data-loss",
+            "The operational-notes journal receipt is unavailable."
+          );
+        }
+        transactionOperationalNotes = projectVerifiedOperationalNotesForBeo({
+          organizationId,
+          quoteId,
+          activeRevisionId: transactionActiveRevisionId,
+          journalRecord,
+          receiptRecord: receiptSnap.data() || {}
+        });
+      }
+      if (transactionOperationalNotes.sourceReviewRequired) {
+        throw new eventOperations.EventOperationsError(
+          "failed-precondition",
+          "Review retained operational notes for the active quote revision before generating the Kitchen BEO."
+        );
+      }
       const transactionClaim = kitchenBeoAuthority.buildGenerationClaim({
         canonicalQuote: transactionQuote,
+        operationalNotes: transactionOperationalNotes.projection,
         request: { requestId },
         trustedContext
       });
@@ -17852,6 +19849,7 @@ exports.generateKitchenBeo = functions.region(REGION).https.onCall(async (data, 
           }));
         const postGenerationStatus = kitchenBeoAuthority.deriveArtifactStatus({
           canonicalQuote: transactionQuote,
+          operationalNotes: transactionOperationalNotes.projection,
           trustedReceipt: record,
           invalidations: remainingKitchenBeoInvalidations,
           sourceState: "available",
@@ -18404,7 +20402,7 @@ exports.getRevenueAutopilotOperations = functions.region(REGION).https.onCall(as
     const policy = normalizeRevenueAutopilotTenantPolicy(
       policySnap.exists ? policySnap.data() || {} : null
     );
-    const global = getRevenueAutopilotGlobalControl(observedAtISO);
+    const global = getRevenueAutopilotGlobalControl(observedAtISO, organizationId);
     const authority = projectRevenueAutopilotAuthorityForStaff({
       organizationId,
       policy,
@@ -18939,7 +20937,7 @@ exports.materializeRevenueAutopilotJobs = functions
           organizationId,
           customerId
         });
-        const global = getRevenueAutopilotGlobalControl(nowISO);
+        const global = getRevenueAutopilotGlobalControl(nowISO, organizationId);
         const provider = { organizationId, ...global.provider };
         const suppression = revenueAutopilotSuppressionEvidence(controlsRaw, {
           organizationId,
@@ -22516,6 +24514,2524 @@ exports.sendFinalBalanceRequestEmail = functions
     sendApprovedPaymentRequestEmail(data, context, "final_balance")
   ));
 
+exports.sendResendAcceptanceTestEmail = functions
+  .runWith({ secrets: [RESEND_API_KEY_SECRET_NAME] })
+  .region(REGION)
+  .https.onCall(async (data, context) => {
+    const staff = await assertStaff(context);
+    if (staff.role !== "admin" || !staff.platformAdmin) {
+      throw new functions.https.HttpsError(
+        "permission-denied",
+        "Platform administrator authority is required for an email acceptance test."
+      );
+    }
+
+    let request;
+    try {
+      request = normalizeResendAcceptanceRequest(data);
+    } catch (error) {
+      if (error instanceof ResendAcceptanceError) {
+        throw new functions.https.HttpsError(error.code, error.message);
+      }
+      throw error;
+    }
+
+    const emailConfig = getEmailConfig();
+    if (
+      emailConfig.provider !== "resend"
+      || !emailConfig.resendApiKey
+      || !emailConfig.senderApproved
+    ) {
+      throw new functions.https.HttpsError(
+        "failed-precondition",
+        "The approved Resend sender is not configured."
+      );
+    }
+
+    const requestedAtISO = new Date().toISOString();
+    const receiptRef = db.collection(ORGANIZATIONS_COLLECTION)
+      .doc(staff.organizationId)
+      .collection(RESEND_ACCEPTANCE_RECEIPTS_COLLECTION)
+      .doc(request.requestId);
+    const claim = await db.runTransaction(async (tx) => {
+      const receiptSnap = await tx.get(receiptRef);
+      if (receiptSnap.exists) {
+        const existing = receiptSnap.data() || {};
+        if (
+          normalizeEmail(existing.recipientEmail) !== request.recipientEmail
+          || normalizeText(existing.actorUid) !== staff.uid
+        ) {
+          throw new functions.https.HttpsError(
+            "permission-denied",
+            "This email acceptance request identity does not match the recorded actor and recipient."
+          );
+        }
+        if (normalizeText(existing.state).toLowerCase() === RESEND_ACCEPTANCE_STATES.PROVIDER_ACCEPTED) {
+          return { kind: "receipt", receipt: existing };
+        }
+        throw new functions.https.HttpsError(
+          "aborted",
+          "This email acceptance request is already recorded and will not be sent again. Review its durable receipt before taking further action."
+        );
+      }
+      const receipt = {
+        schemaVersion: RESEND_ACCEPTANCE_SCHEMA_VERSION,
+        requestId: request.requestId,
+        organizationId: staff.organizationId,
+        recipientEmail: request.recipientEmail,
+        state: RESEND_ACCEPTANCE_STATES.DISPATCHING,
+        provider: "resend",
+        providerMessageId: "",
+        requestedAtISO,
+        acceptedAtISO: "",
+        actorUid: staff.uid,
+        actorEmail: staff.email,
+        actorRole: staff.role,
+        safeReason: "",
+        createdAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp()
+      };
+      tx.create(receiptRef, receipt);
+      return { kind: "send", receipt };
+    });
+
+    if (claim.kind === "receipt") {
+      try {
+        return projectResendAcceptanceReceipt(claim.receipt, { idempotent: true });
+      } catch (error) {
+        if (error instanceof ResendAcceptanceError) {
+          throw new functions.https.HttpsError(error.code, error.message);
+        }
+        throw error;
+      }
+    }
+
+    const payload = buildResendAcceptancePayload({
+      requestId: request.requestId,
+      recipientEmail: request.recipientEmail,
+      actorEmail: staff.email,
+      requestedAtISO
+    });
+    try {
+      const providerResult = await sendEmailViaResend({
+        apiKey: emailConfig.resendApiKey,
+        from: `${emailConfig.fromName} <${emailConfig.fromEmail}>`,
+        to: payload.toEmail,
+        subject: payload.subject,
+        text: payload.text,
+        html: payload.html,
+        idempotencyKey: `quotepilot-resend-acceptance:${staff.organizationId}:${request.requestId}`
+      });
+      const acceptedAtISO = new Date().toISOString();
+      const receipt = {
+        ...claim.receipt,
+        state: RESEND_ACCEPTANCE_STATES.PROVIDER_ACCEPTED,
+        providerMessageId: providerResult.id,
+        acceptedAtISO,
+        safeReason: "provider_request_accepted"
+      };
+      await receiptRef.set({
+        state: receipt.state,
+        providerMessageId: receipt.providerMessageId,
+        acceptedAtISO: receipt.acceptedAtISO,
+        safeReason: receipt.safeReason,
+        updatedAt: FieldValue.serverTimestamp()
+      }, { merge: true });
+      return projectResendAcceptanceReceipt(receipt);
+    } catch (error) {
+      if (error instanceof functions.https.HttpsError) throw error;
+      const failure = classifyResendAcceptanceFailure(error);
+      try {
+        await receiptRef.set({
+          state: failure.state,
+          safeReason: failure.safeReason,
+          failedAtISO: new Date().toISOString(),
+          updatedAt: FieldValue.serverTimestamp()
+        }, { merge: true });
+      } catch (receiptError) {
+        functions.logger.error("Email acceptance test receipt update failed", {
+          organizationId: staff.organizationId,
+          requestId: request.requestId,
+          state: failure.state,
+          error: normalizeText(receiptError?.message)
+        });
+      }
+      functions.logger.error("Email acceptance test failed", {
+        organizationId: staff.organizationId,
+        requestId: request.requestId,
+        state: failure.state,
+        safeReason: failure.safeReason
+      });
+      throw new functions.https.HttpsError(
+        failure.retrySafe ? "failed-precondition" : "aborted",
+        failure.retrySafe
+          ? "Resend rejected the controlled acceptance request before accepting it."
+          : "The Resend acceptance outcome is unknown. Do not retry this request; review provider evidence."
+      );
+    }
+  });
+
+function googleCalendarExactKeys(value, expectedKeys, label) {
+  if (
+    !value
+    || typeof value !== "object"
+    || Array.isArray(value)
+    || Object.keys(value).length !== expectedKeys.length
+    || expectedKeys.some((key) => !Object.hasOwn(value, key))
+  ) {
+    throw new googleCalendarIntegration.GoogleCalendarIntegrationError(
+      "invalid-argument",
+      `${label} contains missing or unsupported fields.`
+    );
+  }
+}
+
+function normalizeGoogleCalendarRequestId(value) {
+  const requestId = normalizeText(value);
+  if (!/^[A-Za-z0-9][A-Za-z0-9._:@-]{19,159}$/u.test(requestId)) {
+    throw new googleCalendarIntegration.GoogleCalendarIntegrationError(
+      "invalid-argument",
+      "A stable Calendar request identity of 20 to 160 characters is required."
+    );
+  }
+  return requestId;
+}
+
+function normalizeGoogleCalendarRevision(value, label) {
+  if (!Number.isSafeInteger(value) || value < 0 || value >= Number.MAX_SAFE_INTEGER) {
+    throw new googleCalendarIntegration.GoogleCalendarIntegrationError(
+      "invalid-argument",
+      `${label} must be a bounded non-negative integer.`
+    );
+  }
+  return value;
+}
+
+function normalizeGoogleCalendarConnectionRequest(
+  data,
+  label,
+  { allowExchangeAcknowledgement = false } = {}
+) {
+  const hasAcknowledgement = Object.hasOwn(
+    data && typeof data === "object" ? data : {},
+    "acknowledgeUnknownExchange"
+  );
+  googleCalendarExactKeys(
+    data,
+    [
+      "organizationId", "requestId", "expectedConnectionRevision",
+      ...(hasAcknowledgement ? ["acknowledgeUnknownExchange"] : [])
+    ],
+    label
+  );
+  if (hasAcknowledgement
+    && (!allowExchangeAcknowledgement || data.acknowledgeUnknownExchange !== true)) {
+    throw new googleCalendarIntegration.GoogleCalendarIntegrationError(
+      "invalid-argument",
+      "The Calendar authorization uncertainty acknowledgement is invalid."
+    );
+  }
+  const organizationId = normalizeOrganizationId(data.organizationId);
+  if (!organizationId) {
+    throw new googleCalendarIntegration.GoogleCalendarIntegrationError(
+      "invalid-argument",
+      "organizationId is required."
+    );
+  }
+  return {
+    organizationId,
+    requestId: normalizeGoogleCalendarRequestId(data.requestId),
+    expectedConnectionRevision: normalizeGoogleCalendarRevision(
+      data.expectedConnectionRevision,
+      "expectedConnectionRevision"
+    ),
+    ...(hasAcknowledgement ? { acknowledgeUnknownExchange: true } : {})
+  };
+}
+
+function parseExactGoogleCalendarHttpsUrl(value, label, { allowQuery = false } = {}) {
+  try {
+    const url = new URL(normalizeText(value));
+    if (
+      url.protocol !== "https:"
+      || url.username
+      || url.password
+      || url.hash
+      || (!allowQuery && url.search)
+    ) {
+      throw new Error("unsafe");
+    }
+    return url.toString();
+  } catch {
+    throw new googleCalendarIntegration.GoogleCalendarIntegrationError(
+      "failed-precondition",
+      `${label} is not configured as an exact HTTPS URL.`
+    );
+  }
+}
+
+function getGoogleCalendarRuntimeConfiguration(organizationId) {
+  const serverEnabled = tenantWorkflowRuntimeEnabled(
+    "GOOGLE_CALENDAR_INTEGRATION_ENABLED",
+    organizationId
+  );
+  const redirectUri = normalizeText(process.env.GOOGLE_CALENDAR_OAUTH_REDIRECT_URI);
+  const appReturnUrl = normalizeText(process.env.GOOGLE_CALENDAR_APP_RETURN_URL);
+  const keyVersion = normalizeText(
+    process.env.GOOGLE_CALENDAR_OAUTH_KEY_VERSION || "calendar-key-v1"
+  );
+  const clientId = normalizeText(process.env[GOOGLE_CALENDAR_OAUTH_CLIENT_ID_SECRET_NAME]);
+  const clientSecret = normalizeText(
+    process.env[GOOGLE_CALENDAR_OAUTH_CLIENT_SECRET_NAME]
+  );
+  const stateSecret = normalizeText(process.env[GOOGLE_CALENDAR_OAUTH_STATE_SECRET_NAME]);
+  const tokenEncryptionKey = normalizeText(
+    process.env[GOOGLE_CALENDAR_TOKEN_ENCRYPTION_KEY_SECRET_NAME]
+  );
+  let urlsConfigured = false;
+  if (redirectUri && appReturnUrl) {
+    try {
+      parseExactGoogleCalendarHttpsUrl(redirectUri, "Calendar OAuth redirect URI");
+      parseExactGoogleCalendarHttpsUrl(appReturnUrl, "Calendar application return URL", {
+        allowQuery: true
+      });
+      urlsConfigured = true;
+    } catch {
+      urlsConfigured = false;
+    }
+  }
+  const tokenDecryptionConfigured = Buffer.from(tokenEncryptionKey, "base64").length === 32;
+  const secretsConfigured = Boolean(
+    clientId
+    && clientSecret
+    && Buffer.byteLength(stateSecret, "utf8") >= 32
+    && tokenDecryptionConfigured
+    && /^calendar-key-v[1-9][0-9]{0,2}$/u.test(keyVersion)
+  );
+  const providerConfigured = urlsConfigured && secretsConfigured;
+  return {
+    serverEnabled,
+    cleanupConfigured: tokenDecryptionConfigured,
+    providerConfigured,
+    configured: serverEnabled && providerConfigured,
+    redirectUri,
+    appReturnUrl,
+    keyVersion,
+    clientId,
+    clientSecret,
+    stateSecret,
+    tokenEncryptionKey
+  };
+}
+
+function googleCalendarOrganizationRefs(organizationId, quoteId = "") {
+  const organizationRef = db.collection(ORGANIZATIONS_COLLECTION).doc(organizationId);
+  return {
+    organizationRef,
+    settingsRef: organizationRef.collection("settings").doc("config"),
+    connectionRef: organizationRef.collection(GOOGLE_CALENDAR_CONNECTIONS_COLLECTION).doc("current"),
+    ...(quoteId ? {
+      quoteRef: organizationRef.collection(QUOTES_COLLECTION).doc(quoteId),
+      linkRef: organizationRef.collection(GOOGLE_CALENDAR_EVENT_LINKS_COLLECTION).doc(quoteId)
+    } : {})
+  };
+}
+
+function assertGoogleCalendarTenantEnabled(configuration, settings) {
+  if (
+    configuration.serverEnabled !== true
+    || settings?.googleCalendarIntegrationEnabled !== true
+  ) {
+    throw new googleCalendarIntegration.GoogleCalendarIntegrationError(
+      "failed-precondition",
+      "Google Calendar is not enabled for this environment and organization."
+    );
+  }
+  if (!configuration.configured) {
+    throw new googleCalendarIntegration.GoogleCalendarIntegrationError(
+      "failed-precondition",
+      "Google Calendar server configuration is incomplete."
+    );
+  }
+}
+
+function assertGoogleCalendarSameOrganizationAdmin(staff, organizationId, context) {
+  assertAdminStaff(staff);
+  if (
+    normalizeOrganizationId(staff.principalOrganizationId) !== organizationId
+    || staff.crossOrgBypass === true
+  ) {
+    throw new functions.https.HttpsError(
+      "permission-denied",
+      "Google Calendar connection changes require a same-organization administrator."
+    );
+  }
+  try {
+    assertRecentAuthentication({
+      authTimeSeconds: context?.auth?.token?.auth_time,
+      nowMs: Date.now()
+    });
+  } catch (error) {
+    throwOrganizationRoleAuthorityHttpsError(error);
+  }
+  return staff;
+}
+
+function throwGoogleCalendarHttpsError(error, fallback = "Google Calendar could not confirm the requested action.") {
+  if (error instanceof functions.https.HttpsError) throw error;
+  if (
+    error instanceof googleCalendarIntegration.GoogleCalendarIntegrationError
+    || error instanceof quoteAttendance.QuoteAttendanceError
+    || error instanceof OrganizationRoleAuthorityError
+  ) {
+    throw new functions.https.HttpsError(error.code, error.message);
+  }
+  functions.logger.error("Google Calendar operation failed", {
+    code: normalizeText(error?.code) || "internal"
+  });
+  throw new functions.https.HttpsError("internal", fallback);
+}
+
+function safeGoogleCalendarReason(value, fallback = "") {
+  const normalized = normalizeText(value).toLowerCase();
+  return /^[a-z][a-z0-9_]{0,79}$/u.test(normalized) ? normalized : fallback;
+}
+
+function googleCalendarPublicStatus({
+  configuration,
+  settings,
+  connection,
+  link,
+  activeSourceVersionId = "",
+  externalCopies = null,
+  externalCopiesTruncated = false
+} = {}) {
+  const tenantEnabled = settings?.googleCalendarIntegrationEnabled === true;
+  const available = configuration.serverEnabled === true
+    && tenantEnabled
+    && configuration.configured === true;
+  const connectionSource = available
+    ? connection
+    : { ...(connection || {}), state: "disabled" };
+  const projected = googleCalendarIntegration.projectStaffStatus({
+    connection: connectionSource,
+    sync: link,
+    activeSourceVersionId
+  });
+  const operationId = /^calendar_operation_[a-f0-9]{48}$/u.test(
+    normalizeText(link?.operationId)
+  ) ? normalizeText(link.operationId) : "";
+  const providerEventUrl = googleCalendarIntegration.safeGoogleCalendarHtmlLink(
+    normalizeText(link?.providerEventUrl)
+  );
+  const authorizationExpiryCandidates = connection?.state === "authorizing"
+    ? [connection.pendingExpiresAtISO, connection.mutationLeaseExpiresAtISO]
+      .map((value) => Date.parse(value))
+      .filter(Number.isFinite)
+    : [];
+  const authorizationExpiresAtISO = authorizationExpiryCandidates.length > 0
+    ? new Date(Math.max(...authorizationExpiryCandidates)).toISOString()
+    : "";
+  return {
+    schemaVersion: "google-calendar-public-status-v1",
+    configuration: {
+      enabled: configuration.serverEnabled === true && tenantEnabled,
+      configured: available,
+      cleanupAvailable: configuration.cleanupConfigured === true
+        && Boolean(connection?.tokenEnvelope)
+    },
+    connection: {
+      ...projected.connection,
+      reasonCode: safeGoogleCalendarReason(connection?.reasonCode),
+      canDisconnect: Boolean(connection?.tokenEnvelope),
+      authorizationExpiresAtISO
+    },
+    sync: link === undefined ? null : {
+      ...projected.sync,
+      operationId,
+      providerEventUrl
+    },
+    externalCopies: Array.isArray(externalCopies) ? externalCopies : [],
+    externalCopiesTruncated: externalCopiesTruncated === true,
+    evidenceBoundary: projected.evidenceBoundary
+  };
+}
+
+function googleCalendarExternalCopyProjection(docSnap, connection) {
+  const record = docSnap.data() || {};
+  const state = normalizeText(record.state).toLowerCase();
+  if (!docSnap.id || ["not_synced", "canceled"].includes(state)) return null;
+  const connectionGeneration = Number.isSafeInteger(connection?.configurationGeneration)
+    ? connection.configurationGeneration
+    : 0;
+  const copyGeneration = Number.isSafeInteger(record.connectionGeneration)
+    ? record.connectionGeneration
+    : 0;
+  const generationMismatch = connection?.state === "active"
+    && connectionGeneration > 0
+    && copyGeneration !== connectionGeneration;
+  const projectedState = generationMismatch ? "provider_drift" : state;
+  const requiresExactReconciliation = [
+    "queued", "dispatching", "outcome_uncertain", "cancel_queued", "provider_drift"
+  ].includes(projectedState);
+  return {
+    quoteId: docSnap.id,
+    label: normalizeText(record.eventLabel || "Catering event").slice(0, 200),
+    state: projectedState,
+    syncRevision: Number.isSafeInteger(record.syncRevision) ? record.syncRevision : 0,
+    sourceVersionId: normalizeText(record.sourceVersionId),
+    operationId: /^calendar_operation_[a-f0-9]{48}$/u.test(normalizeText(record.operationId))
+      ? normalizeText(record.operationId)
+      : "",
+    providerEventUrl: googleCalendarIntegration.safeGoogleCalendarHtmlLink(
+      normalizeText(record.providerEventUrl)
+    ),
+    recoveryAction: requiresExactReconciliation
+      ? "reconcile_exact_operation"
+      : "remove_external_copy"
+  };
+}
+
+async function readGoogleCalendarPublicStatus({ organizationId, quoteId = "" }) {
+  const configuration = getGoogleCalendarRuntimeConfiguration(organizationId);
+  const refs = googleCalendarOrganizationRefs(organizationId, quoteId);
+  const reads = [refs.settingsRef.get(), refs.connectionRef.get()];
+  if (quoteId) {
+    reads.push(refs.quoteRef.get(), refs.linkRef.get());
+  } else {
+    const links = refs.organizationRef.collection(GOOGLE_CALENDAR_EVENT_LINKS_COLLECTION);
+    reads.push(Promise.all([
+      links.where("state", "in", [
+        "queued", "dispatching", "outcome_uncertain", "cancel_queued"
+      ]).limit(51).get(),
+      links.where("providerEventId", ">", "").limit(51).get()
+    ]));
+  }
+  const [settingsSnap, connectionSnap, quoteOrLinksSnap, linkSnap] = await Promise.all(reads);
+  const settings = settingsSnap.exists ? settingsSnap.data() || {} : {};
+  const connection = connectionSnap.exists ? connectionSnap.data() || {} : null;
+  if (quoteId) {
+    const quote = quoteOrLinksSnap.exists ? quoteOrLinksSnap.data() || {} : null;
+    const acceptedOrBooked = ["accepted", "booked"].includes(
+      normalizeText(quote?.status).toLowerCase()
+    );
+    const link = linkSnap.exists ? linkSnap.data() || {} : null;
+    const status = googleCalendarPublicStatus({
+      configuration,
+      settings,
+      connection,
+      link,
+      activeSourceVersionId: acceptedOrBooked
+        ? normalizeText(quote?.activeVersionId || quote?.versionMeta?.versionId)
+        : ""
+    });
+    if (link && !acceptedOrBooked && !["canceled", "not_synced"].includes(link.state)) {
+      status.sync = {
+        ...status.sync,
+        state: "update_required",
+        reasonCode: "source_no_longer_active",
+        recoveryAction: "remove_external_copy"
+      };
+    }
+    return status;
+  }
+  const retainedCopySnaps = Array.isArray(quoteOrLinksSnap) ? quoteOrLinksSnap : [];
+  const retainedCopyDocs = [...new Map(
+    retainedCopySnaps.flatMap((snapshot) => snapshot.docs).map((doc) => [doc.id, doc])
+  ).values()];
+  const projectedCopies = retainedCopyDocs
+    .map((doc) => googleCalendarExternalCopyProjection(doc, connection))
+    .filter(Boolean);
+  const externalCopiesTruncated = projectedCopies.length > 50
+    || retainedCopySnaps.some((snapshot) => snapshot.size >= 51);
+  const externalCopies = projectedCopies.slice(0, 50);
+  return googleCalendarPublicStatus({
+    configuration,
+    settings,
+    connection,
+    link: undefined,
+    externalCopies,
+    externalCopiesTruncated
+  });
+}
+
+function buildGoogleCalendarAuthorizationUrl({ configuration, state, codeChallenge }) {
+  const url = new URL("https://accounts.google.com/o/oauth2/v2/auth");
+  url.searchParams.set("client_id", configuration.clientId);
+  url.searchParams.set("redirect_uri", configuration.redirectUri);
+  url.searchParams.set("response_type", "code");
+  url.searchParams.set("scope", googleCalendarIntegration.GOOGLE_CALENDAR_POLICY.scopes.join(" "));
+  url.searchParams.set("access_type", "offline");
+  url.searchParams.set("prompt", "consent");
+  url.searchParams.set("include_granted_scopes", "false");
+  url.searchParams.set("state", state);
+  url.searchParams.set("code_challenge", codeChallenge);
+  url.searchParams.set("code_challenge_method", "S256");
+  return url.toString();
+}
+
+function sendGoogleCalendarOAuthOutcome(res, configuration, state, reasonCode = "") {
+  res.set("Cache-Control", "no-store, max-age=0");
+  res.set("Pragma", "no-cache");
+  try {
+    const returnUrl = new URL(parseExactGoogleCalendarHttpsUrl(
+      configuration.appReturnUrl,
+      "Calendar application return URL",
+      { allowQuery: true }
+    ));
+    returnUrl.searchParams.set("calendar", state);
+    if (reasonCode) returnUrl.searchParams.set("reason", safeGoogleCalendarReason(reasonCode, "authorization_failed"));
+    res.redirect(303, returnUrl.toString());
+  } catch {
+    res.status(state === "connected" ? 200 : 400).type("text/plain").send(
+      state === "connected"
+        ? "Google Calendar connected. You may close this window."
+        : "Google Calendar could not be connected. Return to QuotePilot and try again."
+    );
+  }
+}
+
+async function exchangeGoogleCalendarAuthorizationCode({ configuration, code, codeVerifier }) {
+  let response;
+  try {
+    response = await fetch("https://oauth2.googleapis.com/token", {
+      method: "POST",
+      signal: AbortSignal.timeout(10_000),
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        code,
+        client_id: configuration.clientId,
+        client_secret: configuration.clientSecret,
+        redirect_uri: configuration.redirectUri,
+        grant_type: "authorization_code",
+        code_verifier: codeVerifier
+      }).toString()
+    });
+  } catch {
+    throw new googleCalendarIntegration.GoogleCalendarIntegrationError(
+      "unavailable",
+      "Google authorization could not be verified."
+    );
+  }
+  let payload = null;
+  try {
+    payload = await response.json();
+  } catch {
+    payload = null;
+  }
+  const refreshToken = normalizeText(payload?.refresh_token);
+  const accessToken = normalizeText(payload?.access_token);
+  const scopes = normalizeText(payload?.scope).split(/\s+/u).filter(Boolean);
+  if (
+    !response.ok
+    || !refreshToken
+    || !accessToken
+    || !googleCalendarIntegration.GOOGLE_CALENDAR_POLICY.scopes.every(
+      (scope) => scopes.includes(scope)
+    )
+  ) {
+    throw new googleCalendarIntegration.GoogleCalendarIntegrationError(
+      "failed-precondition",
+      "Google did not return the required owned-calendar authorization."
+    );
+  }
+  let verification;
+  try {
+    verification = await fetch(
+      "https://www.googleapis.com/calendar/v3/calendars/primary/events?maxResults=1&singleEvents=true",
+      {
+        method: "GET",
+        signal: AbortSignal.timeout(10_000),
+        headers: { Authorization: `Bearer ${accessToken}`, Accept: "application/json" }
+      }
+    );
+  } catch {
+    return {
+      refreshToken,
+      ownershipVerified: false,
+      verificationReasonCode: "calendar_ownership_verification_unavailable"
+    };
+  }
+  if (!verification.ok) {
+    return {
+      refreshToken,
+      ownershipVerified: false,
+      verificationReasonCode: "calendar_ownership_verification_rejected"
+    };
+  }
+  return { refreshToken, ownershipVerified: true, verificationReasonCode: "" };
+}
+
+async function refreshGoogleCalendarAccessToken({ configuration, connection }) {
+  const refreshToken = googleCalendarIntegration.decryptRefreshToken({
+    envelope: connection.tokenEnvelope,
+    organizationId: connection.organizationId,
+    actorUid: connection.tokenActorUid,
+    encryptionKey: configuration.tokenEncryptionKey
+  });
+  let response;
+  try {
+    response = await fetch("https://oauth2.googleapis.com/token", {
+      method: "POST",
+      signal: AbortSignal.timeout(10_000),
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        client_id: configuration.clientId,
+        client_secret: configuration.clientSecret,
+        refresh_token: refreshToken,
+        grant_type: "refresh_token"
+      }).toString()
+    });
+  } catch {
+    return { ok: false, reconnectRequired: false, reasonCode: "token_refresh_unavailable" };
+  }
+  let payload = null;
+  try {
+    payload = await response.json();
+  } catch {
+    payload = null;
+  }
+  const accessToken = normalizeText(payload?.access_token);
+  if (!response.ok || !accessToken) {
+    const reconnectRequired = response.status === 400 || response.status === 401;
+    return {
+      ok: false,
+      reconnectRequired,
+      reasonCode: reconnectRequired
+        ? "provider_credentials_rejected"
+        : "token_refresh_unavailable"
+    };
+  }
+  return { ok: true, accessToken };
+}
+
+async function readGoogleCalendarAcceptedProjection(tx, refs, request, connection, settings) {
+  const quoteSnap = await tx.get(refs.quoteRef);
+  if (!quoteSnap.exists) {
+    throw new googleCalendarIntegration.GoogleCalendarIntegrationError(
+      "not-found",
+      "The accepted event is unavailable."
+    );
+  }
+  const quote = { ...(quoteSnap.data() || {}), id: quoteSnap.id };
+  const sourceVersionId = normalizeText(quote.activeVersionId || quote.versionMeta?.versionId);
+  const acceptanceReceiptId = normalizeText(quote.acceptanceReceipt?.receiptId);
+  if (!sourceVersionId || !acceptanceReceiptId) {
+    throw new googleCalendarIntegration.GoogleCalendarIntegrationError(
+      "failed-precondition",
+      "The event is missing exact proposal acceptance evidence."
+    );
+  }
+  const [versionSnap, receiptSnap] = await Promise.all([
+    tx.get(refs.quoteRef.collection("versions").doc(sourceVersionId)),
+    tx.get(refs.organizationRef.collection(PROPOSAL_ACCEPTANCE_RECEIPTS_COLLECTION).doc(acceptanceReceiptId))
+  ]);
+  const version = versionSnap.exists
+    ? { ...(versionSnap.data() || {}), id: versionSnap.id }
+    : null;
+  const receiptDocument = receiptSnap.exists ? receiptSnap.data() || {} : null;
+  const acceptedSource = quoteAttendance.resolveAcceptedSource({
+    organizationId: request.organizationId,
+    quoteId: request.quoteId,
+    sourceQuote: quote,
+    sourceVersion: version,
+    acceptanceReceiptDocument: receiptDocument
+  });
+  if (acceptedSource.sourceVersionId !== request.expectedSourceVersionId) {
+    throw new googleCalendarIntegration.GoogleCalendarIntegrationError(
+      "aborted",
+      "The accepted event revision changed. Refresh before publishing its Calendar copy."
+    );
+  }
+  const tenantTimeZone = normalizeText(settings.businessTimeZone || settings.timeZone);
+  return googleCalendarIntegration.buildCanonicalEventProjection({
+    organizationId: request.organizationId,
+    quoteId: request.quoteId,
+    sourceVersionId,
+    quote,
+    sourceVersion: version,
+    acceptanceReceipt: {
+      ...(quote.acceptanceReceipt || {}),
+      organizationId: request.organizationId,
+      quoteId: request.quoteId
+    },
+    tenantTimeZone,
+    calendarBindingId: connection.calendarBindingId
+  });
+}
+
+function googleCalendarCommandDigest(request) {
+  return googleCalendarIntegration.sha256({
+    schemaVersion: googleCalendarIntegration.GOOGLE_CALENDAR_POLICY.schemaVersion,
+    request
+  });
+}
+
+function googleCalendarLinkBase(record = null) {
+  return record && typeof record === "object" ? record : {
+    state: "not_synced",
+    syncRevision: 0,
+    sourceVersionId: "",
+    operationId: "",
+    reasonCode: "",
+    providerEventId: "",
+    providerEtag: "",
+    providerOwnedFieldsSha256: "",
+    providerEventUrl: "",
+    connectionGeneration: 0,
+    lastVerifiedAtISO: ""
+  };
+}
+
+function googleCalendarLeaseIsActive(connection, nowMs = Date.now()) {
+  const kind = normalizeText(connection?.mutationLeaseKind);
+  const id = normalizeText(connection?.mutationLeaseId);
+  if (!kind || !id) return false;
+  const expiresAtMs = Date.parse(connection?.mutationLeaseExpiresAtISO || "");
+  return !Number.isFinite(expiresAtMs) || expiresAtMs > nowMs;
+}
+
+function clearGoogleCalendarLease() {
+  return {
+    mutationLeaseKind: FieldValue.delete(),
+    mutationLeaseId: FieldValue.delete(),
+    mutationLeaseExpiresAtISO: FieldValue.delete()
+  };
+}
+
+async function revokeGoogleCalendarToken(refreshToken) {
+  try {
+    const response = await fetch("https://oauth2.googleapis.com/revoke", {
+      method: "POST",
+      signal: AbortSignal.timeout(10_000),
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ token: refreshToken }).toString()
+    });
+    return response.ok || response.status === 400;
+  } catch {
+    return false;
+  }
+}
+
+async function retainGoogleCalendarRevocationUncertainty({
+  refs,
+  attemptRef,
+  stateId,
+  tokenEnvelope,
+  actorUid,
+  reasonCode
+}) {
+  const nowISO = new Date().toISOString();
+  await db.runTransaction(async (tx) => {
+    const [attemptSnap, connectionSnap] = await Promise.all([
+      tx.get(attemptRef),
+      tx.get(refs.connectionRef)
+    ]);
+    const attempt = attemptSnap.data() || {};
+    const connection = connectionSnap.data() || {};
+    const ownsActiveExchange = ["exchanging", "token_issued"].includes(attempt.state)
+      && connection.mutationLeaseKind === "oauth"
+      && connection.mutationLeaseId === stateId;
+    const ownsRecoveredUnknownExchange = attempt.state === "exchange_outcome_uncertain"
+      && attempt.stateId === stateId
+      && attempt.actorUid === actorUid
+      && connection.state === "reconnect_required"
+      && connection.reasonCode === "authorization_exchange_outcome_uncertain"
+      && !connection.tokenEnvelope
+      && !connection.pendingStateId;
+    if (!ownsActiveExchange && !ownsRecoveredUnknownExchange) {
+      throw new googleCalendarIntegration.GoogleCalendarIntegrationError(
+        "aborted",
+        "The uncertain Google grant could not be bound to its original authorization."
+      );
+    }
+    tx.set(attemptRef, {
+      state: "revocation_uncertain",
+      tokenEnvelope,
+      codeVerifierEnvelope: FieldValue.delete(),
+      reasonCode: safeGoogleCalendarReason(reasonCode, "revocation_outcome_uncertain"),
+      updatedAtISO: nowISO,
+      updatedAt: FieldValue.serverTimestamp()
+    }, { merge: true });
+    tx.set(refs.connectionRef, {
+      state: "reconnect_required",
+      connectionRevision: (connection.connectionRevision || 0) + 1,
+      tokenEnvelope,
+      tokenActorUid: actorUid,
+      tokenRevocationOnly: true,
+      reasonCode: "unactivated_grant_revocation_uncertain",
+      pendingStateId: FieldValue.delete(),
+      pendingRequestSha256: FieldValue.delete(),
+      pendingExpiresAtISO: FieldValue.delete(),
+      authorizationUrl: FieldValue.delete(),
+      authorizationPreviousState: FieldValue.delete(),
+      authorizationPreviousReasonCode: FieldValue.delete(),
+      ...clearGoogleCalendarLease(),
+      updatedAtISO: nowISO,
+      updatedAt: FieldValue.serverTimestamp()
+    }, { merge: true });
+  });
+}
+
+async function retainGoogleCalendarRevocationUncertaintyWithRetry(input) {
+  let lastError = null;
+  for (let attemptNumber = 1; attemptNumber <= 3; attemptNumber += 1) {
+    try {
+      await retainGoogleCalendarRevocationUncertainty(input);
+      return;
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw lastError;
+}
+
+async function recoverExpiredGoogleCalendarAuthorization({ organizationId, connection }) {
+  const revision = Number.isSafeInteger(connection?.connectionRevision)
+    ? connection.connectionRevision
+    : 0;
+  const stateId = normalizeText(connection?.pendingStateId);
+  const recoveryBoundaryMs = Math.max(
+    ...[connection?.pendingExpiresAtISO, connection?.mutationLeaseExpiresAtISO]
+      .map((value) => Date.parse(value))
+      .filter(Number.isFinite)
+  );
+  if (
+    connection?.state !== "authorizing"
+    || !/^calendar_oauth_state_[a-f0-9]{48}$/u.test(stateId)
+    || !Number.isFinite(recoveryBoundaryMs)
+    || recoveryBoundaryMs > Date.now()
+  ) {
+    return { handled: false };
+  }
+  const refs = googleCalendarOrganizationRefs(organizationId);
+  const attemptRef = db.collection(GOOGLE_CALENDAR_OAUTH_STATES_COLLECTION).doc(stateId);
+  return db.runTransaction(async (tx) => {
+    const [connectionSnap, attemptSnap] = await Promise.all([
+      tx.get(refs.connectionRef),
+      tx.get(attemptRef)
+    ]);
+    const current = connectionSnap.exists ? connectionSnap.data() || {} : {};
+    const attempt = attemptSnap.exists ? attemptSnap.data() || {} : null;
+    if (
+      current.state !== "authorizing"
+      || current.connectionRevision !== revision
+      || current.pendingStateId !== stateId
+      || current.mutationLeaseKind !== "oauth"
+      || current.mutationLeaseId !== stateId
+    ) {
+      throw new googleCalendarIntegration.GoogleCalendarIntegrationError(
+        "aborted",
+        "The Google authorization changed while its expired state was being recovered."
+      );
+    }
+    if (
+      !attempt
+      || attempt.stateId !== stateId
+      || attempt.organizationId !== organizationId
+    ) {
+      throw new googleCalendarIntegration.GoogleCalendarIntegrationError(
+        "data-loss",
+        "The expired Google authorization evidence could not be verified."
+      );
+    }
+    const nowISO = new Date().toISOString();
+    const recoveryPlan = googleCalendarIntegration.planExpiredOAuthRecovery({
+      connection: current,
+      attempt,
+      nowISO
+    });
+    if (["activate_verified_grant", "revoke_unverified_grant"].includes(recoveryPlan.action)
+      && !normalizeText(attempt.actorUid)) {
+      throw new googleCalendarIntegration.GoogleCalendarIntegrationError(
+        "data-loss",
+        "The retained Google grant is missing its original connector identity."
+      );
+    }
+    if (recoveryPlan.action === "replace_pending") return { handled: false };
+    if (recoveryPlan.action === "restore_prior") {
+      const restoredState = ["revoked", "unconfigured", "reconnect_required"]
+        .includes(current.authorizationPreviousState)
+        ? current.authorizationPreviousState
+        : "reconnect_required";
+      tx.set(attemptRef, {
+        state: "failed",
+        codeVerifierEnvelope: FieldValue.delete(),
+        reasonCode: "authorization_expired",
+        failedAtISO: nowISO,
+        updatedAt: FieldValue.serverTimestamp()
+      }, { merge: true });
+      tx.set(refs.connectionRef, {
+        state: restoredState,
+        connectionRevision: revision + 1,
+        reasonCode: safeGoogleCalendarReason(
+          current.authorizationPreviousReasonCode,
+          "provider_credentials_rejected"
+        ),
+        pendingStateId: FieldValue.delete(),
+        pendingRequestSha256: FieldValue.delete(),
+        pendingExpiresAtISO: FieldValue.delete(),
+        authorizationUrl: FieldValue.delete(),
+        authorizationPreviousState: FieldValue.delete(),
+        authorizationPreviousReasonCode: FieldValue.delete(),
+        ...clearGoogleCalendarLease(),
+        updatedAtISO: nowISO,
+        updatedAt: FieldValue.serverTimestamp()
+      }, { merge: true });
+      return { handled: true, state: "prior_connection_restored" };
+    }
+    if (recoveryPlan.action === "record_exchange_uncertain") {
+      tx.set(attemptRef, {
+        state: "exchange_outcome_uncertain",
+        codeVerifierEnvelope: FieldValue.delete(),
+        reasonCode: "authorization_exchange_outcome_uncertain",
+        outcomeRecordedAtISO: nowISO,
+        updatedAt: FieldValue.serverTimestamp()
+      }, { merge: true });
+      tx.set(refs.connectionRef, {
+        state: "reconnect_required",
+        connectionRevision: revision + 1,
+        reasonCode: "authorization_exchange_outcome_uncertain",
+        pendingStateId: FieldValue.delete(),
+        pendingRequestSha256: FieldValue.delete(),
+        pendingExpiresAtISO: FieldValue.delete(),
+        authorizationUrl: FieldValue.delete(),
+        authorizationPreviousState: FieldValue.delete(),
+        authorizationPreviousReasonCode: FieldValue.delete(),
+        ...clearGoogleCalendarLease(),
+        updatedAtISO: nowISO,
+        updatedAt: FieldValue.serverTimestamp()
+      }, { merge: true });
+      return { handled: true, state: "exchange_outcome_uncertain" };
+    }
+    if (["activate_verified_grant", "revoke_unverified_grant"].includes(recoveryPlan.action)) {
+      if (recoveryPlan.action === "activate_verified_grant") {
+        tx.set(refs.connectionRef, {
+          schemaVersion: 1,
+          organizationId,
+          state: "active",
+          connectionRevision: revision + 1,
+          configurationGeneration: (current.configurationGeneration || 0) + 1,
+          calendarBindingId: `calendar_binding_${randomUUID()}`,
+          calendarLabel: "Primary Google Calendar",
+          calendarId: "primary",
+          tokenActorUid: attempt.actorUid,
+          tokenEnvelope: attempt.tokenEnvelope,
+          scopes: googleCalendarIntegration.GOOGLE_CALENDAR_POLICY.scopes,
+          connectedAtISO: nowISO,
+          connectedByUid: attempt.actorUid,
+          reasonCode: "",
+          ...clearGoogleCalendarLease(),
+          updatedAtISO: nowISO,
+          updatedAt: FieldValue.serverTimestamp()
+        }, { merge: false });
+        tx.set(attemptRef, {
+          state: "consumed",
+          codeVerifierEnvelope: FieldValue.delete(),
+          tokenEnvelope: FieldValue.delete(),
+          callbackLeaseId: FieldValue.delete(),
+          consumedAtISO: nowISO,
+          updatedAt: FieldValue.serverTimestamp()
+        }, { merge: true });
+        return { handled: true, state: "active" };
+      }
+      tx.set(attemptRef, {
+        state: "revocation_required",
+        codeVerifierEnvelope: FieldValue.delete(),
+        reasonCode: safeGoogleCalendarReason(
+          attempt.verificationReasonCode,
+          "calendar_ownership_verification_unavailable"
+        ),
+        updatedAtISO: nowISO,
+        updatedAt: FieldValue.serverTimestamp()
+      }, { merge: true });
+      tx.set(refs.connectionRef, {
+        state: "reconnect_required",
+        connectionRevision: revision + 1,
+        tokenEnvelope: attempt.tokenEnvelope,
+        tokenActorUid: attempt.actorUid,
+        tokenRevocationOnly: true,
+        reasonCode: "unactivated_grant_requires_revocation",
+        pendingStateId: FieldValue.delete(),
+        pendingRequestSha256: FieldValue.delete(),
+        pendingExpiresAtISO: FieldValue.delete(),
+        authorizationUrl: FieldValue.delete(),
+        authorizationPreviousState: FieldValue.delete(),
+        authorizationPreviousReasonCode: FieldValue.delete(),
+        ...clearGoogleCalendarLease(),
+        updatedAtISO: nowISO,
+        updatedAt: FieldValue.serverTimestamp()
+      }, { merge: true });
+      return { handled: true, state: "revocation_required" };
+    }
+    throw new googleCalendarIntegration.GoogleCalendarIntegrationError(
+      "data-loss",
+      "The expired Google authorization has no safe recovery transition."
+    );
+  });
+}
+
+async function finalizeGoogleCalendarOperation({
+  organizationId,
+  quoteId,
+  operationId,
+  expectedSyncRevision,
+  resultState,
+  reasonCode,
+  sourceVersionId = "",
+  eventLabel = "",
+  provider = null,
+  connectionState = ""
+}) {
+  const refs = googleCalendarOrganizationRefs(organizationId, quoteId);
+  const operationRef = refs.organizationRef.collection(GOOGLE_CALENDAR_OPERATIONS_COLLECTION).doc(operationId);
+  const nowISO = new Date().toISOString();
+  await db.runTransaction(async (tx) => {
+    const [connectionSnap, linkSnap, operationSnap] = await Promise.all([
+      tx.get(refs.connectionRef),
+      tx.get(refs.linkRef),
+      tx.get(operationRef)
+    ]);
+    if (!operationSnap.exists) {
+      throw new googleCalendarIntegration.GoogleCalendarIntegrationError(
+        "data-loss",
+        "The Calendar operation receipt is unavailable."
+      );
+    }
+    const operation = operationSnap.data() || {};
+    const connection = connectionSnap.exists ? connectionSnap.data() || {} : {};
+    const link = googleCalendarLinkBase(linkSnap.exists ? linkSnap.data() || {} : null);
+    if (
+      operation.organizationId !== organizationId
+      || operation.quoteId !== quoteId
+      || operation.operationId !== operationId
+      || link.operationId !== operationId
+      || link.syncRevision !== expectedSyncRevision
+      || connection.mutationLeaseKind !== "event"
+      || connection.mutationLeaseId !== operationId
+    ) {
+      throw new googleCalendarIntegration.GoogleCalendarIntegrationError(
+        "aborted",
+        "The Calendar operation was superseded. Refresh its current state."
+      );
+    }
+    const nextLink = {
+      ...link,
+      organizationId,
+      quoteId,
+      state: resultState,
+      syncRevision: expectedSyncRevision + 1,
+      sourceVersionId: sourceVersionId || link.sourceVersionId || "",
+      operationId,
+      connectionGeneration: resultState === "synced"
+        || !operation.priorConnectionGeneration
+        || operation.priorConnectionGeneration === operation.connectionGeneration
+        ? operation.connectionGeneration || connection.configurationGeneration || 0
+        : operation.priorConnectionGeneration,
+      reasonCode: safeGoogleCalendarReason(reasonCode),
+      eventLabel: normalizeText(eventLabel || link.eventLabel || "Catering event").slice(0, 200),
+      ...(provider?.eventId ? {
+        providerEventId: provider.eventId,
+        providerEtag: provider.etag,
+        providerOwnedFieldsSha256: provider.ownedFieldsSha256,
+        providerEventUrl: provider.htmlLink,
+        lastVerifiedAtISO: provider.updatedAtISO || nowISO
+      } : {}),
+      ...(resultState === "canceled" ? {
+        providerEventId: "",
+        providerEtag: "",
+        providerOwnedFieldsSha256: "",
+        providerEventUrl: "",
+        lastVerifiedAtISO: nowISO
+      } : {}),
+      updatedAtISO: nowISO,
+      updatedAt: FieldValue.serverTimestamp()
+    };
+    tx.set(refs.linkRef, nextLink, { merge: true });
+    tx.set(operationRef, {
+      state: resultState,
+      reasonCode: safeGoogleCalendarReason(reasonCode),
+      resultSyncRevision: nextLink.syncRevision,
+      completedAtISO: nowISO,
+      updatedAt: FieldValue.serverTimestamp()
+    }, { merge: true });
+    tx.set(refs.connectionRef, {
+      ...clearGoogleCalendarLease(),
+      ...(connectionState === "reconnect_required" ? {
+        state: "reconnect_required",
+        connectionRevision: (connection.connectionRevision || 0) + 1,
+        reasonCode: safeGoogleCalendarReason(reasonCode)
+      } : {}),
+      updatedAtISO: nowISO,
+      updatedAt: FieldValue.serverTimestamp()
+    }, { merge: true });
+  });
+}
+
+const GOOGLE_CALENDAR_SECRET_BINDINGS = [
+  GOOGLE_CALENDAR_OAUTH_CLIENT_ID_SECRET_NAME,
+  GOOGLE_CALENDAR_OAUTH_CLIENT_SECRET_NAME,
+  GOOGLE_CALENDAR_OAUTH_STATE_SECRET_NAME,
+  GOOGLE_CALENDAR_TOKEN_ENCRYPTION_KEY_SECRET_NAME
+];
+
+exports.getGoogleCalendarStatus = functions
+  .runWith({ secrets: GOOGLE_CALENDAR_SECRET_BINDINGS })
+  .region(REGION)
+  .https.onCall(async (data, context) => {
+    try {
+      const supplied = data && typeof data === "object" && !Array.isArray(data) ? data : {};
+      const expectedKeys = Object.hasOwn(supplied, "quoteId")
+        ? ["organizationId", "quoteId"]
+        : ["organizationId"];
+      googleCalendarExactKeys(supplied, expectedKeys, "Calendar status request");
+      const organizationId = normalizeOrganizationId(supplied.organizationId);
+      const quoteId = normalizeText(supplied.quoteId);
+      if (!organizationId || (Object.hasOwn(supplied, "quoteId") && !quoteId)) {
+        throw new googleCalendarIntegration.GoogleCalendarIntegrationError(
+          "invalid-argument",
+          "An exact organization and optional quote are required."
+        );
+      }
+      await assertStaff(context, { expectedOrganizationId: organizationId });
+      return {
+        ok: true,
+        status: await readGoogleCalendarPublicStatus({ organizationId, quoteId })
+      };
+    } catch (error) {
+      return throwGoogleCalendarHttpsError(error, "Google Calendar status is unavailable.");
+    }
+  });
+
+exports.startGoogleCalendarConnection = functions
+  .runWith({ secrets: GOOGLE_CALENDAR_SECRET_BINDINGS })
+  .region(REGION)
+  .https.onCall(async (data, context) => {
+    try {
+      const request = normalizeGoogleCalendarConnectionRequest(
+        data,
+        "Calendar connection request",
+        { allowExchangeAcknowledgement: true }
+      );
+      const staff = assertGoogleCalendarSameOrganizationAdmin(
+        await assertStaff(context, { expectedOrganizationId: request.organizationId }),
+        request.organizationId,
+        context
+      );
+      const configuration = getGoogleCalendarRuntimeConfiguration(request.organizationId);
+      const refs = googleCalendarOrganizationRefs(request.organizationId);
+      const [settingsSnap, connectionSnap] = await Promise.all([
+        refs.settingsRef.get(),
+        refs.connectionRef.get()
+      ]);
+      const settings = settingsSnap.exists ? settingsSnap.data() || {} : {};
+      assertGoogleCalendarTenantEnabled(configuration, settings);
+      const prior = connectionSnap.exists ? connectionSnap.data() || {} : {};
+      const priorRevision = Number.isSafeInteger(prior.connectionRevision)
+        ? prior.connectionRevision
+        : 0;
+      const requestSha256 = googleCalendarIntegration.sha256(request.requestId);
+      if (
+        prior.state === "authorizing"
+        && prior.pendingRequestSha256 === requestSha256
+        && Number.isFinite(Date.parse(prior.pendingExpiresAtISO))
+        && Date.parse(prior.pendingExpiresAtISO) > Date.now()
+        && normalizeText(prior.authorizationUrl)
+      ) {
+        return {
+          ok: true,
+          authorizationUrl: prior.authorizationUrl,
+          expiresAtISO: prior.pendingExpiresAtISO,
+          connectionRevision: priorRevision
+        };
+      }
+      if (priorRevision !== request.expectedConnectionRevision) {
+        throw new googleCalendarIntegration.GoogleCalendarIntegrationError(
+          "aborted",
+          "The Calendar connection changed. Refresh before trying again."
+        );
+      }
+      const expiredRecovery = await recoverExpiredGoogleCalendarAuthorization({
+        organizationId: request.organizationId,
+        connection: prior
+      });
+      if (expiredRecovery.handled) {
+        return {
+          ok: true,
+          recovered: true,
+          status: await readGoogleCalendarPublicStatus({ organizationId: request.organizationId })
+        };
+      }
+      const exchangeOutcomeUncertain = prior.reasonCode === "authorization_exchange_outcome_uncertain";
+      if (exchangeOutcomeUncertain && request.acknowledgeUnknownExchange !== true) {
+        throw new googleCalendarIntegration.GoogleCalendarIntegrationError(
+          "failed-precondition",
+          "Review Google account access and acknowledge the unknown authorization exchange before retrying."
+        );
+      }
+      if (!exchangeOutcomeUncertain && request.acknowledgeUnknownExchange === true) {
+        throw new googleCalendarIntegration.GoogleCalendarIntegrationError(
+          "invalid-argument",
+          "No unknown Google authorization exchange is awaiting acknowledgement."
+        );
+      }
+      const mayReplaceExpiredAuthorization = prior.state === "authorizing"
+        && /^calendar_oauth_state_[a-f0-9]{48}$/u.test(normalizeText(prior.pendingStateId))
+        && Number.isFinite(Date.parse(prior.pendingExpiresAtISO))
+        && Date.parse(prior.pendingExpiresAtISO) <= Date.now();
+      if (prior.tokenEnvelope && !mayReplaceExpiredAuthorization) {
+        throw new googleCalendarIntegration.GoogleCalendarIntegrationError(
+          "failed-precondition",
+          "Disconnect the current Google Calendar authorization before connecting another account."
+        );
+      }
+      if (googleCalendarLeaseIsActive(prior)) {
+        throw new googleCalendarIntegration.GoogleCalendarIntegrationError(
+          "failed-precondition",
+          "Another Google Calendar change is still in progress. Check its result before continuing."
+        );
+      }
+      if (
+        prior.state === "authorizing"
+        && Number.isFinite(Date.parse(prior.pendingExpiresAtISO))
+        && Date.parse(prior.pendingExpiresAtISO) > Date.now()
+      ) {
+        throw new googleCalendarIntegration.GoogleCalendarIntegrationError(
+          "failed-precondition",
+          "Another Calendar authorization is still open. Finish it or wait for it to expire."
+        );
+      }
+      const nowISO = new Date().toISOString();
+      const stateEnvelope = googleCalendarIntegration.createOAuthState({
+        organizationId: request.organizationId,
+        actorUid: staff.uid,
+        requestId: request.requestId,
+        redirectUri: configuration.redirectUri,
+        nowISO,
+        signingSecret: configuration.stateSecret
+      });
+      const codeVerifier = `${randomUUID().replace(/-/g, "")}${randomUUID().replace(/-/g, "")}`;
+      const codeChallenge = createHash("sha256").update(codeVerifier).digest("base64url");
+      const encryptedCodeVerifier = googleCalendarIntegration.encryptRefreshToken({
+        refreshToken: codeVerifier,
+        organizationId: request.organizationId,
+        actorUid: staff.uid,
+        keyVersion: configuration.keyVersion,
+        encryptionKey: configuration.tokenEncryptionKey
+      });
+      const authorizationUrl = buildGoogleCalendarAuthorizationUrl({
+        configuration,
+        state: stateEnvelope.state,
+        codeChallenge
+      });
+      const attemptRef = db.collection(GOOGLE_CALENDAR_OAUTH_STATES_COLLECTION).doc(
+        stateEnvelope.stateId
+      );
+      const nextRevision = priorRevision + 1;
+      await db.runTransaction(async (tx) => {
+        const currentConnectionSnap = await tx.get(refs.connectionRef);
+        const current = currentConnectionSnap.exists ? currentConnectionSnap.data() || {} : {};
+        const supersededStateId = normalizeText(current.pendingStateId);
+        const supersededAttemptRef = /^calendar_oauth_state_[a-f0-9]{48}$/u.test(supersededStateId)
+          ? db.collection(GOOGLE_CALENDAR_OAUTH_STATES_COLLECTION).doc(supersededStateId)
+          : null;
+        const [existingAttemptSnap, supersededAttemptSnap] = await Promise.all([
+          tx.get(attemptRef),
+          supersededAttemptRef ? tx.get(supersededAttemptRef) : Promise.resolve(null)
+        ]);
+        const currentRevision = Number.isSafeInteger(current.connectionRevision)
+          ? current.connectionRevision
+          : 0;
+        if (currentRevision !== priorRevision || existingAttemptSnap.exists) {
+          throw new googleCalendarIntegration.GoogleCalendarIntegrationError(
+            "aborted",
+            "The Calendar connection changed while authorization was starting."
+          );
+        }
+        const supersededAttempt = supersededAttemptSnap?.exists
+          ? supersededAttemptSnap.data() || {}
+          : null;
+        const replacingExpiredAuthorization = current.state === "authorizing"
+          && Number.isFinite(Date.parse(current.pendingExpiresAtISO))
+          && Date.parse(current.pendingExpiresAtISO) <= Date.now();
+        if (current.state === "authorizing") {
+          if (
+            !replacingExpiredAuthorization
+            || !supersededAttempt
+            || supersededAttempt.stateId !== supersededStateId
+            || supersededAttempt.organizationId !== request.organizationId
+            || supersededAttempt.state !== "pending"
+          ) {
+            throw new googleCalendarIntegration.GoogleCalendarIntegrationError(
+              "failed-precondition",
+              "The prior Google authorization may already have contacted Google. Finish or recover that exact authorization before starting another."
+            );
+          }
+          tx.set(supersededAttemptRef, {
+            state: "failed",
+            codeVerifierEnvelope: FieldValue.delete(),
+            reasonCode: "authorization_expired",
+            failedAtISO: nowISO,
+            updatedAt: FieldValue.serverTimestamp()
+          }, { merge: true });
+        }
+        if (
+          (current.tokenEnvelope && !replacingExpiredAuthorization)
+          || googleCalendarLeaseIsActive(current)
+        ) {
+          throw new googleCalendarIntegration.GoogleCalendarIntegrationError(
+            "failed-precondition",
+            "Another Google Calendar authorization or event change is still active."
+          );
+        }
+        const authorizationBaseState = current.state === "authorizing"
+          ? current.authorizationPreviousState
+          : current.state;
+        const authorizationBaseReasonCode = current.state === "authorizing"
+          ? current.authorizationPreviousReasonCode
+          : current.reasonCode;
+        tx.create(attemptRef, {
+          schemaVersion: 1,
+          stateId: stateEnvelope.stateId,
+          organizationId: request.organizationId,
+          actorUid: staff.uid,
+          requestId: request.requestId,
+          redirectUri: configuration.redirectUri,
+          codeVerifierEnvelope: encryptedCodeVerifier,
+          previousConnectionState: ["revoked", "unconfigured", "reconnect_required"].includes(authorizationBaseState)
+            ? authorizationBaseState
+            : "unconfigured",
+          previousConnectionReasonCode: safeGoogleCalendarReason(authorizationBaseReasonCode),
+          state: "pending",
+          issuedAtISO: nowISO,
+          expiresAtISO: stateEnvelope.expiresAtISO,
+          createdAt: FieldValue.serverTimestamp()
+        });
+        tx.set(refs.connectionRef, {
+          ...current,
+          schemaVersion: 1,
+          organizationId: request.organizationId,
+          state: "authorizing",
+          connectionRevision: nextRevision,
+          configurationGeneration: Number.isSafeInteger(current.configurationGeneration)
+            ? current.configurationGeneration
+            : 0,
+          pendingStateId: stateEnvelope.stateId,
+          pendingRequestSha256: requestSha256,
+          pendingExpiresAtISO: stateEnvelope.expiresAtISO,
+          authorizationUrl,
+          authorizationPreviousState: ["revoked", "unconfigured", "reconnect_required"].includes(authorizationBaseState)
+            ? authorizationBaseState
+            : "unconfigured",
+          authorizationPreviousReasonCode: safeGoogleCalendarReason(authorizationBaseReasonCode),
+          mutationLeaseKind: "oauth",
+          mutationLeaseId: stateEnvelope.stateId,
+          mutationLeaseExpiresAtISO: stateEnvelope.expiresAtISO,
+          reasonCode: "authorization_in_progress",
+          updatedAtISO: nowISO,
+          updatedAt: FieldValue.serverTimestamp()
+        }, { merge: false });
+      });
+      return {
+        ok: true,
+        authorizationUrl,
+        expiresAtISO: stateEnvelope.expiresAtISO,
+        connectionRevision: nextRevision
+      };
+    } catch (error) {
+      return throwGoogleCalendarHttpsError(error, "Google Calendar authorization could not start.");
+    }
+  });
+
+exports.googleCalendarOAuthCallback = functions
+  .runWith({
+    secrets: GOOGLE_CALENDAR_SECRET_BINDINGS,
+    timeoutSeconds: GOOGLE_CALENDAR_OAUTH_CALLBACK_TIMEOUT_SECONDS
+  })
+  .region(REGION)
+  .https.onRequest(async (req, res) => {
+    const state = normalizeText(req.query?.state);
+    const code = normalizeText(req.query?.code);
+    const oauthError = normalizeText(req.query?.error);
+    const stateId = state
+      ? `calendar_oauth_state_${googleCalendarIntegration.sha256(state).slice(0, 48)}`
+      : "";
+    let configuration = getGoogleCalendarRuntimeConfiguration("");
+    let attemptRef = null;
+    let attempt = null;
+    let callbackLeaseId = "";
+    let issuedRefreshToken = "";
+    let retainedRefreshToken = "";
+    let issuedTokenPersisted = false;
+    let failureRecorded = false;
+    let unresolvedIssuedGrantWithoutReceipt = false;
+    try {
+      if (req.method !== "GET" || !stateId || code.length > 4_096) {
+        throw new googleCalendarIntegration.GoogleCalendarIntegrationError(
+          "invalid-argument",
+          "Google Calendar authorization response is incomplete."
+        );
+      }
+      attemptRef = db.collection(GOOGLE_CALENDAR_OAUTH_STATES_COLLECTION).doc(stateId);
+      const attemptSnap = await attemptRef.get();
+      if (!attemptSnap.exists) {
+        throw new googleCalendarIntegration.GoogleCalendarIntegrationError(
+          "permission-denied",
+          "Google Calendar authorization state is unavailable."
+        );
+      }
+      attempt = attemptSnap.data() || {};
+      configuration = getGoogleCalendarRuntimeConfiguration(attempt.organizationId);
+      googleCalendarIntegration.verifyOAuthState(state, {
+        organizationId: attempt.organizationId,
+        actorUid: attempt.actorUid,
+        requestId: attempt.requestId,
+        redirectUri: attempt.redirectUri,
+        nowISO: new Date().toISOString(),
+        signingSecret: configuration.stateSecret
+      });
+      const refs = googleCalendarOrganizationRefs(attempt.organizationId);
+      const settingsSnap = await refs.settingsRef.get();
+      const settings = settingsSnap.exists ? settingsSnap.data() || {} : {};
+      assertGoogleCalendarTenantEnabled(configuration, settings);
+      if (!code) {
+        const reasonCode = oauthError === "access_denied"
+          ? "authorization_declined"
+          : "authorization_response_incomplete";
+        await db.runTransaction(async (tx) => {
+          const [currentAttemptSnap, connectionSnap] = await Promise.all([
+            tx.get(attemptRef),
+            tx.get(refs.connectionRef)
+          ]);
+          const currentAttempt = currentAttemptSnap.data() || {};
+          const connection = connectionSnap.data() || {};
+          if (
+            currentAttempt.state !== "pending"
+            || connection.mutationLeaseKind !== "oauth"
+            || connection.mutationLeaseId !== stateId
+          ) {
+            throw new googleCalendarIntegration.GoogleCalendarIntegrationError(
+              "already-exists",
+              "Google Calendar authorization state was already handled."
+            );
+          }
+          const nowISO = new Date().toISOString();
+          const restoredState = ["revoked", "unconfigured", "reconnect_required"]
+            .includes(connection.authorizationPreviousState)
+            ? connection.authorizationPreviousState
+            : "unconfigured";
+          tx.set(attemptRef, {
+            state: "failed",
+            codeVerifierEnvelope: FieldValue.delete(),
+            reasonCode,
+            failedAtISO: nowISO,
+            updatedAt: FieldValue.serverTimestamp()
+          }, { merge: true });
+          tx.set(refs.connectionRef, {
+            state: restoredState,
+            connectionRevision: (connection.connectionRevision || 0) + 1,
+            reasonCode: restoredState === "reconnect_required"
+              ? safeGoogleCalendarReason(connection.authorizationPreviousReasonCode, reasonCode)
+              : reasonCode,
+            pendingStateId: FieldValue.delete(),
+            pendingRequestSha256: FieldValue.delete(),
+            pendingExpiresAtISO: FieldValue.delete(),
+            authorizationUrl: FieldValue.delete(),
+            authorizationPreviousState: FieldValue.delete(),
+            authorizationPreviousReasonCode: FieldValue.delete(),
+            ...clearGoogleCalendarLease(),
+            updatedAtISO: nowISO,
+            updatedAt: FieldValue.serverTimestamp()
+          }, { merge: true });
+        });
+        failureRecorded = true;
+        throw new googleCalendarIntegration.GoogleCalendarIntegrationError(
+          "permission-denied",
+          oauthError === "access_denied"
+            ? "Google Calendar authorization was not approved."
+            : "Google Calendar authorization response is incomplete."
+        );
+      }
+      callbackLeaseId = `calendar_oauth_callback_${randomUUID()}`;
+      const claim = await db.runTransaction(async (tx) => {
+        const [currentAttemptSnap, connectionSnap] = await Promise.all([
+          tx.get(attemptRef),
+          tx.get(refs.connectionRef)
+        ]);
+        const currentAttempt = currentAttemptSnap.data() || {};
+        const connection = connectionSnap.data() || {};
+        if (
+          currentAttempt.state === "consumed"
+          && connection.state === "active"
+        ) {
+          return { replayConnected: true };
+        }
+        if (
+          currentAttempt.state === "token_issued"
+          && currentAttempt.tokenEnvelope
+          && connection.mutationLeaseKind === "oauth"
+          && connection.mutationLeaseId === stateId
+        ) {
+          return { tokenIssued: true, attempt: currentAttempt, connection };
+        }
+        if (currentAttempt.state === "exchanging") {
+          return { inProgress: true };
+        }
+        if (
+          currentAttempt.state !== "pending"
+          || currentAttempt.stateId !== stateId
+          || connection.state !== "authorizing"
+          || connection.pendingStateId !== stateId
+          || connection.mutationLeaseKind !== "oauth"
+          || connection.mutationLeaseId !== stateId
+          || Date.parse(currentAttempt.expiresAtISO) < Date.now()
+        ) {
+          throw new googleCalendarIntegration.GoogleCalendarIntegrationError(
+            "permission-denied",
+            "Google Calendar authorization is expired or was replaced."
+          );
+        }
+        const exchangeStartedAtISO = new Date().toISOString();
+        const exchangeLeaseExpiresAtISO = new Date(
+          Date.now() + GOOGLE_CALENDAR_OAUTH_EXCHANGE_LEASE_MS
+        ).toISOString();
+        tx.set(attemptRef, {
+          state: "exchanging",
+          callbackLeaseId,
+          exchangeStartedAtISO,
+          exchangeLeaseExpiresAtISO,
+          updatedAt: FieldValue.serverTimestamp()
+        }, { merge: true });
+        tx.set(refs.connectionRef, {
+          mutationLeaseExpiresAtISO: exchangeLeaseExpiresAtISO,
+          updatedAtISO: exchangeStartedAtISO,
+          updatedAt: FieldValue.serverTimestamp()
+        }, { merge: true });
+        return { claimed: true, attempt: currentAttempt, connection };
+      });
+      if (claim.replayConnected) {
+        return sendGoogleCalendarOAuthOutcome(res, configuration, "connected");
+      }
+      if (claim.inProgress) {
+        throw new googleCalendarIntegration.GoogleCalendarIntegrationError(
+          "already-exists",
+          "Google Calendar authorization is already being completed."
+        );
+      }
+      const claimedAttempt = claim.attempt;
+      let tokenEnvelope = claim.tokenIssued ? claimedAttempt.tokenEnvelope : null;
+      let ownershipVerified = claim.tokenIssued
+        ? claimedAttempt.ownershipVerified === true
+        : false;
+      let verificationReasonCode = claim.tokenIssued
+        ? safeGoogleCalendarReason(
+          claimedAttempt.verificationReasonCode,
+          "calendar_ownership_verification_unavailable"
+        )
+        : "";
+      if (!claim.tokenIssued) {
+      const codeVerifier = googleCalendarIntegration.decryptRefreshToken({
+          envelope: claimedAttempt.codeVerifierEnvelope,
+          organizationId: claimedAttempt.organizationId,
+          actorUid: claimedAttempt.actorUid,
+        encryptionKey: configuration.tokenEncryptionKey
+      });
+      const tokens = await exchangeGoogleCalendarAuthorizationCode({
+        configuration,
+        code,
+        codeVerifier
+      });
+        issuedRefreshToken = tokens.refreshToken;
+        retainedRefreshToken = tokens.refreshToken;
+        ownershipVerified = tokens.ownershipVerified === true;
+        verificationReasonCode = safeGoogleCalendarReason(tokens.verificationReasonCode);
+        tokenEnvelope = googleCalendarIntegration.encryptRefreshToken({
+        refreshToken: tokens.refreshToken,
+          organizationId: claimedAttempt.organizationId,
+          actorUid: claimedAttempt.actorUid,
+        keyVersion: configuration.keyVersion,
+        encryptionKey: configuration.tokenEncryptionKey
+      });
+        try {
+          await db.runTransaction(async (tx) => {
+            const [currentAttemptSnap, connectionSnap] = await Promise.all([
+              tx.get(attemptRef),
+              tx.get(refs.connectionRef)
+            ]);
+            const currentAttempt = currentAttemptSnap.data() || {};
+            const connection = connectionSnap.data() || {};
+            if (
+              currentAttempt.state !== "exchanging"
+              || currentAttempt.callbackLeaseId !== callbackLeaseId
+              || connection.mutationLeaseKind !== "oauth"
+              || connection.mutationLeaseId !== stateId
+            ) {
+              throw new googleCalendarIntegration.GoogleCalendarIntegrationError(
+                "aborted",
+                "Google Calendar authorization was replaced before its token could be retained."
+              );
+            }
+            tx.set(attemptRef, {
+              state: "token_issued",
+              tokenEnvelope,
+              ownershipVerified,
+              verificationReasonCode,
+              codeVerifierEnvelope: FieldValue.delete(),
+              tokenIssuedAtISO: new Date().toISOString(),
+              updatedAt: FieldValue.serverTimestamp()
+            }, { merge: true });
+          });
+          issuedTokenPersisted = true;
+          issuedRefreshToken = "";
+        } catch (error) {
+          const revocationAccepted = await revokeGoogleCalendarToken(issuedRefreshToken);
+          if (revocationAccepted) {
+            issuedRefreshToken = "";
+          } else {
+            try {
+              await retainGoogleCalendarRevocationUncertaintyWithRetry({
+                refs,
+                attemptRef,
+                stateId,
+                tokenEnvelope,
+                actorUid: claimedAttempt.actorUid,
+                reasonCode: "token_retention_failed_revocation_uncertain"
+              });
+              failureRecorded = true;
+              issuedTokenPersisted = true;
+              issuedRefreshToken = "";
+            } catch {
+              functions.logger.error("Google Calendar uncertain grant could not be retained", {
+                stateId
+              });
+            }
+          }
+          throw error;
+        }
+      } else {
+        issuedTokenPersisted = true;
+      }
+      if (!ownershipVerified) {
+        const refreshTokenForRevocation = retainedRefreshToken || googleCalendarIntegration.decryptRefreshToken({
+          envelope: tokenEnvelope,
+          organizationId: claimedAttempt.organizationId,
+          actorUid: claimedAttempt.actorUid,
+          encryptionKey: configuration.tokenEncryptionKey
+        });
+        const revocationAccepted = await revokeGoogleCalendarToken(refreshTokenForRevocation);
+        if (!revocationAccepted) {
+          await retainGoogleCalendarRevocationUncertaintyWithRetry({
+            refs,
+            attemptRef,
+            stateId,
+            tokenEnvelope,
+            actorUid: claimedAttempt.actorUid,
+            reasonCode: verificationReasonCode
+          });
+          failureRecorded = true;
+        } else {
+          await db.runTransaction(async (tx) => {
+            const [currentAttemptSnap, connectionSnap] = await Promise.all([
+              tx.get(attemptRef),
+              tx.get(refs.connectionRef)
+            ]);
+            const currentAttempt = currentAttemptSnap.data() || {};
+            const connection = connectionSnap.data() || {};
+            if (
+              currentAttempt.state !== "token_issued"
+              || connection.mutationLeaseKind !== "oauth"
+              || connection.mutationLeaseId !== stateId
+            ) {
+              throw new googleCalendarIntegration.GoogleCalendarIntegrationError(
+                "aborted",
+                "The rejected Google grant changed before revocation was recorded."
+              );
+            }
+            const restoredState = ["revoked", "unconfigured", "reconnect_required"]
+              .includes(connection.authorizationPreviousState)
+              ? connection.authorizationPreviousState
+              : "unconfigured";
+            const nowISO = new Date().toISOString();
+            tx.set(attemptRef, {
+              state: "failed",
+              tokenEnvelope: FieldValue.delete(),
+              reasonCode: verificationReasonCode,
+              failedAtISO: nowISO,
+              updatedAt: FieldValue.serverTimestamp()
+            }, { merge: true });
+            tx.set(refs.connectionRef, {
+              state: restoredState,
+              connectionRevision: (connection.connectionRevision || 0) + 1,
+              reasonCode: restoredState === "reconnect_required"
+                ? safeGoogleCalendarReason(connection.authorizationPreviousReasonCode)
+                : verificationReasonCode,
+              pendingStateId: FieldValue.delete(),
+              pendingRequestSha256: FieldValue.delete(),
+              pendingExpiresAtISO: FieldValue.delete(),
+              authorizationUrl: FieldValue.delete(),
+              authorizationPreviousState: FieldValue.delete(),
+              authorizationPreviousReasonCode: FieldValue.delete(),
+              ...clearGoogleCalendarLease(),
+              updatedAtISO: nowISO,
+              updatedAt: FieldValue.serverTimestamp()
+            }, { merge: true });
+          });
+          failureRecorded = true;
+        }
+        throw new googleCalendarIntegration.GoogleCalendarIntegrationError(
+          revocationAccepted ? "failed-precondition" : "unavailable",
+          revocationAccepted
+            ? "The connected account did not pass owned-calendar verification; its new grant was revoked."
+            : "The connected account did not pass verification and Google did not confirm grant revocation."
+        );
+      }
+      const connectedAtISO = new Date().toISOString();
+      await db.runTransaction(async (tx) => {
+        const [currentAttemptSnap, currentConnectionSnap] = await Promise.all([
+          tx.get(attemptRef),
+          tx.get(refs.connectionRef)
+        ]);
+        const currentAttempt = currentAttemptSnap.data() || {};
+        const currentConnection = currentConnectionSnap.data() || {};
+        if (
+          currentAttempt.state !== "token_issued"
+          || !currentAttempt.tokenEnvelope
+          || currentConnection.state !== "authorizing"
+          || currentConnection.pendingStateId !== stateId
+          || currentConnection.mutationLeaseKind !== "oauth"
+          || currentConnection.mutationLeaseId !== stateId
+        ) {
+          throw new googleCalendarIntegration.GoogleCalendarIntegrationError(
+            "aborted",
+            "Google Calendar authorization was already completed or replaced."
+          );
+        }
+        tx.set(refs.connectionRef, {
+          schemaVersion: 1,
+          organizationId: claimedAttempt.organizationId,
+          state: "active",
+          connectionRevision: (currentConnection.connectionRevision || 0) + 1,
+          configurationGeneration: (currentConnection.configurationGeneration || 0) + 1,
+          calendarBindingId: `calendar_binding_${randomUUID()}`,
+          calendarLabel: "Primary Google Calendar",
+          calendarId: "primary",
+          tokenActorUid: claimedAttempt.actorUid,
+          tokenEnvelope: currentAttempt.tokenEnvelope,
+          scopes: googleCalendarIntegration.GOOGLE_CALENDAR_POLICY.scopes,
+          connectedAtISO,
+          connectedByUid: claimedAttempt.actorUid,
+          reasonCode: "",
+          ...clearGoogleCalendarLease(),
+          updatedAtISO: connectedAtISO,
+          updatedAt: FieldValue.serverTimestamp()
+        }, { merge: false });
+        tx.set(attemptRef, {
+          state: "consumed",
+          codeVerifierEnvelope: FieldValue.delete(),
+          tokenEnvelope: FieldValue.delete(),
+          callbackLeaseId: FieldValue.delete(),
+          consumedAtISO: connectedAtISO,
+          updatedAt: FieldValue.serverTimestamp()
+        }, { merge: true });
+      });
+      return sendGoogleCalendarOAuthOutcome(res, configuration, "connected");
+    } catch (error) {
+      const reasonCode = error instanceof googleCalendarIntegration.GoogleCalendarIntegrationError
+        ? safeGoogleCalendarReason(error.code, "authorization_failed")
+        : "authorization_failed";
+      if (issuedRefreshToken && !issuedTokenPersisted) {
+        const revocationAccepted = await revokeGoogleCalendarToken(issuedRefreshToken);
+        if (revocationAccepted) {
+          issuedRefreshToken = "";
+        } else if (tokenEnvelope && attemptRef && attempt?.organizationId) {
+          try {
+            await retainGoogleCalendarRevocationUncertaintyWithRetry({
+              refs: googleCalendarOrganizationRefs(attempt.organizationId),
+              attemptRef,
+              stateId,
+              tokenEnvelope,
+              actorUid: attempt.actorUid,
+              reasonCode: "token_retention_failed_revocation_uncertain"
+            });
+            failureRecorded = true;
+            issuedTokenPersisted = true;
+            issuedRefreshToken = "";
+          } catch {
+            unresolvedIssuedGrantWithoutReceipt = true;
+            functions.logger.error("Google Calendar grant revocation and recovery receipt both remain uncertain", {
+              stateId
+            });
+          }
+        }
+      }
+      if (!failureRecorded && !unresolvedIssuedGrantWithoutReceipt && attemptRef && attempt?.organizationId) {
+        try {
+          const refs = googleCalendarOrganizationRefs(attempt.organizationId);
+          await db.runTransaction(async (tx) => {
+            const [currentAttemptSnap, connectionSnap] = await Promise.all([
+              tx.get(attemptRef),
+              tx.get(refs.connectionRef)
+            ]);
+            const currentAttempt = currentAttemptSnap.data() || {};
+            const connection = connectionSnap.data() || {};
+            const ownsExchange = currentAttempt.state === "exchanging"
+              && currentAttempt.callbackLeaseId === callbackLeaseId;
+            const exchangeOutcomeUncertain = ownsExchange
+              && error instanceof googleCalendarIntegration.GoogleCalendarIntegrationError
+              && error.code === "unavailable"
+              && !issuedTokenPersisted;
+            if (currentAttempt.state === "pending" || ownsExchange) {
+              tx.set(attemptRef, {
+                state: exchangeOutcomeUncertain ? "exchange_outcome_uncertain" : "failed",
+                codeVerifierEnvelope: FieldValue.delete(),
+                reasonCode: exchangeOutcomeUncertain
+                  ? "authorization_exchange_outcome_uncertain"
+                  : reasonCode,
+                ...(exchangeOutcomeUncertain
+                  ? { outcomeRecordedAtISO: new Date().toISOString() }
+                  : { failedAtISO: new Date().toISOString() }),
+                updatedAt: FieldValue.serverTimestamp()
+              }, { merge: true });
+            }
+            if (
+              (currentAttempt.state === "pending" || ownsExchange)
+              && connection.pendingStateId === stateId
+              && connection.mutationLeaseKind === "oauth"
+              && connection.mutationLeaseId === stateId
+            ) {
+              const restoredState = ["revoked", "unconfigured", "reconnect_required"]
+                .includes(connection.authorizationPreviousState)
+                ? connection.authorizationPreviousState
+                : "unconfigured";
+              tx.set(refs.connectionRef, {
+                state: exchangeOutcomeUncertain ? "reconnect_required" : restoredState,
+                connectionRevision: (connection.connectionRevision || 0) + 1,
+                reasonCode: exchangeOutcomeUncertain
+                  ? "authorization_exchange_outcome_uncertain"
+                  : restoredState === "reconnect_required"
+                    ? safeGoogleCalendarReason(connection.authorizationPreviousReasonCode, reasonCode)
+                    : reasonCode,
+                pendingStateId: FieldValue.delete(),
+                pendingRequestSha256: FieldValue.delete(),
+                pendingExpiresAtISO: FieldValue.delete(),
+                authorizationUrl: FieldValue.delete(),
+                authorizationPreviousState: FieldValue.delete(),
+                authorizationPreviousReasonCode: FieldValue.delete(),
+                ...clearGoogleCalendarLease(),
+                updatedAtISO: new Date().toISOString(),
+                updatedAt: FieldValue.serverTimestamp()
+              }, { merge: true });
+            }
+          });
+        } catch {
+          functions.logger.error("Google Calendar OAuth failure receipt could not be recorded", {
+            reasonCode
+          });
+        }
+      }
+      return sendGoogleCalendarOAuthOutcome(res, configuration, "error", reasonCode);
+    }
+  });
+
+exports.applyGoogleCalendarEventCommand = functions
+  .runWith({ secrets: GOOGLE_CALENDAR_SECRET_BINDINGS })
+  .region(REGION)
+  .https.onCall(async (data, context) => {
+    try {
+      const request = googleCalendarIntegration.normalizeSyncCommand(data);
+      const staff = assertGoogleCalendarSameOrganizationAdmin(
+        await assertStaff(context, { expectedOrganizationId: request.organizationId }),
+        request.organizationId,
+        context
+      );
+      const configuration = getGoogleCalendarRuntimeConfiguration(request.organizationId);
+      const refs = googleCalendarOrganizationRefs(request.organizationId, request.quoteId);
+      const operationId = googleCalendarIntegration.calendarOperationIdFor(request);
+      const operationRef = refs.organizationRef
+        .collection(GOOGLE_CALENDAR_OPERATIONS_COLLECTION)
+        .doc(operationId);
+      const claim = await db.runTransaction(async (tx) => {
+        const [settingsSnap, connectionSnap, linkSnap, operationSnap] = await Promise.all([
+          tx.get(refs.settingsRef),
+          tx.get(refs.connectionRef),
+          tx.get(refs.linkRef),
+          tx.get(operationRef)
+        ]);
+        const settings = settingsSnap.exists ? settingsSnap.data() || {} : {};
+        assertGoogleCalendarTenantEnabled(configuration, settings);
+        const connection = connectionSnap.exists ? connectionSnap.data() || {} : {};
+        const link = googleCalendarLinkBase(linkSnap.exists ? linkSnap.data() || {} : null);
+        const commandDigest = googleCalendarCommandDigest(request);
+        if (operationSnap.exists) {
+          const operation = operationSnap.data() || {};
+          if (operation.commandDigest !== commandDigest) {
+            throw new googleCalendarIntegration.GoogleCalendarIntegrationError(
+              "already-exists",
+              "This Calendar request identity belongs to another action."
+            );
+          }
+          return { replay: true, operation };
+        }
+        if (
+          connection.state !== "active"
+          || !connection.tokenEnvelope
+          || !connection.calendarBindingId
+        ) {
+          throw new googleCalendarIntegration.GoogleCalendarIntegrationError(
+            "failed-precondition",
+            "Connect Google Calendar before publishing an event copy."
+          );
+        }
+        if (connection.configurationGeneration !== request.expectedConnectionGeneration) {
+          throw new googleCalendarIntegration.GoogleCalendarIntegrationError(
+            "aborted",
+            "The Calendar connection changed. Refresh before trying again."
+          );
+        }
+        const activeLease = googleCalendarLeaseIsActive(connection);
+        const expiredTargetLease = !activeLease
+          && connection.mutationLeaseKind === "event"
+          && connection.mutationLeaseId === request.expectedOperationId
+          && request.command === "reconcile";
+        if (activeLease || (connection.mutationLeaseKind && !expiredTargetLease)) {
+          throw new googleCalendarIntegration.GoogleCalendarIntegrationError(
+            "failed-precondition",
+            "Another Google Calendar change is still in progress. Check its exact result first."
+          );
+        }
+        if (link.syncRevision !== request.expectedSyncRevision) {
+          throw new googleCalendarIntegration.GoogleCalendarIntegrationError(
+            "aborted",
+            "The Calendar event copy changed. Refresh before trying again."
+          );
+        }
+        const linkConnectionGenerationChanged = Boolean(link.providerEventId)
+          && Boolean(link.connectionGeneration)
+          && link.connectionGeneration !== connection.configurationGeneration;
+        let projection = null;
+        let targetOperation = null;
+        if (request.command === "sync") {
+          projection = await readGoogleCalendarAcceptedProjection(
+            tx,
+            refs,
+            request,
+            connection,
+            settings
+          );
+          if (["queued", "outcome_uncertain", "dispatching"].includes(link.state)) {
+            throw new googleCalendarIntegration.GoogleCalendarIntegrationError(
+              "failed-precondition",
+              "Reconcile the prior Calendar operation before publishing again."
+            );
+          }
+          if (link.state === "provider_drift") {
+            throw new googleCalendarIntegration.GoogleCalendarIntegrationError(
+              "failed-precondition",
+              "Review the changed Google event before replacing any Calendar content."
+            );
+          }
+        } else if (request.command === "cancel") {
+          if (linkConnectionGenerationChanged) {
+            throw new googleCalendarIntegration.GoogleCalendarIntegrationError(
+              "failed-precondition",
+              "Check the copy against the current Google connection before removing it."
+            );
+          }
+          if (["queued", "outcome_uncertain", "dispatching"].includes(link.state)) {
+            throw new googleCalendarIntegration.GoogleCalendarIntegrationError(
+              "failed-precondition",
+              "Reconcile the prior Calendar operation before removing its copy."
+            );
+          }
+          if (
+            !link.sourceVersionId
+            || link.sourceVersionId !== request.expectedBoundSourceVersionId
+          ) {
+            throw new googleCalendarIntegration.GoogleCalendarIntegrationError(
+              "aborted",
+              "The external copy is bound to another event revision. Refresh before removing it."
+            );
+          }
+          if (!link.providerEventId || !link.providerEtag) {
+            throw new googleCalendarIntegration.GoogleCalendarIntegrationError(
+              "failed-precondition",
+              "No verified Google Calendar copy is available to remove."
+            );
+          }
+        } else {
+          const targetOperationRef = refs.organizationRef
+            .collection(GOOGLE_CALENDAR_OPERATIONS_COLLECTION)
+            .doc(request.expectedOperationId);
+          const targetOperationSnap = await tx.get(targetOperationRef);
+          targetOperation = targetOperationSnap.exists ? targetOperationSnap.data() || {} : null;
+          if (
+            !targetOperation
+            || targetOperation.organizationId !== request.organizationId
+            || targetOperation.quoteId !== request.quoteId
+            || link.operationId !== request.expectedOperationId
+            || (!linkConnectionGenerationChanged && ![
+              "queued", "dispatching", "outcome_uncertain", "provider_drift", "blocked_connection"
+            ].includes(link.state))
+          ) {
+            throw new googleCalendarIntegration.GoogleCalendarIntegrationError(
+              "failed-precondition",
+              "The exact uncertain Calendar operation is unavailable for reconciliation."
+            );
+          }
+        }
+        const nowISO = new Date().toISOString();
+        const operation = {
+          schemaVersion: 1,
+          operationId,
+          organizationId: request.organizationId,
+          quoteId: request.quoteId,
+          request,
+          commandDigest,
+          command: request.command,
+          state: "dispatching",
+          expectedSyncRevision: request.expectedSyncRevision,
+          connectionGeneration: connection.configurationGeneration,
+          priorConnectionGeneration: link.connectionGeneration || 0,
+          sourceVersionId: projection?.sourceVersionId || link.sourceVersionId || "",
+          projection: projection || targetOperation?.projection || null,
+          targetOperationId: request.command === "reconcile" ? request.expectedOperationId : "",
+          requestedBy: { uid: staff.uid, role: staff.role },
+          createdAtISO: nowISO,
+          updatedAtISO: nowISO,
+          createdAt: FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp()
+        };
+        tx.create(operationRef, operation);
+        tx.set(refs.linkRef, {
+          ...link,
+          schemaVersion: 1,
+          organizationId: request.organizationId,
+          quoteId: request.quoteId,
+          state: "dispatching",
+          operationId,
+          reasonCode: "provider_action_dispatching",
+          connectionGeneration: link.connectionGeneration
+            || (link.providerEventId ? 0 : connection.configurationGeneration),
+          sourceVersionId: operation.sourceVersionId,
+          eventLabel: projection?.providerEvent?.summary || link.eventLabel || "Catering event",
+          updatedAtISO: nowISO,
+          updatedAt: FieldValue.serverTimestamp()
+        }, { merge: true });
+        tx.set(refs.connectionRef, {
+          mutationLeaseKind: "event",
+          mutationLeaseId: operationId,
+          mutationLeaseExpiresAtISO: new Date(Date.now() + 60_000).toISOString(),
+          updatedAtISO: nowISO,
+          updatedAt: FieldValue.serverTimestamp()
+        }, { merge: true });
+        return { replay: false, operation, connection, settings, link, projection, targetOperation };
+      });
+      if (claim.replay) {
+        return {
+          ok: true,
+          status: await readGoogleCalendarPublicStatus({
+            organizationId: request.organizationId,
+            quoteId: request.quoteId
+          })
+        };
+      }
+
+      const tokenResult = await refreshGoogleCalendarAccessToken({
+        configuration,
+        connection: claim.connection
+      });
+      if (!tokenResult.ok) {
+        await finalizeGoogleCalendarOperation({
+          organizationId: request.organizationId,
+          quoteId: request.quoteId,
+          operationId,
+          expectedSyncRevision: request.expectedSyncRevision,
+          resultState: tokenResult.reconnectRequired ? "blocked_connection" : "definite_failure",
+          reasonCode: tokenResult.reasonCode,
+          sourceVersionId: claim.operation.sourceVersionId,
+          eventLabel: claim.operation.projection?.providerEvent?.summary,
+          connectionState: tokenResult.reconnectRequired ? "reconnect_required" : ""
+        });
+        return {
+          ok: true,
+          status: await readGoogleCalendarPublicStatus({
+            organizationId: request.organizationId,
+            quoteId: request.quoteId
+          })
+        };
+      }
+
+      const projection = claim.operation.projection;
+      const existingLink = claim.link;
+      let providerResult = null;
+      let resultState = "definite_failure";
+      let reasonCode = "provider_request_failed";
+      let provider = null;
+      const reconcileEventId = projection?.eventId || existingLink.providerEventId;
+      const connectionGenerationChanged = Boolean(existingLink.providerEventId)
+        && Boolean(existingLink.connectionGeneration)
+        && existingLink.connectionGeneration !== claim.connection.configurationGeneration;
+
+      if (request.command === "reconcile") {
+        providerResult = await googleCalendarIntegration.executeProviderRequest({
+          fetchImpl: fetch,
+          accessToken: tokenResult.accessToken,
+          calendarId: "primary",
+          operation: "reconcile",
+          eventId: reconcileEventId
+        });
+        const targetCommand = claim.operation.command === "reconcile"
+          ? claim.targetOperation?.command
+          : claim.operation.command;
+        if (providerResult.outcome.state === "provider_accepted") {
+          const expectedOwnedSha = projection
+            ? googleCalendarIntegration.googleOwnedFieldsSha256(projection.providerEvent)
+            : existingLink.providerOwnedFieldsSha256;
+          if (providerResult.provider.ownedFieldsSha256 === expectedOwnedSha) {
+            resultState = "synced";
+            reasonCode = "provider_event_verified";
+            provider = providerResult.provider;
+          } else {
+            resultState = "provider_drift";
+            reasonCode = "provider_owned_fields_mismatch";
+          }
+        } else if (
+          providerResult.outcome.reasonCode === "provider_event_missing"
+          && targetCommand === "cancel"
+          && !connectionGenerationChanged
+        ) {
+          resultState = "canceled";
+          reasonCode = "provider_event_already_absent";
+        } else if (providerResult.outcome.reasonCode === "provider_event_missing") {
+          resultState = connectionGenerationChanged ? "provider_drift" : "definite_failure";
+          reasonCode = connectionGenerationChanged
+            ? "previous_connection_event_unavailable"
+            : "provider_event_missing_retry_safe";
+        } else {
+          resultState = providerResult.outcome.state;
+          reasonCode = providerResult.outcome.reasonCode;
+        }
+      } else if (request.command === "sync" && existingLink.providerEventId) {
+        const observed = await googleCalendarIntegration.executeProviderRequest({
+          fetchImpl: fetch,
+          accessToken: tokenResult.accessToken,
+          calendarId: "primary",
+          operation: "reconcile",
+          eventId: existingLink.providerEventId
+        });
+        if (
+          observed.outcome.state !== "provider_accepted"
+          || observed.provider.ownedFieldsSha256 !== existingLink.providerOwnedFieldsSha256
+        ) {
+          resultState = observed.outcome.state === "provider_accepted"
+            ? "provider_drift"
+            : observed.outcome.state;
+          reasonCode = observed.outcome.state === "provider_accepted"
+            ? "provider_owned_fields_changed"
+            : observed.outcome.reasonCode;
+        } else {
+          providerResult = await googleCalendarIntegration.executeProviderRequest({
+            fetchImpl: fetch,
+            accessToken: tokenResult.accessToken,
+            calendarId: "primary",
+            operation: "update",
+            eventId: projection.eventId,
+            providerEvent: projection.providerEvent,
+            etag: observed.provider.etag
+          });
+          resultState = providerResult.outcome.state === "provider_accepted"
+            ? "synced"
+            : providerResult.outcome.state;
+          reasonCode = providerResult.outcome.reasonCode;
+          provider = providerResult.provider;
+        }
+      } else if (request.command === "sync") {
+        providerResult = await googleCalendarIntegration.executeProviderRequest({
+          fetchImpl: fetch,
+          accessToken: tokenResult.accessToken,
+          calendarId: "primary",
+          operation: "insert",
+          eventId: projection.eventId,
+          providerEvent: projection.providerEvent
+        });
+        resultState = providerResult.outcome.state === "provider_accepted"
+          ? "synced"
+          : providerResult.outcome.state;
+        reasonCode = providerResult.outcome.reasonCode;
+        provider = providerResult.provider;
+      } else {
+        const observed = await googleCalendarIntegration.executeProviderRequest({
+          fetchImpl: fetch,
+          accessToken: tokenResult.accessToken,
+          calendarId: "primary",
+          operation: "reconcile",
+          eventId: existingLink.providerEventId
+        });
+        if (observed.outcome.reasonCode === "provider_event_missing") {
+          resultState = connectionGenerationChanged ? "provider_drift" : "canceled";
+          reasonCode = connectionGenerationChanged
+            ? "previous_connection_event_unavailable"
+            : "provider_event_already_absent";
+        } else if (
+          observed.outcome.state !== "provider_accepted"
+          || observed.provider.ownedFieldsSha256 !== existingLink.providerOwnedFieldsSha256
+        ) {
+          resultState = observed.outcome.state === "provider_accepted"
+            ? "provider_drift"
+            : observed.outcome.state;
+          reasonCode = observed.outcome.state === "provider_accepted"
+            ? "provider_owned_fields_changed"
+            : observed.outcome.reasonCode;
+        } else {
+          providerResult = await googleCalendarIntegration.executeProviderRequest({
+            fetchImpl: fetch,
+            accessToken: tokenResult.accessToken,
+            calendarId: "primary",
+            operation: "cancel",
+            eventId: existingLink.providerEventId,
+            etag: observed.provider.etag
+          });
+          resultState = providerResult.outcome.state === "provider_absent"
+            ? "canceled"
+            : providerResult.outcome.state;
+          reasonCode = providerResult.outcome.reasonCode;
+        }
+      }
+
+      if (resultState === "reconnect_required") {
+        resultState = "blocked_connection";
+      }
+
+      await finalizeGoogleCalendarOperation({
+        organizationId: request.organizationId,
+        quoteId: request.quoteId,
+        operationId,
+        expectedSyncRevision: request.expectedSyncRevision,
+        resultState,
+        reasonCode,
+        sourceVersionId: claim.operation.sourceVersionId,
+        eventLabel: projection?.providerEvent?.summary,
+        provider,
+        connectionState: providerResult?.outcome?.state === "reconnect_required"
+          ? "reconnect_required"
+          : ""
+      });
+      return {
+        ok: true,
+        status: await readGoogleCalendarPublicStatus({
+          organizationId: request.organizationId,
+          quoteId: request.quoteId
+        })
+      };
+    } catch (error) {
+      return throwGoogleCalendarHttpsError(error);
+    }
+  });
+
+exports.disconnectGoogleCalendar = functions
+  .runWith({ secrets: GOOGLE_CALENDAR_SECRET_BINDINGS })
+  .region(REGION)
+  .https.onCall(async (data, context) => {
+    try {
+      const request = normalizeGoogleCalendarConnectionRequest(
+        data,
+        "Calendar disconnect request"
+      );
+      assertGoogleCalendarSameOrganizationAdmin(
+        await assertStaff(context, { expectedOrganizationId: request.organizationId }),
+        request.organizationId,
+        context
+      );
+      const configuration = getGoogleCalendarRuntimeConfiguration(request.organizationId);
+      const refs = googleCalendarOrganizationRefs(request.organizationId);
+      const links = refs.organizationRef.collection(GOOGLE_CALENDAR_EVENT_LINKS_COLLECTION);
+      const unresolvedCopyQuery = links
+        .where("state", "in", [
+          "queued", "dispatching", "outcome_uncertain", "cancel_queued"
+        ])
+        .limit(1);
+      const retainedProviderCopyQuery = links.where("providerEventId", ">", "").limit(1);
+      const claim = await db.runTransaction(async (tx) => {
+        const [settingsSnap, connectionSnap, unresolvedCopySnap, retainedProviderCopySnap] = await Promise.all([
+          tx.get(refs.settingsRef),
+          tx.get(refs.connectionRef),
+          tx.get(unresolvedCopyQuery),
+          tx.get(retainedProviderCopyQuery)
+        ]);
+        const settings = settingsSnap.exists ? settingsSnap.data() || {} : {};
+        if (configuration.cleanupConfigured !== true) {
+          throw new googleCalendarIntegration.GoogleCalendarIntegrationError(
+            "failed-precondition",
+            "Google Calendar provider access is unavailable, so stored authorization cannot be revoked safely."
+          );
+        }
+        const connection = connectionSnap.exists ? connectionSnap.data() || {} : {};
+        const revision = Number.isSafeInteger(connection.connectionRevision)
+          ? connection.connectionRevision
+          : 0;
+        if (connection.state === "revoked" && connection.lastDisconnectRequestId === request.requestId) {
+          return { replay: true };
+        }
+        const sameDisconnectLease = connection.mutationLeaseKind === "disconnect"
+          && connection.mutationLeaseId === request.requestId;
+        const expiredSameDisconnectLease = sameDisconnectLease
+          && !googleCalendarLeaseIsActive(connection);
+        if (
+          sameDisconnectLease
+          && !expiredSameDisconnectLease
+        ) {
+          return { replay: true };
+        }
+        const retryUncertainDisconnect = connection.state === "reconnect_required"
+          && ["revocation_outcome_uncertain", "unactivated_grant_revocation_uncertain"]
+            .includes(connection.reasonCode)
+          && connection.lastDisconnectRequestId === request.requestId;
+        if (!retryUncertainDisconnect && !expiredSameDisconnectLease
+          && revision !== request.expectedConnectionRevision) {
+          throw new googleCalendarIntegration.GoogleCalendarIntegrationError(
+            "aborted",
+            "The Calendar connection changed. Refresh before disconnecting."
+          );
+        }
+        if (googleCalendarLeaseIsActive(connection)
+          || (connection.mutationLeaseKind && !expiredSameDisconnectLease)) {
+          throw new googleCalendarIntegration.GoogleCalendarIntegrationError(
+            "failed-precondition",
+            "Another Google Calendar change is still in progress. Check it before disconnecting."
+          );
+        }
+        const hasRetainedCopies = !unresolvedCopySnap.empty || !retainedProviderCopySnap.empty;
+        const integrationDisabled = configuration.serverEnabled !== true
+          || settings.googleCalendarIntegrationEnabled !== true;
+        const retainedCopiesDisconnectReason = connection.tokenRevocationOnly === true
+          ? "unactivated_grant"
+          : connection.retainedCopiesDisconnectReason === "provider_credentials_rejected"
+            ? "provider_credentials_rejected"
+            : connection.reasonCode === "provider_credentials_rejected"
+              ? "provider_credentials_rejected"
+              : integrationDisabled
+                ? "integration_disabled"
+                : "";
+        if (hasRetainedCopies && !retainedCopiesDisconnectReason) {
+          throw new googleCalendarIntegration.GoogleCalendarIntegrationError(
+            "failed-precondition",
+            "Remove or reconcile every retained Google event copy before disconnecting."
+          );
+        }
+        if (!connection.tokenEnvelope) {
+          throw new googleCalendarIntegration.GoogleCalendarIntegrationError(
+            "failed-precondition",
+            "No connected Google Calendar authorization is available to disconnect."
+          );
+        }
+        if (
+          connection.state !== "active"
+          && connection.state !== "reconnect_required"
+          && !expiredSameDisconnectLease
+        ) {
+          throw new googleCalendarIntegration.GoogleCalendarIntegrationError(
+            "failed-precondition",
+            "The Google Calendar authorization is not in a disconnectable state."
+          );
+        }
+        const nowISO = new Date().toISOString();
+        tx.set(refs.connectionRef, {
+          state: "reconnect_required",
+          connectionRevision: revision + 1,
+          reasonCode: "revocation_in_progress",
+          lastDisconnectRequestId: request.requestId,
+          mutationLeaseKind: "disconnect",
+          mutationLeaseId: request.requestId,
+          mutationLeaseExpiresAtISO: new Date(Date.now() + 30_000).toISOString(),
+          ...(hasRetainedCopies && retainedCopiesDisconnectReason
+            ? { retainedCopiesDisconnectReason }
+            : {}),
+          updatedAtISO: nowISO,
+          updatedAt: FieldValue.serverTimestamp()
+        }, { merge: true });
+        return {
+          replay: false,
+          connection,
+          pendingRevision: revision + 1,
+          revocationOnly: connection.tokenRevocationOnly === true,
+          hadRetainedCopies: hasRetainedCopies,
+          retainedCopiesDisconnectReason
+        };
+      });
+      if (claim.replay) {
+        return {
+          ok: true,
+          status: await readGoogleCalendarPublicStatus({ organizationId: request.organizationId })
+        };
+      }
+      const refreshToken = googleCalendarIntegration.decryptRefreshToken({
+        envelope: claim.connection.tokenEnvelope,
+        organizationId: request.organizationId,
+        actorUid: claim.connection.tokenActorUid,
+        encryptionKey: configuration.tokenEncryptionKey
+      });
+      const revocationAccepted = await revokeGoogleCalendarToken(refreshToken);
+      await db.runTransaction(async (tx) => {
+        const connectionSnap = await tx.get(refs.connectionRef);
+        const connection = connectionSnap.exists ? connectionSnap.data() || {} : {};
+        if (
+          connection.mutationLeaseKind !== "disconnect"
+          || connection.mutationLeaseId !== request.requestId
+          || connection.connectionRevision !== claim.pendingRevision
+        ) {
+          throw new googleCalendarIntegration.GoogleCalendarIntegrationError(
+            "aborted",
+            "The Calendar disconnect was superseded. Refresh its current status."
+          );
+        }
+        const nowISO = new Date().toISOString();
+        tx.set(refs.connectionRef, revocationAccepted ? {
+          state: "revoked",
+          connectionRevision: claim.pendingRevision + 1,
+          tokenEnvelope: FieldValue.delete(),
+          tokenActorUid: FieldValue.delete(),
+          calendarId: FieldValue.delete(),
+          scopes: FieldValue.delete(),
+          authorizationUrl: FieldValue.delete(),
+          pendingStateId: FieldValue.delete(),
+          pendingRequestSha256: FieldValue.delete(),
+          pendingExpiresAtISO: FieldValue.delete(),
+          authorizationPreviousState: FieldValue.delete(),
+          tokenRevocationOnly: FieldValue.delete(),
+          retainedCopiesDisconnectReason: FieldValue.delete(),
+          ...clearGoogleCalendarLease(),
+          reasonCode: claim.hadRetainedCopies
+            && claim.retainedCopiesDisconnectReason === "provider_credentials_rejected"
+            ? "rejected_grant_revoked_external_copies_retained"
+            : claim.hadRetainedCopies
+              && claim.retainedCopiesDisconnectReason === "integration_disabled"
+              ? "disabled_grant_revoked_external_copies_retained"
+            : claim.revocationOnly && claim.hadRetainedCopies
+              ? "unactivated_grant_revoked_external_copies_retained"
+              : "authorization_revoked",
+          revokedAtISO: nowISO,
+          updatedAtISO: nowISO,
+          updatedAt: FieldValue.serverTimestamp()
+        } : {
+          state: "reconnect_required",
+          connectionRevision: claim.pendingRevision + 1,
+          ...clearGoogleCalendarLease(),
+          reasonCode: claim.revocationOnly
+            ? "unactivated_grant_revocation_uncertain"
+            : "revocation_outcome_uncertain",
+          updatedAtISO: nowISO,
+          updatedAt: FieldValue.serverTimestamp()
+        }, { merge: true });
+      });
+      return {
+        ok: true,
+        status: await readGoogleCalendarPublicStatus({ organizationId: request.organizationId })
+      };
+    } catch (error) {
+      return throwGoogleCalendarHttpsError(error, "Google Calendar could not be disconnected safely.");
+    }
+  });
+
 exports.getIntegrationSetupStatus = functions
   .runWith({
     secrets: [
@@ -25855,11 +30371,16 @@ exports.stripeWebhook = functions
 // provider's key must all exist before any provider call happens; until
 // then every request fails closed with a definitive precondition error.
 // Persists nothing and returns only low-confidence, human-review facts.
-// NOTE: keys are read from process.env so this deploys green before the
-// secrets exist; when the owner creates INTENT_PARSER_OPENAI_KEY /
-// INTENT_PARSER_ANTHROPIC_KEY in Secret Manager, add
-// .runWith({ secrets: [...] }) here to bind them.
-exports.parseIntentDraft = functions.region(REGION).https.onCall(async (data, context) => {
+// OpenAI access is available only through the callable's Firebase Secret
+// Manager binding. The compatibility fallback keeps isolated source-slice and
+// VM tests working when their minimal RegionBuilder stub does not expose
+// runWith; the hosted Firebase gen1 runtime does expose it and receives the
+// bound value through process.env.
+const intentParserRegion = functions.region(REGION);
+const intentParserRuntime = typeof intentParserRegion.runWith === "function"
+  ? intentParserRegion.runWith({ secrets: ["INTENT_PARSER_OPENAI_KEY"] })
+  : intentParserRegion;
+exports.parseIntentDraft = intentParserRuntime.https.onCall(async (data, context) => {
   const {
     INTENT_PARSER_OPENAI_KEY_NAME,
     INTENT_PARSER_ANTHROPIC_KEY_NAME,
@@ -25891,6 +30412,18 @@ exports.parseIntentDraft = functions.region(REGION).https.onCall(async (data, co
     throw new functions.https.HttpsError(
       "failed-precondition",
       "The model-assisted intake lane is disabled. The deterministic extractor remains available."
+    );
+  }
+  const intentParserOrganizationId = normalizeOrganizationId(
+    process.env.INTENT_PARSER_ORGANIZATION_ID
+  );
+  if (
+    intentParserOrganizationId !== "mm05366-sandbox"
+    || organizationId !== intentParserOrganizationId
+  ) {
+    throw new functions.https.HttpsError(
+      "failed-precondition",
+      "Model-assisted intake is not enabled for this workspace."
     );
   }
   const apiKeys = Object.freeze({
@@ -26008,3 +30541,1394 @@ exports.parseIntentDraft = functions.region(REGION).https.onCall(async (data, co
     parsedAtISO: new Date().toISOString()
   };
 });
+
+// Event work journal is independently pinned and never writes phase authority.
+async function readEventOperatingWorkPhase(tx, ledgerRef, source) {
+  const phaseSnap = await tx.get(ledgerRef);
+  if (!phaseSnap.exists) {
+    await assertEventOperatingParentNotOrphaned(tx, ledgerRef, source);
+    return null;
+  }
+  const ledger = phaseSnap.data() || {};
+  if (!/^event_ops_command_[a-f0-9]{48}$/.test(ledger.lastReceiptId || "")) {
+    throw new eventOperations.EventOperationsError("data-loss", "The phase receipt reference is invalid.");
+  }
+  const receiptSnap = await tx.get(ledgerRef.collection("receipts").doc(ledger.lastReceiptId));
+  return eventOperations.projectSnapshot(source, ledger, receiptSnap.exists ? receiptSnap.data() : null);
+}
+
+async function verifyEventConstraintOutcome(tx, instanceRef, receipt) {
+  const stored = await tx.get(instanceRef.collection("observations").doc(receipt.receiptId));
+  if (!stored.exists) throw new eventOperations.EventOperationsError("data-loss", "The native outcome is missing its configured constraint evidence.");
+  const proof = workflowPackAdapters.verifyEventConstraintProof(stored.data());
+  if (workflowExecution.digest(proof.resultReceipt) !== workflowExecution.digest(receipt)) throw new eventOperations.EventOperationsError("data-loss", "The constraint proof names a different native outcome.");
+}
+async function readEventOperatingWorkState(tx, ledgerRef, source) {
+  const stateRef = ledgerRef.collection("workState").doc("current");
+  const stateSnap = await tx.get(stateRef);
+  if (!stateSnap.exists) {
+    const historySnap = await tx.get(ledgerRef.collection("workReceipts").limit(1));
+    if (!historySnap.empty) {
+      throw new eventOperations.EventOperationsError("data-loss", "Retained event work receipts have no current journal state.");
+    }
+    if (source) {
+      const organizationRef = db.collection(ORGANIZATIONS_COLLECTION).doc(source.organizationId);
+      const instanceRef = eventWorkflowInstanceRef(organizationRef, source, 2);
+      if ((await tx.get(instanceRef)).exists) {
+        const proofs = await tx.get(instanceRef.collection("observations").where("sourceChannel", "==", "work").limit(1));
+        if (!proofs.empty) throw new eventOperations.EventOperationsError("data-loss", "Retained native work constraint evidence has no current journal.");
+      }
+    }
+    return { stateRef, workState: null, currentReceipt: null };
+  }
+  const workState = stateSnap.data() || {};
+  if (!/^event_work_command_[a-f0-9]{48}$/.test(workState.lastReceiptId || "")) {
+    throw new eventOperations.EventOperationsError("data-loss", "The work journal receipt reference is invalid.");
+  }
+  const receiptSnap = await tx.get(ledgerRef.collection("workReceipts").doc(workState.lastReceiptId));
+  return { stateRef, workState, currentReceipt: receiptSnap.exists ? receiptSnap.data() : null };
+}
+
+exports.getEventOperatingWorkSnapshot = functions.region(REGION).https.onCall(async (data, context) => {
+  try {
+    const scope = eventOperatingWork.normalizeReadRequest(data);
+    const staff = await assertStaff(context, { expectedOrganizationId: scope.organizationId });
+    eventOperatingActor(staff, scope.organizationId);
+    const organizationRef = db.collection(ORGANIZATIONS_COLLECTION).doc(scope.organizationId);
+    const snapshot = await db.runTransaction(async (tx) => {
+      await assertEventOperatingTransactionAuthority(tx, organizationRef, staff);
+      const source = await readEventOperatingSource(tx, organizationRef, scope);
+      const ledgerRef = organizationRef.collection("eventOperatingLedgers").doc(eventOperations.ledgerIdFor(source));
+      const phaseSnapshot = await readEventOperatingWorkPhase(tx, ledgerRef, source);
+      if (!phaseSnapshot) {
+        const orphan = await readEventOperatingWorkState(tx, ledgerRef, source);
+        if (orphan.workState) {
+          throw new eventOperations.EventOperationsError("data-loss", "Recorded event work has no initialized phase ledger.");
+        }
+        return eventOperatingWork.projectSnapshot({ source, phaseInitialized: false });
+      }
+      const { workState, currentReceipt } = await readEventOperatingWorkState(tx, ledgerRef, source);
+      return eventOperatingWork.projectSnapshot({ source, workState, receipt: currentReceipt });
+    });
+    return { ok: true, storage: "firebase", ...scope, snapshot };
+  } catch (error) {
+    return throwEventOperatingError(error);
+  }
+});
+
+exports.applyEventOperatingWorkCommand = functions.region(REGION).https.onCall(async (data, context) => {
+  try {
+    const request = eventOperatingWork.normalizeRequest(data);
+    const scope = eventOperations.normalizeScope(request);
+    const staff = await assertStaff(context, { expectedOrganizationId: scope.organizationId });
+    const actor = eventOperatingActor(staff, scope.organizationId, true);
+    const organizationRef = db.collection(ORGANIZATIONS_COLLECTION).doc(scope.organizationId);
+    const ledgerRef = organizationRef.collection("eventOperatingLedgers").doc(eventOperations.ledgerIdFor(request));
+    const receiptRef = ledgerRef.collection("workReceipts").doc(eventOperatingWork.receiptIdFor(request));
+    const result = await db.runTransaction(async (tx) => {
+      await assertEventOperatingTransactionAuthority(tx, organizationRef, staff, true);
+      const receiptSnap = await tx.get(receiptRef);
+      if (receiptSnap.exists) {
+        const replay = eventOperatingWork.planCommand({ request, actor, existingReceipt: receiptSnap.data() });
+        const workflow = await readEventWorkflowInstance(tx, organizationRef, request);
+        if (workflow.instance?.schemaVersion === 2) await verifyEventConstraintOutcome(tx, workflow.instanceRef, replay.receipt);
+        return replay;
+      }
+      const source = await readEventOperatingSource(tx, organizationRef, scope);
+      if (eventOperations.ledgerIdFor(source) !== ledgerRef.id) {
+        throw new eventOperations.EventOperationsError("aborted", "The accepted event source changed. Reload before recording work.");
+      }
+      const phaseSnapshot = await readEventOperatingWorkPhase(tx, ledgerRef, source);
+      if (!phaseSnapshot) {
+        throw new eventOperations.EventOperationsError("failed-precondition", "Initialize a valid event phase ledger before recording work.");
+      }
+      const { stateRef, workState, currentReceipt } = await readEventOperatingWorkState(tx, ledgerRef, source);
+      const workflow = await readEventWorkflowInstance(tx, organizationRef, source);
+      const phase = workflow.instance?.schemaVersion === 2 ? await readEventWorkflowPhase(tx, organizationRef, source) : null;
+      if (phase) {
+        assertWorkflowCurrentPhase(workflow.instance, phase);
+        workflowPackAdapters.assertEventConstraints({ source, definition: workflow.instance.definition, ledger: phase.ledger, phaseReceipt: phase.receipt, workState, workReceipt: currentReceipt, command: request });
+      }
+      const planned = eventOperatingWork.planCommand({
+        request, actor, source, phaseSnapshot, workState, currentReceipt,
+        nowISO: new Date().toISOString()
+      });
+      let proof = null;
+      if (phase) {
+        proof = workflowPackAdapters.buildEventConstraintProof({ source, definition: workflow.instance.definition, ledger: phase.ledger, phaseReceipt: phase.receipt, workState, workReceipt: currentReceipt, resultReceipt: planned.receipt });
+        if ((await tx.get(workflow.instanceRef.collection("observations").doc(proof.evidenceId))).exists) throw new eventOperations.EventOperationsError("data-loss", "This work constraint proof already exists without its outcome.");
+      }
+      if (workState) tx.set(stateRef, planned.nextWorkState);
+      else tx.create(stateRef, planned.nextWorkState);
+      tx.create(receiptRef, planned.receipt);
+      if (proof) tx.create(workflow.instanceRef.collection("observations").doc(proof.evidenceId), proof);
+      return planned;
+    });
+    return {
+      ok: true, storage: "firebase", ...scope, snapshot: result.snapshot,
+      idempotent: result.idempotent, receipt: eventOperatingWork.publicReceipt(result.receipt)
+    };
+  } catch (error) {
+    return throwEventOperatingError(error);
+  }
+});
+
+// Operational actuals is a separate journal; phase and work evidence remain read-only.
+async function readEventOperatingActualsState(tx, ledgerRef) {
+  const stateRef = ledgerRef.collection("actualsState").doc("current");
+  const stateSnap = await tx.get(stateRef);
+  if (!stateSnap.exists) {
+    const historySnap = await tx.get(ledgerRef.collection("actualsReceipts").limit(1));
+    if (!historySnap.empty) {
+      throw new eventOperations.EventOperationsError("data-loss", "Retained event actuals receipts have no current journal state.");
+    }
+    return { stateRef, actualsState: null, currentReceipt: null };
+  }
+  const actualsState = stateSnap.data() || {};
+  if (!/^event_actuals_command_[a-f0-9]{48}$/.test(actualsState.lastReceiptId || "")) {
+    throw new eventOperations.EventOperationsError("data-loss", "The actuals journal receipt reference is invalid.");
+  }
+  const receiptSnap = await tx.get(ledgerRef.collection("actualsReceipts").doc(actualsState.lastReceiptId));
+  return { stateRef, actualsState, currentReceipt: receiptSnap.exists ? receiptSnap.data() : null };
+}
+
+exports.getEventOperatingActualsSnapshot = functions.region(REGION).https.onCall(async (data, context) => {
+  try {
+    const scope = eventOperatingActuals.normalizeReadRequest(data);
+    const staff = await assertStaff(context, { expectedOrganizationId: scope.organizationId });
+    eventOperatingActor(staff, scope.organizationId);
+    const organizationRef = db.collection(ORGANIZATIONS_COLLECTION).doc(scope.organizationId);
+    const snapshot = await db.runTransaction(async (tx) => {
+      await assertEventOperatingTransactionAuthority(tx, organizationRef, staff);
+      const source = await readEventOperatingSource(tx, organizationRef, scope);
+      const ledgerRef = organizationRef.collection("eventOperatingLedgers").doc(eventOperations.ledgerIdFor(source));
+      const phaseSnapshot = await readEventOperatingWorkPhase(tx, ledgerRef, source);
+      if (!phaseSnapshot) {
+        const orphan = await readEventOperatingActualsState(tx, ledgerRef);
+        if (orphan.actualsState) {
+          throw new eventOperations.EventOperationsError("data-loss", "Recorded event actuals has no initialized phase ledger.");
+        }
+        return eventOperatingActuals.projectSnapshot({ source, phaseInitialized: false });
+      }
+      const { actualsState, currentReceipt } = await readEventOperatingActualsState(tx, ledgerRef);
+      return eventOperatingActuals.projectSnapshot({ source, actualsState, receipt: currentReceipt });
+    });
+    return { ok: true, storage: "firebase", ...scope, snapshot };
+  } catch (error) {
+    return throwEventOperatingError(error);
+  }
+});
+
+exports.applyEventOperatingActualsCommand = functions.region(REGION).https.onCall(async (data, context) => {
+  try {
+    const request = eventOperatingActuals.normalizeRequest(data);
+    const scope = eventOperations.normalizeScope(request);
+    const staff = await assertStaff(context, { expectedOrganizationId: scope.organizationId });
+    const actor = eventOperatingActor(staff, scope.organizationId, true);
+    const organizationRef = db.collection(ORGANIZATIONS_COLLECTION).doc(scope.organizationId);
+    const ledgerRef = organizationRef.collection("eventOperatingLedgers").doc(eventOperations.ledgerIdFor(request));
+    const receiptRef = ledgerRef.collection("actualsReceipts").doc(eventOperatingActuals.receiptIdFor(request));
+    const result = await db.runTransaction(async (tx) => {
+      await assertEventOperatingTransactionAuthority(tx, organizationRef, staff, true);
+      const receiptSnap = await tx.get(receiptRef);
+      if (receiptSnap.exists) {
+        return eventOperatingActuals.planCommand({ request, actor, existingReceipt: receiptSnap.data() });
+      }
+      const source = await readEventOperatingSource(tx, organizationRef, scope);
+      if (eventOperations.ledgerIdFor(source) !== ledgerRef.id) {
+        throw new eventOperations.EventOperationsError("aborted", "The accepted event source changed. Reload before recording actuals.");
+      }
+      const phaseSnapshot = await readEventOperatingWorkPhase(tx, ledgerRef, source);
+      if (!phaseSnapshot) {
+        throw new eventOperations.EventOperationsError("failed-precondition", "Initialize a valid event phase ledger before recording actuals.");
+      }
+      const { stateRef, actualsState, currentReceipt } = await readEventOperatingActualsState(tx, ledgerRef);
+      const planned = eventOperatingActuals.planCommand({
+        request, actor, source, phaseSnapshot, actualsState, currentReceipt,
+        nowISO: new Date().toISOString()
+      });
+      if (actualsState) tx.set(stateRef, planned.nextActualsState);
+      else tx.create(stateRef, planned.nextActualsState);
+      tx.create(receiptRef, planned.receipt);
+      return planned;
+    });
+    return {
+      ok: true, storage: "firebase", ...scope, snapshot: result.snapshot,
+      idempotent: result.idempotent, receipt: eventOperatingActuals.publicReceipt(result.receipt)
+    };
+  } catch (error) {
+    return throwEventOperatingError(error);
+  }
+});
+
+// Bounded operational history is observation-only and never reconciles a command.
+exports.getEventOperatingHistory = functions.region(REGION).https.onCall(async (data, context) => {
+  try {
+    const request = eventOperatingHistory.normalizeRequest(data);
+    const scope = eventOperations.normalizeScope(request);
+    const staff = await assertStaff(context, { expectedOrganizationId: scope.organizationId });
+    eventOperatingActor(staff, scope.organizationId);
+    const organizationRef = db.collection(ORGANIZATIONS_COLLECTION).doc(scope.organizationId);
+    const snapshot = await db.runTransaction(async (tx) => {
+      await assertEventOperatingTransactionAuthority(tx, organizationRef, staff);
+      const source = await readEventOperatingSource(tx, organizationRef, scope);
+      const ledgerRef = organizationRef.collection("eventOperatingLedgers").doc(eventOperations.ledgerIdFor(source));
+      if (request.cursor && eventOperations.ledgerIdFor(request.cursor.source) !== ledgerRef.id) {
+        throw new eventOperations.EventOperationsError("aborted", "The accepted source changed. Refresh operational history.");
+      }
+      const phaseSnapshot = await readEventOperatingWorkPhase(tx, ledgerRef, source);
+      if (!phaseSnapshot) {
+        eventOperatingHistory.preparePage({
+          source, cursor: request.cursor,
+          currentHeads: Object.fromEntries(eventOperatingHistory.CHANNELS.map((channel) => [channel, { revision: 0, receiptId: "" }]))
+        });
+        return eventOperatingHistory.emptyHistory(source);
+      }
+      const work = await readEventOperatingWorkState(tx, ledgerRef, source);
+      const actuals = await readEventOperatingActualsState(tx, ledgerRef);
+      const workSnapshot = eventOperatingWork.projectSnapshot({ source, workState: work.workState, receipt: work.currentReceipt });
+      const actualsSnapshot = eventOperatingActuals.projectSnapshot({ source, actualsState: actuals.actualsState, receipt: actuals.currentReceipt });
+      const currentHeads = {
+        phase: { revision: phaseSnapshot.revision, receiptId: phaseSnapshot.lastReceiptId },
+        work: { revision: workSnapshot.revision, receiptId: workSnapshot.lastReceiptId },
+        actuals: { revision: actualsSnapshot.revision, receiptId: actualsSnapshot.lastReceiptId }
+      };
+      const page = eventOperatingHistory.preparePage({ source, currentHeads, cursor: request.cursor });
+      const collectionNames = { phase: "receipts", work: "workReceipts", actuals: "actualsReceipts" };
+      const anchorDocuments = {};
+      const boundaryDocuments = {};
+      const documents = {};
+      const privateDocument = (snap) => snap.exists ? { id: snap.id, data: snap.data() || {} } : null;
+      await Promise.all(eventOperatingHistory.CHANNELS.map(async (channel) => {
+        const receiptsRef = ledgerRef.collection(collectionNames[channel]);
+        const anchor = page.anchors[channel];
+        const position = page.positions[channel];
+        anchorDocuments[channel] = anchor.revision > 0
+          ? privateDocument(await tx.get(receiptsRef.doc(anchor.receiptId))) : null;
+        boundaryDocuments[channel] = position.nextRevision < anchor.revision
+          ? privateDocument(await tx.get(receiptsRef.doc(position.lastConsumedReceiptId))) : null;
+        if (position.nextRevision === 0) {
+          documents[channel] = [];
+        } else {
+          const candidates = await tx.get(receiptsRef
+            .where("resultRevision", "<=", position.nextRevision)
+            .orderBy("resultRevision", "desc")
+            .limit(eventOperatingHistory.PAGE_SIZE));
+          documents[channel] = candidates.docs.map((doc) => ({ id: doc.id, data: doc.data() || {} }));
+        }
+      }));
+      return eventOperatingHistory.buildPage({ page, anchorDocuments, boundaryDocuments, documents });
+    });
+    return { ok: true, storage: "firebase", ...scope, snapshot };
+  } catch (error) {
+    return throwEventOperatingError(error);
+  }
+});
+
+// Configuration publication governs future bindings only and never enables gates.
+exports.getWorkflowConfiguration = functions.region(REGION).https.onCall(async (data, context) => {
+  try {
+    const scope = workflowConfigurationScope(data);
+    const snapshot = await workflowAuthorizedTransaction(context, scope.organizationId, true, async (tx, organizationRef) =>
+      (await readWorkflowConfiguration(tx, organizationRef, scope.workflowKind)).snapshot);
+    return { ok: true, storage: "firebase", ...scope, snapshot };
+  } catch (error) { return throwEventOperatingError(error); }
+});
+exports.previewWorkflowDefinition = functions.region(REGION).https.onCall(async (data, context) => {
+  try {
+    const scope = workflowConfigurationScope(data, ["expectedRevision"]);
+    const preview = await workflowAuthorizedTransaction(context, scope.organizationId, true, async (tx, organizationRef, actor) => {
+      const current = await readWorkflowConfiguration(tx, organizationRef, scope.workflowKind);
+      workflowAssertRevision(data.expectedRevision, current.snapshot.revision);
+      return workflowDefinitions.previewPublish({ ...scope, actor, head: current.head, currentReceipt: current.currentReceipt });
+    });
+    return { ok: true, storage: "firebase", ...scope, preview };
+  } catch (error) { return throwEventOperatingError(error); }
+});
+exports.applyWorkflowDefinitionCommand = functions.region(REGION).https.onCall(async (data, context) => {
+  try {
+    const request = workflowDefinitions.normalizeRequest(data);
+    const scope = { organizationId: request.organizationId, workflowKind: request.workflowKind };
+    const result = await workflowAuthorizedTransaction(context, scope.organizationId, true, async (tx, organizationRef, actor) => {
+      const definitionRef = organizationRef.collection("workflowDefinitions").doc(scope.workflowKind);
+      const receiptRef = definitionRef.collection("lifecycleReceipts").doc(workflowDefinitions.receiptIdFor(request));
+      const receiptSnap = await tx.get(receiptRef);
+      if (receiptSnap.exists) return workflowDefinitions.planCommand({ request, actor, existingReceipt: receiptSnap.data() });
+      const current = await readWorkflowConfiguration(tx, organizationRef, scope.workflowKind);
+      const planned = workflowDefinitions.planCommand({ request, actor, head: current.head, currentReceipt: current.currentReceipt, nowISO: new Date().toISOString() });
+      let versionRef = null;
+      if (planned.publishedVersion) {
+        versionRef = definitionRef.collection("versions").doc(planned.publishedVersion.versionId);
+        if ((await tx.get(versionRef)).exists) throw new eventOperations.EventOperationsError("data-loss", "The next immutable workflow version already exists.");
+      }
+      if (current.head) tx.set(definitionRef, planned.nextHead);
+      else tx.create(definitionRef, planned.nextHead);
+      if (versionRef) tx.create(versionRef, planned.publishedVersion);
+      tx.create(receiptRef, planned.receipt);
+      return planned;
+    });
+    return { ok: true, storage: "firebase", ...scope, idempotent: result.idempotent, receipt: workflowDefinitionPublicReceipt(result.receipt) };
+  } catch (error) { return throwEventOperatingError(error); }
+});
+exports.getEventWorkflowSnapshot = functions.region(REGION).https.onCall(async (data, context) => {
+  try {
+    workflowExactKeys(data, ["organizationId", "quoteId"]);
+    const scope = eventOperations.normalizeScope(data);
+    const snapshot = await workflowAuthorizedTransaction(context, scope.organizationId, false, async (tx, organizationRef) => {
+      const source = await readEventOperatingSource(tx, organizationRef, scope);
+      const phase = await readEventWorkflowPhase(tx, organizationRef, source);
+      const current = await readEventWorkflowInstance(tx, organizationRef, source);
+      const observedAtISO = new Date().toISOString();
+      const refs = { organizationId: source.organizationId, quoteId: source.quoteId, sourceVersionId: source.sourceVersionId,
+        acceptanceReceiptId: source.acceptanceReceiptId, ledgerId: eventOperations.ledgerIdFor(source),
+        phaseRevision: phase.snapshot?.revision || 0, phaseReceiptId: phase.snapshot?.lastReceiptId || "" };
+      if (!current.instance) {
+        const projection = workflowExecution.projectSnapshot({ source: eventWorkflowAdapter.eventSource(source), observedAtISO });
+        let nextDefinition = null;
+        let initializationEligibility = { eligible: false, reasonCode: "legacy_unbound" };
+        if (!phase.ledger) {
+          const configuration = (await readWorkflowConfiguration(tx, organizationRef)).snapshot;
+          nextDefinition = configuration.activeVersion || null;
+          initializationEligibility = { eligible: configuration.newInstanceEligible === true,
+            reasonCode: configuration.availability === "schema_drift" ? "definition_schema_unsupported" : configuration.state };
+        }
+        return { ...projection, ...refs, reasonCode: phase.ledger ? "legacy_unbound" : "phase_ledger_missing", nextDefinition, initializationEligibility };
+      }
+      assertWorkflowCurrentPhase(current.instance, phase);
+      const costs = await readEventOperatingActualsState(tx, phase.ledgerRef);
+      const actualsRef = eventWorkflowAdapter.actualsReference(source, costs.actualsState, costs.currentReceipt);
+      return { ...workflowExecution.projectSnapshot({ source: current.instance.source, instance: current.instance,
+        receipt: current.currentReceipt, actualsRef, observedAtISO }), ...refs };
+    });
+    return { ok: true, storage: "firebase", ...scope, snapshot };
+  } catch (error) { return throwEventOperatingError(error); }
+});
+exports.previewEventWorkflowMigration = functions.region(REGION).https.onCall(async (data, context) => {
+  try {
+    const request = workflowEventRequest(data, ["expectedRevision"]);
+    const scope = eventOperations.normalizeScope(request);
+    const preview = await workflowAuthorizedTransaction(context, scope.organizationId, true, async (tx, organizationRef) => {
+      const source = await readEventOperatingSource(tx, organizationRef, scope);
+      assertWorkflowExactSource(request, source);
+      const phase = await readEventWorkflowPhase(tx, organizationRef, source);
+      const current = await readEventWorkflowInstance(tx, organizationRef, source);
+      if (!current.instance) throw new eventOperations.EventOperationsError("failed-precondition", "Legacy events have no configured instance to migrate.");
+      assertWorkflowCurrentPhase(current.instance, phase);
+      workflowAssertRevision(data.expectedRevision, current.instance.revision);
+      const configuration = (await readWorkflowConfiguration(tx, organizationRef)).snapshot;
+      if (configuration.state !== "published" || !configuration.activeVersion) throw new eventOperations.EventOperationsError("failed-precondition", "Migration requires a currently active tenant publication.");
+      return workflowExecution.previewMigration({ source: current.instance.source, instance: current.instance,
+        currentReceipt: current.currentReceipt, targetDefinition: configuration.activeVersion });
+    });
+    return { ok: true, storage: "firebase", ...scope, preview };
+  } catch (error) { return throwEventOperatingError(error); }
+});
+exports.applyEventWorkflowCommand = functions.region(REGION).https.onCall(async (data, context) => {
+  try {
+    const commandInput = { ...data };
+    for (const key of ["organizationId", "quoteId", "sourceVersionId", "acceptanceReceiptId"]) delete commandInput[key];
+    const command = workflowExecution.normalizeRequest(commandInput);
+    const request = workflowEventRequest(data, Object.keys(command));
+    const scope = eventOperations.normalizeScope(request);
+    const result = await workflowAuthorizedTransaction(context, scope.organizationId, ["review_ack", "migrate"].includes(command.command), async (tx, organizationRef, actor) => {
+      const retries = [];
+      for (const schemaVersion of [1, 2]) {
+        const identity = eventWorkflowAdapter.eventSource(request, schemaVersion);
+        const ref = eventWorkflowInstanceRef(organizationRef, request, schemaVersion);
+        const receiptSnap = await tx.get(ref.collection("receipts").doc(workflowExecution.receiptIdFor(identity, command.requestId)));
+        if (receiptSnap.exists) retries.push({ identity, receipt: receiptSnap.data() });
+      }
+      if (retries.length > 1) throw new eventOperations.EventOperationsError("data-loss", "The command has conflicting schema bindings.");
+      if (retries.length) {
+        const replay = workflowExecution.planCommand({ source: retries[0].identity, request: command, actor, existingReceipt: retries[0].receipt });
+        await assertWorkflowPinnedDefinition(tx, organizationRef, replay.receipt.resultInstance);
+        return replay;
+      }
+      const source = await readEventOperatingSource(tx, organizationRef, scope);
+      assertWorkflowExactSource(request, source);
+      const phase = await readEventWorkflowPhase(tx, organizationRef, source);
+      const current = await readEventWorkflowInstance(tx, organizationRef, source);
+      if (!current.instance) throw new eventOperations.EventOperationsError("failed-precondition", "The event has no configured workflow binding.");
+      assertWorkflowCurrentPhase(current.instance, phase);
+      let definition = null;
+      let actualsRef = null;
+      if (command.command === "migrate") {
+        const configuration = (await readWorkflowConfiguration(tx, organizationRef)).snapshot;
+        if (configuration.state !== "published" || !configuration.activeVersion) throw new eventOperations.EventOperationsError("failed-precondition", "Migration requires the active tenant publication.");
+        definition = configuration.activeVersion;
+      } else if (command.command === "review_ack") {
+        const costs = await readEventOperatingActualsState(tx, phase.ledgerRef);
+        actualsRef = eventWorkflowAdapter.actualsReference(source, costs.actualsState, costs.currentReceipt);
+      }
+      const planned = workflowExecution.planCommand({ source: current.instance.source, request: command, actor, instance: current.instance,
+        currentReceipt: current.currentReceipt, definition, actualsRef, nowISO: new Date().toISOString() });
+      tx.set(current.instanceRef, planned.nextInstance);
+      tx.create(current.instanceRef.collection("receipts").doc(planned.receipt.receiptId), planned.receipt);
+      return planned;
+    });
+    return { ok: true, storage: "firebase", ...scope, idempotent: result.idempotent, receipt: eventWorkflowPublicReceipt(result.receipt) };
+  } catch (error) { return throwEventOperatingError(error); }
+});
+
+// Version two pack coordination consumes exact domain evidence; public commands
+// cannot initialize or manufacture a domain observation.
+function throwWorkflowPackError(error) {
+  if (error instanceof quoteAttendance.QuoteAttendanceError
+    || error instanceof PortalConversationError || error instanceof QuoteDeliveryError) throw new functions.https.HttpsError(error.code, error.message);
+  return throwEventOperatingError(error);
+}
+function workflowPackSource(scope) {
+  return workflowExecution.normalizeSource({ schemaVersion: 2, organizationId: scope.organizationId,
+    workflowKind: scope.workflowKind, subjectId: scope.quoteId,
+    sourceVersionId: scope.sourceVersionId, sourceReceiptId: scope.sourceReceiptId });
+}
+async function readWorkflowPackInstance(tx, organizationRef, source) {
+  const instanceRef = organizationRef.collection("workflowInstances").doc(workflowExecution.instanceIdFor(source));
+  const snapshot = await tx.get(instanceRef);
+  if (!snapshot.exists) {
+    const [receipts, observations] = await Promise.all([tx.get(instanceRef.collection("receipts").limit(1)), tx.get(instanceRef.collection("observations").limit(1))]);
+    if (!receipts.empty || !observations.empty) throw new eventOperations.EventOperationsError("data-loss", "Retained pack evidence has no current instance.");
+    return { instanceRef, instance: null, currentReceipt: null };
+  }
+  const instance = snapshot.data();
+  if (!/^workflow_command_[a-f0-9]{48}$/.test(instance?.lastReceiptId || "")) throw new eventOperations.EventOperationsError("data-loss", "The pack receipt reference is invalid.");
+  const receiptSnap = await tx.get(instanceRef.collection("receipts").doc(instance.lastReceiptId));
+  const currentReceipt = receiptSnap.exists ? receiptSnap.data() : null;
+  workflowExecution.verifyInstance(source, instance, currentReceipt);
+  await assertWorkflowPinnedDefinition(tx, organizationRef, instance);
+  return { instanceRef, instance, currentReceipt };
+}
+async function prepareWorkflowPackObservation(tx, organizationRef, { observation, actor, requestId, nowISO, definition = null, proof = null }) {
+  const current = await readWorkflowPackInstance(tx, organizationRef, observation.source);
+  const receiptRef = current.instanceRef.collection("receipts").doc(workflowExecution.receiptIdFor(observation.source, requestId));
+  const existingSnap = await tx.get(receiptRef);
+  let selected = definition;
+  if (!current.instance && !existingSnap.exists && !selected) {
+    const catalog = (await readWorkflowConfiguration(tx, organizationRef, observation.source.workflowKind)).snapshot;
+    if (catalog.state !== "published" || catalog.activeVersion?.schemaVersion !== 2) return null;
+    selected = catalog.activeVersion;
+  }
+  const planned = workflowPackAdapters.planObservation({ ...observation, actor, requestId,
+    instance: current.instance, currentReceipt: current.currentReceipt,
+    existingReceipt: existingSnap.exists ? existingSnap.data() : null,
+    definition: selected, nowISO });
+  let proofRef = null;
+  if (proof) {
+    workflowPackAdapters.verifyCloseoutObservationProof(proof);
+    proofRef = current.instanceRef.collection("observations").doc(proof.evidenceId);
+    const stored = await tx.get(proofRef);
+    if (stored.exists && workflowExecution.digest(stored.data()) !== workflowExecution.digest(proof)) throw new eventOperations.EventOperationsError("data-loss", "The immutable adapter proof changed.");
+    if (stored.exists) proofRef = null;
+  }
+  return { planned, commit() {
+    if (planned.idempotent) return;
+    if (current.instance) tx.set(current.instanceRef, planned.nextInstance);
+    else tx.create(current.instanceRef, planned.nextInstance);
+    tx.create(receiptRef, planned.receipt);
+    if (proofRef) tx.create(proofRef, proof);
+  } };
+}
+async function readQuoteAttendanceState(tx, organizationRef, source) {
+  const stateRef = organizationRef.collection("quoteAttendance").doc(quoteAttendance.ledgerIdFor(source));
+  const snapshot = await tx.get(stateRef);
+  if (!snapshot.exists) {
+    const retained = await tx.get(stateRef.collection("receipts").limit(1));
+    if (!retained.empty) throw new eventOperations.EventOperationsError("data-loss", "Attendance history exists without its current journal.");
+    return { stateRef, state: null, currentReceipt: null };
+  }
+  const state = snapshot.data();
+  if (!/^attendance_command_[a-f0-9]{48}$/.test(state?.lastReceiptId || "")) throw new eventOperations.EventOperationsError("data-loss", "Attendance receipt reference is invalid.");
+  const receipt = await tx.get(stateRef.collection("receipts").doc(state.lastReceiptId));
+  const currentReceipt = receipt.exists ? receipt.data() : null;
+  quoteAttendance.projectSnapshot({ source, state, receipt: currentReceipt });
+  return { stateRef, state, currentReceipt };
+}
+async function readQuoteAttendanceSource(tx, organizationRef, scope) {
+  const quoteRef = organizationRef.collection(QUOTES_COLLECTION).doc(scope.quoteId);
+  const quote = await tx.get(quoteRef);
+  if (!quote.exists) throw new eventOperations.EventOperationsError("not-found", "The accepted quote is unavailable.");
+  const value = quote.data();
+  const sourceVersionId = value.activeVersionId || value.versionMeta?.versionId;
+  const acceptanceReceiptId = value.acceptanceReceipt?.receiptId;
+  if (typeof sourceVersionId !== "string" || typeof acceptanceReceiptId !== "string" || /[\s/?#\\\u0000]/u.test(sourceVersionId + acceptanceReceiptId)) throw new eventOperations.EventOperationsError("failed-precondition", "Exact current acceptance evidence is required.");
+  const [version, receipt] = await Promise.all([tx.get(quoteRef.collection("versions").doc(sourceVersionId)), tx.get(organizationRef.collection(PROPOSAL_ACCEPTANCE_RECEIPTS_COLLECTION).doc(acceptanceReceiptId))]);
+  return quoteAttendance.resolveAcceptedSource({ organizationId: scope.organizationId, quoteId: scope.quoteId,
+    sourceQuote: { ...value, id: scope.quoteId }, sourceVersion: version.exists ? version.data() : null, acceptanceReceiptDocument: receipt.exists ? receipt.data() : null });
+}
+async function readQuoteAttendanceTiming(tx, organizationRef, source) {
+  const [settingsSnap, policySnap, versionSnap] = await Promise.all([
+    tx.get(organizationRef.collection("settings").doc("config")),
+    tx.get(organizationRef.collection(DECISION_DEBT_POLICIES_COLLECTION).doc("current")),
+    tx.get(organizationRef.collection(QUOTES_COLLECTION).doc(source.quoteId).collection("versions").doc(source.sourceVersionId))
+  ]);
+  const policyRecord = decisionDebtPolicyRecord(policySnap.exists ? policySnap.data() : null);
+  const timezone = normalizeText(settingsSnap.data()?.businessTimeZone || settingsSnap.data()?.timeZone);
+  const dueDate = addCalendarDaysDateOnly(versionSnap.data()?.snapshot?.event?.date, -policyRecord.policy.decisionTypes.guest_count.lockWindowDays);
+  return quoteAttendance.normalizeTiming({ dueDate, timezone,
+    policyReferenceId: `decision_debt_guest_count_${workflowExecution.digest({ organizationId: organizationRef.id, revision: policyRecord.revision, policy: policyRecord.policy }).slice(0, 48)}` });
+}
+async function readAttendancePortal(tx, portalKey, nowISO, operation = "read") {
+  const portalRef = db.collection(PORTAL_COLLECTION).doc(portalKey);
+  const portalSnap = await tx.get(portalRef);
+  if (!portalSnap.exists) throw new eventOperations.EventOperationsError("not-found", "The current proposal link is unavailable.");
+  const portal = portalSnap.data();
+  const scope = eventOperations.normalizeScope({ organizationId: portal.organizationId, quoteId: portal.quoteId });
+  const organizationRef = db.collection(ORGANIZATIONS_COLLECTION).doc(scope.organizationId);
+  const [quoteSnap, orgSnap, tombstoneSnap, settingsSnap] = await Promise.all([
+    tx.get(organizationRef.collection(QUOTES_COLLECTION).doc(scope.quoteId)), tx.get(organizationRef),
+    tx.get(db.collection(ORGANIZATION_TOMBSTONES_COLLECTION).doc(scope.organizationId)), tx.get(organizationRef.collection("settings").doc("config"))
+  ]);
+  if (!tenantWorkflowRuntimeEnabled("EVENT_OPERATING_SPINE_ENABLED", organizationRef.id) || settingsSnap.data()?.eventOperatingSpineEnabled !== true) throw new eventOperations.EventOperationsError("failed-precondition", "Attendance confirmation is unavailable for this organization.");
+  const activation = assertPortalConversationActivation({ quote: quoteSnap.data(), quoteId: scope.quoteId, organizationId: scope.organizationId,
+    portalSnapshot: portal, requestedPortalKey: portalKey, organizationActive: orgSnap.exists && isOrganizationRecordActive(orgSnap.data()),
+    organizationTombstoned: tombstoneSnap.exists, operation, nowISO, assertPortalActivation: assertQuoteDeliveryPortalActivation });
+  const source = await readQuoteAttendanceSource(tx, organizationRef, scope);
+  const actor = { organizationId: scope.organizationId, role: "customer", portalKeySha256: createHash("sha256").update(portalKey).digest("hex"), portalIssuedAtISO: activation.portalIssuedAtISO };
+  return { scope, source, actor, organizationRef, portalRef };
+}
+exports.getQuoteAttendance = functions.region(REGION).https.onCall(async (data, context) => {
+  try {
+    if (data?.accessMode === "staff") {
+      workflowExactKeys(data, ["accessMode", "organizationId", "quoteId"]);
+      const scope = eventOperations.normalizeScope(data);
+      const snapshot = await workflowAuthorizedTransaction(context, scope.organizationId, false, async (tx, organizationRef) => {
+        const source = await readQuoteAttendanceSource(tx, organizationRef, scope);
+        const current = await readQuoteAttendanceState(tx, organizationRef, source);
+        return quoteAttendance.projectSnapshot({ source, state: current.state, receipt: current.currentReceipt });
+      });
+      return { ok: true, storage: "firebase", ...scope, snapshot };
+    }
+    workflowExactKeys(data, ["accessMode", "portalKey"]);
+    if (data.accessMode !== "portal" || !/^[A-Za-z0-9_-]{20,128}$/.test(data.portalKey || "")) throw new eventOperations.EventOperationsError("invalid-argument", "A current portal link is required.");
+    return await db.runTransaction(async (tx) => {
+      const binding = await readAttendancePortal(tx, data.portalKey, new Date().toISOString());
+      const current = await readQuoteAttendanceState(tx, binding.organizationRef, binding.source);
+      return { ok: true, storage: "firebase", ...binding.scope, snapshot: quoteAttendance.projectSnapshot({ source: binding.source, state: current.state, receipt: current.currentReceipt, accessMode: "portal", portalIdentity: binding.actor }) };
+    });
+  } catch (error) { return throwWorkflowPackError(error); }
+});
+async function verifyAttendanceWorkflowReplay(tx, organizationRef, receipt, actor) {
+  const observation = workflowPackAdapters.attendanceObservation({ source: receipt.source, state: receipt.resultState,
+    receipt, portalIdentity: actor.role === "customer" ? actor : null });
+  const current = await readWorkflowPackInstance(tx, organizationRef, observation.source);
+  if (!current.instance) return;
+  const paired = await tx.get(current.instanceRef.collection("receipts").doc(workflowExecution.receiptIdFor(observation.source, receipt.request.requestId)));
+  if (paired.exists) {
+    const replay = workflowPackAdapters.planObservation({ ...observation, actor, requestId: receipt.request.requestId,
+      existingReceipt: paired.data(), nowISO: receipt.recordedAtISO });
+    await assertWorkflowPinnedDefinition(tx, organizationRef, replay.receipt.resultInstance);
+    return;
+  }
+  // A native receipt may legitimately predate tenant workflow initialization.
+  // Prove that ordering from the original native revisions, not wall-clock ties.
+  const initial = await tx.get(current.instanceRef.collection("receipts").where("priorRevision", "==", 0).limit(2));
+  if (initial.docs.length !== 1) throw new eventOperations.EventOperationsError("data-loss", "The attendance workflow initialization evidence is unavailable.");
+  const first = workflowExecution.verifyReceipt(initial.docs[0].data());
+  if (first.request.command !== "initialize" || workflowExecution.digest(first.source) !== workflowExecution.digest(observation.source)) throw new eventOperations.EventOperationsError("data-loss", "The attendance workflow initialization scope is invalid.");
+  const native = await tx.get(organizationRef.collection("quoteAttendance").doc(receipt.ledgerId).collection("receipts").doc(first.domainRef.evidenceId));
+  if (!native.exists) throw new eventOperations.EventOperationsError("data-loss", "The original attendance binding receipt is missing.");
+  const firstNative = quoteAttendance.verifyReceipt(native.data());
+  const firstObservation = workflowPackAdapters.attendanceObservation({ source: firstNative.source, state: firstNative.resultState, receipt: firstNative });
+  if (workflowExecution.digest(firstObservation.domainRef) !== workflowExecution.digest(first.domainRef)
+    || receipt.resultRevision >= firstNative.resultRevision) throw new eventOperations.EventOperationsError("data-loss", "The paired attendance workflow receipt is missing.");
+}
+exports.applyQuoteAttendanceCommand = functions.region(REGION).https.onCall(async (data, context) => {
+  try {
+    const request = quoteAttendance.normalizeStaffCommand(data);
+    const scope = eventOperations.normalizeScope(request);
+    const result = await workflowAuthorizedTransaction(context, scope.organizationId, false, async (tx, organizationRef, actor) => {
+      const stateRef = organizationRef.collection("quoteAttendance").doc(quoteAttendance.ledgerIdFor(request));
+      const receiptRef = stateRef.collection("receipts").doc(quoteAttendance.receiptIdFor(request));
+      const existing = await tx.get(receiptRef);
+      if (existing.exists) {
+        const replay = quoteAttendance.planCommand({ request, actor, existingReceipt: existing.data() });
+        await verifyAttendanceWorkflowReplay(tx, organizationRef, replay.receipt, actor);
+        return replay;
+      }
+      const source = await readQuoteAttendanceSource(tx, organizationRef, scope);
+      const current = await readQuoteAttendanceState(tx, organizationRef, source);
+      const timing = request.command === "request_confirmation" ? await readQuoteAttendanceTiming(tx, organizationRef, source) : null;
+      const nowISO = new Date().toISOString();
+      const planned = quoteAttendance.planCommand({ request, actor, source, state: current.state, currentReceipt: current.currentReceipt, timing, nowISO });
+      const observation = workflowPackAdapters.attendanceObservation({ source, state: planned.nextState, receipt: planned.receipt });
+      const coordinator = await prepareWorkflowPackObservation(tx, organizationRef, { observation, actor, requestId: request.requestId, nowISO });
+      const quote = await tx.get(organizationRef.collection(QUOTES_COLLECTION).doc(scope.quoteId));
+      const portalKey = quote.data()?.portalKey;
+      const portalRef = typeof portalKey === "string" && /^[A-Za-z0-9_-]{20,128}$/.test(portalKey) ? db.collection(PORTAL_COLLECTION).doc(portalKey) : null;
+      const portal = portalRef ? await tx.get(portalRef) : null;
+      if (current.state) tx.set(stateRef, planned.nextState); else tx.create(stateRef, planned.nextState);
+      tx.create(receiptRef, planned.receipt);
+      coordinator?.commit();
+      if (portal?.exists && portal.data()?.organizationId === scope.organizationId && portal.data()?.quoteId === scope.quoteId) tx.set(portalRef, { ...portal.data(), attendanceAvailable: true });
+      return planned;
+    });
+    return { ok: true, storage: "firebase", ...scope, idempotent: result.idempotent, receipt: quoteAttendance.publicReceipt(result.receipt) };
+  } catch (error) { return throwWorkflowPackError(error); }
+});
+exports.submitQuoteAttendanceResponse = functions.region(REGION).https.onCall(async (data) => {
+  try {
+    const input = quoteAttendance.normalizePortalCommand(data);
+    return await db.runTransaction(async (tx) => {
+      const nowISO = new Date().toISOString();
+      const binding = await readAttendancePortal(tx, input.portalKey, nowISO, "send");
+      if (input.expectedSourceVersionId !== binding.source.sourceVersionId || input.expectedPortalIssuedAtISO !== binding.actor.portalIssuedAtISO) throw new eventOperations.EventOperationsError("aborted", "The proposal source or portal issuance changed.");
+      const request = { organizationId: binding.source.organizationId, quoteId: binding.source.quoteId, sourceVersionId: binding.source.sourceVersionId,
+        acceptanceReceiptId: binding.source.acceptanceReceiptId, requestId: input.requestId, expectedAttendanceRevision: input.expectedAttendanceRevision,
+        command: "submit_response", confirmationRequestId: input.confirmationRequestId, count: input.count };
+      const current = await readQuoteAttendanceState(tx, binding.organizationRef, binding.source);
+      const receiptRef = current.stateRef.collection("receipts").doc(quoteAttendance.receiptIdFor(request));
+      const existing = await tx.get(receiptRef);
+      const planned = quoteAttendance.planCommand({ request, actor: binding.actor, source: binding.source, state: current.state,
+        currentReceipt: current.currentReceipt, existingReceipt: existing.exists ? existing.data() : null, nowISO });
+      if (planned.idempotent) await verifyAttendanceWorkflowReplay(tx, binding.organizationRef, planned.receipt, binding.actor);
+      if (!planned.idempotent) {
+        const observation = workflowPackAdapters.attendanceObservation({ source: binding.source, state: planned.nextState, receipt: planned.receipt, portalIdentity: binding.actor });
+        const bound = await readWorkflowPackInstance(tx, binding.organizationRef, observation.source);
+        const coordinator = bound.instance ? await prepareWorkflowPackObservation(tx, binding.organizationRef, { observation, actor: binding.actor, requestId: request.requestId, nowISO }) : null;
+        tx.set(current.stateRef, planned.nextState); tx.create(receiptRef, planned.receipt); coordinator?.commit();
+      }
+      return { ok: true, storage: "firebase", ...binding.scope, idempotent: planned.idempotent, receipt: quoteAttendance.publicReceipt(planned.receipt) };
+    });
+  } catch (error) { return throwWorkflowPackError(error); }
+});
+function workflowPackRequest(data, extra = []) {
+  const quoteReview = data?.workflowKind === "quote_review";
+  workflowExactKeys(data, ["organizationId", "quoteId", "workflowKind", ...(quoteReview ? ["simulationReceiptId"] : []), ...extra]);
+  eventOperations.normalizeScope(data);
+  if (!workflowDefinitions.RUNTIME_KINDS.includes(data.workflowKind)) throw new eventOperations.EventOperationsError("invalid-argument", "This workflow pack is unavailable.");
+  if (quoteReview && !/^ccs_[a-f0-9]{48}$/.test(data.simulationReceiptId || "")) throw new eventOperations.EventOperationsError("invalid-argument", "An exact commercial simulation receipt is required.");
+  return { organizationId: data.organizationId, quoteId: data.quoteId, workflowKind: data.workflowKind,
+    ...(quoteReview ? { simulationReceiptId: data.simulationReceiptId } : {}) };
+}
+async function readWorkflowPackContext(tx, organizationRef, scope) {
+  let source;
+  let domainSource;
+  let observation = null;
+  let current;
+  if (scope.workflowKind === "quote_review") {
+    const simulationSnap = await tx.get(organizationRef.collection(COMMERCIAL_CHANGE_SIMULATIONS_COLLECTION).doc(scope.simulationReceiptId));
+    if (!simulationSnap.exists) throw new eventOperations.EventOperationsError("not-found", "The commercial simulation is unavailable.");
+    const simulation = commercialChangeAuthority.validateSimulationReceipt(simulationSnap.data()?.receipt);
+    if (simulation.organizationId !== scope.organizationId || simulation.quoteId !== scope.quoteId || simulation.receiptId !== scope.simulationReceiptId) throw new eventOperations.EventOperationsError("permission-denied", "The simulation is outside this exact quote scope.");
+    source = workflowPackSource({ ...scope, sourceVersionId: simulation.baseRevisionId, sourceReceiptId: simulation.receiptId });
+    current = await readWorkflowPackInstance(tx, organizationRef, source);
+    let applyReceipt = null;
+    let authorizationReceipt = null;
+    const reference = current.instance?.domainRef;
+    if (reference && reference.evidenceId !== simulation.receiptId) {
+      if (reference.stateCode === "applied") {
+        const applied = await tx.get(organizationRef.collection(COMMERCIAL_CHANGE_APPLY_RECEIPTS_COLLECTION).doc(reference.evidenceId));
+        if (!applied.exists) throw new eventOperations.EventOperationsError("data-loss", "The pinned commercial apply receipt is missing.");
+        applyReceipt = commercialChangeAuthority.validateApplyReceipt(applied.data()?.receipt);
+      }
+      const authorizationId = applyReceipt?.authorizationReceiptId || (reference.stateCode === "authorized" ? reference.evidenceId : "");
+      if (authorizationId) {
+        const authorized = await tx.get(organizationRef.collection(COMMERCIAL_CHANGE_AUTHORIZATIONS_COLLECTION).doc(authorizationId));
+        if (!authorized.exists) throw new eventOperations.EventOperationsError("data-loss", "The pinned authorization receipt is missing.");
+        authorizationReceipt = commercialChangeAuthority.validateAuthorizationReceipt(authorized.data()?.receipt);
+      }
+    }
+    const quote = await tx.get(organizationRef.collection(QUOTES_COLLECTION).doc(scope.quoteId));
+    if (!quote.exists || quote.data()?.organizationId !== scope.organizationId || quote.data()?.activeVersionId !== (applyReceipt?.newRevisionId || simulation.baseRevisionId)) throw new eventOperations.EventOperationsError("aborted", "The current quote source changed. Refresh its workflow.");
+    if (current.instance) {
+      // Coordination metadata may migrate; native commercial policy remains pinned
+      // to the immutable publication sealed into this original simulation.
+      const pin = simulation.workflowPolicy?.definitionPin;
+      if (!pin || pin.workflowKind !== "quote_review") throw new eventOperations.EventOperationsError("data-loss", "The commercial source has no immutable origin policy.");
+      const origin = await tx.get(organizationRef.collection("workflowDefinitions").doc("quote_review").collection("versions").doc(pin.versionId));
+      if (!origin.exists) throw new eventOperations.EventOperationsError("data-loss", "The original commercial publication is missing.");
+      const definition = workflowDefinitions.validatePublishedVersion(origin.data(), { workflowKind: "quote_review", allowSeed: false });
+      observation = workflowPackAdapters.quoteObservation({ authority: commercialChangeAuthority, simulationReceipt: simulation, authorizationReceipt, applyReceipt, definition });
+    }
+  } else {
+    domainSource = scope.workflowKind === "final_guest_count" ? await readQuoteAttendanceSource(tx, organizationRef, scope) : await readEventOperatingSource(tx, organizationRef, scope);
+    source = workflowPackAdapters.acceptedSource(domainSource, scope.workflowKind);
+    current = await readWorkflowPackInstance(tx, organizationRef, source);
+    if (scope.workflowKind === "final_guest_count") {
+      const journal = await readQuoteAttendanceState(tx, organizationRef, domainSource);
+      if (journal.state) observation = workflowPackAdapters.attendanceObservation({ source: domainSource, state: journal.state, receipt: journal.currentReceipt,
+        portalIdentity: journal.currentReceipt.actor.role === "customer" ? journal.currentReceipt.actor : null });
+    } else if (scope.workflowKind === "event_execution") {
+      const phase = await readEventWorkflowPhase(tx, organizationRef, domainSource);
+      if (phase.ledger) observation = workflowPackAdapters.eventObservation({ source: domainSource, ledger: phase.ledger, receipt: phase.receipt });
+    } else {
+      const closeoutId = `closeout_${createHash("sha256").update([domainSource.organizationId, domainSource.quoteId, domainSource.sourceVersionId, domainSource.acceptanceReceiptId].join("\u0000")).digest("hex").slice(0, 48)}`;
+      const record = await tx.get(organizationRef.collection("postEventCloseouts").doc(closeoutId));
+      if (current.instance) {
+        const proofSnap = await tx.get(current.instanceRef.collection("observations").doc(current.instance.domainRef.evidenceId));
+        if (!record.exists || !proofSnap.exists) throw new eventOperations.EventOperationsError("data-loss", "The pinned closeout record or immutable adapter proof is missing.");
+        const proof = proofSnap.data();
+        workflowPackAdapters.verifyCloseoutObservationProof(proof);
+        const currentProof = workflowPackAdapters.buildCloseoutObservationProof({ source: domainSource, record: record.data(), priorRecord: proof.priorRecord, actionReceipt: proof.actionReceipt });
+        if (currentProof.proofDigest !== proof.proofDigest) throw new eventOperations.EventOperationsError("data-loss", "Current closeout state differs from its pinned observation.");
+        observation = workflowPackAdapters.closeoutObservation({ proof, definition: current.instance.definition });
+      }
+    }
+  }
+  if (current.instance && (!observation || workflowExecution.digest(current.instance.domainRef) !== workflowExecution.digest(observation.domainRef))) throw new eventOperations.EventOperationsError("data-loss", "The workflow instance differs from its current verified domain evidence.");
+  return { source, domainSource, current, observation };
+}
+exports.getWorkflowPackSnapshot = functions.region(REGION).https.onCall(async (data, context) => {
+  try {
+    const scope = workflowPackRequest(data);
+    const snapshot = await workflowAuthorizedTransaction(context, scope.organizationId, false, async (tx, organizationRef) => {
+      const state = await readWorkflowPackContext(tx, organizationRef, scope);
+      const projected = workflowExecution.projectSnapshot({ source: state.source, instance: state.current.instance, receipt: state.current.currentReceipt, observedAtISO: new Date().toISOString() });
+      if (state.current.instance) return projected;
+      const catalog = (await readWorkflowConfiguration(tx, organizationRef, scope.workflowKind)).snapshot;
+      const nextDefinition = catalog.activeVersion?.schemaVersion === 2 ? catalog.activeVersion : null;
+      return { ...projected, nextDefinition, initializationEligibility: { eligible: Boolean(nextDefinition), reasonCode: nextDefinition ? "published" : catalog.state === "retired" ? "retired" : "unpublished" } };
+    });
+    return { ok: true, storage: "firebase", ...scope, snapshot };
+  } catch (error) { return throwWorkflowPackError(error); }
+});
+exports.previewWorkflowPackMigration = functions.region(REGION).https.onCall(async (data, context) => {
+  try {
+    const scope = workflowPackRequest(data, ["sourceVersionId", "sourceReceiptId", "expectedRevision"]);
+    const expectedSource = workflowPackSource(data);
+    const preview = await workflowAuthorizedTransaction(context, scope.organizationId, true, async (tx, organizationRef) => {
+      const state = await readWorkflowPackContext(tx, organizationRef, scope);
+      if (workflowExecution.digest(state.source) !== workflowExecution.digest(expectedSource)) throw new eventOperations.EventOperationsError("aborted", "The workflow source changed.");
+      if (!state.current.instance) throw new eventOperations.EventOperationsError("failed-precondition", "This source has no configured workflow instance.");
+      workflowAssertRevision(data.expectedRevision, state.current.instance.revision);
+      const catalog = (await readWorkflowConfiguration(tx, organizationRef, scope.workflowKind)).snapshot;
+      if (catalog.state !== "published" || !catalog.activeVersion) throw new eventOperations.EventOperationsError("failed-precondition", "Migration requires an active tenant publication.");
+      return workflowExecution.previewMigration({ source: state.source, instance: state.current.instance, currentReceipt: state.current.currentReceipt, targetDefinition: catalog.activeVersion });
+    });
+    return { ok: true, storage: "firebase", ...scope, preview };
+  } catch (error) { return throwWorkflowPackError(error); }
+});
+exports.applyWorkflowPackCommand = functions.region(REGION).https.onCall(async (data, context) => {
+  try {
+    const commandInput = { ...data };
+    for (const key of ["organizationId", "quoteId", "workflowKind", "simulationReceiptId", "sourceVersionId", "sourceReceiptId"]) delete commandInput[key];
+    const command = workflowExecution.normalizeRequest(commandInput);
+    const scope = workflowPackRequest(data, ["sourceVersionId", "sourceReceiptId", ...Object.keys(command)]);
+    const source = workflowPackSource(data);
+    if (scope.workflowKind === "quote_review" && data.sourceReceiptId !== scope.simulationReceiptId) throw new eventOperations.EventOperationsError("invalid-argument", "The quote workflow must bind its exact simulation.");
+    const result = await workflowAuthorizedTransaction(context, scope.organizationId, ["migrate", "review_ack"].includes(command.command), async (tx, organizationRef, actor) => {
+      const instanceRef = organizationRef.collection("workflowInstances").doc(workflowExecution.instanceIdFor(source));
+      const receiptRef = instanceRef.collection("receipts").doc(workflowExecution.receiptIdFor(source, command.requestId));
+      const existing = await tx.get(receiptRef);
+      if (existing.exists) {
+        const replay = workflowExecution.planCommand({ source, request: command, actor, existingReceipt: existing.data() });
+        await assertWorkflowPinnedDefinition(tx, organizationRef, replay.receipt.resultInstance);
+        return replay;
+      }
+      const state = await readWorkflowPackContext(tx, organizationRef, scope);
+      if (workflowExecution.digest(state.source) !== workflowExecution.digest(source)) throw new eventOperations.EventOperationsError("aborted", "The workflow source changed.");
+      if (!state.current.instance) throw new eventOperations.EventOperationsError("failed-precondition", "This source has no configured workflow instance.");
+      let definition = null;
+      let actualsRef = null;
+      if (command.command === "migrate") {
+        const catalog = (await readWorkflowConfiguration(tx, organizationRef, scope.workflowKind)).snapshot;
+        if (catalog.state !== "published" || !catalog.activeVersion) throw new eventOperations.EventOperationsError("failed-precondition", "Migration requires an active tenant publication.");
+        definition = catalog.activeVersion;
+      } else if (command.command === "review_ack") {
+        if (scope.workflowKind !== "event_execution") throw new eventOperations.EventOperationsError("invalid-argument", "Actuals review belongs only to event execution.");
+        const phase = await readEventWorkflowPhase(tx, organizationRef, state.domainSource);
+        const actuals = await readEventOperatingActualsState(tx, phase.ledgerRef);
+        actualsRef = eventWorkflowAdapter.actualsReference(state.domainSource, actuals.actualsState, actuals.currentReceipt);
+      }
+      const planned = workflowExecution.planCommand({ source, request: command, actor, instance: state.current.instance, currentReceipt: state.current.currentReceipt, definition, actualsRef, nowISO: new Date().toISOString() });
+      tx.set(instanceRef, planned.nextInstance); tx.create(receiptRef, planned.receipt);
+      return planned;
+    });
+    return { ok: true, storage: "firebase", ...scope, idempotent: result.idempotent, receipt: eventWorkflowPublicReceipt(result.receipt) };
+  } catch (error) { return throwWorkflowPackError(error); }
+});
+async function resolveCommercialWorkflowContext(tx, refs, staff, { nowISO, catalogAuthority, simulation = null, attendanceSubmissionReceiptId = "" }) {
+  const settingsSnap = await tx.get(refs.settingsRef);
+  const enabled = tenantWorkflowRuntimeEnabled("EVENT_OPERATING_SPINE_ENABLED", refs.organizationRef.id) && settingsSnap.data()?.eventOperatingSpineEnabled === true;
+  const hasStoredBinding = Boolean(simulation?.workflowPolicy || simulation?.attendanceBinding);
+  const base = commercialChangeTrustedContext({ staff, nowISO, catalogAuthority });
+  if (!enabled) {
+    if (hasStoredBinding || attendanceSubmissionReceiptId) throw new CommercialChangeAuthorityError("failed-precondition", "The tenant workflow gate must be enabled for this bound commercial change.");
+    return { trustedContext: base, definition: null, workflowPolicy: null, attendanceBinding: null };
+  }
+  await assertEventOperatingTransactionAuthority(tx, refs.organizationRef, staff, false);
+  let definition = null;
+  let workflowPolicy = null;
+  if (simulation?.workflowPolicy) {
+    const pin = simulation.workflowPolicy.definitionPin;
+    const version = await tx.get(refs.organizationRef.collection("workflowDefinitions").doc("quote_review").collection("versions").doc(pin.versionId));
+    if (!version.exists) throw new CommercialChangeAuthorityError("data-loss", "The pinned quote review publication is unavailable.");
+    definition = workflowDefinitions.validatePublishedVersion(version.data(), { workflowKind: "quote_review", allowSeed: false });
+    workflowPolicy = workflowPackAdapters.quotePolicy(definition);
+    if (workflowExecution.digest(workflowPolicy) !== workflowExecution.digest(simulation.workflowPolicy)) throw new CommercialChangeAuthorityError("data-loss", "The quote review policy changed or does not match its sealed simulation.");
+  } else if (!simulation) {
+    const catalog = (await readWorkflowConfiguration(tx, refs.organizationRef, "quote_review")).snapshot;
+    if (catalog.state === "published" && catalog.activeVersion?.schemaVersion === 2) {
+      definition = catalog.activeVersion;
+      workflowPolicy = workflowPackAdapters.quotePolicy(definition);
+    } else if (catalog.state === "retired") throw new CommercialChangeAuthorityError("failed-precondition", "Quote review publication is retired for new simulations.");
+  } else {
+    const catalog = (await readWorkflowConfiguration(tx, refs.organizationRef, "quote_review")).snapshot;
+    if (catalog.activeVersion?.schemaVersion === 2) throw new CommercialChangeAuthorityError("aborted", "This legacy simulation predates the mandatory quote policy. Refresh the simulation.");
+  }
+  if (workflowPolicy && !workflowPolicy.approvalPolicy.allowedRoles.includes(staff.role)) throw new CommercialChangeAuthorityError("permission-denied", "This role is not enabled by the pinned commercial review policy.");
+  let attendanceBinding = simulation?.attendanceBinding || null;
+  if (attendanceSubmissionReceiptId || attendanceBinding) {
+    const scope = { organizationId: refs.organizationRef.id, quoteId: refs.quoteRef.id };
+    const source = await readQuoteAttendanceSource(tx, refs.organizationRef, scope);
+    const current = await readQuoteAttendanceState(tx, refs.organizationRef, source);
+    const submissionId = attendanceSubmissionReceiptId || attendanceBinding.submissionReceiptId;
+    if (!/^attendance_command_[a-f0-9]{48}$/.test(submissionId) || current.state?.latestResponse?.submissionReceiptId !== submissionId) throw new CommercialChangeAuthorityError("aborted", "The current submitted guest count changed. Review the latest response.");
+    const receipt = await tx.get(current.stateRef.collection("receipts").doc(submissionId));
+    if (!receipt.exists) throw new CommercialChangeAuthorityError("data-loss", "The exact submitted guest-count receipt is unavailable.");
+    const verified = quoteAttendance.submissionReference(receipt.data());
+    const resolved = { organizationId: source.organizationId, quoteId: source.quoteId, sourceVersionId: source.sourceVersionId,
+      acceptanceReceiptId: source.acceptanceReceiptId, submissionReceiptId: submissionId, submissionReceiptDigest: verified.receiptDigest, count: verified.count };
+    if (attendanceBinding && workflowExecution.digest(resolved) !== workflowExecution.digest(attendanceBinding)) throw new CommercialChangeAuthorityError("aborted", "The submitted attendance binding changed.");
+    attendanceBinding = resolved;
+  }
+  if ((workflowPolicy || attendanceBinding) && commercialChangeEnforcementState(settingsSnap.data() || {}, staff.organizationId).authorityState !== "enforced") throw new CommercialChangeAuthorityError("failed-precondition", "Commercial Change authority must be enforced before applying a workflow-bound policy or attendance response.");
+  return { definition, workflowPolicy, attendanceBinding,
+    trustedContext: workflowPolicy || attendanceBinding ? { ...base, workflowPolicy, attendanceBinding } : base };
+}
+
+// Inquiry Showcase is a customer-safe merchandising projection. It never owns
+// commercial price, availability, inclusion, staffing, or inventory authority.
+function throwInquiryShowcaseError(error, fallback = "Inquiry operation failed.") {
+  if (error instanceof functions.https.HttpsError) throw error;
+  if (error instanceof inquiryShowcase.InquiryShowcaseError || error instanceof QuoteCreationError) {
+    throw new functions.https.HttpsError(error.code || "failed-precondition", error.message, error.details || undefined);
+  }
+  functions.logger.error("Inquiry Showcase operation failed", {
+    error: normalizeText(error?.message || error).slice(0, 300)
+  });
+  throw new functions.https.HttpsError("internal", fallback);
+}
+
+function assertInquiryRuntime(organizationId) {
+  if (!tenantWorkflowRuntimeEnabled("INQUIRY_SHOWCASE_ENABLED", organizationId)) {
+    throw new functions.https.HttpsError("failed-precondition", "Inquiry pages are not enabled for this workspace.");
+  }
+}
+
+async function assertInquiryStaff(context, data, { admin = false } = {}) {
+  const requestedOrganizationId = normalizeOrganizationId(data?.organizationId);
+  const staff = await assertStaff(context, { expectedOrganizationId: requestedOrganizationId });
+  const organizationId = normalizeOrganizationId(requestedOrganizationId || staff.organizationId);
+  assertInquiryRuntime(organizationId);
+  if (admin && normalizeText(staff.role).toLowerCase() !== "admin") {
+    throw new functions.https.HttpsError("permission-denied", "Administrator role required.");
+  }
+  return { staff, organizationId };
+}
+
+async function loadInquiryCatalog(organizationId) {
+  const organizationRef = db.collection(ORGANIZATIONS_COLLECTION).doc(organizationId);
+  const settingsRef = organizationRef.collection("settings").doc("config");
+  const [organizationSnap, settingsSnap, packagesSnap, addonsSnap, rentalsSnap, menuItemsSnap] = await Promise.all([
+    organizationRef.get(),
+    settingsRef.get(),
+    organizationRef.collection("catalogPackages").get(),
+    organizationRef.collection("catalogAddons").get(),
+    organizationRef.collection("catalogRentals").get(),
+    organizationRef.collection("menuItems").get()
+  ]);
+  if (!organizationSnap.exists || !settingsSnap.exists) {
+    throw new inquiryShowcase.InquiryShowcaseError("failed-precondition", "The workspace catalog is not available.");
+  }
+  const mapDocs = (snapshot) => snapshot.docs.map((item) => ({ id: item.id, ...(item.data() || {}) }));
+  return {
+    organizationRef,
+    organization: organizationSnap.data() || {},
+    settings: settingsSnap.data() || {},
+    catalog: {
+      packages: mapDocs(packagesSnap),
+      addons: mapDocs(addonsSnap),
+      rentals: mapDocs(rentalsSnap),
+      menuItems: mapDocs(menuItemsSnap)
+    }
+  };
+}
+
+function projectInquiryCatalog(bundle) {
+  const collections = {
+    offer: bundle.catalog.packages,
+    addon: bundle.catalog.addons,
+    rental: bundle.catalog.rentals,
+    menu_item: bundle.catalog.menuItems,
+    template: Array.isArray(bundle.settings.eventTemplates) ? bundle.settings.eventTemplates : []
+  };
+  return Object.entries(collections).flatMap(([referenceType, items]) => items.map((item) => ({
+    referenceType,
+    referenceId: normalizeText(item.id),
+    name: normalizeText(item.name).slice(0, 160),
+    active: item.active !== false,
+    customerSafe: item.internalOnly !== true && item.customerVisible !== false,
+    sourceItemVersion: inquiryShowcase.sourceItemVersion(item)
+  })));
+}
+
+function inquiryShowcaseRefs(organizationId) {
+  const organizationRef = db.collection(ORGANIZATIONS_COLLECTION).doc(organizationId);
+  const headRef = organizationRef.collection(INQUIRY_SHOWCASES_COLLECTION).doc("default");
+  return { organizationRef, headRef, versionsRef: headRef.collection(INQUIRY_VERSIONS_COLLECTION) };
+}
+
+function inquiryReceiptId(kind, value) {
+  return `${kind}_${inquiryShowcase.digest({ kind, value }).slice(0, 48)}`;
+}
+
+function incrementInquiryAnalytics(tx, organizationId, eventName, nowISO) {
+  if (!inquiryShowcase.ANALYTICS_EVENTS.includes(eventName)) return;
+  const day = nowISO.slice(0, 10);
+  const ref = db.collection("inquiryAnalytics").doc(`${day}_${eventName}`);
+  tx.set(ref, {
+    schemaVersion: 1,
+    day,
+    eventName,
+    count: FieldValue.increment(1),
+    updatedAt: FieldValue.serverTimestamp()
+  }, { merge: true });
+}
+
+async function recordInquiryAnalyticsBestEffort(organizationId, eventName, nowISO) {
+  try {
+    await db.runTransaction(async (tx) => incrementInquiryAnalytics(tx, organizationId, eventName, nowISO));
+  } catch (error) {
+    functions.logger.warn("Inquiry analytics write failed", {
+      organizationId,
+      eventName,
+      error: normalizeText(error?.message || error).slice(0, 200)
+    });
+  }
+}
+
+async function updateInquiryNotificationBestEffort(inquiryRef, notification) {
+  try {
+    await inquiryRef.set({ notification, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+  } catch (error) {
+    functions.logger.warn("Inquiry notification status write failed after durable receipt", {
+      inquiryId: inquiryRef.id,
+      state: notification?.state || "unknown",
+      error: normalizeText(error?.message || error).slice(0, 200)
+    });
+  }
+}
+
+function requestBodySize(data) {
+  try { return Buffer.byteLength(JSON.stringify(data || {}), "utf8"); } catch { return Number.MAX_SAFE_INTEGER; }
+}
+
+async function verifyInquiryTurnstile({ token, requestIp } = {}) {
+  const secret = readBoundSecret(INQUIRY_TURNSTILE_SECRET_NAME);
+  const allowedHostnames = String(readConfig("inquiry_turnstile_hostnames", ""))
+    .split(",").map((value) => normalizeHostname(value)).filter(Boolean);
+  if (!secret || !allowedHostnames.length) {
+    throw new functions.https.HttpsError("failed-precondition", "Inquiry verification is not configured.");
+  }
+  if (secret === CLOUDFLARE_TURNSTILE_ALWAYS_PASS_TEST_SECRET && process.env.FUNCTIONS_EMULATOR !== "true") {
+    throw new functions.https.HttpsError("failed-precondition", "Inquiry verification test credentials are not permitted in a hosted runtime.");
+  }
+  let response;
+  try {
+    response = await fetch("https://challenges.cloudflare.com/turnstile/v0/siteverify", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ secret, response: normalizeText(token), ...(requestIp ? { remoteip: requestIp } : {}) }),
+      signal: AbortSignal.timeout(5_000)
+    });
+  } catch {
+    throw new functions.https.HttpsError("unavailable", "Inquiry verification is temporarily unavailable.");
+  }
+  const result = await response.json().catch(() => null);
+  const hostname = normalizeHostname(result?.hostname);
+  const officialTest = secret === CLOUDFLARE_TURNSTILE_ALWAYS_PASS_TEST_SECRET
+    && result?.success === true && hostname === "example.com" && !normalizeText(result?.action);
+  if (!response.ok || result?.success !== true || (!officialTest && (
+    normalizeText(result.action) !== "public_inquiry_submit" || !allowedHostnames.includes(hostname)
+  ))) {
+    throw new functions.https.HttpsError("permission-denied", "Inquiry verification failed. Refresh and try again.");
+  }
+  return { action: normalizeText(result.action), hostname, challengeTimestamp: normalizeText(result.challenge_ts) };
+}
+
+async function applyInquiryRateLimits({ organizationId, requestIp, nowMs }) {
+  const secret = readBoundSecret(INQUIRY_RATE_LIMIT_SECRET_NAME);
+  if (!secret) throw new functions.https.HttpsError("failed-precondition", "Inquiry abuse controls are not configured.");
+  const windowStart = Math.floor(nowMs / 3_600_000) * 3_600_000;
+  const ipKey = createHmac("sha256", secret).update(`${organizationId}|${requestIp || "unknown"}|${windowStart}`).digest("hex");
+  const tenantKey = createHmac("sha256", secret).update(`${organizationId}|tenant|${windowStart}`).digest("hex");
+  const ipRef = db.collection(INQUIRY_RATE_LIMITS_COLLECTION).doc(`ip_${ipKey}`);
+  const tenantRef = db.collection(INQUIRY_RATE_LIMITS_COLLECTION).doc(`tenant_${tenantKey}`);
+  await db.runTransaction(async (tx) => {
+    const [ipSnap, tenantSnap] = await Promise.all([tx.get(ipRef), tx.get(tenantRef)]);
+    const ipCount = Number(ipSnap.data()?.count || 0);
+    const tenantCount = Number(tenantSnap.data()?.count || 0);
+    if (ipCount >= 8 || tenantCount >= 40) {
+      throw new functions.https.HttpsError("resource-exhausted", "Too many inquiry requests. Try again later.");
+    }
+    const patch = (scope, count) => ({ scope, count: count + 1, windowStartISO: new Date(windowStart).toISOString(), expiresAt: Timestamp.fromMillis(windowStart + 7_200_000), updatedAt: FieldValue.serverTimestamp() });
+    tx.set(ipRef, patch("tenant_ip_hour", ipCount));
+    tx.set(tenantRef, patch("tenant_hour", tenantCount));
+  });
+}
+
+async function publishInquiryVersion({ organizationId, staff, sourceVersion = null } = {}) {
+  const bundle = await loadInquiryCatalog(organizationId);
+  const refs = inquiryShowcaseRefs(organizationId);
+  return db.runTransaction(async (tx) => {
+    const [headSnap, settingsSnap] = await Promise.all([
+      tx.get(refs.headRef),
+      tx.get(refs.organizationRef.collection("settings").doc("config"))
+    ]);
+    if (!headSnap.exists) throw new inquiryShowcase.InquiryShowcaseError("failed-precondition", "Save an Inquiry Showcase draft before publishing.");
+    if (!settingsSnap.exists || Number(settingsSnap.data()?.catalogRevision || 0) !== Number(bundle.settings.catalogRevision || 0)) {
+      throw new inquiryShowcase.InquiryShowcaseError("aborted", "The catalog changed during publication. Review the Inquiry Showcase and publish again.");
+    }
+    const head = headSnap.data() || {};
+    if (head.tenantEnabled !== true) throw new inquiryShowcase.InquiryShowcaseError("failed-precondition", "Enable this tenant's inquiry page before publishing.");
+    let draft = head.draft;
+    if (sourceVersion) {
+      const sourceSnap = await tx.get(refs.versionsRef.doc(sourceVersion));
+      if (!sourceSnap.exists) throw new inquiryShowcase.InquiryShowcaseError("not-found", "The requested publication version is unavailable.");
+      const source = sourceSnap.data() || {};
+      draft = {
+        slug: source.slug,
+        pageTitle: source.pageTitle,
+        introduction: source.introduction,
+        responsePromise: source.responsePromise,
+        entries: source.entries
+      };
+    }
+    const sequence = Math.max(1, Number(head.nextVersionNumber || 1));
+    const versionId = `pub_${String(sequence).padStart(6, "0")}`;
+    const nowISO = new Date().toISOString();
+    const publication = inquiryShowcase.buildPublication({ organizationId, versionId, draft, catalog: bundle.catalog, settings: bundle.settings, actor: staff, nowISO });
+    const slugRef = db.collection(INQUIRY_SLUGS_COLLECTION).doc(publication.slug);
+    const slugSnap = await tx.get(slugRef);
+    if (slugSnap.exists && normalizeOrganizationId(slugSnap.data()?.organizationId) !== organizationId) {
+      throw new inquiryShowcase.InquiryShowcaseError("already-exists", "That inquiry page slug is already in use.");
+    }
+    const priorSlug = normalizeText(head.activeSlug);
+    if (priorSlug && priorSlug !== publication.slug) {
+      tx.set(db.collection(INQUIRY_SLUGS_COLLECTION).doc(priorSlug), {
+        active: false,
+        deactivatedAtISO: nowISO,
+        deactivatedAt: FieldValue.serverTimestamp()
+      }, { merge: true });
+    }
+    const receiptId = inquiryReceiptId("inquiry_publish", `${organizationId}|${versionId}|${publication.publicationDigest}`);
+    tx.create(refs.versionsRef.doc(versionId), { ...publication, createdAt: FieldValue.serverTimestamp() });
+    tx.create(refs.headRef.collection(INQUIRY_RECEIPTS_COLLECTION).doc(receiptId), {
+      schemaVersion: 1, receiptType: sourceVersion ? "inquiry_version_republished" : "inquiry_published",
+      receiptId, organizationId, versionId, sourceVersionId: sourceVersion || "", publicationDigest: publication.publicationDigest,
+      actor: { uid: staff.uid, email: normalizeEmail(staff.email), role: staff.role }, occurredAtISO: nowISO,
+      createdAt: FieldValue.serverTimestamp()
+    });
+    tx.set(slugRef, { organizationId, showcaseId: "default", active: true, versionId, publicationDigest: publication.publicationDigest, updatedAt: FieldValue.serverTimestamp() });
+    tx.set(refs.headRef, { state: "published", activeVersionId: versionId, activeSlug: publication.slug, nextVersionNumber: sequence + 1, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+    return { versionId, receiptId, publicationDigest: publication.publicationDigest, slug: publication.slug, publishedAtISO: nowISO };
+  });
+}
+
+exports.getPublishedInquiryShowcase = functions.region(REGION).https.onCall(async (data) => {
+  try {
+    const requestedSlug = inquiryShowcase.slug(data?.slug);
+    if (!requestedSlug) throw new inquiryShowcase.InquiryShowcaseError("invalid-argument", "A valid inquiry slug is required.");
+    const slugSnap = await db.collection(INQUIRY_SLUGS_COLLECTION).doc(requestedSlug).get();
+    if (!slugSnap.exists || slugSnap.data()?.active !== true) throw new inquiryShowcase.InquiryShowcaseError("not-found", "This inquiry page is not available.");
+    const slugRecord = slugSnap.data() || {};
+    const organizationId = normalizeOrganizationId(slugRecord.organizationId);
+    assertInquiryRuntime(organizationId);
+    const refs = inquiryShowcaseRefs(organizationId);
+    const [headSnap, versionSnap, bundle] = await Promise.all([
+      refs.headRef.get(), refs.versionsRef.doc(normalizeText(slugRecord.versionId)).get(), loadInquiryCatalog(organizationId)
+    ]);
+    if (headSnap.data()?.state !== "published" || headSnap.data()?.tenantEnabled !== true || !versionSnap.exists) {
+      throw new inquiryShowcase.InquiryShowcaseError("not-found", "This inquiry page is not available.");
+    }
+    const nowISO = new Date().toISOString();
+    const analyticsEvent = normalizeText(data?.analyticsEvent) === "inquiry_form_started"
+      && normalizeText(data?.publicationVersionId) === normalizeText(slugRecord.versionId)
+      ? "inquiry_form_started"
+      : "inquiry_page_viewed";
+    await recordInquiryAnalyticsBestEffort(organizationId, analyticsEvent, nowISO);
+    return { ok: true, showcase: inquiryShowcase.publicProjection(versionSnap.data(), { ...bundle.organization, ...bundle.settings }) };
+  } catch (error) { return throwInquiryShowcaseError(error, "Unable to load this inquiry page."); }
+});
+
+exports.getInquiryShowcaseAdminState = functions.region(REGION).https.onCall(async (data, context) => {
+  try {
+    const { staff, organizationId } = await assertInquiryStaff(context, data, { admin: true });
+    const bundle = await loadInquiryCatalog(organizationId);
+    const refs = inquiryShowcaseRefs(organizationId);
+    const [headSnap, versionsSnap, receiptsSnap] = await Promise.all([
+      refs.headRef.get(), refs.versionsRef.orderBy("publishedAtISO", "desc").limit(20).get(), refs.headRef.collection(INQUIRY_RECEIPTS_COLLECTION).orderBy("occurredAtISO", "desc").limit(20).get()
+    ]);
+    return { ok: true, organizationId, role: staff.role, state: headSnap.exists ? headSnap.data() : { state: "draft", tenantEnabled: false, draft: null }, catalogRevision: Number(bundle.settings.catalogRevision || 0), catalogReferences: projectInquiryCatalog(bundle), versions: versionsSnap.docs.map((doc) => ({ id: doc.id, ...doc.data() })), receipts: receiptsSnap.docs.map((doc) => ({ id: doc.id, ...doc.data() })) };
+  } catch (error) { return throwInquiryShowcaseError(error); }
+});
+
+exports.saveInquiryShowcaseDraft = functions.region(REGION).https.onCall(async (data, context) => {
+  try {
+    const { staff, organizationId } = await assertInquiryStaff(context, data, { admin: true });
+    const draft = inquiryShowcase.normalizeDraft(data?.draft);
+    const bundle = await loadInquiryCatalog(organizationId);
+    const validation = inquiryShowcase.validateDraftReferences(draft, bundle);
+    const refs = inquiryShowcaseRefs(organizationId);
+    const nowISO = new Date().toISOString();
+    const headSnap = await refs.headRef.get();
+    const retainedState = headSnap.data()?.activeVersionId && headSnap.data()?.state !== "paused" ? "published" : headSnap.data()?.state || "draft";
+    await refs.headRef.set({ schemaVersion: 1, showcaseId: "default", organizationId, state: retainedState, tenantEnabled: data?.tenantEnabled === true, draft, draftValidation: validation, updatedAtISO: nowISO, updatedBy: { uid: staff.uid, email: normalizeEmail(staff.email) }, ...(!headSnap.exists ? { nextVersionNumber: 1 } : {}), updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+    return { ok: true, state: retainedState, tenantEnabled: data?.tenantEnabled === true, validation, savedAtISO: nowISO };
+  } catch (error) { return throwInquiryShowcaseError(error, "Unable to save the Inquiry Showcase draft."); }
+});
+
+exports.publishInquiryShowcase = functions.region(REGION).https.onCall(async (data, context) => {
+  try { const { staff, organizationId } = await assertInquiryStaff(context, data, { admin: true }); return { ok: true, ...(await publishInquiryVersion({ organizationId, staff })) }; }
+  catch (error) { return throwInquiryShowcaseError(error, "Unable to publish the Inquiry Showcase."); }
+});
+
+exports.republishInquiryShowcaseVersion = functions.region(REGION).https.onCall(async (data, context) => {
+  try { const { staff, organizationId } = await assertInquiryStaff(context, data, { admin: true }); return { ok: true, ...(await publishInquiryVersion({ organizationId, staff, sourceVersion: normalizeText(data?.versionId) })) }; }
+  catch (error) { return throwInquiryShowcaseError(error, "Unable to republish that Inquiry Showcase version."); }
+});
+
+exports.pauseInquiryShowcase = functions.region(REGION).https.onCall(async (data, context) => {
+  try {
+    const { staff, organizationId } = await assertInquiryStaff(context, data, { admin: true });
+    const refs = inquiryShowcaseRefs(organizationId);
+    const nowISO = new Date().toISOString();
+    const result = await db.runTransaction(async (tx) => {
+      const headSnap = await tx.get(refs.headRef); const head = headSnap.data() || {};
+      if (!headSnap.exists || head.state !== "published") throw new inquiryShowcase.InquiryShowcaseError("failed-precondition", "Only a published inquiry page can be paused.");
+      const receiptId = inquiryReceiptId("inquiry_pause", `${organizationId}|${head.activeVersionId}|${nowISO}`);
+      tx.set(db.collection(INQUIRY_SLUGS_COLLECTION).doc(head.activeSlug), { active: false, deactivatedAtISO: nowISO, deactivatedAt: FieldValue.serverTimestamp() }, { merge: true });
+      tx.set(refs.headRef, { state: "paused", updatedAtISO: nowISO, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+      tx.create(refs.headRef.collection(INQUIRY_RECEIPTS_COLLECTION).doc(receiptId), { schemaVersion: 1, receiptType: "inquiry_paused", receiptId, organizationId, versionId: head.activeVersionId, actor: { uid: staff.uid, email: normalizeEmail(staff.email) }, occurredAtISO: nowISO, createdAt: FieldValue.serverTimestamp() });
+      return { receiptId, versionId: head.activeVersionId, pausedAtISO: nowISO };
+    });
+    return { ok: true, ...result };
+  } catch (error) { return throwInquiryShowcaseError(error, "Unable to pause the Inquiry Showcase."); }
+});
+
+const inquirySubmitRegion = functions.region(REGION);
+const inquirySubmitRuntime = typeof inquirySubmitRegion.runWith === "function"
+  ? inquirySubmitRegion.runWith({ secrets: ["INQUIRY_TURNSTILE_SECRET", "INQUIRY_RATE_LIMIT_SECRET", "RESEND_API_KEY"] })
+  : inquirySubmitRegion;
+exports.submitPublicInquiry = inquirySubmitRuntime.https.onCall(async (data, context) => {
+  try {
+    if (requestBodySize(data) > 32_000) throw new inquiryShowcase.InquiryShowcaseError("invalid-argument", "Inquiry request is too large.");
+    const requestedSlug = inquiryShowcase.slug(data?.slug);
+    const requestId = normalizeText(data?.requestId);
+    if (!requestedSlug || !/^[A-Za-z0-9][A-Za-z0-9._:@-]{15,127}$/u.test(requestId)) throw new inquiryShowcase.InquiryShowcaseError("invalid-argument", "Inquiry request identity is invalid.");
+    const slugSnap = await db.collection(INQUIRY_SLUGS_COLLECTION).doc(requestedSlug).get();
+    if (!slugSnap.exists || slugSnap.data()?.active !== true) throw new inquiryShowcase.InquiryShowcaseError("not-found", "This inquiry page is not available.");
+    const organizationId = normalizeOrganizationId(slugSnap.data()?.organizationId);
+    assertInquiryRuntime(organizationId);
+    const requestDocId = inquiryReceiptId("public_inquiry", `${requestedSlug}|${requestId}`);
+    const requestRef = db.collection(INQUIRY_REQUESTS_COLLECTION).doc(requestDocId);
+    const existingRequestSnap = await requestRef.get();
+    if (existingRequestSnap.exists) {
+      const prior = existingRequestSnap.data() || {};
+      if (!inquiryShowcase.recoverySecretMatches(data?.recoverySecret, prior.recoverySecretHash)) throw new functions.https.HttpsError("permission-denied", "Inquiry request cannot be resolved.");
+      return { ok: true, idempotent: true, inquiryId: prior.inquiryId, receiptId: prior.receiptId, submittedAtISO: prior.submittedAtISO, message: "Your inquiry was received. This is not a quote, booking, or availability confirmation." };
+    }
+    const requestIp = getTrustedBuyerAccessRequestIp(context);
+    const turnstile = await verifyInquiryTurnstile({ token: data?.turnstileToken, requestIp });
+    await applyInquiryRateLimits({ organizationId, requestIp, nowMs: Date.now() });
+    const refs = inquiryShowcaseRefs(organizationId);
+    const versionId = normalizeText(data?.publicationVersionId);
+    const versionSnap = await refs.versionsRef.doc(versionId).get();
+    const headSnap = await refs.headRef.get();
+    if (!versionSnap.exists || headSnap.data()?.state !== "published" || headSnap.data()?.activeVersionId !== versionId || slugSnap.data()?.versionId !== versionId) {
+      throw new inquiryShowcase.InquiryShowcaseError("aborted", "This inquiry page changed while it was open. Refresh and review your request before submitting.");
+    }
+    const inquiryRef = refs.organizationRef.collection(CUSTOMER_INQUIRIES_COLLECTION).doc();
+    const now = new Date(); const nowISO = now.toISOString(); const deleteAt = new Date(now.getTime() + 90 * 24 * 60 * 60 * 1000);
+    const inquiry = inquiryShowcase.buildInquiry({ organizationId, inquiryId: inquiryRef.id, requestId, recoverySecret: data?.recoverySecret, publication: versionSnap.data(), fields: data?.fields, preferenceRefs: data?.preferenceRefs, nowISO, deleteAtISO: deleteAt.toISOString() });
+    const receiptId = inquiryReceiptId("inquiry_received", `${organizationId}|${inquiryRef.id}|${requestId}`);
+    const result = await db.runTransaction(async (tx) => {
+      const [requestSnap, currentHeadSnap] = await Promise.all([tx.get(requestRef), tx.get(refs.headRef)]);
+      if (requestSnap.exists) {
+        const prior = requestSnap.data() || {};
+        if (!inquiryShowcase.recoverySecretMatches(data?.recoverySecret, prior.recoverySecretHash)) throw new functions.https.HttpsError("permission-denied", "Inquiry request cannot be resolved.");
+        return { idempotent: true, inquiryId: prior.inquiryId, receiptId: prior.receiptId, submittedAtISO: prior.submittedAtISO };
+      }
+      if (currentHeadSnap.data()?.activeVersionId !== versionId || currentHeadSnap.data()?.state !== "published") throw new inquiryShowcase.InquiryShowcaseError("aborted", "This inquiry page changed while it was open. Refresh and review your request before submitting.");
+      tx.create(inquiryRef, { ...inquiry, revision: 1, deleteAt: Timestamp.fromDate(deleteAt), turnstile, createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() });
+      tx.create(inquiryRef.collection(INQUIRY_RECEIPTS_COLLECTION).doc(receiptId), { schemaVersion: 1, receiptType: "inquiry_received", receiptId, organizationId, inquiryId: inquiryRef.id, publicationVersionId: versionId, publicationDigest: inquiry.source.publicationDigest, submittedAtISO: nowISO, createdAt: FieldValue.serverTimestamp() });
+      tx.create(requestRef, { schemaVersion: 1, organizationId, inquiryId: inquiryRef.id, requestId, recoverySecretHash: inquiry.recoverySecretHash, receiptId, state: "received", submittedAtISO: nowISO, expiresAt: Timestamp.fromDate(deleteAt), createdAt: FieldValue.serverTimestamp() });
+      incrementInquiryAnalytics(tx, organizationId, "inquiry_submitted", nowISO);
+      return { idempotent: false, inquiryId: inquiryRef.id, receiptId, submittedAtISO: nowISO };
+    });
+    if (!result.idempotent) {
+      try {
+        const bundle = await loadInquiryCatalog(organizationId);
+        const notifyEmail = normalizeEmail(bundle.settings.inquiryNotificationEmail || bundle.settings.businessEmail);
+        if (notifyEmail) {
+          const sent = await sendCustomerEmail({ toEmail: notifyEmail, subject: `New event inquiry: ${inquiry.fields.eventType}`, text: `A new inquiry was recorded in QuotePilot.\n\nContact: ${inquiry.fields.name} <${inquiry.fields.email}>\nEvent date: ${inquiry.fields.eventDate}\nEstimated guests: ${inquiry.fields.estimatedGuests}\n\nOpen Opportunities in QuotePilot to acknowledge and review it.`, idempotencyKey: receiptId });
+          await updateInquiryNotificationBestEffort(inquiryRef, { state: "accepted", attemptedAtISO: new Date().toISOString(), provider: sent.provider, messageId: sent.messageId, failureCode: "" });
+        } else {
+          await updateInquiryNotificationBestEffort(inquiryRef, { state: "not_configured", attemptedAtISO: new Date().toISOString(), provider: "none", messageId: "", failureCode: "" });
+        }
+      } catch (error) {
+        await updateInquiryNotificationBestEffort(inquiryRef, { state: "failed", attemptedAtISO: new Date().toISOString(), provider: getEmailProvider(), messageId: "", failureCode: normalizeText(error?.code || "provider_failure").slice(0, 80) });
+      }
+    }
+    return { ok: true, ...result, message: "Your inquiry was received. This is not a quote, booking, or availability confirmation." };
+  } catch (error) { return throwInquiryShowcaseError(error, "Unable to submit this inquiry."); }
+  });
+
+exports.resolveInquirySubmission = functions.region(REGION).https.onCall(async (data) => {
+  try {
+    const requestedSlug = inquiryShowcase.slug(data?.slug); const requestId = normalizeText(data?.requestId);
+    const requestRef = db.collection(INQUIRY_REQUESTS_COLLECTION).doc(inquiryReceiptId("public_inquiry", `${requestedSlug}|${requestId}`));
+    const requestSnap = await requestRef.get();
+    if (!requestSnap.exists || !inquiryShowcase.recoverySecretMatches(data?.recoverySecret, requestSnap.data()?.recoverySecretHash)) throw new inquiryShowcase.InquiryShowcaseError("not-found", "No matching inquiry outcome was found.");
+    const request = requestSnap.data() || {};
+    return { ok: true, outcome: "received", receiptId: request.receiptId, submittedAtISO: request.submittedAtISO, message: "Your inquiry was received. This response does not include inquiry content." };
+  } catch (error) { return throwInquiryShowcaseError(error, "Unable to resolve this inquiry outcome."); }
+});
+
+function projectInquiryForQueue(doc) {
+  const value = doc.data ? doc.data() : doc;
+  return { inquiryId: value.inquiryId || doc.id, state: value.state, revision: Number(value.revision || 0), submittedAtISO: value.submittedAtISO, assignment: value.assignment || null, fields: value.fields || {}, preferences: value.preferences || [], source: value.source || {}, notification: value.notification || {}, conversion: value.conversion || {} };
+}
+
+exports.getInquiryQueue = functions.region(REGION).https.onCall(async (data, context) => {
+  try {
+    const { organizationId } = await assertInquiryStaff(context, data);
+    const snapshot = await db.collection(ORGANIZATIONS_COLLECTION).doc(organizationId).collection(CUSTOMER_INQUIRIES_COLLECTION).orderBy("submittedAtISO", "desc").limit(100).get();
+    const inquiries = snapshot.docs.map(projectInquiryForQueue);
+    return { ok: true, organizationId, inquiries, truncated: snapshot.size >= 100 };
+  } catch (error) { return throwInquiryShowcaseError(error, "Unable to load inquiries."); }
+});
+
+async function transitionStoredInquiry({ organizationId, inquiryId, staff, nextState, expectedRevision, reason = "" }) {
+  const ref = db.collection(ORGANIZATIONS_COLLECTION).doc(organizationId).collection(CUSTOMER_INQUIRIES_COLLECTION).doc(normalizeText(inquiryId));
+  const nowISO = new Date().toISOString();
+  return db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref); if (!snap.exists) throw new inquiryShowcase.InquiryShowcaseError("not-found", "Inquiry not found.");
+    const current = snap.data() || {};
+    if (Number(current.revision || 0) !== Number(expectedRevision)) throw new inquiryShowcase.InquiryShowcaseError("aborted", "The inquiry changed. Refresh and try again.");
+    const patch = inquiryShowcase.transitionInquiry(current, nextState, { actor: staff, nowISO, reason });
+    const revision = Number(current.revision || 0) + 1;
+    const receiptId = inquiryReceiptId(`inquiry_${nextState}`, `${organizationId}|${inquiryId}|${revision}`);
+    tx.update(ref, { ...patch, revision, updatedAt: FieldValue.serverTimestamp() });
+    tx.create(ref.collection(INQUIRY_RECEIPTS_COLLECTION).doc(receiptId), { schemaVersion: 1, receiptType: `inquiry_${nextState}`, receiptId, organizationId, inquiryId, actor: { uid: staff.uid, email: normalizeEmail(staff.email), role: staff.role }, occurredAtISO: nowISO, reason: normalizeText(reason).slice(0, 300), createdAt: FieldValue.serverTimestamp() });
+    if (nextState === "dismissed") incrementInquiryAnalytics(tx, organizationId, "inquiry_dismissed", nowISO);
+    return { inquiryId, state: nextState, revision, receiptId, occurredAtISO: nowISO };
+  });
+}
+
+exports.acknowledgeInquiry = functions.region(REGION).https.onCall(async (data, context) => {
+  try { const { staff, organizationId } = await assertInquiryStaff(context, data); return { ok: true, ...(await transitionStoredInquiry({ organizationId, inquiryId: data?.inquiryId, staff, nextState: "acknowledged", expectedRevision: data?.expectedRevision })) }; }
+  catch (error) { return throwInquiryShowcaseError(error, "Unable to acknowledge this inquiry."); }
+});
+
+exports.dismissInquiry = functions.region(REGION).https.onCall(async (data, context) => {
+  try { const { staff, organizationId } = await assertInquiryStaff(context, data); return { ok: true, ...(await transitionStoredInquiry({ organizationId, inquiryId: data?.inquiryId, staff, nextState: "dismissed", expectedRevision: data?.expectedRevision, reason: data?.reason })) }; }
+  catch (error) { return throwInquiryShowcaseError(error, "Unable to dismiss this inquiry."); }
+});
+
+async function buildInquiryConversionPreview(organizationId, inquiryId) {
+  const bundle = await loadInquiryCatalog(organizationId);
+  const ref = bundle.organizationRef.collection(CUSTOMER_INQUIRIES_COLLECTION).doc(normalizeText(inquiryId));
+  const snap = await ref.get(); if (!snap.exists) throw new inquiryShowcase.InquiryShowcaseError("not-found", "Inquiry not found.");
+  const inquiry = { inquiryId: snap.id, ...(snap.data() || {}) };
+  if (!["received", "acknowledged"].includes(inquiry.state)) throw new inquiryShowcase.InquiryShowcaseError("failed-precondition", "This inquiry is no longer available for conversion.");
+  const drift = inquiryShowcase.resolveReferenceDrift(inquiry.preferences, bundle);
+  const claimRef = bundle.organizationRef.collection(CUSTOMER_EMAIL_CLAIMS_COLLECTION).doc(customerEmailClaimDocumentId(inquiry.fields?.email));
+  const claimSnap = await claimRef.get(); const claim = claimSnap.exists ? claimSnap.data() || {} : null;
+  return { bundle, inquiry, drift, prefill: inquiryShowcase.buildQuotePrefill(inquiry, drift), identity: claim ? { state: "existing_claim", customerId: normalizeText(claim.customerId), email: normalizeEmail(claim.emailKey) } : { state: "unclaimed", customerId: "", email: normalizeEmail(inquiry.fields?.email) }, catalogRevision: Number(bundle.settings.catalogRevision || 0) };
+}
+
+function quoteFormContainsInquiryReference(form = {}, driftItem = {}) {
+  const referenceId = normalizeText(driftItem.referenceId);
+  if (!referenceId) return false;
+  if (driftItem.referenceType === "offer") return normalizeText(form.pkg) === referenceId;
+  if (driftItem.referenceType === "template") return normalizeText(form.eventTemplateId) === referenceId;
+  const field = driftItem.referenceType === "addon"
+    ? "addons"
+    : driftItem.referenceType === "rental" ? "rentals" : driftItem.referenceType === "menu_item" ? "menuItems" : "";
+  return field ? (Array.isArray(form[field]) ? form[field] : []).map(normalizeText).includes(referenceId) : false;
+}
+
+exports.previewInquiryConversion = functions.region(REGION).https.onCall(async (data, context) => {
+  try {
+    const { organizationId } = await assertInquiryStaff(context, data);
+    const preview = await buildInquiryConversionPreview(organizationId, data?.inquiryId);
+    const nowISO = new Date().toISOString();
+    await recordInquiryAnalyticsBestEffort(organizationId, "inquiry_reviewed", nowISO);
+    return { ok: true, organizationId, inquiryId: preview.inquiry.inquiryId, inquiryRevision: Number(preview.inquiry.revision || 0), state: preview.inquiry.state, drift: preview.drift, identity: preview.identity, prefill: preview.prefill, catalogRevision: preview.catalogRevision, reviewedAtISO: nowISO };
+  } catch (error) { return throwInquiryShowcaseError(error, "Unable to preview inquiry conversion."); }
+});
+
+exports.convertInquiryToQuoteDraft = functions.region(REGION).https.onCall(async (data, context) => {
+  let staff = null; let organizationId = "";
+  try {
+    ({ staff, organizationId } = await assertInquiryStaff(context, data));
+    const conversionRequestId = normalizeText(data?.conversionRequestId);
+    if (!/^[A-Za-z0-9][A-Za-z0-9._:@-]{15,127}$/u.test(conversionRequestId)) throw new inquiryShowcase.InquiryShowcaseError("invalid-argument", "A valid conversion request identity is required.");
+    const preview = await buildInquiryConversionPreview(organizationId, data?.inquiryId);
+    if (Number(data?.expectedInquiryRevision) !== Number(preview.inquiry.revision) || Number(data?.expectedCatalogRevision) !== preview.catalogRevision) throw new inquiryShowcase.InquiryShowcaseError("aborted", "The inquiry or catalog changed after review. Review conversion again.");
+    if (preview.inquiry.state !== "acknowledged") throw new inquiryShowcase.InquiryShowcaseError("failed-precondition", "Acknowledge and assign this inquiry before conversion.");
+    const resolutions = Array.isArray(data?.resolutions) ? data.resolutions : [];
+    const resolutionByEntry = new Map(resolutions.map((item) => [normalizeText(item?.entryId), normalizeText(item?.resolution)]));
+    preview.drift.filter((item) => item.requiresResolution).forEach((item) => {
+      const resolution = resolutionByEntry.get(item.entryId);
+      const allowed = item.state === "changed" ? ["use_current", "remove"] : ["remove"];
+      if (!allowed.includes(resolution)) throw new inquiryShowcase.InquiryShowcaseError("failed-precondition", `Resolve ${item.publicTitle} before conversion.`);
+      const included = quoteFormContainsInquiryReference(data?.quoteForm, item);
+      if ((resolution === "use_current" && !included) || (resolution === "remove" && included)) {
+        throw new inquiryShowcase.InquiryShowcaseError("failed-precondition", `The quote prefill does not match the resolution for ${item.publicTitle}. Review the conversion again.`);
+      }
+    });
+    const identityChoice = normalizeText(data?.identityChoice);
+    if ((preview.identity.state === "existing_claim" && identityChoice !== "use_existing") || (preview.identity.state === "unclaimed" && identityChoice !== "create_new")) throw new inquiryShowcase.InquiryShowcaseError("failed-precondition", "Choose how to handle the customer identity before conversion.");
+    const receiptId = inquiryReceiptId("inquiry_converted", `${organizationId}|${preview.inquiry.inquiryId}|${conversionRequestId}`);
+    const provenance = {
+      schemaVersion: 1,
+      authority: "customer_preference_evidence",
+      inquiryId: preview.inquiry.inquiryId,
+      publicationVersionId: preview.inquiry.source.publicationVersionId,
+      publicationDigest: preview.inquiry.source.publicationDigest,
+      submittedAtISO: preview.inquiry.submittedAtISO,
+      originalSubmission: { fields: preview.inquiry.fields, preferences: preview.inquiry.preferences },
+      commercialStatus: "unconfirmed_preferences"
+    };
+    const result = await createTrustedQuoteDraftInternal({
+      organizationId, staff, form: data?.quoteForm, creationReason: "inquiry_conversion",
+      expectedCustomerId: preview.identity.state === "existing_claim" ? preview.identity.customerId : "",
+      inquiryConversion: { inquiryId: preview.inquiry.inquiryId, receiptId, conversionRequestId, expectedInquiryRevision: Number(preview.inquiry.revision), catalogRevisionAtReview: preview.catalogRevision, resolutions, identityChoice, provenance }
+    });
+    await recordInquiryAnalyticsBestEffort(organizationId, "inquiry_converted", new Date().toISOString());
+    return { ...result, inquiryId: preview.inquiry.inquiryId, conversionReceiptId: receiptId };
+  } catch (error) {
+    if (error instanceof inquiryShowcase.InquiryShowcaseError) return throwInquiryShowcaseError(error);
+    return quoteCreationFailure(error, { operation: "convertInquiryToQuoteDraft", staff: staff || { uid: "" }, organizationId, failureMessage: "Unable to convert this inquiry." });
+  }
+});
+
+exports.purgeExpiredInquiries = functions.region(REGION).pubsub?.schedule
+  ? functions.region(REGION).pubsub.schedule("every 60 minutes").onRun(async () => {
+    const now = new Date(); const nowISO = now.toISOString();
+    let deleted = 0; let scanned = 0;
+    for (let page = 0; page < 10; page += 1) {
+      const snapshot = await db.collectionGroup(CUSTOMER_INQUIRIES_COLLECTION).where("deleteAt", "<=", Timestamp.fromDate(now)).limit(50).get();
+      scanned += snapshot.size;
+      for (const inquirySnap of snapshot.docs) {
+        const inquiry = inquirySnap.data() || {};
+        const [receiptsSnap, requestRecordsSnap] = await Promise.all([
+          inquirySnap.ref.collection(INQUIRY_RECEIPTS_COLLECTION).limit(100).get(),
+          db.collection(INQUIRY_REQUESTS_COLLECTION).where("inquiryId", "==", inquiry.inquiryId || inquirySnap.id).limit(10).get()
+        ]);
+        const batch = db.batch();
+        receiptsSnap.docs.forEach((receipt) => batch.delete(receipt.ref));
+        requestRecordsSnap.docs.forEach((requestRecord) => batch.delete(requestRecord.ref));
+        const deletionReceipt = inquiryShowcase.contentFreeDeletionReceipt(inquiry, nowISO);
+        batch.set(db.collection(INQUIRY_DELETION_RECEIPTS_COLLECTION).doc(inquiryReceiptId("inquiry_deleted", `${inquiry.organizationId}|${inquiry.inquiryId}`)), { ...deletionReceipt, createdAt: FieldValue.serverTimestamp() });
+        batch.delete(inquirySnap.ref);
+        await batch.commit(); deleted += 1;
+      }
+      if (snapshot.size < 50) break;
+    }
+    return { deleted, scanned, checkedAtISO: nowISO };
+  })
+  : async () => ({ deleted: 0, checkedAtISO: "" });

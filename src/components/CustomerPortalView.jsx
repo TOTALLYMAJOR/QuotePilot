@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { currency, serviceChargeLabel } from "../lib/quoteCalculator";
 import {
   getPortalQuote,
@@ -20,7 +20,25 @@ import ProductBrandLockup from "./ProductBrandLockup";
 import QuoteConversationPanel from "quotepilot-active-conversation-panel";
 import ShimmerReveal from "./ShimmerReveal";
 import { playCue } from "./soundKit";
+import {
+  Armchair,
+  CalendarBlank,
+  ChatCircleDots,
+  CheckCircle,
+  ForkKnife,
+  MapPin,
+  NotePencil,
+  Package,
+  Plus,
+  StarFour,
+  UsersThree,
+  XCircle
+} from "./ProductIcons";
 import "./portalCeremony.css";
+import "./customerPortalView.css";
+
+const PortalAttendanceQuestionnaire = import.meta.env.VITE_EVENT_OPERATING_SPINE_ENABLED === "true"
+  ? lazy(() => import("./PortalAttendanceQuestionnaire")) : null;
 
 const PAYMENT_CONFIRMATION_POLL_INTERVAL_MS = 1500;
 const PAYMENT_CONFIRMATION_MAX_ATTEMPTS = 10;
@@ -312,6 +330,19 @@ function formatPaymentCents(amountCents, currencyCode) {
     }).format(Number(amountCents || 0) / 100);
   } catch {
     return currency(Number(amountCents || 0) / 100);
+  }
+}
+
+function formatPortalCurrency(amount) {
+  try {
+    return new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: "USD",
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    }).format(Number(amount || 0));
+  } catch {
+    return currency(amount);
   }
 }
 
@@ -675,7 +706,7 @@ export default function CustomerPortalView({
         : "idle",
     attempt: 0
   });
-  const [recovery, setRecovery] = useState({ loading: false, contact: null });
+  const [recovery, setRecovery] = useState({ loading: false, contact: null, error: "" });
   const [manualEntry, setManualEntry] = useState(!initialPortalKey);
   const portalKeyInputRef = useRef(null);
   const portalLoadRequestRef = useRef(0);
@@ -834,15 +865,19 @@ export default function CustomerPortalView({
   const loadRecoveryContact = async (key) => {
     const requestId = recoveryRequestRef.current + 1;
     recoveryRequestRef.current = requestId;
-    setRecovery({ loading: true, contact: null });
+    setRecovery({ loading: true, contact: null, error: "" });
     try {
       const contact = await getPortalRecoveryContact(key);
       if (recoveryRequestRef.current === requestId) {
-        setRecovery({ loading: false, contact });
+        setRecovery({ loading: false, contact, error: "" });
       }
     } catch {
       if (recoveryRequestRef.current === requestId) {
-        setRecovery({ loading: false, contact: null });
+        setRecovery({
+          loading: false,
+          contact: null,
+          error: "Caterer contact details are temporarily unavailable."
+        });
       }
     }
   };
@@ -857,7 +892,7 @@ export default function CustomerPortalView({
     const requestId = portalLoadRequestRef.current + 1;
     portalLoadRequestRef.current = requestId;
     recoveryRequestRef.current += 1;
-    setRecovery({ loading: false, contact: null });
+    setRecovery({ loading: false, contact: null, error: "" });
     setState((prev) => ({ ...prev, loading: true, error: "", status: "" }));
     try {
       let quote = await getPortalQuote(key);
@@ -913,7 +948,7 @@ export default function CustomerPortalView({
     decisionRequestRef.current += 1;
     decisionAttemptRef.current = null;
     setDecisionMutation({ phase: "ready" });
-    setRecovery({ loading: false, contact: null });
+    setRecovery({ loading: false, contact: null, error: "" });
     setState((prev) => ({
       ...prev,
       loading: false,
@@ -1303,14 +1338,25 @@ export default function CustomerPortalView({
     : DECISION_OPTIONS;
 
   return (
-    <main className={`portal-shell${AMBIENT_DECISION_ROOM_ENABLED ? " portal-decision-room-shell" : ""}`} style={portalTheme}>
+    <main
+      className={`portal-shell${AMBIENT_DECISION_ROOM_ENABLED ? " portal-decision-room-shell" : ""}`}
+      data-portal-presentation={AMBIENT_DECISION_ROOM_ENABLED ? "event-story" : "legacy"}
+      style={portalTheme}
+    >
       <section className={`panel portal-card${AMBIENT_DECISION_ROOM_ENABLED ? " portal-decision-room" : ""}`}>
         <div className="portal-head">
           <div className="portal-brand-heading">
             {brandLogoUrl && <img src={brandLogoUrl} alt={`${brandName || "Caterer"} logo`} />}
+            {AMBIENT_DECISION_ROOM_ENABLED && !brandLogoUrl && (
+              <StarFour className="portal-brand-fallback-mark" size={28} aria-hidden="true" />
+            )}
             <div>
             <p className="eyebrow">Catering proposal</p>
-            <h1>{portalTitle}</h1>
+            <h1 aria-label={AMBIENT_DECISION_ROOM_ENABLED ? portalTitle : undefined}>
+              {AMBIENT_DECISION_ROOM_ENABLED
+                ? brandName || organizationName || "Your proposal"
+                : portalTitle}
+            </h1>
             </div>
           </div>
           {(businessEmail || businessPhone) && (
@@ -1346,6 +1392,30 @@ export default function CustomerPortalView({
             <h2>Request a new link</h2>
             {recovery.loading ? (
               <p className="source-note" role="status">Finding the right catering contact...</p>
+            ) : recovery.error ? (
+              <>
+                <p
+                  id="portal-recovery-contact-error"
+                  className="warning-note"
+                  role="alert"
+                  data-capability-state="unavailable"
+                >
+                  {recovery.error} Your proposal remains unavailable; try the contact lookup again or use another current key.
+                </p>
+                <div className="portal-recovery-actions">
+                  <button
+                    type="button"
+                    className="cta"
+                    data-capability-state="recovery"
+                    onClick={() => void loadRecoveryContact(String(portalKey || initialPortalKey || "").trim())}
+                  >
+                    Try finding contact again
+                  </button>
+                  <button type="button" className="ghost" onClick={tryAnotherPortalKey}>
+                    Try another key
+                  </button>
+                </div>
+              </>
             ) : (
               <>
                 <p>
@@ -1382,53 +1452,87 @@ export default function CustomerPortalView({
 
         {quote && (
           <div className="portal-decision-layout">
-            <header className={`portal-proposal-header${AMBIENT_DECISION_ROOM_ENABLED ? " portal-decision-room-cover" : ""}`}>
+            <header
+              className={`portal-proposal-header${AMBIENT_DECISION_ROOM_ENABLED ? " portal-decision-room-cover" : ""}`}
+              data-portal-region="proposal-header"
+            >
               <div>
                 <span>
                   {AMBIENT_DECISION_ROOM_ENABLED
-                    ? `Your event proposal · ${quote.quoteNumber || "Current proposal"}`
+                    ? "Your event proposal"
                     : quote.quoteNumber || "Proposal"}
                 </span>
-                <h2>{eventLabel}</h2>
-                <p>
-                  {AMBIENT_DECISION_ROOM_ENABLED
-                    ? `Prepared for ${quote.customerName || "you"}`
-                    : quote.customerName || "Customer"}
-                </p>
+                <h2>
+                  {AMBIENT_DECISION_ROOM_ENABLED ? (
+                    <>
+                      <span className="portal-event-title">{quote.eventName || "Your event"}</span>
+                      <span className="portal-event-date">{fmtDate(quote.eventDate)}</span>
+                    </>
+                  ) : eventLabel}
+                </h2>
+                {AMBIENT_DECISION_ROOM_ENABLED ? (
+                  <p>Prepared for <strong>{quote.customerName || "you"}</strong></p>
+                ) : (
+                  <p>{quote.customerName || "Customer"}</p>
+                )}
               </div>
               <div className={`portal-decision-receipt receipt-${receipt.tone}`}>
+                {AMBIENT_DECISION_ROOM_ENABLED && <small className="portal-rail-eyebrow">Your decision</small>}
                 <strong>{receipt.title}</strong>
                 <span>{receipt.body}</span>
               </div>
             </header>
 
             <div className="portal-content-grid">
-              <section className={`portal-detail-section${AMBIENT_DECISION_ROOM_ENABLED ? " portal-experience-section" : ""}`} data-portal-block="event-details">
+              <section
+                className={`portal-detail-section${AMBIENT_DECISION_ROOM_ENABLED ? " portal-experience-section" : ""}`}
+                data-portal-block="event-details"
+                data-portal-region="proposal-story"
+              >
                 {AMBIENT_DECISION_ROOM_ENABLED ? (
-                  <div className="portal-section-heading">
-                    <div>
-                      <span>At a glance</span>
-                      <h3>Your event</h3>
+                  <>
+                    <h3 className="portal-event-summary-heading">Your event</h3>
+                    <div className="portal-event-facts" aria-label="Event summary">
+                      <div className="portal-event-fact">
+                        <span className="portal-event-fact-icon" aria-hidden="true"><CalendarBlank size={22} /></span>
+                        <span><small>Date &amp; time</small><strong>{fmtDate(quote.eventDate)}</strong><em>{fmtTime(quote.eventTime)}</em></span>
+                      </div>
+                      <div className="portal-event-fact">
+                        <span className="portal-event-fact-icon" aria-hidden="true"><UsersThree size={22} /></span>
+                        <span><small>Guests</small><strong>{quote.eventGuests || "-"} guests</strong></span>
+                      </div>
+                      <div className="portal-event-fact">
+                        <span className="portal-event-fact-icon" aria-hidden="true"><MapPin size={22} /></span>
+                        <span><small>Venue</small><strong>{quote.venue || "-"}</strong>{quote.venueAddress && <em>{quote.venueAddress}</em>}</span>
+                      </div>
+                      <div className="portal-event-fact">
+                        <span className="portal-event-fact-icon" aria-hidden="true"><ForkKnife size={22} /></span>
+                        <span><small>Service</small><strong>{humanizeValue(quote.eventStyle)}</strong>{quote.eventHours ? <em>{quote.eventHours} hours</em> : null}</span>
+                      </div>
                     </div>
-                    {askAboutButton("your event details")}
-                  </div>
+                    <div className="portal-context-question">{askAboutButton("your event details")}</div>
+                  </>
                 ) : (
                   <h3>Event details {askAboutButton("the event details")}</h3>
                 )}
-                <dl className="portal-detail-grid">
-                  {eventRows.map(([label, value]) => (
-                    <div key={label}><dt>{label}</dt><dd>{value}</dd></div>
-                  ))}
-                </dl>
-                {quote.venueAddress && <p className="portal-address">{quote.venueAddress}</p>}
+                {!AMBIENT_DECISION_ROOM_ENABLED && (
+                  <>
+                    <dl className="portal-detail-grid">
+                      {eventRows.map(([label, value]) => (
+                        <div key={label}><dt>{label}</dt><dd>{value}</dd></div>
+                      ))}
+                    </dl>
+                    {quote.venueAddress && <p className="portal-address">{quote.venueAddress}</p>}
+                  </>
+                )}
                 <div className="portal-scope-block" data-portal-block="package-and-menu">
                   {AMBIENT_DECISION_ROOM_ENABLED ? (
                     <div className="portal-section-heading portal-section-heading-small">
-                      <div>
-                        <span>Menu and service</span>
-                        <h4>{scope.packageName || "Catering package"}</h4>
-                      </div>
-                      {askAboutButton("your menu and service")}
+                    <div>
+                      <span>Package &amp; menu</span>
+                      <h4>{scope.packageName || "Catering package"}</h4>
+                    </div>
+                    {askAboutButton("your menu and service")}
                     </div>
                   ) : (
                     <h4>{scope.packageName || "Catering package"} {askAboutButton("the package and menu")}</h4>
@@ -1443,25 +1547,46 @@ export default function CustomerPortalView({
                 </div>
               </section>
 
-              <section className="portal-detail-section portal-pricing-section" data-portal-block="pricing">
+              <section
+                className="portal-detail-section portal-pricing-section"
+                data-portal-block="pricing"
+                data-portal-region="commercial-summary"
+              >
                 {AMBIENT_DECISION_ROOM_ENABLED ? (
-                  <div className="portal-section-heading">
-                    <div>
-                      <span>Pricing</span>
-                      <h3>Your proposal total</h3>
+                  <>
+                    <div className="portal-section-heading">
+                      <div>
+                        <span>Your proposal total</span>
+                        <h3 aria-label="Your proposal total">{formatPortalCurrency(quote.total || 0)}</h3>
+                      </div>
+                      {askAboutButton("your proposal total")}
                     </div>
-                    {askAboutButton("your proposal total")}
-                  </div>
+                    <div className="portal-deposit-summary">
+                      <span>Required deposit</span>
+                      <strong>{formatPortalCurrency(quote.deposit || 0)}</strong>
+                    </div>
+                  </>
                 ) : (
                   <h3>Pricing {askAboutButton("the pricing")}</h3>
                 )}
-                <dl className="portal-price-list">
-                  {pricingRows.map(([label, amount]) => (
-                    <div key={label}><dt>{label}</dt><dd>{currency(amount || 0)}</dd></div>
-                  ))}
-                  <div className="portal-price-total"><dt>Total</dt><dd>{currency(quote.total || 0)}</dd></div>
-                  <div className="portal-price-deposit"><dt>Deposit</dt><dd>{currency(quote.deposit || 0)}</dd></div>
-                </dl>
+                {AMBIENT_DECISION_ROOM_ENABLED ? (
+                  <details className="portal-price-breakdown">
+                    <summary>View price details</summary>
+                    <dl className="portal-price-list">
+                      {pricingRows.map(([label, amount]) => (
+                        <div key={label}><dt>{label}</dt><dd>{formatPortalCurrency(amount || 0)}</dd></div>
+                      ))}
+                    </dl>
+                  </details>
+                ) : (
+                  <dl className="portal-price-list">
+                    {pricingRows.map(([label, amount]) => (
+                      <div key={label}><dt>{label}</dt><dd>{currency(amount || 0)}</dd></div>
+                    ))}
+                    <div className="portal-price-total"><dt>Total</dt><dd>{currency(quote.total || 0)}</dd></div>
+                    <div className="portal-price-deposit"><dt>Deposit</dt><dd>{currency(quote.deposit || 0)}</dd></div>
+                  </dl>
+                )}
                 <PaymentStatusCeremonyBlock
                   payment={payment}
                   confirmationState={paymentConfirmation.state}
@@ -1504,17 +1629,24 @@ export default function CustomerPortalView({
             {PILOT_DECISION_ROOM_ENABLED && (
               <section className="portal-detail-section portal-assumptions" data-portal-block="assumptions">
                 {AMBIENT_DECISION_ROOM_ENABLED ? (
-                  <div className="portal-section-heading">
-                    <div>
-                      <span>What this is based on</span>
-                      <h3>Planning assumptions</h3>
-                    </div>
+                  <details className="portal-secondary-disclosure">
+                    <summary><h3>Planning assumptions</h3></summary>
+                    <p className="portal-decidable-sub">
+                      {[
+                        Number(quote.eventGuests ?? quote.guests) > 0
+                          ? `${quote.eventGuests ?? quote.guests} guests` : "",
+                        quote.eventDate ? `on ${fmtDate(quote.eventDate)}` : "",
+                        Number(quote.eventHours) > 0 ? `${quote.eventHours} hours of service` : "",
+                        quote.eventStyle ? `${String(quote.eventStyle).toLowerCase()} service` : ""
+                      ].filter(Boolean).join(" · ") || "The event details shown above."}
+                      {" If anything changes, let your catering team know below. They will review the details and share an updated proposal before anything changes here."}
+                    </p>
                     {askAboutButton("the planning assumptions")}
-                  </div>
+                  </details>
                 ) : (
                   <h3>What this price assumes {askAboutButton("the assumptions")}</h3>
                 )}
-                <p className="portal-decidable-sub">
+                {!AMBIENT_DECISION_ROOM_ENABLED && <p className="portal-decidable-sub">
                   {[
                     Number(quote.eventGuests ?? quote.guests) > 0
                       ? `${quote.eventGuests ?? quote.guests} guests` : "",
@@ -1527,24 +1659,22 @@ export default function CustomerPortalView({
                   {AMBIENT_DECISION_ROOM_ENABLED
                     ? " If anything changes, let your catering team know below. They will review the details and share an updated proposal before anything changes here."
                     : " If any of these change, ask below — your caterer re-prices from the updated details before anything is promised."}
-                </p>
+                </p>}
               </section>
             )}
 
             {PILOT_DECISION_ROOM_ENABLED && String(quoteMeta.portalTermsText || "").trim() && (
               <section className="portal-detail-section portal-terms" data-portal-block="terms">
                 {AMBIENT_DECISION_ROOM_ENABLED ? (
-                  <div className="portal-section-heading">
-                    <div>
-                      <span>Good to know</span>
-                      <h3>Terms from your catering team</h3>
-                    </div>
+                  <details className="portal-secondary-disclosure">
+                    <summary><h3>Terms from your catering team</h3></summary>
+                    <p className="portal-terms-text">{quoteMeta.portalTermsText}</p>
                     {askAboutButton("the terms")}
-                  </div>
+                  </details>
                 ) : (
                   <h3>Terms {askAboutButton("the terms")}</h3>
                 )}
-                <p className="portal-terms-text">{quoteMeta.portalTermsText}</p>
+                {!AMBIENT_DECISION_ROOM_ENABLED && <p className="portal-terms-text">{quoteMeta.portalTermsText}</p>}
               </section>
             )}
 
@@ -1553,19 +1683,16 @@ export default function CustomerPortalView({
               <section className="portal-decidable-options" data-portal-block="options" aria-labelledby="portal-decidable-title">
                 {AMBIENT_DECISION_ROOM_ENABLED ? (
                   <div className="portal-section-heading">
-                    <div>
-                      <span>Optional</span>
-                      <h3 id="portal-decidable-title">Possible additions</h3>
-                    </div>
+                    <h3 id="portal-decidable-title">Optional additions</h3>
                   </div>
                 ) : (
                   <h3 id="portal-decidable-title">Options you can ask to add</h3>
                 )}
-                <p className="portal-decidable-sub">
-                  {AMBIENT_DECISION_ROOM_ENABLED
-                    ? "Choose any option you would like your catering team to review. Nothing changes until you send the request and they confirm an updated proposal."
-                    : "Choosing one drafts a change request below — your caterer reviews and confirms it before anything about this proposal changes."}
-                </p>
+                {!AMBIENT_DECISION_ROOM_ENABLED && (
+                  <p className="portal-decidable-sub">
+                    Choosing one drafts a change request below — your caterer reviews and confirms it before anything about this proposal changes.
+                  </p>
+                )}
                 <div className="portal-decidable-grid">
                   {decidableOptions.map((option) => {
                     const selected = stagedOptionKeys.includes(option.key);
@@ -1593,11 +1720,21 @@ export default function CustomerPortalView({
                       aria-pressed={selected}
                       aria-label={`${selected ? "Remove" : "Add"} ${option.name} ${selected ? "from" : "to"} request`}
                     >
+                      <span className="portal-option-icon" aria-hidden="true">
+                        {option.itemType === "rental"
+                          ? <Armchair size={18} />
+                          : option.itemType === "addon"
+                            ? <Package size={18} />
+                            : <ForkKnife size={18} />}
+                      </span>
                       <span className="portal-decidable-card-copy">
                         <strong>{option.name}</strong>
                         <small>{decidableOptionPriceLabel(option)}</small>
                       </span>
-                      <span aria-hidden="true">{selected ? "Selected" : "Add to request"}</span>
+                      <span className="portal-option-action" aria-hidden="true">
+                        {selected ? "Selected" : "Add to request"}
+                        {!selected && <Plus size={15} />}
+                      </span>
                     </button>
                     );
                   })}
@@ -1632,6 +1769,7 @@ export default function CustomerPortalView({
             {!decisionLocked && (
               <section
                 className="portal-decision-panel"
+                data-portal-region="decision-workspace"
                 ref={decisionPanelRef}
                 tabIndex={-1}
                 aria-labelledby="portal-decision-title"
@@ -1641,6 +1779,11 @@ export default function CustomerPortalView({
                 <h3 id="portal-decision-title">
                   {AMBIENT_DECISION_ROOM_ENABLED ? "Your response" : "Your decision"}
                 </h3>
+                {AMBIENT_DECISION_ROOM_ENABLED && !decisionDraft && (
+                  <p className="source-note portal-decision-intro">
+                    Choose the response that matches what you want to do.
+                  </p>
+                )}
                 <div className="portal-decision-options" role="group" aria-label="Proposal decision">
                   {decisionOptions.map(([value, label]) => (
                     <button
@@ -1651,11 +1794,20 @@ export default function CustomerPortalView({
                       disabled={state.busy}
                       onClick={() => selectDecision(value)}
                     >
-                      {label}
+                      {AMBIENT_DECISION_ROOM_ENABLED && (
+                        <span className="portal-decision-option-icon" aria-hidden="true">
+                          {value === "accepted"
+                            ? <CheckCircle size={19} />
+                            : value === "changes_requested"
+                              ? <NotePencil size={19} />
+                              : <XCircle size={19} />}
+                        </span>
+                      )}
+                      <span>{label}</span>
                     </button>
                   ))}
                 </div>
-                {!decisionDraft && (
+                {!AMBIENT_DECISION_ROOM_ENABLED && !decisionDraft && (
                   <p className="source-note portal-decision-guidance">
                     Choose the response that matches what you want to do. Nothing is selected or submitted for you.
                   </p>
@@ -1745,10 +1897,51 @@ export default function CustomerPortalView({
                           : "Submit Decision"}
                   </button>
                 </div>}
+                <PortalDecisionMutationState
+                  mutation={decisionMutation}
+                  feedbackRef={decisionFeedbackRef}
+                  onReconcile={() => reconcileDecisionAttempt(decisionAttemptRef.current)}
+                  onRetryAcceptance={retryAcceptance}
+                  onReviewLatest={reviewLatestProposal}
+                  onReturnToDecision={returnToDecision}
+                />
+                {AMBIENT_DECISION_ROOM_ENABLED && portalConversationAvailable() && (
+                  <section className="portal-question-shortcut" aria-label="Proposal question">
+                    <span className="portal-question-shortcut-icon" aria-hidden="true"><ChatCircleDots size={20} /></span>
+                    <div>
+                      <strong>Ask a question</strong>
+                      <span>Send a message to your catering team.</span>
+                    </div>
+                    <button
+                      type="button"
+                      className="ghost compact portal-question-action"
+                      onClick={() => askAboutBlock("this proposal")}
+                    >
+                      Ask a question
+                    </button>
+                  </section>
+                )}
               </section>
             )}
 
-            {(!decisionLocked || decisionMutation.phase !== "ready") && (
+            {AMBIENT_DECISION_ROOM_ENABLED && decisionLocked && portalConversationAvailable() && (
+              <section className="portal-question-shortcut" aria-label="Proposal question">
+                <span className="portal-question-shortcut-icon" aria-hidden="true"><ChatCircleDots size={20} /></span>
+                <div>
+                  <strong>Ask a question</strong>
+                  <span>Send a message to your catering team.</span>
+                </div>
+                <button
+                  type="button"
+                  className="ghost compact portal-question-action"
+                  onClick={() => askAboutBlock("this proposal")}
+                >
+                  Ask a question
+                </button>
+              </section>
+            )}
+
+            {decisionLocked && decisionMutation.phase !== "ready" && (
               <PortalDecisionMutationState
                 mutation={decisionMutation}
                 feedbackRef={decisionFeedbackRef}
@@ -1786,6 +1979,13 @@ export default function CustomerPortalView({
               </section>
             )}
 
+            {PortalAttendanceQuestionnaire && quote.attendanceAvailable === true && ["accepted", "booked"].includes(quote.status) && (
+              <Suspense fallback={<p role="status">Loading your guest count request...</p>}>
+                <PortalAttendanceQuestionnaire portalKey={portalKey} enabled
+                  expectedSourceVersionId={quote.deliveryEvidence?.revisionId || quote.activeVersionId || ""}
+                  expectedPortalIssuedAtISO={quote.portalIssuedAtISO || ""} />
+              </Suspense>
+            )}
             <AcceptanceCeremonyReceipt quote={quote} />
 
             {quote.portalDecision?.message && decisionLocked && (

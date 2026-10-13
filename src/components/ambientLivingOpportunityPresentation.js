@@ -18,7 +18,11 @@ import { buildAmbientProposalObject } from "../lib/ambientProposalObject";
 import { buildAmbientSelectionObjects } from "../lib/ambientSelectionObjects";
 import { buildAmbientOperationalReceipts } from "../lib/ambientOperationalReceipts";
 import { buildProposalReadiness } from "../lib/quoteWorkflow";
+import { buildQuoteCompletionProjection } from "../lib/quoteCompletionProjection";
 import { buildEventWorkspacePresentation } from "./eventWorkspacePresentation";
+
+const QUOTE_COMPLETION_BUILD_ENABLED = import.meta.env.MODE === "test"
+  || import.meta.env.VITE_QUOTE_COMPLETION_COMMAND_PATH_ENABLED === "true";
 
 export const AMBIENT_LIVING_OPPORTUNITY_MODEL = "pilot-slice-alpha-v1";
 export const AMBIENT_GUEST_SCENARIO_MIN = 1;
@@ -2671,6 +2675,9 @@ export function buildAmbientLivingOpportunityPresentation(quote = {}, {
   packageMenuCatalogEvidence = null,
   scenarioGuestCount,
   role = "non_staff",
+  quoteCompletionCommandPathEnabled = false,
+  configuredActions = null,
+  quoteCompletionCommand = null,
   now,
   todayISO
 } = {}) {
@@ -2710,6 +2717,16 @@ export function buildAmbientLivingOpportunityPresentation(quote = {}, {
     role: normalizedRole,
     nowISO: now instanceof Date ? now.toISOString() : text(now) || undefined
   });
+  const quoteCompletion = QUOTE_COMPLETION_BUILD_ENABLED && quoteCompletionCommandPathEnabled
+    ? buildQuoteCompletionProjection({
+        quote,
+        readiness: proposal,
+        configuredActions,
+        livingOpportunity: proposalObject,
+        draftDirty: false,
+        command: quoteCompletionCommand
+      })
+    : null;
   const packageMenuObjects = buildAmbientPackageMenuObjects(quote, {
     role: normalizedRole,
     ordinaryEditAllowed,
@@ -3281,6 +3298,7 @@ export function buildAmbientLivingOpportunityPresentation(quote = {}, {
     conversationObject,
     moneyObject,
     proposalObject,
+    quoteCompletion,
     packageObject,
     menuObject,
     selectionObjects,

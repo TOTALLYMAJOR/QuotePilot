@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from "react";
+import AdaptiveChoiceField from "./AdaptiveChoiceField";
+import FieldStateIndicator from "./FieldStateIndicator";
 import StatusChip from "./StatusChip";
 import { STATUS_FAMILY } from "../lib/statusSemantics";
 
@@ -48,12 +50,29 @@ const INCLUSION_GROUPS = [
   }
 ];
 
+const CHOICE_COMPONENT_TYPES = [
+  { id: "menu_item", label: "Menu items" },
+  { id: "addon", label: "Services and add-ons" },
+  { id: "rental", label: "Rentals" }
+];
+
 function text(value) {
   return String(value ?? "").trim();
 }
 
 function normalizeIdList(value) {
   return (Array.isArray(value) ? value : []).map((entry) => text(entry));
+}
+
+function normalizeChoiceGroups(value) {
+  return (Array.isArray(value) ? value : []).map((group) => ({
+    id: text(group?.id),
+    label: text(group?.label || group?.name),
+    componentType: text(group?.componentType || group?.type).toLowerCase(),
+    componentIds: normalizeIdList(group?.componentIds),
+    minChoices: Number(group?.minChoices ?? (group?.required === true ? 1 : 0)),
+    maxChoices: Number(group?.maxChoices ?? (Array.isArray(group?.componentIds) ? group.componentIds.length : 0))
+  }));
 }
 
 function normalizePackageForComparison(packageRecord = null) {
@@ -68,7 +87,12 @@ function normalizePackageForComparison(packageRecord = null) {
     active: packageRecord.active !== false,
     includedMenuItemIds: normalizeIdList(packageRecord.includedMenuItemIds),
     includedAddonIds: normalizeIdList(packageRecord.includedAddonIds),
-    includedRentalIds: normalizeIdList(packageRecord.includedRentalIds)
+    includedRentalIds: normalizeIdList(packageRecord.includedRentalIds),
+    choiceGroups: normalizeChoiceGroups(packageRecord.choiceGroups),
+    quantityPolicyRefs: normalizeIdList(packageRecord.quantityPolicyRefs),
+    ruleRefs: normalizeIdList(packageRecord.ruleRefs),
+    offerVersion: text(packageRecord.offerVersion),
+    verticalType: text(packageRecord.verticalType)
   };
 }
 
@@ -154,7 +178,6 @@ function optionCategoryLabel(option, group, menuCategoryLookup) {
     const categoryId = text(option?.categoryId);
     return text(option?.categoryName)
       || text(menuCategoryLookup.get(categoryId))
-      || categoryId
       || "Other menu items";
   }
   return text(option?.categoryName)
@@ -169,7 +192,99 @@ function uniqueIds(value) {
 
 function describeReference(reference = {}) {
   if (reference.issue === "blank") return "Blank inclusion";
-  return text(reference.label) || text(reference.id) || "Unnamed inclusion";
+  if (text(reference.name)) return text(reference.name);
+  if (reference.status === "missing") {
+    if (reference.kind === "menu_item") return "Unavailable menu item";
+    if (reference.kind === "addon") return "Unavailable service or add-on";
+    if (reference.kind === "rental") return "Unavailable rental";
+    return "Unavailable inclusion";
+  }
+  if (reference.status !== "ok") return "Invalid inclusion";
+  return text(reference.label) || "Unnamed inclusion";
+}
+
+function uniqueRecordsById(records = []) {
+  const seen = new Set();
+  return (Array.isArray(records) ? records : []).filter((record) => {
+    const id = text(record?.id);
+    if (!id || seen.has(id)) return false;
+    seen.add(id);
+    return true;
+  });
+}
+
+function allMenuChoices(menuItems = [], catalog = {}) {
+  const storedItems = (Array.isArray(catalog?.settings?.menuSections)
+    ? catalog.settings.menuSections
+    : []).flatMap((section) => (Array.isArray(section?.items) ? section.items : []));
+  return uniqueRecordsById([...(Array.isArray(menuItems) ? menuItems : []), ...storedItems]);
+}
+
+function choiceComponentLabel(componentType = "") {
+  return CHOICE_COMPONENT_TYPES.find((entry) => entry.id === componentType)?.label || "Unsupported component type";
+}
+
+function ruleDisplayName(rule = {}, index = 0) {
+  return text(rule?.label)
+    || text(rule?.name)
+    || text(rule?.reason)
+    || `${text(rule?.type) || "Configuration"} rule ${index + 1}`;
+}
+
+function ruleTypeLabel(rule = {}) {
+  const type = text(rule?.type).toLowerCase();
+  if (type === "requirement") return "Requirement";
+  if (type === "recommendation") return "Recommendation";
+  if (type === "exclusion") return "Exclusion";
+  if (type === "validation") return "Validation";
+  return "Configuration rule";
+}
+
+function templateOfferId(template = {}) {
+  return text(template?.pkg || template?.offerRef);
+}
+
+function choiceGroupPresentation(group = {}, options = []) {
+  const optionMap = new Map(options.map((option) => [text(option?.id), option]));
+  const rawComponentIds = normalizeIdList(group?.componentIds);
+  const componentIds = rawComponentIds.filter(Boolean);
+  const blankCount = rawComponentIds.length - componentIds.length;
+  const duplicateCount = componentIds.length - new Set(componentIds).size;
+  const minChoices = Number(group?.minChoices ?? (group?.required === true ? 1 : 0));
+  const maxChoices = Number(group?.maxChoices ?? componentIds.length);
+  const missingCount = componentIds.filter((id) => !optionMap.has(id)).length;
+  const inactiveCount = componentIds.filter((id) => optionMap.get(id)?.active === false).length;
+  const boundsInvalid = !Number.isSafeInteger(minChoices)
+    || !Number.isSafeInteger(maxChoices)
+    || minChoices < 0
+    || maxChoices < minChoices
+    || maxChoices > componentIds.length;
+  const supportedType = CHOICE_COMPONENT_TYPES.some((entry) => (
+    entry.id === text(group?.componentType || group?.type).toLowerCase()
+  ));
+  const attentionCount = [
+    text(group?.label || group?.name) ? 0 : 1,
+    text(group?.id) ? 0 : 1,
+    supportedType ? 0 : 1,
+    componentIds.length > 0 ? 0 : 1,
+    boundsInvalid ? 1 : 0,
+    blankCount,
+    duplicateCount,
+    missingCount,
+    inactiveCount
+  ].reduce((total, count) => total + count, 0);
+  return {
+    componentIds,
+    minChoices,
+    maxChoices,
+    missingCount,
+    inactiveCount,
+    boundsInvalid,
+    blankCount,
+    duplicateCount,
+    supportedType,
+    attentionCount
+  };
 }
 
 export default function PackageWorkspace({
@@ -206,6 +321,60 @@ export default function PackageWorkspace({
   const selectedPackageIndex = findPackageIndex(draftCatalog?.packages, selectedPackageId);
   const savedPackageRecord = findPackageById(savedCatalog?.packages, selectedPackageId);
   const selectedPackageDirty = isPackageWorkspaceRowDirty(savedPackageRecord, selectedPackageRecord);
+  const choiceGroups = Array.isArray(selectedPackageRecord?.choiceGroups)
+    ? selectedPackageRecord.choiceGroups
+    : [];
+  const configurationRules = Array.isArray(draftCatalog?.settings?.configurationRules)
+    ? draftCatalog.settings.configurationRules
+    : [];
+  const linkedRuleIds = uniqueIds(selectedPackageRecord?.ruleRefs);
+  const configurationRuleMap = new Map(configurationRules.map((rule) => [text(rule?.id), rule]));
+  const missingRuleIds = linkedRuleIds.filter((ruleId) => !configurationRuleMap.has(ruleId));
+  const usedByTemplates = (Array.isArray(draftCatalog?.settings?.eventTemplates)
+    ? draftCatalog.settings.eventTemplates
+    : []).filter((template) => templateOfferId(template) === selectedPackageId);
+  const usedByRecommendations = (Array.isArray(draftCatalog?.settings?.upsellRules)
+    ? draftCatalog.settings.upsellRules
+    : []).filter((rule) => (
+    rule?.kind === "package" && text(rule?.targetId) === selectedPackageId
+  ));
+  const availableMenuEventTypes = (Array.isArray(menuEventTypes) ? menuEventTypes : [])
+    .filter((eventType) => text(eventType?.id) && eventType?.active !== false);
+  const selectedMenuEventTypeId = text(selectedEventType);
+  const selectedMenuEventTypeIsAvailable = availableMenuEventTypes.some(
+    (eventType) => text(eventType.id) === selectedMenuEventTypeId
+  );
+  const onlyMenuEventType = availableMenuEventTypes.length === 1
+    ? availableMenuEventTypes[0]
+    : null;
+
+  const choiceOptionsForType = (componentType) => {
+    if (componentType === "menu_item") return allMenuChoices(menuItems, draftCatalog);
+    if (componentType === "addon") return uniqueRecordsById(draftCatalog?.addons || []);
+    if (componentType === "rental") return uniqueRecordsById(draftCatalog?.rentals || []);
+    return [];
+  };
+  const nestedAttentionForPackage = (packageRecord = {}) => {
+    const groups = Array.isArray(packageRecord?.choiceGroups) ? packageRecord.choiceGroups : [];
+    const groupIds = groups.map((group) => text(group?.id)).filter(Boolean);
+    const duplicateGroupIds = groupIds.length - new Set(groupIds).size;
+    const choiceIssues = groups.reduce((total, group) => {
+      const componentType = text(group?.componentType || group?.type).toLowerCase();
+      return total + choiceGroupPresentation(group, choiceOptionsForType(componentType)).attentionCount;
+    }, duplicateGroupIds);
+    const unavailableRules = uniqueIds(packageRecord?.ruleRefs)
+      .filter((ruleId) => !configurationRuleMap.has(ruleId)).length;
+    return choiceIssues + unavailableRules;
+  };
+  const choicePresentations = choiceGroups.map((group) => choiceGroupPresentation(
+    group,
+    choiceOptionsForType(text(group?.componentType || group?.type).toLowerCase())
+  ));
+  const choiceGroupIds = choiceGroups.map((group) => text(group?.id)).filter(Boolean);
+  const duplicateChoiceGroupIdCount = choiceGroupIds.length - new Set(choiceGroupIds).size;
+  const choiceAttentionCount = choicePresentations.reduce((total, presentation) => (
+    total + presentation.attentionCount
+  ), duplicateChoiceGroupIdCount);
 
   useEffect(() => {
     setExpandedGroupId("");
@@ -230,10 +399,26 @@ export default function PackageWorkspace({
   useEffect(() => {
     const activationBlockIsResolved = selectedPackageModel?.readiness === "ready"
       || selectedPackageRecord?.active !== false;
-    if (activationBlockIsResolved && activationNotice.startsWith("Activation is blocked")) {
+    if (activationBlockIsResolved && activationNotice.startsWith("This offer cannot be made available")) {
       setActivationNotice("");
     }
   }, [activationNotice, selectedPackageModel?.readiness, selectedPackageRecord?.active]);
+
+  useEffect(() => {
+    if (
+      menuLoading
+      || !workspace
+      || !onlyMenuEventType
+      || selectedMenuEventTypeId
+      || typeof onSelectEventType !== "function"
+    ) return;
+    onSelectEventType(text(onlyMenuEventType.id));
+  }, [menuLoading, onSelectEventType, onlyMenuEventType, selectedMenuEventTypeId, workspace]);
+
+  const revealSection = (sectionId) => {
+    const section = rootRef.current?.querySelector(`[data-package-section="${sectionId}"]`);
+    if (section?.tagName === "DETAILS") section.open = true;
+  };
 
   const focusField = (selector, afterFocus) => {
     if (typeof afterFocus === "function") {
@@ -242,6 +427,10 @@ export default function PackageWorkspace({
     if (typeof window === "undefined") return;
     window.requestAnimationFrame(() => {
       const target = rootRef.current?.querySelector(selector);
+      const disclosure = target?.closest?.("details");
+      if (disclosure && !disclosure.open) {
+        disclosure.open = true;
+      }
       target?.focus?.({ preventScroll: true });
       target?.scrollIntoView?.({ block: "nearest", behavior: "auto" });
     });
@@ -253,6 +442,16 @@ export default function PackageWorkspace({
         (selectedPackageModel?.referenceHealth?.[group.modelKey] || []).some((reference) => reference.status !== "ok")
       )) || INCLUSION_GROUPS[0];
       openPicker(priorityGroup);
+      return;
+    }
+    if (reason?.targetSection === "choices") {
+      revealSection("choices");
+      focusField('[data-package-section="choices"] > summary');
+      return;
+    }
+    if (reason?.targetSection === "rules") {
+      revealSection("rules");
+      focusField('[data-package-section="rules"] > summary');
       return;
     }
     if (reason?.targetField === "name") {
@@ -281,6 +480,7 @@ export default function PackageWorkspace({
   };
 
   const openPicker = (group) => {
+    revealSection("included");
     setPickerSelections((current) => ({
       ...current,
       [group.id]: uniqueIds(selectedPackageRecord?.[group.field])
@@ -351,7 +551,7 @@ export default function PackageWorkspace({
   const applyPickerSelection = (group) => {
     const nextIds = uniqueIds(pickerSelections[group.id]);
     onReplacePackageInclusionIds(selectedPackageId, group.field, nextIds);
-    setPickerStatus(`${group.label}: ${countLabel(nextIds.length, group.singularLabel)} staged in this package draft.`);
+    setPickerStatus(`${group.label}: ${countLabel(nextIds.length, group.singularLabel)} staged in this offer draft.`);
     closePicker(group.id);
   };
 
@@ -359,7 +559,7 @@ export default function PackageWorkspace({
     if (nextActive && selectedPackageModel?.readiness !== "ready") {
       const firstReason = selectedPackageModel?.reasons?.[0];
       setActivationNotice(
-        `Activation is blocked until this package is ready. ${firstReason?.title || "Review the package health items first."}`
+        `This offer cannot be made available yet. ${firstReason?.title || "Complete the required offer details first."}`
       );
       if (typeof window !== "undefined") {
         window.requestAnimationFrame(() => {
@@ -369,9 +569,147 @@ export default function PackageWorkspace({
       return;
     }
     setActivationNotice(nextActive
-      ? "This package is staged to become available in Quote Builder after the catalog is saved."
-      : "This package is staged as draft-only after the catalog is saved.");
+      ? "This offer will become available for quoting when the catalog draft is saved."
+      : "This offer will remain draft-only when the catalog draft is saved.");
     onPatchPackageField(selectedPackageId, "active", nextActive);
+  };
+
+  const renderMenuEventTypeFilter = () => {
+    const label = "Menu item filter for add actions";
+    const description = "This only narrows the available menu choices below. It does not change where the offer can be used.";
+    const canSelectEventType = typeof onSelectEventType === "function";
+
+    if (menuLoading) {
+      return (
+        <div
+          className="admin-package-menu-filter package-workspace-menu-filter"
+          data-package-field="eventTypeFilter"
+          role="group"
+          aria-label={label}
+        >
+          <span>{label}</span>
+          <small>{description}</small>
+          <FieldStateIndicator
+            state={{ evidence: "pending" }}
+            label="Menu event types"
+            supportingDetail="Loading the current Library event types."
+          />
+        </div>
+      );
+    }
+
+    if (availableMenuEventTypes.length === 0) {
+      const canClearStale = Boolean(selectedMenuEventTypeId && canSelectEventType);
+      return (
+        <div
+          className="admin-package-menu-filter package-workspace-menu-filter"
+          data-package-field="eventTypeFilter"
+          role="group"
+          aria-label={label}
+        >
+          <span>{label}</span>
+          <small>{description}</small>
+          <FieldStateIndicator
+            state={canClearStale ? { evidence: "stale" } : { availability: "not_provided" }}
+            label="Menu event types"
+            reason={canClearStale ? "The selected event type is no longer active in the current Library." : ""}
+            supportingDetail={canClearStale
+              ? "Remove the stale filter, then activate an event type before adding menu inclusions."
+              : "No active event types are available. Add or activate one in the Menu area, then return to this offer."}
+            recoveryAction={canClearStale
+              ? { label: "Remove unavailable filter", onClick: () => onSelectEventType("") }
+              : undefined}
+          />
+        </div>
+      );
+    }
+
+    if (onlyMenuEventType && selectedMenuEventTypeIsAvailable) {
+      return (
+        <div data-package-field="eventTypeFilter">
+          <AdaptiveChoiceField
+            className="admin-package-menu-filter package-workspace-menu-filter"
+            label={label}
+            description={description}
+            options={[{
+              value: text(onlyMenuEventType.id),
+              label: text(onlyMenuEventType.name) || text(onlyMenuEventType.id)
+            }]}
+            value={selectedMenuEventTypeId}
+            singleChoiceDetail="This is the only active menu event type."
+          />
+        </div>
+      );
+    }
+
+    if (onlyMenuEventType && !selectedMenuEventTypeId) {
+      return (
+        <div
+          className="admin-package-menu-filter package-workspace-menu-filter"
+          data-package-field="eventTypeFilter"
+          role="group"
+          aria-label={label}
+        >
+          <span>{label}</span>
+          <small>{description}</small>
+          <strong className="adaptive-choice-field__single-value">
+            {text(onlyMenuEventType.name) || text(onlyMenuEventType.id)}
+          </strong>
+          <FieldStateIndicator
+            state={{ origin: "defaulted" }}
+            label="Menu event type"
+            provenance="The only active menu event type"
+            supportingDetail="Applying this presentation-only filter."
+          />
+        </div>
+      );
+    }
+
+    if (onlyMenuEventType) {
+      const canRecover = canSelectEventType;
+      return (
+        <div
+          className="admin-package-menu-filter package-workspace-menu-filter"
+          data-package-field="eventTypeFilter"
+          role="group"
+          aria-label={label}
+        >
+          <span>{label}</span>
+          <small>{description}</small>
+          <strong className="adaptive-choice-field__single-value">{selectedMenuEventTypeId}</strong>
+          <FieldStateIndicator
+            state={canRecover ? { evidence: "stale" } : { availability: "unknown" }}
+            label="Menu event type"
+            reason={canRecover ? "The selected filter is no longer an active event type." : ""}
+            supportingDetail={`The only current choice is ${text(onlyMenuEventType.name) || text(onlyMenuEventType.id)}.`}
+            recoveryAction={canRecover
+              ? {
+                  label: `Use ${text(onlyMenuEventType.name) || text(onlyMenuEventType.id)}`,
+                  onClick: () => onSelectEventType(text(onlyMenuEventType.id))
+                }
+              : undefined}
+          />
+        </div>
+      );
+    }
+
+    return (
+      <label className="admin-package-menu-filter package-workspace-menu-filter">
+        <span>{label}</span>
+        <small>{description}</small>
+        <select
+          aria-label="Menu item filter for package inclusions"
+          data-package-field="eventTypeFilter"
+          value={selectedMenuEventTypeIsAvailable ? selectedMenuEventTypeId : ""}
+          onChange={(event) => onSelectEventType(event.target.value)}
+        >
+          <option value="">Choose event type</option>
+          {availableMenuEventTypes.map((eventType) => (
+            <option key={eventType.id} value={eventType.id}>{eventType.name}</option>
+          ))}
+        </select>
+      </label>
+    );
   };
 
   if (!workspace || workspace.packageIds.length === 0) {
@@ -379,23 +717,41 @@ export default function PackageWorkspace({
       <section className="admin-section package-workspace-section">
         <div className="admin-section-head package-workspace-head">
           <div>
-            <h3>Packages</h3>
+            <p className="package-workspace-kicker">Offers</p>
+            <h3>Build the packages customers can choose.</h3>
             <p className="source-note">
-              Define what each package promises, what it includes at $0 when selected, and whether it is commercially ready before sales uses it.
+              An offer is a reusable catering package with a customer-facing name, price, availability, and included choices.
             </p>
           </div>
-          <button type="button" className="ghost" onClick={onAddPackage}>Add</button>
+          <button type="button" className="ghost" onClick={onAddPackage}>Add offer</button>
         </div>
         <div className="package-workspace-empty">
-          <h4>No packages yet</h4>
-          <p>Create your first package to define a customer-facing promise, record its price, and choose what Quote Builder may include at no added charge.</p>
-          <button type="button" className="cta" onClick={onAddPackage}>Add first package</button>
+          <h4>No offers yet</h4>
+          <p>Create the first catering package, then choose its price, availability, and included menu or service choices.</p>
+          <button type="button" className="cta" onClick={onAddPackage}>Add first offer</button>
         </div>
       </section>
     );
   }
 
   const readiness = packageReadinessPresentation(selectedPackageModel?.readiness);
+  const nestedAttentionAction = choiceAttentionCount > 0
+    ? {
+        label: "Review customer choices",
+        detail: "One or more choice groups have missing details, unavailable items, or selection limits that need correction.",
+        targetSection: "choices"
+      }
+    : missingRuleIds.length > 0
+      ? {
+          label: "Review linked rules",
+          detail: "One or more linked selling rules are no longer available in the current Library.",
+          targetSection: "rules"
+        }
+      : null;
+  const nextDecision = selectedPackageModel?.nextAction || nestedAttentionAction;
+  const overallReadiness = selectedPackageModel?.readiness === "ready" && nestedAttentionAction
+    ? { family: STATUS_FAMILY.PENDING, label: "Needs review" }
+    : readiness;
   const lifecycle = packageLifecyclePresentation(selectedPackageModel?.package);
   const commercialSummary = selectedPackageModel?.commercialSummary || {};
   const contributionLabel = commercialSummary.contributionPerPerson === null
@@ -405,26 +761,37 @@ export default function PackageWorkspace({
     commercialSummary.includedCounts?.total || 0,
     "included item"
   );
-  const renderHealthContent = (headingId) => (
-    <div className="package-workspace-card package-workspace-health-card" data-package-health tabIndex="-1">
+  const renderNextAction = (headingId) => (
+    <section className="package-workspace-next" data-package-health tabIndex="-1" aria-labelledby={headingId}>
       <div className="package-workspace-card-head">
         <div>
-          <p className="package-workspace-kicker">Package health</p>
-          <h4 id={headingId}>Next action</h4>
+          <p className="package-workspace-kicker">Next decision</p>
+          <h5 id={headingId}>
+            {nextDecision
+              ? nextDecision.label
+              : "Ready for quoting"}
+          </h5>
+          <p>
+            {nextDecision
+              ? nextDecision.detail || selectedPackageModel?.reasons?.[0]?.detail
+              : "This offer is ready for sales to use on the current catalog."}
+          </p>
         </div>
-        <StatusChip family={readiness.family} label={readiness.label} />
+        <StatusChip family={overallReadiness.family} label={overallReadiness.label} />
       </div>
-      {selectedPackageModel?.nextAction ? (
+      {nextDecision && (
         <button
           type="button"
           className="cta package-workspace-next-action"
-          onClick={() => handleReasonAction(selectedPackageModel.nextAction)}
+          onClick={() => handleReasonAction(nextDecision)}
         >
-          {selectedPackageModel.nextAction.label}
+          {nextDecision.label}
         </button>
-      ) : (
-        <p className="package-workspace-health-clear">This package is ready for quoting on the current catalog revision.</p>
       )}
+    </section>
+  );
+  const renderReadinessDetails = () => (
+    <div className="package-workspace-readiness-details">
       {selectedPackageModel?.reasons?.length > 0 && (
         <ol className="package-workspace-reason-list">
           {selectedPackageModel.reasons.map((reason) => (
@@ -440,20 +807,6 @@ export default function PackageWorkspace({
           ))}
         </ol>
       )}
-      <dl className="package-workspace-evidence-list">
-        <div>
-          <dt>Catalog revision</dt>
-          <dd>{selectedPackageModel?.evidence?.catalogRevision ?? "Unavailable"}</dd>
-        </div>
-        <div>
-          <dt>Pricing confirmation</dt>
-          <dd>{selectedPackageModel?.evidence?.pricingConfirmationCurrent ? "Current" : "Needs confirmation"}</dd>
-        </div>
-        <div>
-          <dt>Selected at $0</dt>
-          <dd>Yes, when sales explicitly chooses an included item.</dd>
-        </div>
-      </dl>
     </div>
   );
 
@@ -461,9 +814,10 @@ export default function PackageWorkspace({
     <section ref={rootRef} className="admin-section package-workspace-section" data-package-workspace="true">
       <div className="admin-section-head package-workspace-head">
         <div>
-          <h3>Packages</h3>
+          <p className="package-workspace-kicker">Offers</p>
+          <h3>Customer-ready catering packages</h3>
           <p className="source-note">
-            Review one package at a time, keep current inclusions visible before edit controls, and save the whole catalog only when this draft is ready.
+            Shape one offer at a time. Its price, included choices, and availability are saved with the rest of the Library.
           </p>
         </div>
         <div className="package-workspace-head-actions">
@@ -477,7 +831,7 @@ export default function PackageWorkspace({
                 setExpandedGroupId("");
                 onRevertPackage(selectedPackageId);
               }}
-            >Revert this package</button>
+            >Revert this offer</button>
           )}
           <div className="package-workspace-actions-menu">
             <button
@@ -486,7 +840,7 @@ export default function PackageWorkspace({
               aria-haspopup="menu"
               aria-expanded={actionsOpen}
               onClick={() => setActionsOpen((current) => !current)}
-            >Package actions</button>
+            >Offer actions</button>
             {actionsOpen && (
               <div
                 className="package-workspace-actions-popover"
@@ -506,11 +860,11 @@ export default function PackageWorkspace({
                     setActionsOpen(false);
                     setDeleteReviewOpen(true);
                   }}
-                >Delete package…</button>
+                >Delete offer…</button>
               </div>
             )}
           </div>
-          <button type="button" className="ghost" onClick={onAddPackage}>Add package</button>
+          <button type="button" className="ghost" onClick={onAddPackage}>Add offer</button>
         </div>
       </div>
 
@@ -523,15 +877,15 @@ export default function PackageWorkspace({
         >
           <div>
             <p className="package-workspace-kicker">Destructive catalog change</p>
-            <h4 id="package-delete-review-title">Delete {selectedPackageModel?.package?.displayName || "this package"}?</h4>
+            <h4 id="package-delete-review-title">Delete {text(selectedPackageRecord?.name) || `unnamed offer ${selectedPackageIndex + 1}`}?</h4>
             <p id="package-delete-review-description">
               {packageDeletionSummary.available === false
                 ? "Dependency review is unavailable until the Event Templates draft is valid. Nothing has been deleted."
-                : `${countLabel(packageDeletionSummary.eventTemplateCount || 0, "event template")} and ${countLabel(packageDeletionSummary.ruleCount || 0, "recommendation rule")} currently reference this package. Saving will remove those catalog references; existing saved quotes stay unchanged.`}
+                : `${countLabel(packageDeletionSummary.eventTemplateCount || 0, "event template")} and ${countLabel(packageDeletionSummary.ruleCount || 0, "recommendation rule")} currently use this offer. When saved, they will stop using it; existing saved quotes stay unchanged.`}
             </p>
           </div>
           <div className="package-workspace-delete-actions">
-            <button type="button" className="ghost" onClick={() => setDeleteReviewOpen(false)}>Keep package</button>
+            <button type="button" className="ghost" onClick={() => setDeleteReviewOpen(false)}>Keep offer</button>
             <button
               type="button"
               className="ghost danger"
@@ -546,32 +900,68 @@ export default function PackageWorkspace({
       )}
 
       <div className="package-workspace-shell">
-        <aside className="package-workspace-nav" aria-label="Package list">
+        <aside className="package-workspace-nav" aria-label="Offer list">
           <div className="package-workspace-nav-head">
-            <strong>{countLabel(workspace.packageIds.length, "package")}</strong>
-            <span>{workspace.packages.filter((entry) => entry.readiness === "ready").length} ready</span>
+            <strong>{countLabel(workspace.packageIds.length, "offer")}</strong>
+            <span>{workspace.packages.filter((entry) => (
+              entry.readiness === "ready"
+              && nestedAttentionForPackage(findPackageById(draftCatalog?.packages, entry.package.id)) === 0
+            )).length} ready</span>
           </div>
-          <label className="package-workspace-mobile-switcher">
-            <span>Choose package</span>
-            <select
-              aria-label="Choose package"
-              value={selectedPackageId}
-              onChange={(event) => selectPackage(event.target.value)}
-            >
-              {workspace.packages.map((entry) => (
-                <option key={entry.package.id} value={entry.package.id}>
-                  {entry.package.displayName} · {packageReadinessPresentation(entry.readiness).label}
-                </option>
-              ))}
-            </select>
-          </label>
+          {workspace.packages.length === 1 ? (() => {
+            const [entry] = workspace.packages;
+            const entryNestedAttention = nestedAttentionForPackage(
+              findPackageById(draftCatalog?.packages, entry.package.id)
+            );
+            const entryReadiness = entry.readiness === "ready" && entryNestedAttention > 0
+              ? "Needs review"
+              : packageReadinessPresentation(entry.readiness).label;
+            return (
+              <AdaptiveChoiceField
+                className="package-workspace-mobile-switcher"
+                label="Choose offer"
+                options={[{
+                  value: entry.package.id,
+                  label: `${text(entry.package.name) || "Unnamed offer"} · ${entryReadiness}`
+                }]}
+                value={selectedPackageId}
+                singleChoiceDetail="This is the only offer in the current Library draft."
+              />
+            );
+          })() : (
+            <label className="package-workspace-mobile-switcher">
+              <span>Choose offer</span>
+              <select
+                aria-label="Choose offer"
+                value={selectedPackageId}
+                onChange={(event) => selectPackage(event.target.value)}
+              >
+                {workspace.packages.map((entry, entryIndex) => {
+                  const entryNestedAttention = nestedAttentionForPackage(
+                    findPackageById(draftCatalog?.packages, entry.package.id)
+                  );
+                  const entryReadiness = entry.readiness === "ready" && entryNestedAttention > 0
+                    ? "Needs review"
+                    : packageReadinessPresentation(entry.readiness).label;
+                  return (
+                    <option key={entry.package.id} value={entry.package.id}>
+                      {text(entry.package.name) || `Unnamed offer ${entryIndex + 1}`} · {entryReadiness}
+                    </option>
+                  );
+                })}
+              </select>
+            </label>
+          )}
           <ul className="package-workspace-nav-list">
-            {workspace.packages.map((entry) => {
+            {workspace.packages.map((entry, entryIndex) => {
               const entryReadiness = packageReadinessPresentation(entry.readiness);
+              const entryNestedAttention = nestedAttentionForPackage(
+                findPackageById(draftCatalog?.packages, entry.package.id)
+              );
+              const entryOverallReadiness = entry.readiness === "ready" && entryNestedAttention > 0
+                ? { family: STATUS_FAMILY.PENDING, label: "Needs review" }
+                : entryReadiness;
               const entryActive = packageLifecyclePresentation(entry.package);
-              const marginLabel = entry.commercialSummary.marginPct === null
-                ? "Margin unavailable"
-                : `${formatPercent(entry.commercialSummary.marginPct)} margin`;
               return (
                 <li key={entry.package.id}>
                   <button
@@ -582,16 +972,14 @@ export default function PackageWorkspace({
                     onClick={() => selectPackage(entry.package.id)}
                   >
                     <div className="package-workspace-nav-item-top">
-                      <strong>{entry.package.displayName}</strong>
-                      <StatusChip family={entryReadiness.family} label={entryReadiness.label} />
+                      <strong>{text(entry.package.name) || `Unnamed offer ${entryIndex + 1}`}</strong>
+                      <StatusChip family={entryOverallReadiness.family} label={entryOverallReadiness.label} />
                     </div>
                     <div className="package-workspace-nav-item-facts">
                       <span>{formatCurrency(entry.package.pricePerPerson)}</span>
-                      <span>{marginLabel}</span>
                       <span>{countLabel(entry.commercialSummary.includedCounts.total || 0, "inclusion")}</span>
                     </div>
                     <div className="package-workspace-nav-item-bottom">
-                      <small>{entry.package.id}</small>
                       <StatusChip family={entryActive.family} label={entryActive.label} />
                     </div>
                   </button>
@@ -605,130 +993,112 @@ export default function PackageWorkspace({
           <section className="package-workspace-card package-workspace-overview" aria-labelledby="package-workspace-overview-heading">
             <div className="package-workspace-card-head">
               <div>
-                <p className="package-workspace-kicker">Customer promise</p>
+                <p className="package-workspace-kicker">Selected offer</p>
                 <h4
                   id="package-workspace-overview-heading"
                   data-package-workspace-heading
                   tabIndex="-1"
-                >{selectedPackageModel?.package?.displayName}</h4>
+                >{text(selectedPackageRecord?.name) || `Unnamed offer ${selectedPackageIndex + 1}`}</h4>
               </div>
               <div className="package-workspace-chip-row">
-                <StatusChip family={readiness.family} label={readiness.label} />
+                <StatusChip family={overallReadiness.family} label={overallReadiness.label} />
                 <StatusChip family={lifecycle.family} label={lifecycle.label} />
               </div>
             </div>
-            <div className="package-workspace-overview-grid">
-              <label>
-                <span>Customer-facing package name</span>
-                <input
-                  data-package-field="name"
-                  aria-label="Customer-facing package name"
-                  value={selectedPackageRecord?.name || ""}
-                  onChange={(event) => onPatchPackageField(selectedPackageId, "name", event.target.value)}
-                />
-              </label>
-              <label>
-                <span>Package ID</span>
-                <input aria-label="Package ID" value={selectedPackageRecord?.id || ""} disabled />
-              </label>
-              <label>
-                <span>Price per person</span>
-                <input
-                  data-package-field="ppp"
-                  aria-label="Price per person"
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={selectedPackageRecord?.ppp ?? 0}
-                  onChange={(event) => onPatchPackageField(selectedPackageId, "ppp", Number(event.target.value))}
-                />
-              </label>
-              <label>
-                <span>Cost per person</span>
-                <input
-                  data-package-field="costPpp"
-                  aria-label="Cost per person"
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  placeholder={marginsEnabled ? "Not recorded" : "Record when known"}
-                  value={selectedPackageRecord?.costPpp ?? ""}
-                  onChange={(event) => onPatchPackageField(
-                    selectedPackageId,
-                    "costPpp",
-                    event.target.value === "" ? null : Number(event.target.value)
-                  )}
-                />
-              </label>
-              <label className="admin-inline-toggle package-workspace-active-toggle">
-                <span>Available in Quote Builder</span>
-                <input
-                  type="checkbox"
-                  aria-label={`Package ${selectedPackageIndex + 1} active`}
-                  checked={selectedPackageRecord?.active !== false}
-                  onChange={(event) => handleActiveChange(event.target.checked)}
-                />
-              </label>
-            </div>
-            {activationNotice && (
-              <p className="package-workspace-activation-notice" role="status">{activationNotice}</p>
-            )}
-            <div className="package-workspace-summary-grid" aria-label="Package economics">
+            <div className="package-workspace-summary-grid package-workspace-primary-summary" aria-label="Offer commercial summary">
               <article>
-                <span>Price</span>
+                <span>Selling price</span>
                 <strong>{formatCurrency(commercialSummary.pricePerPerson, "$0.00")}</strong>
                 <small>Per guest</small>
               </article>
               <article>
-                <span>Recorded cost</span>
-                <strong>{commercialSummary.costPerPerson === null ? "Not recorded" : formatCurrency(commercialSummary.costPerPerson)}</strong>
-                <small>{commercialSummary.costPerPerson === null ? "Add cost evidence to unlock margin." : "Per guest"}</small>
+                <span>Availability</span>
+                <strong>{selectedPackageRecord?.active !== false ? "Available" : "Draft only"}</strong>
+                <small>{selectedPackageRecord?.active !== false ? "Sales can choose this offer." : "Hidden from new quotes after save."}</small>
               </article>
               <article>
-                <span>Contribution</span>
-                <strong>{contributionLabel}</strong>
-                <small>{commercialSummary.contributionPerPerson === null ? "Requires price and cost." : "Price minus cost"}</small>
+                <span>Included</span>
+                <strong>{selectedCountLabel}</strong>
+                <small>Charged through the offer when selected</small>
               </article>
               <article>
                 <span>Margin</span>
                 <strong>{formatPercent(commercialSummary.marginPct)}</strong>
-                <small>{commercialSummary.marginPct === null ? "Unavailable until price and cost are both valid." : "Commercial evidence only"}</small>
+                <small>{commercialSummary.marginPct === null ? "Record cost evidence to calculate it." : `${contributionLabel} contribution per guest`}</small>
               </article>
             </div>
+            {renderNextAction("package-workspace-next-heading")}
+            {activationNotice && (
+              <p className="package-workspace-activation-notice" role="status">{activationNotice}</p>
+            )}
           </section>
 
-          <details className="package-workspace-health-mobile">
-            <summary>Package health · {readiness.label}</summary>
-            {renderHealthContent("package-workspace-health-mobile-heading")}
-          </details>
-
-          <section className="package-workspace-card package-workspace-composition" aria-labelledby="package-workspace-composition-heading">
-            <div className="package-workspace-card-head">
-              <div>
-                <p className="package-workspace-kicker">Composition</p>
-                <h4 id="package-workspace-composition-heading">{selectedCountLabel}</h4>
+          <details
+            className="package-workspace-disclosure package-workspace-object-section package-workspace-section-basics"
+            data-package-section="basics"
+          >
+            <summary>
+              <span>
+                <strong>Basics</strong>
+                <small>Name and quoting availability</small>
+              </span>
+              {!text(selectedPackageRecord?.name) && (
+                <StatusChip family={STATUS_FAMILY.BLOCKED} label="Needs attention" />
+              )}
+            </summary>
+            <div className="package-workspace-disclosure-body">
+              <div className="package-workspace-overview-grid">
+                <label>
+                  <span>Customer-facing offer name</span>
+                  <input
+                    data-package-field="name"
+                    aria-label="Customer-facing offer name"
+                    value={selectedPackageRecord?.name || ""}
+                    onChange={(event) => onPatchPackageField(selectedPackageId, "name", event.target.value)}
+                  />
+                </label>
+                <label className="admin-inline-toggle package-workspace-active-toggle">
+                  <span>Available for quoting</span>
+                  <input
+                    type="checkbox"
+                    aria-label={`Offer ${selectedPackageIndex + 1} active`}
+                    checked={selectedPackageRecord?.active !== false}
+                    onChange={(event) => handleActiveChange(event.target.checked)}
+                  />
+                </label>
               </div>
-              <p className="package-workspace-quote-rule">
-                Quote Builder never auto-selects these items. When an estimator picks one, QuotePilot prices it at $0 inside this package.
+              <p className="source-note">
+                Availability changes only in this catalog draft. Existing saved quotes keep their recorded offer.
               </p>
             </div>
+          </details>
 
-            <label className="admin-package-menu-filter package-workspace-menu-filter">
-              <span>Menu item filter for add actions</span>
-              <small>This only narrows the menu choices below. It does not decide where the package can be sold or what Quote Builder allows.</small>
-              <select
-                aria-label="Menu item filter for package inclusions"
-                data-package-field="eventTypeFilter"
-                value={selectedEventType}
-                onChange={(event) => onSelectEventType(event.target.value)}
-                disabled={menuLoading}
-              >
-                <option value="">Choose event type</option>
-                {menuEventTypes.map((eventType) => (
-                  <option key={eventType.id} value={eventType.id}>{eventType.name}</option>
-                ))}
-              </select>
-            </label>
+          <details
+            className="package-workspace-disclosure package-workspace-object-section package-workspace-section-included"
+            data-package-section="included"
+          >
+            <summary>
+              <span>
+                <strong>Included</strong>
+                <small>{selectedCountLabel} available through this offer</small>
+              </span>
+              {(selectedPackageModel?.referenceHealth?.counts?.blocking > 0
+                || selectedPackageModel?.referenceHealth?.counts?.review > 0) && (
+                <StatusChip family={STATUS_FAMILY.PENDING} label="Needs attention" />
+              )}
+            </summary>
+            <div className="package-workspace-disclosure-body package-workspace-composition" aria-labelledby="package-workspace-composition-heading">
+              <div className="package-workspace-card-head">
+                <div>
+                  <p className="package-workspace-kicker">Included with this offer</p>
+                  <h4 id="package-workspace-composition-heading">Fixed inclusions</h4>
+                </div>
+                <p className="package-workspace-quote-rule">
+                  These items remain choices in a quote. When selected, their price is already included in this offer.
+                </p>
+              </div>
+
+            {renderMenuEventTypeFilter()}
 
             <div className="package-workspace-group-grid">
               {INCLUSION_GROUPS.map((group) => {
@@ -785,7 +1155,7 @@ export default function PackageWorkspace({
                     </div>
                     {referenceIssues.length > 0 && (
                       <p className="package-workspace-group-warning">
-                        {countLabel(referenceIssues.length, "selected issue")} {referenceIssues.length === 1 ? "needs" : "need"} attention before this package can quote cleanly.
+                        {countLabel(referenceIssues.length, "selected issue")} {referenceIssues.length === 1 ? "needs" : "need"} attention before this offer can be quoted cleanly.
                       </p>
                     )}
                     <ul className="package-workspace-selection-list">
@@ -797,7 +1167,7 @@ export default function PackageWorkspace({
                           <li key={`${group.id}-${reference.id || "blank"}-${index}`}>
                             <div>
                               <strong>{describeReference(reference)}</strong>
-                              <small>{reference.status === "ok" ? "Selected at $0 when chosen in Quote Builder." : reference.issue === "inactive" ? "Record still exists but is inactive." : "Resolve or remove this reference."}</small>
+                              <small>{reference.status === "ok" ? "Included in the offer when chosen in a quote." : reference.issue === "inactive" ? "This choice still exists but is unavailable." : "Resolve or remove this choice."}</small>
                             </div>
                             <div className="package-workspace-selection-actions">
                               <StatusChip family={presentation.family} label={presentation.label} />
@@ -830,7 +1200,7 @@ export default function PackageWorkspace({
                         >
                           <div className="package-workspace-picker-head">
                             <div>
-                              <p className="package-workspace-kicker">Package composition</p>
+                              <p className="package-workspace-kicker">Offer contents</p>
                               <h6 id={`package-picker-${group.id}-title`}>Choose {group.label.toLowerCase()}</h6>
                             </div>
                             <button type="button" className="ghost" onClick={() => closePicker(group.id)}>Close</button>
@@ -849,25 +1219,23 @@ export default function PackageWorkspace({
                                 placeholder={`Search ${group.label.toLowerCase()}`}
                               />
                             </label>
-                            <label className="package-workspace-search">
-                              <span>Category</span>
-                              <select
-                                aria-label={`Filter ${group.label.toLowerCase()} by category`}
+                            {categories.length > 0 ? (
+                              <AdaptiveChoiceField
+                                className="package-workspace-search"
+                                label="Category"
+                                options={categories.map((category) => ({ value: category, label: category }))}
                                 value={categoryByGroup[group.id] || ""}
+                                placeholder="All categories"
                                 onChange={(event) => setCategoryByGroup((current) => ({
                                   ...current,
                                   [group.id]: event.target.value
                                 }))}
-                              >
-                                <option value="">All categories</option>
-                                {categories.map((category) => (
-                                  <option key={category} value={category}>{category}</option>
-                                ))}
-                              </select>
-                            </label>
+                                singleChoiceDetail="Every available record is in this category, so filtering would not change the list."
+                              />
+                            ) : null}
                           </div>
                           <p className="package-workspace-picker-count" role="status">
-                            {countLabel(pendingIds.size, "selection")} in this package
+                            {countLabel(pendingIds.size, "selection")} in this offer
                           </p>
                           <div className="package-workspace-option-list">
                             {filteredOptions.length === 0 ? (
@@ -886,11 +1254,11 @@ export default function PackageWorkspace({
                                     onChange={(event) => togglePickerSelection(group.id, optionId, event.target.checked)}
                                   />
                                   <span>
-                                    <strong>{text(option?.name) || optionId}</strong>
+                                    <strong>{text(option?.name) || "Unnamed catalog item"}</strong>
                                     <small>
                                       {option?.active === false
                                         ? "Inactive record; unselect it before applying if it should be removed."
-                                        : `${optionCategoryLabel(option, group, menuCategoryLookup)} · ${optionId}`}
+                                        : optionCategoryLabel(option, group, menuCategoryLookup)}
                                     </small>
                                   </span>
                                 </label>
@@ -911,35 +1279,323 @@ export default function PackageWorkspace({
               })}
             </div>
             {pickerStatus && <p className="package-workspace-picker-status" role="status">{pickerStatus}</p>}
-          </section>
+            </div>
+          </details>
 
-          <section className="package-workspace-card package-workspace-quote-behavior" aria-labelledby="package-workspace-quote-behavior-heading">
-            <div className="package-workspace-card-head">
-              <div>
-                <p className="package-workspace-kicker">Quote Builder behavior</p>
-                <h4 id="package-workspace-quote-behavior-heading">What sales will see</h4>
+          {choiceGroups.length > 0 && (
+            <details
+              className="package-workspace-disclosure package-workspace-object-section package-workspace-section-choices"
+              data-package-section="choices"
+            >
+            <summary>
+              <span>
+                <strong>Choices</strong>
+                <small>
+                  {choiceGroups.length === 0
+                    ? "No bounded customer choices"
+                    : countLabel(choiceGroups.length, "customer choice group")}
+                </small>
+              </span>
+              {choiceAttentionCount > 0 && (
+                <StatusChip family={STATUS_FAMILY.PENDING} label={countLabel(choiceAttentionCount, "issue")} />
+              )}
+            </summary>
+            <div className="package-workspace-disclosure-body">
+              <div className="package-workspace-card-head">
+                <div>
+                  <p className="package-workspace-kicker">Customer choices</p>
+                  <h4>What customers must choose</h4>
+                </div>
               </div>
-            </div>
-            <div className="package-workspace-behavior-grid">
-              <article>
-                <strong>Selections stay optional</strong>
-                <p>{selectedPackageModel?.quoteBehaviorSummary?.description}</p>
-              </article>
-              <article>
-                <strong>Catalog pricing receipt</strong>
-                <p>
-                  {selectedPackageModel?.evidence?.pricingConfirmationCurrent
-                    ? "Catalog pricing is confirmed at the current revision."
-                    : "Catalog pricing is not yet confirmed at the current revision."}
-                </p>
-              </article>
-            </div>
-          </section>
-        </div>
+              <p className="package-workspace-quote-rule">
+                These recorded limits belong to the current offer. They are shown here without creating another choice or pricing authority.
+              </p>
+              <div className="package-workspace-group-grid package-workspace-choice-groups">
+                  {choiceGroups.map((group, groupIndex) => {
+                    const componentType = text(group?.componentType || group?.type).toLowerCase();
+                    const options = choiceOptionsForType(componentType);
+                    const optionMap = new Map(options.map((option) => [text(option?.id), option]));
+                    const presentation = choicePresentations[groupIndex];
+                    return (
+                      <article
+                        key={text(group?.id) || `choice-group-${groupIndex}`}
+                        className="package-workspace-group-card package-workspace-choice-group"
+                        data-package-choice-group={groupIndex}
+                      >
+                        <div className="package-workspace-group-head">
+                          <div>
+                            <h5>{text(group?.label || group?.name) || `Customer choice ${groupIndex + 1}`}</h5>
+                            <p>
+                              {choiceComponentLabel(componentType)} · choose {presentation.minChoices}–{presentation.maxChoices} from {countLabel(presentation.componentIds.length, "available item")}
+                            </p>
+                          </div>
+                          <StatusChip
+                            family={presentation.attentionCount > 0 ? STATUS_FAMILY.PENDING : STATUS_FAMILY.CONFIRMED}
+                            label={presentation.attentionCount > 0 ? "Needs attention" : "Recorded"}
+                          />
+                        </div>
+                        {presentation.attentionCount > 0 && (
+                          <p className="package-workspace-group-warning">
+                            This choice needs attention before the offer can be published cleanly.
+                          </p>
+                        )}
+                        <div className="package-workspace-behavior-grid package-workspace-choice-facts">
+                          <article>
+                            <strong>Selection limit</strong>
+                            <p>Choose at least {presentation.minChoices} and no more than {presentation.maxChoices}.</p>
+                          </article>
+                          <article>
+                            <strong>Choice type</strong>
+                            <p>{choiceComponentLabel(componentType)}</p>
+                          </article>
+                        </div>
+                        <div className="package-workspace-choice-selection">
+                          <div className="package-workspace-group-head">
+                            <div>
+                              <h5>Available choices</h5>
+                              <p>{countLabel(presentation.componentIds.length, "catalog item")}</p>
+                            </div>
+                          </div>
+                          <ul className="package-workspace-selection-list">
+                            {presentation.componentIds.length === 0 ? (
+                              <li className="empty">No choices selected yet.</li>
+                            ) : presentation.componentIds.map((componentId, componentIndex) => {
+                              const option = optionMap.get(componentId);
+                              const optionStatus = option?.active === false ? "inactive" : option ? "ok" : "missing";
+                              const optionPresentation = referencePresentation({ status: optionStatus });
+                              return (
+                                <li key={`${componentId}-${componentIndex}`}>
+                                  <div>
+                                    <strong>{text(option?.name) || `Unavailable ${choiceComponentLabel(componentType).toLowerCase().replace(/s$/u, "")}`}</strong>
+                                    <small>{optionStatus === "ok" ? "Available in this customer choice." : "Remove or replace this unavailable catalog item."}</small>
+                                  </div>
+                                  <StatusChip family={optionPresentation.family} label={optionPresentation.label} />
+                                </li>
+                              );
+                            })}
+                          </ul>
+                        </div>
+                      </article>
+                    );
+                  })}
+                </div>
+              </div>
+            </details>
+          )}
 
-        <aside className="package-workspace-health package-workspace-health-desktop" aria-labelledby="package-workspace-health-heading">
-          {renderHealthContent("package-workspace-health-heading")}
-        </aside>
+          {linkedRuleIds.length > 0 && (
+            <details
+              className="package-workspace-disclosure package-workspace-object-section package-workspace-section-rules"
+              data-package-section="rules"
+            >
+              <summary>
+                <span>
+                  <strong>Rules</strong>
+                  <small>{countLabel(linkedRuleIds.length, "linked rule")}</small>
+                </span>
+                {missingRuleIds.length > 0 && (
+                  <StatusChip family={STATUS_FAMILY.PENDING} label={countLabel(missingRuleIds.length, "issue")} />
+                )}
+              </summary>
+              <div className="package-workspace-disclosure-body">
+                <p className="package-workspace-quote-rule">
+                  These are the selling-rule relationships recorded on this offer. Rule logic and availability remain managed in the Library’s Rules workspace.
+                </p>
+                {missingRuleIds.length > 0 && (
+                  <p className="package-workspace-group-warning">
+                    {countLabel(missingRuleIds.length, "linked rule")} cannot be found in the current Library and needs review before publishing.
+                  </p>
+                )}
+                <ul className="package-workspace-selection-list package-workspace-rule-list">
+                  {linkedRuleIds.map((ruleId, index) => {
+                    const rule = configurationRuleMap.get(ruleId);
+                    return (
+                      <li key={ruleId || `configuration-rule-${index}`} className="package-workspace-rule-row">
+                        <div>
+                          <strong>{rule ? ruleDisplayName(rule, index) : "Unavailable linked rule"}</strong>
+                          <small>{rule ? `${ruleTypeLabel(rule)} · ${rule?.enabled === false ? "Disabled" : "Enabled"}` : "The recorded rule is not present in the current Library."}</small>
+                        </div>
+                        <StatusChip
+                          family={rule ? (rule.enabled === false ? STATUS_FAMILY.ARCHIVED : STATUS_FAMILY.CONFIRMED) : STATUS_FAMILY.BLOCKED}
+                          label={rule ? (rule.enabled === false ? "Disabled" : "Linked") : "Missing"}
+                        />
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            </details>
+          )}
+
+          <details
+            className="package-workspace-disclosure package-workspace-object-section package-workspace-section-pricing"
+            data-package-section="pricing"
+          >
+            <summary>
+              <span>
+                <strong>Pricing</strong>
+                <small>
+                  {commercialSummary.marginPct === null
+                    ? "Record cost evidence to see margin"
+                    : `${formatPercent(commercialSummary.marginPct)} margin`}
+                </small>
+              </span>
+              <StatusChip family={readiness.family} label={readiness.label} />
+            </summary>
+            <div className="package-workspace-disclosure-body">
+              <div className="package-workspace-overview-grid package-workspace-pricing-fields">
+                <label>
+                  <span>Price per person</span>
+                  <input
+                    data-package-field="ppp"
+                    aria-label="Price per person"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={selectedPackageRecord?.ppp ?? 0}
+                    onChange={(event) => onPatchPackageField(selectedPackageId, "ppp", Number(event.target.value))}
+                  />
+                </label>
+                <label className="package-workspace-cost-field">
+                  <span>Cost per person</span>
+                  <input
+                    data-package-field="costPpp"
+                    aria-label="Cost per person"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    placeholder={marginsEnabled ? "Not recorded" : "Record when known"}
+                    value={selectedPackageRecord?.costPpp ?? ""}
+                    onChange={(event) => onPatchPackageField(
+                      selectedPackageId,
+                      "costPpp",
+                      event.target.value === "" ? null : Number(event.target.value)
+                    )}
+                  />
+                </label>
+              </div>
+              <div className="package-workspace-summary-grid" aria-label="Offer economics">
+                <article>
+                  <span>Price</span>
+                  <strong>{formatCurrency(commercialSummary.pricePerPerson, "$0.00")}</strong>
+                  <small>Per guest</small>
+                </article>
+                <article>
+                  <span>Recorded cost</span>
+                  <strong>{commercialSummary.costPerPerson === null ? "Not recorded" : formatCurrency(commercialSummary.costPerPerson)}</strong>
+                  <small>{commercialSummary.costPerPerson === null ? "Add cost evidence to unlock margin." : "Per guest"}</small>
+                </article>
+                <article>
+                  <span>Contribution</span>
+                  <strong>{contributionLabel}</strong>
+                  <small>{commercialSummary.contributionPerPerson === null ? "Requires price and cost." : "Price minus cost"}</small>
+                </article>
+                <article>
+                  <span>Margin</span>
+                  <strong>{formatPercent(commercialSummary.marginPct)}</strong>
+                  <small>{commercialSummary.marginPct === null ? "Unavailable until price and cost are both valid." : "Commercial evidence only"}</small>
+                </article>
+              </div>
+              {renderReadinessDetails()}
+            </div>
+          </details>
+
+          <details
+            className="package-workspace-disclosure package-workspace-object-section package-workspace-section-usage"
+            data-package-section="usage"
+          >
+            <summary>
+              <span>
+                <strong>Usage</strong>
+                <small>
+                  {countLabel(usedByTemplates.length, "template")} · {countLabel(usedByRecommendations.length, "recommendation")}
+                </small>
+              </span>
+            </summary>
+            <div className="package-workspace-disclosure-body">
+              <div className="package-workspace-behavior-grid">
+                <article>
+                  <strong>How quotes use this offer</strong>
+                  <p>{selectedPackageModel?.quoteBehaviorSummary?.description}</p>
+                </article>
+                <article>
+                  <strong>Starting points</strong>
+                  <p>{usedByTemplates.length === 0
+                    ? "No event template currently starts with this offer."
+                    : `${countLabel(usedByTemplates.length, "event template")} currently starts with this offer.`}</p>
+                </article>
+              </div>
+              {usedByTemplates.length > 0 && (
+                <ul className="package-workspace-selection-list package-workspace-usage-list">
+                  {usedByTemplates.map((template, index) => (
+                    <li key={text(template?.id) || `offer-template-${index}`}>
+                      <div>
+                        <strong>{text(template?.name) || `Event template ${index + 1}`}</strong>
+                        <small>Starts new quotes with this offer.</small>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </details>
+
+          <details
+            className="package-workspace-disclosure package-workspace-object-section package-workspace-section-advanced"
+            data-package-section="advanced"
+          >
+            <summary>
+              <span>
+                <strong>Advanced details</strong>
+                <small>Revision, record references, and pricing confirmation</small>
+              </span>
+            </summary>
+            <div className="package-workspace-disclosure-body">
+              <dl className="package-workspace-evidence-list">
+                <div>
+                  <dt>Offer record ID</dt>
+                  <dd>{selectedPackageRecord?.id || "Unavailable"}</dd>
+                </div>
+                <div>
+                  <dt>Catalog revision</dt>
+                  <dd>{selectedPackageModel?.evidence?.catalogRevision ?? "Unavailable"}</dd>
+                </div>
+                <div>
+                  <dt>Included-choice pricing</dt>
+                  <dd>Included when sales chooses an item.</dd>
+                </div>
+                <div>
+                  <dt>Offer format</dt>
+                  <dd>{text(selectedPackageRecord?.offerVersion) || "Legacy package compatibility"}</dd>
+                </div>
+                <div>
+                  <dt>Business type</dt>
+                  <dd>{text(selectedPackageRecord?.verticalType) || "Catering"}</dd>
+                </div>
+                <div>
+                  <dt>Pricing confirmation</dt>
+                  <dd>
+                    {selectedPackageModel?.evidence?.pricingConfirmationCurrent
+                      ? "Current for this catalog revision"
+                      : "Needs confirmation at the current catalog revision"}
+                  </dd>
+                </div>
+                {uniqueIds(selectedPackageRecord?.quantityPolicyRefs).length > 0 && (
+                  <div>
+                    <dt>Quantity policy references</dt>
+                    <dd>{uniqueIds(selectedPackageRecord?.quantityPolicyRefs).join(", ")}</dd>
+                  </div>
+                )}
+                {linkedRuleIds.length > 0 && (
+                  <div>
+                    <dt>Rule references</dt>
+                    <dd>{linkedRuleIds.join(", ")}</dd>
+                  </div>
+                )}
+              </dl>
+            </div>
+          </details>
+        </div>
       </div>
     </section>
   );

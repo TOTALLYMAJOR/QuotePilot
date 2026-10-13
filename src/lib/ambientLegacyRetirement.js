@@ -20,6 +20,14 @@ export const AMBIENT_LEGACY_RETIREMENT_ITEMS = Object.freeze([
     requiredEvidence: "Now coverage and authenticated staff acceptance"
   }),
   Object.freeze({
+    id: "operations-switchboard",
+    replacement: "calendar-first Operations route with Workspace tools reachability",
+    sourceState: "ambient-graph-retired",
+    requiredEvidence: "calendar-first route ownership and role-safe direct-route coverage",
+    retirementCondition: "calendar-first-route-active-and-zero-runtime-consumers",
+    capabilityDisposition: "live-routes-preserved"
+  }),
+  Object.freeze({
     id: "primary-quote-table",
     replacement: "Opportunities stream",
     sourceState: "fallback-disclosure-retained",

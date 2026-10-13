@@ -1,4 +1,6 @@
 import { classifyQuoteStatus } from "../lib/statusSemantics";
+import { buildEventRunOfShowItem } from "../lib/eventRunOfShow";
+import { buildCommercialPriorityContext } from "../lib/ambientOpportunityStream";
 import {
   buildProposalReadiness,
   buildWorkflowAttentionSummary,
@@ -184,6 +186,231 @@ function reasonCode(value) {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "_")
     .replace(/^_+|_+$/g, "");
+}
+
+const EXECUTION_FACT_LABELS = Object.freeze({
+  "event.date": "Event date",
+  "event.time": "Event start time",
+  "event.hours": "Event duration",
+  "event.venue": "Venue",
+  "event.venueAddress": "Venue address",
+  "event.guests": "Guest count",
+  "staffing.staffLead": "Staff lead",
+  "staffing.servers": "Server count",
+  "staffing.chefs": "Chef count",
+  "staffing.bartenders": "Bartender count"
+});
+
+function calendarDateAt(now, timeZone) {
+  const current = now instanceof Date ? now : new Date(now || Date.now());
+  if (Number.isNaN(current.getTime()) || !text(timeZone)) return "";
+  try {
+    const parts = new Intl.DateTimeFormat("en-US", {
+      timeZone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit"
+    }).formatToParts(current);
+    const value = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+    return `${value.year}-${value.month}-${value.day}`;
+  } catch {
+    return "";
+  }
+}
+
+function daysUntilEvent(date, todayISO) {
+  if (!/^\d{4}-\d{2}-\d{2}$/u.test(text(date))) return null;
+  if (!/^\d{4}-\d{2}-\d{2}$/u.test(text(todayISO))) return null;
+  const eventDay = new Date(`${date}T00:00:00.000Z`);
+  const currentDay = new Date(`${todayISO}T00:00:00.000Z`);
+  return Math.round((eventDay.getTime() - currentDay.getTime()) / 86_400_000);
+}
+
+function eventTimingLabel(event, { now, todayISO, tenantTimeZone } = {}) {
+  const tenantToday = text(todayISO) || calendarDateAt(now, tenantTimeZone);
+  const days = daysUntilEvent(event?.date, tenantToday);
+  if (days === null) return text(event?.date) ? "Relative timing unavailable" : "Event date not set";
+  if (days === 0) return "Today";
+  if (days === 1) return "Tomorrow";
+  if (days > 1) return `${days} days away`;
+  if (days === -1) return "1 day ago";
+  return `${Math.abs(days)} days ago`;
+}
+
+function commercialEvidenceSummary(quote) {
+  const position = buildCommercialPriorityContext(quote).position;
+  const label = (fact, noun) => fact.available
+    ? text(fact.value)
+    : `${noun} status not recorded`;
+  return {
+    deposit: label(position.deposit, "Deposit"),
+    finalBalance: position.finalBalance.available
+      ? `Final ${text(position.finalBalance.value).toLowerCase()}`
+      : "Final balance status not recorded",
+    booking: position.booking.available
+      ? text(position.booking.value)
+      : quote?.status === "booked" ? "Booked lifecycle recorded" : "Booking confirmation not recorded",
+    boundary: "Payment and booking labels report recorded evidence only; they do not infer provider settlement or delivery."
+  };
+}
+
+function recordedExecutionEvidence(runOfShow, quote) {
+  const evidence = [];
+  const accepted = runOfShow?.milestones?.proposalAcceptance;
+  const booked = runOfShow?.milestones?.booking;
+  if (accepted?.state === "accepted") {
+    evidence.push({
+      id: "proposal-accepted",
+      atISO: accepted.atISO,
+      action: "Proposal accepted",
+      transition: "Commercial proposal → Accepted commitment",
+      actor: "Actor not recorded in this bounded read",
+      channel: accepted.evidence || "Accepted quote state",
+      revision: text(quote?.acceptanceReceipt?.quoteRevisionId)
+        ? `Accepted revision ${text(quote.acceptanceReceipt.quoteRevisionId)}`
+        : "Acceptance revision not established"
+    });
+  }
+  if (booked?.state === "booked") {
+    evidence.push({
+      id: "event-booked",
+      atISO: booked.atISO,
+      action: "Event booked",
+      transition: "Accepted commitment → Booked obligation",
+      actor: "Actor not recorded in this bounded read",
+      channel: booked.evidence || "Booked quote state",
+      revision: booked.contractNumber ? `Contract ${booked.contractNumber}` : "Contract number not recorded"
+    });
+  }
+  for (const group of runOfShow?.productionChecklist?.groups || []) {
+    for (const item of group.items || []) {
+      if (item.state !== "completed") continue;
+      evidence.push({
+        id: `checklist-${item.id}`,
+        atISO: item.completedAtISO,
+        action: item.label,
+        transition: "Checklist item → Completed",
+        actor: item.completedByEmail || "Actor not recorded",
+        channel: `${group.group} checklist`,
+        revision: "Operational checklist evidence"
+      });
+    }
+  }
+  return evidence.sort((left, right) => {
+    if (left.atISO && right.atISO) return left.atISO.localeCompare(right.atISO);
+    if (left.atISO) return -1;
+    if (right.atISO) return 1;
+    return left.id.localeCompare(right.id);
+  });
+}
+
+export function buildCommitmentExecutionPresentation(quote = {}, {
+  source = "",
+  now,
+  todayISO,
+  tenantTimeZone,
+  scheduleAvailable = true
+} = {}) {
+  const workspace = buildEventWorkspacePresentation(quote, { source, now });
+  const runOfShow = buildEventRunOfShowItem(quote);
+  if (!runOfShow) return null;
+  const evidence = recordedExecutionEvidence(runOfShow, quote);
+  const missingFacts = runOfShow.unknownFields
+    .filter((field) => EXECUTION_FACT_LABELS[field])
+    .map((field) => ({ id: field, label: EXECUTION_FACT_LABELS[field] }));
+  const checklist = runOfShow.productionChecklist;
+  const timingUnknownCount = runOfShow.timeline.filter((item) => item.timingState !== "known").length;
+  const attention = [];
+  if (workspace.intelligence.needsYou.target) {
+    attention.push({
+      id: "workflow",
+      domain: "Commercial follow-through",
+      title: workspace.intelligence.needsYou.title,
+      detail: workspace.intelligence.needsYou.detail,
+      action: { kind: "workflow", label: "Open in Workflow", target: workspace.intelligence.needsYou.target }
+    });
+  }
+  if (missingFacts.length) {
+    attention.push({
+      id: "missing-plan-facts",
+      domain: "Event plan",
+      title: `${missingFacts.length} execution ${missingFacts.length === 1 ? "fact needs" : "facts need"} confirmation`,
+      detail: missingFacts.map((item) => item.label).join(", "),
+      action: { kind: "quote", label: "Open quote record" }
+    });
+  }
+  if (checklist.state !== "complete") {
+    attention.push({
+      id: "production-checklist",
+      domain: "Production",
+      title: `${checklist.completedCount} of ${checklist.totalCount} checklist items recorded complete`,
+      detail: checklist.unknownCount
+        ? `${checklist.unknownCount} items have no recorded completion state.`
+        : `${checklist.notCompletedCount} items are recorded not complete.`,
+      action: { kind: "schedule", label: "Open Schedule" }
+    });
+  }
+  const scheduleAction = scheduleAvailable
+    ? { kind: "schedule", label: "Open exact event in Schedule", quoteId: text(quote.id) }
+    : { kind: "quote", label: "Open quote record" };
+  const checklistAttention = attention.find((item) => item.id === "production-checklist");
+  if (checklistAttention) checklistAttention.action = scheduleAction;
+  const nextAction = attention[0]?.action || scheduleAction;
+  const staffingValues = [runOfShow.staffing.servers, runOfShow.staffing.chefs, runOfShow.staffing.bartenders];
+  const recordedStaffingValues = staffingValues.filter((value) => value !== null);
+  const staffingSummary = recordedStaffingValues.length === 0
+    ? "Quoted staff counts not recorded"
+    : recordedStaffingValues.length < staffingValues.length
+      ? `${recordedStaffingValues.reduce((sum, value) => sum + value, 0)} quoted staff across ${recordedStaffingValues.length} of 3 recorded roles`
+      : `${recordedStaffingValues.reduce((sum, value) => sum + value, 0)} quoted staff`;
+  const acceptance = quote?.acceptanceReceipt && typeof quote.acceptanceReceipt === "object"
+    ? quote.acceptanceReceipt
+    : {};
+  const acceptedRevisionId = text(acceptance.quoteRevisionId);
+  return {
+    workspace,
+    runOfShow,
+    timingLabel: eventTimingLabel(runOfShow.event, { now, todayISO, tenantTimeZone }),
+    commercialEvidence: commercialEvidenceSummary(quote),
+    commitment: {
+      revision: Number(quote.latestVersionNumber || quote.versionMeta?.versionNumber) > 0
+        ? `Version ${Number(quote.latestVersionNumber || quote.versionMeta?.versionNumber)}`
+        : text(quote.activeVersionId || quote.versionMeta?.versionId) || "Revision identity not recorded",
+      duration: runOfShow.event.hours === null ? "Duration not recorded" : `${runOfShow.event.hours} hours`,
+      address: runOfShow.event.venueAddress || "Venue address not recorded",
+      package: formatWorkspaceText(quote?.selection?.packageName || quote?.selection?.packageId, { emptyLabel: "Package not recorded" }),
+      serviceStyle: formatWorkspaceText(runOfShow.event.style, { emptyLabel: "Service style not recorded" }),
+      acceptance: text(acceptance.receiptId)
+        ? acceptedRevisionId
+          ? `Acceptance receipt for revision ${acceptedRevisionId}`
+          : "Acceptance receipt recorded; accepted revision not established"
+        : "Acceptance receipt not recorded"
+    },
+    staffingSummary,
+    dependencyEvidence: {
+      state: "not_read",
+      summary: "Dependency invalidation not read here",
+      detail: "Open commercial truth for the governed dependency graph; this planning projection does not infer a healthy state from absence."
+    },
+    missingFacts,
+    timingUnknownCount,
+    attention,
+    nextAction,
+    evidence,
+    actuals: {
+      state: "unavailable",
+      title: "Live actuals are not recorded",
+      detail: "Current phase, staff check-ins, issue timing, and plan-versus-actual measures require a server-owned live event session. QuotePilot does not infer them from the plan."
+    },
+    replay: {
+      state: "unavailable",
+      title: "Execution replay is not established",
+      detail: evidence.length
+        ? "The current record contains supporting milestones and checklist timestamps, but they are not an immutable event-session ledger and are not presented as an execution replay."
+        : "The bounded record contains no timestamped supporting evidence. QuotePilot will not manufacture an event history from the plan."
+    },
+    proofBoundary: runOfShow.operationalReadiness.reason
+  };
 }
 
 export function deriveEventIntelligence(quote = {}, {

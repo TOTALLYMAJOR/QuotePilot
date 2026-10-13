@@ -24,7 +24,7 @@ import {
 } from "../../../evidence/testing/buildFixtures.mjs";
 import { exportBundle, exportRecord } from "../../../evidence/src/exporterCore.mjs";
 import { canonicalJson, digestSha256 } from "../../../evidence/src/canonical.mjs";
-import { coverageReport, structuralCoverage } from "../../../evidence/src/coverage.mjs";
+import { coverageReport, structuralCoverage, observedCoverage, renderCoverageText } from "../../../evidence/src/coverage.mjs";
 import { guarded, producerRegistry } from "../../../evidence/src/producers/index.mjs";
 import { createPayoutProducer } from "../../../evidence/src/producers/payoutProducer.mjs";
 import { createFeeScheduleProducer } from "../../../evidence/src/producers/feeScheduleProducer.mjs";
@@ -180,6 +180,18 @@ describe("evidence exporter: determinism", () => {
   });
 });
 
+describe("evidence exporter: booked acceptance continuity", () => {
+  it("verifies booked receipts and retains missing or contradictory acceptance evidence", () => {
+    const booked = sourceFor();
+    booked.quote.status = "booked";
+    expect(exportOne(booked).evidence.acceptedSnapshot.availability).toBe(AVAILABILITY.AVAILABLE);
+    expect(exportOne({ ...booked, acceptanceReceipt: null }).evidence.acceptedSnapshot.availability).toBe(AVAILABILITY.MISSING);
+    const tampered = structuredClone(booked);
+    tampered.acceptanceReceipt.proposalSnapshot.totalsMinor.total += 1;
+    expect(exportOne(tampered).evidence.acceptedSnapshot.availability).toBe(AVAILABILITY.CONTRADICTORY);
+  });
+});
+
 describe("evidence exporter: producer coverage", () => {
   it("keeps the payout producer inert behind the Connect stopping point", () => {
     const payouts = exportOne(sourceFor()).evidence.payouts;
@@ -230,30 +242,53 @@ describe("evidence exporter: producer coverage", () => {
     expect(schedule.value.percentBasisPoints).toBe(325);
   });
 
-  it("separates consumption that cannot exist yet from consumption that is missing", () => {
+  it("does not infer actual costs from an elapsed event date", () => {
     const beforeEvent = exportOne(sourceFor()).evidence.actualConsumption;
-    expect(beforeEvent.availability).toBe(AVAILABILITY.NOT_APPLICABLE);
+    expect(beforeEvent.availability).toBe(AVAILABILITY.NOT_YET_AVAILABLE);
 
     const afterEvent = exportOne(sourceFor({ eventCompleted: true }))
       .evidence.actualConsumption;
-    expect(afterEvent.availability).toBe(AVAILABILITY.MISSING);
-    expect(afterEvent.constraintClass).toBe("engineering");
+    expect(afterEvent.availability).toBe(AVAILABILITY.NOT_YET_AVAILABLE);
+    expect(afterEvent.constraintClass).toBe("business_policy");
   });
 });
 
 describe("evidence exporter: coverage report", () => {
-  it("reports which rules can reach a verdict today and why the rest cannot", () => {
+  it("reports structural evidence producibility separately from rule verdicts", () => {
     const structural = structuralCoverage();
     expect(structural.rulesTotal).toBe(11);
-    expect(structural.rulesReachable).toBe(8);
+    expect(structural.rulesReachable).toBe(10);
     expect(structural.fullyReconcilableToday).toBe(false);
     expect(structural.constraintSummary.integration.blockedSections).toEqual(["payouts"]);
     expect(structural.constraintSummary.business_policy.blockedSections).toEqual([
       "processorFeeSchedule"
     ]);
-    expect(structural.constraintSummary.engineering.blockedSections).toEqual([
-      "actualConsumption"
-    ]);
+    expect(structural.constraintSummary.engineering).toBeUndefined();
+  });
+
+  it("keeps overrun blocked without explicit bounded comparison policy including zero declarations", () => {
+    const bundle = workedExampleBundle();
+    const check = () => observedCoverage(bundle).rules.find((rule) => rule.ruleId === "operational_overrun");
+    expect(check().recordsWithCompleteEvidence).toBe(0);
+    const complete = { laborBasisPoints: 0, purchasingBasisPoints: 0, minimumCents: 0, declaredBy: "fixture operator", declaredAtISO: EVALUATED_AT };
+    bundle.records[0].overrunThresholds = complete;
+    expect(check().recordsWithCompleteEvidence).toBe(0);
+    bundle.records[0].overrunPolicyEvidence = { ...bundle.records[0].overrunPolicyEvidence, availability: "available", value: complete };
+    expect(check().recordsWithCompleteEvidence).toBe(1);
+    bundle.records[0].overrunPolicyEvidence.value = { ...complete, minimumCents: 1 };
+    expect(check().recordsWithCompleteEvidence).toBe(0);
+    delete bundle.records[0].overrunPolicyEvidence;
+    expect(check().recordsWithCompleteEvidence).toBe(1);
+    for (const [key, value] of [["laborBasisPoints", null], ["purchasingBasisPoints", false], ["minimumCents", -1], ["declaredBy", ""], ["declaredAtISO", "yesterday"], ["laborBasisPoints", 10_001]]) {
+      bundle.records[0].overrunThresholds = { ...complete, [key]: value };
+      expect(check().recordsWithCompleteEvidence).toBe(0);
+    }
+    bundle.records[0].overrunThresholds = { ...complete };
+    delete bundle.records[0].overrunThresholds.minimumCents;
+    expect(check().recordsWithCompleteEvidence).toBe(0);
+    const text = renderCoverageText(coverageReport(bundle));
+    expect(text).toContain("10/11 rules have producible evidence and policy inputs");
+    expect(text).toContain("not a verdict count");
   });
 
   it("reports observed coverage per rule from a real bundle", () => {

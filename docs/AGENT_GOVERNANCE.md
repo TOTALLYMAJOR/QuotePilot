@@ -1,25 +1,65 @@
 # Agent Governance
 
-Last updated: 2026-08-28 17:25:14 CDT
-
+Last updated: 2026-10-10 19:54:09 CDT
 ## Scope
 This document defines governance for repository-managed agent and skill assets under `.codex/skills/`.
 
 ## Approved Skills
 - `quote-wizard-maintainer`: implementation, fixes, safe refactors, and required documentation updates.
 - `quote-wizard-release-manager`: release readiness, changelog curation, and operational handoff quality.
+- `catering-domain-intelligence`: task-specific domain retrieval and
+  reconsideration of a provisional QuotePilot action before implementation.
 
 ## Canonical Locations
 - Skill definitions: `.codex/skills/*/SKILL.md`
 - Agent interface metadata: `.codex/skills/*/agents/openai.yaml`
 - Skill references/scripts: `.codex/skills/*/references/`, `.codex/skills/*/scripts/`
+- Repository lifecycle hooks: `.codex/hooks.json`
+- Graph-retrieval enforcement: `.codex/hooks/codebase_memory_guard.py`
 - Index only: `docs/SKILLS.md`
+
+## Graph-First Retrieval Enforcement
+
+The repository hook requires each Codex session to complete the ordered
+Codebase Memory preflight—`list_projects`, `index_status` for `quoteflow`, then
+`check_index_coverage` for at least one material path or scope—before supported
+local tool routes may read repository source or apply edits. The hook resets on
+new or cleared sessions, preserves state across resume and compaction, and
+re-injects the `GRAPH_COVERAGE_BLOCKED` rule at session start.
+
+Before preflight completion, `apply_patch` and common direct source readers such
+as `rg`, `grep`, `find`, `sed`, `cat`, `head`, `tail`, and source-bearing Git
+inspection commands are denied for repository paths. Bootstrap reads of
+external skill instructions remain available. This is defense in depth around
+the canonical `AGENTS.md` protocol, not a completeness guarantee: Codex
+documents that some specialized or hosted tool paths can bypass normal hook
+routing, and modified hooks require explicit trust review before execution.
+## External Engineering Skill Configuration
+
+Repository-local configuration consumed by externally installed engineering
+skills lives under `docs/agents/`:
+
+- `issue-tracker.md`: selected tracker and bounded command conventions.
+- `triage-labels.md`: mapping from canonical triage roles to tracker labels.
+- `domain.md`: domain glossary and ADR discovery rules.
+
+These subordinate files configure skill consumption only. They do not approve
+external skill source, expand repository or provider authority, or replace
+QuotePilot's canonical product, runtime, release, evidence, or governance
+documents. Installing or updating a global skill remains an external operation
+and is not a repository deployment.
 
 ## Validation Requirements
 - Maintainer skill checks:
   - `bash .codex/skills/quote-wizard-maintainer/scripts/run-maintainer-checks.sh`
 - Release manager checks:
   - `bash .codex/skills/quote-wizard-release-manager/scripts/release-readiness.sh`
+- Catering intelligence structure:
+  - `python3 /home/administrator/.codex/skills/.system/skill-creator/scripts/quick_validate.py .codex/skills/catering-domain-intelligence`
+- Catering intelligence behavior changes:
+  - run the versioned fresh-agent rubric under
+    `.codex/skills/catering-domain-intelligence/evals/` after deterministic
+    verification; report human acceptance separately.
 - Orchestration lane entrypoints:
   - `npm run lane:quick`
   - `npm run lane:core`
@@ -28,13 +68,16 @@ This document defines governance for repository-managed agent and skill assets u
   - `npm run lane:release`
 - Governance controls:
   - `npm run plan:task -- --task "<work>" --files <path,...>`
+  - `node scripts/check-enhancement-impact-contract.mjs`
   - `npm run evidence:task -- --task "<work>" --phase complete ...`
   - `npm run evidence:index`
   - `npm run status:product`
   - `npm run check:product-drift`
-  - `npm run check:docs:governance`
+  - `npm run check:product-intelligence`
+  - `npm run eval:layered -- --dry-run`  - `npm run check:docs:governance`
   - `npm run check:perf:bundle`
   - `npm run check:perf:cwv`
+  - `node --test scripts/__tests__/codebase-memory-hook.test.mjs`
 
 ## Ownership and Review
 - Repository owner (`@TOTALLYMAJOR`) approves skill behavior changes.
@@ -69,6 +112,39 @@ read-first set. Agents must load that skill before UI analysis or edits, then
 preserve QuotePilot's canonical visual, interaction, copy, accessibility, and
 proof-boundary rules rather than introducing a parallel design language.
 
+The planner also performs an orthogonal catering-domain classification from
+task semantics, owned paths, affected product surfaces, and explicit
+exclusions. Schema-v2 packets expose `domainClassification.applicable`,
+`contexts`, `matchedSignals`, `authorityReads`, and `referenceSlices`.
+This classification does not replace the execution profile. It conditionally
+adds `catering-domain-intelligence` to `dependencies.requiredSkills`, adds
+current QuotePilot authorities to `readFirst`, and keeps advisory domain
+references separate so the agent can form a provisional action before reading
+them.
+
+Every packet also emits `productIntelligence.disposition`, the required
+catering-value declaration fields, and whether `not_applicable` requires a
+rationale. Applicable work requires the Product Intelligence index and
+release/experiment ledger to move together. The planner always emits
+`npm run check:product-intelligence`; the gate validates the canonical graph
+and change-impact mappings before `lane:core` may pass.
+
+The versioned Product Intelligence evaluation manifest is also a required
+canonical input. `npm run eval:layered` executes its automated dimensions and
+writes an ignored candidate-bound local receipt; `--dry-run` validates the
+manifest and governed IDs without executing checks. Results remain independent
+by dimension and evidence class. The runner emits no composite score and grants
+no promotion authority.
+For applicable work, the required reasoning order is: reconstruct the user
+objective, inspect repository authority and implementation, form a provisional
+action, retrieve the smallest domain slice, reconcile it, then classify the
+effect as `RETAIN`, `REFINE`, `REPLACE`, `EXPAND`, `BOUND`, or
+`NO_MATERIAL_EFFECT`. Domain expertise may improve the implementation method;
+it cannot silently override current executable evidence, canonical QuotePilot
+authority, accepted contracts, or the user's governing objective. Visible
+domain commentary is optional and is not evidence that reconsideration changed
+the work.
+
 The planner recommends `economy`, `balanced`, or `frontier` work and resolves
 those tiers to runner model defaults. `TASK_MODEL_ECONOMY`,
 `TASK_MODEL_BALANCED`, and `TASK_MODEL_FRONTIER` may override those defaults at
@@ -82,11 +158,27 @@ Every planner result includes `lifecycle.phase` and an exact ISO-8601 UTC
 checkpoint, and `complete` for the final report. Completion reports must carry
 the emitted `recordedAt`; do not substitute an approximate conversational time.
 
+Tasks naming an enhancement or item number are fail-closed against
+`docs/enhancement-impact-manifest.json`. Each registered item declares its
+affected routes, authority identifiers, and runnable tests. The planner checks
+its explicit file set against the manifest's registered authority paths and
+adds the declared tests to the task packet. Presentation-only work must
+explicitly declare `authorities: []`; touching a pricing, commercial-quote, or
+Inventory authority path requires a separate non-presentation declaration.
+This is source-level change-scope evidence, not semantic completeness, CI,
+hosted, production, or human-acceptance proof.
+
 To minimize tokens, read only `dependencies.readFirst` plus task-owned files,
 execute `taskGraph` in dependency order, and run the narrowest relevant check
 before global checks. Changes to the planner or its contract fail documentation
 governance unless this policy, the orchestration blueprint and runbook, and the
 documentation ownership map move together.
+
+When agent instructions, skill behavior, or routing changes, `taskGraph` adds
+an `expertise_eval` node after deterministic verification. Unit tests establish
+routing and packet structure only. A genuinely fresh agent run and separate
+human acceptance are required before claiming that domain reconsideration
+improves decisions.
 
 ## Task Evidence Loop
 For meaningful implementation, process, release, or architecture work, agents

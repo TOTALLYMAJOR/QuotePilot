@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest";
 import {
   CLIENT_PREVIEW_AUTHORITY,
+  LEGACY_PRICING_VERSION,
   PRICING_VERSION,
   buildPricingSnapshotFromClientTotals,
   deriveLegacyPricingSnapshot,
@@ -250,7 +251,7 @@ describe("pricingContracts", () => {
     };
 
     const derived = deriveLegacyPricingSnapshot(legacyQuote);
-    expect(derived.pricingVersion).toBe(PRICING_VERSION);
+    expect(derived.pricingVersion).toBe(LEGACY_PRICING_VERSION);
     expect(derived.authority).toBe("legacy_derived");
     expect(derived.grandTotal).toBeCloseTo(legacyQuote.totals.total, 6);
     expect(derived.deposit.amount).toBeCloseTo(legacyQuote.totals.deposit, 6);

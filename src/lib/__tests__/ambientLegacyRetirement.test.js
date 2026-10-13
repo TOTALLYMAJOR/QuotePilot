@@ -5,22 +5,33 @@ import {
 } from "../ambientLegacyRetirement";
 
 describe("Ambient legacy retirement", () => {
-  test("names every AIUI-48 target", () => {
+  test("names every governed target including the superseded Operations switchboard", () => {
     expect(AMBIENT_LEGACY_RETIREMENT_ITEMS.map(({ id }) => id)).toEqual([
       "legacy-stepper",
       "duplicated-modal-routes",
       "command-center",
+      "operations-switchboard",
       "primary-quote-table",
       "redundant-search-palette",
       "presentation-only-pilot-flags"
     ]);
+
+    expect(AMBIENT_LEGACY_RETIREMENT_ITEMS.find(({ id }) => id === "operations-switchboard")).toMatchObject({
+      replacement: "calendar-first Operations route with Workspace tools reachability",
+      sourceState: "ambient-graph-retired",
+      retirementCondition: "calendar-first-route-active-and-zero-runtime-consumers",
+      capabilityDisposition: "live-routes-preserved"
+    });
   });
 
   test("fails closed without external release and rollback evidence", () => {
     const result = assessAmbientLegacyRetirement();
     expect(result.removalAuthorized).toBe(false);
     expect(result.retained).toHaveLength(5);
-    expect(result.retiredFromAmbientGraph.map(({ id }) => id)).toEqual(["duplicated-modal-routes"]);
+    expect(result.retiredFromAmbientGraph.map(({ id }) => id)).toEqual([
+      "duplicated-modal-routes",
+      "operations-switchboard"
+    ]);
   });
 
   test("requires every gate before reviewed removal becomes eligible", () => {

@@ -37,6 +37,7 @@ import {
 } from "./provenance.mjs";
 import { checkSourceSchema, driftDetail, evidenceContract } from "./schemaDrift.mjs";
 import { producerRegistry } from "./producers/index.mjs";
+import { workflowPolicyEnvelope } from "./workflowPolicyProjection.mjs";
 
 export const BUNDLE_VERSION = "truthloop-evidence-bundle-v2";
 
@@ -184,7 +185,7 @@ function exportAcceptedSnapshot(context) {
     sourceField: "acceptanceReceipt"
   });
 
-  if (text(quote?.status).toLowerCase() !== "accepted") {
+  if (!["accepted", "booked"].includes(text(quote?.status).toLowerCase())) {
     // Not "not yet available": before acceptance there is no promise, so the
     // commercial chain has not started and there is nothing to reconcile. The
     // run metrics segment these records so they cannot flatter the rate.
@@ -366,7 +367,7 @@ function exportPayments(context) {
     );
   }
 
-  if (text(quote?.status).toLowerCase() !== "accepted") {
+  if (!["accepted", "booked"].includes(text(quote?.status).toLowerCase())) {
     return notApplicable(base, "The quote is not accepted, so no payment is due.");
   }
   return available([], base, "No payment operations recorded.");
@@ -381,7 +382,7 @@ function exportOperationalPlan(context) {
     observedAtISO: utc(quote?.updatedAtISO)
   });
 
-  if (text(quote?.status).toLowerCase() !== "accepted") {
+  if (!["accepted", "booked"].includes(text(quote?.status).toLowerCase())) {
     return notApplicable(base, "No operational plan exists before acceptance.");
   }
   if (!quote?.selection && !quote?.event) {
@@ -570,8 +571,12 @@ export function exportRecord(source, { evaluatedAtISO, producers }) {
         );
   }
 
+  const overrunPolicyEvidence = workflowPolicyEnvelope(source, evaluatedAtISO);
   return canonicalize({
     ...context.record,
+    overrunPolicyEvidence,
+    ...(overrunPolicyEvidence.availability === AVAILABILITY.AVAILABLE
+      ? { overrunThresholds: overrunPolicyEvidence.value } : {}),
     currentCatalogRevision: integer(source.organizationSettings?.catalogRevision, -1),
     evidence
   });

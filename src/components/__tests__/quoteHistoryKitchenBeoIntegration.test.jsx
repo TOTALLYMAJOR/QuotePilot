@@ -53,7 +53,7 @@ const QUOTE = Object.freeze({
   customer: Object.freeze({ name: "Henderson Foods", email: "ops@example.test" }),
   event: Object.freeze({
     name: "Company picnic",
-    date: "2026-09-12",
+    date: "2026-10-12",
     time: "12:00",
     guests: 125
   }),
@@ -63,7 +63,7 @@ const QUOTE = Object.freeze({
   booking: Object.freeze({ confirmationStatus: "pending" }),
   createdAtISO: "2026-08-09T15:00:00.000Z",
   updatedAtISO: "2026-08-09T15:00:00.000Z",
-  expiresAtISO: "2026-09-08T15:00:00.000Z"
+  expiresAtISO: "2026-10-08T15:00:00.000Z"
 });
 
 const STATUS = Object.freeze({
@@ -114,7 +114,9 @@ function mount(props = {}) {
         open
         presentation="embedded"
         organizationId="org-one"
+        currentUserUid="sales-one"
         currentUserRole="sales"
+        focusQuoteId="quote-42"
         onClose={() => {}}
         {...props}
       />
@@ -192,17 +194,17 @@ describe("Quote History Kitchen BEO integration", () => {
   test("Escape closes the nested Kitchen BEO dialog without closing modal Quote History", async () => {
     const onClose = vi.fn();
     mocks.getQuoteHistory.mockResolvedValue({ source: "firebase", quotes: [QUOTE] });
-    mount({ presentation: "modal", onClose });
+    mount({ onClose });
     await settle();
     act(() => container.querySelector('[data-capability-action="open-kitchen-beo"]').click());
-    expect(container.querySelectorAll('[role="dialog"]')).toHaveLength(2);
+    expect(container.querySelectorAll('[role="dialog"]')).toHaveLength(1);
 
     act(() => document.dispatchEvent(new KeyboardEvent("keydown", {
       key: "Escape",
       bubbles: true,
       cancelable: true
     })));
-    expect(container.querySelectorAll('[role="dialog"]')).toHaveLength(1);
+    expect(container.querySelectorAll('[role="dialog"]')).toHaveLength(0);
     expect(onClose).not.toHaveBeenCalled();
   });
 });

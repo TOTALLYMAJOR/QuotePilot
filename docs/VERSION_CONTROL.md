@@ -1,6 +1,6 @@
 # Version Control Playbook
 
-Last updated: 2026-09-03 13:49:00 CDT
+Last updated: 2026-10-12 03:41:06 CDT
 
 ## Goals
 - Keep `main` stable and deployable.
@@ -45,18 +45,52 @@ explicit owner promotion after real-run review.
   Commercial Change, Revenue Autopilot, and the server staffing authority off.
   It preserves `STRIPE_MODE=live` solely for the established quote-payment
   rail; the separate buyer-invoice rail remains disabled with test mode bound.
+- The `ragnakok-operations` profile is the only production profile that may
+  enable the coupled Commercial Change and Event Spine gates together with
+  `OPERATIONAL_STAFFING_AUTHORITY_ENABLED` and
+  `INVENTORY_AUTHORITY_ENABLED`. It is restricted to a Functions-bearing
+  Firebase deployment and binds `TENANT_WORKFLOW_ORGANIZATION_ID` to the exact
+  founder-pilot organization. Every other profile keeps all four authorities
+  off. After the successful tagged all-surface deploy,
+  the Staffing, Inventory, and coupled Event/Commercial tenant workflows must
+  each verify that deploy receipt, update only their declared setting fields,
+  and prove provider readback. Do not substitute a console edit or direct
+  Firestore write.
+- The `ragnakok-realistic-v1` population may seed menu cost only from a
+  complete, current same-tenant Inventory recipe-cost projection and only when
+  the target menu row is explicitly fixture-owned and has no recorded cost.
+  The guarded transaction must recheck the exact catalog revision and every
+  projection digest, preserve selling prices and operator/unclassified rows,
+  advance the revision once, record synthetic provenance, bind a fresh pricing
+  confirmation to the resolved verified administrator, and prove provider
+  readback. A successful dry run or source test does not authorize the provider
+  mutation.
+- The coordinated `all-qualified-features` profile supersedes the split
+  founder-pilot release path only for an explicitly authorized full promotion.
+  It is accepted exclusively by Firebase `all` and Vercel, pins the compiled
+  and runtime organization to `mm05366-sandbox`, and enables the qualified
+  staff workspace, Resend, Commercial Change, Event Spine, Staffing,
+  Inventory, Guided Inquiry, and review-only Model Assist. It still keeps
+  Buyer Access, SMS, Revenue Autopilot sends, test bypasses, and hard App Check
+  enforcement off. The exact Inquiry Turnstile site key and Secret Manager
+  bindings plus the tenant-scoped OpenAI provider configuration are required
+  profile evidence, not optional post-deploy setup.
 - Firebase Functions production mutation is quota-aware and fail-closed. The
   deployer derives the exact tracked export inventory, submits no more than 35
   function writes per batch, waits a complete provider quota window between
   batches, and rejects Firebase's textual create/update failure even if the CLI
   exits zero. A backend/all workflow succeeds only after `functions:list`
   proves the exact inventory active in `us-central1` with every function bound
-  to the expected safe-off runtime values and no disabled-provider residue.
+  to the exact selected runtime profile and no disabled-provider residue.
   The dedicated deployer also requires `roles/iam.serviceAccountUser` on the
   exact Functions runtime service account and project-scoped
   `roles/cloudscheduler.admin` for scheduled-function lifecycle. Cloud
   Functions Admin does not include either authority; their provider readback is
   a release prerequisite, not an emergency bypass.
+  Separately, every Function-bound Secret Manager value must grant
+  `roles/secretmanager.secretAccessor` to the exact runtime service account
+  before dispatch. Do not give the CI deployer broad secret-policy mutation
+  authority to compensate for a missing runtime binding.
 - Protect `main` and configure exactly one release approval mode. Team-owned
   repositories use `production` with a directly assigned independent reviewer
   and self-review prevention. Solo-owned repositories use the reviewless
@@ -98,6 +132,18 @@ explicit owner promotion after real-run review.
   planner rule, skill, or check; one-off friction should stay as evidence.
 
 ## Release Workflow
+
+The latest target-specific deployment and tenant-population receipts belong in
+`PROJECT_STATUS.md` and historical outcomes in `CHANGELOG.md`; this playbook
+retains the process contract and must not become a competing current-state
+ledger.
+
+Tenant authority activation may bind separate tagged Firebase backend and
+Vercel browser releases when those are the current deployed surfaces. The
+protected operator must verify both exact workflow receipts, release profiles,
+and compiled/runtime gates before changing the tenant setting; an older
+all-surface receipt cannot stand in for a newer backend deployment.
+
 1. Create `release/<version>` from `main`.
 2. Finalize `CHANGELOG.md` and `PROJECT_STATUS.md`.
 3. Run release checks (CI must be green):
@@ -171,14 +217,23 @@ explicit owner promotion after real-run review.
    `not-applicable` for `none` or Twilio. Portal projection backfill is separate
    source/data-operation acceptance, not deployment-target evidence.
    Use `npm run release:candidate:deploy` only from the clean, published
-   `release/vX.Y.Z` head with its exact successful CI run. The command is fixed
-   to the isolated Firebase staging identity or the `quoteflow` Vercel preview
+   `release/vX.Y.Z` head with its exact successful CI run. The command requires
+   a complete root and Functions dependency install; Firebase-all preflight
+   verifies the Functions production dependency tree before receipt reservation
+   or provider mutation, with `npm ci --prefix functions` as the bounded repair.
+   It is fixed to the isolated Firebase staging identity or the `quoteflow` Vercel preview
    project, requires a SHA-bound confirmation, and records a hosted source/gate
    manifest plus provider deployment id. The receipt path is reserved before
    mutation and retains failed or partial outcomes. Hosted manifest equality is
    retried every two seconds for at most one minute to absorb bounded provider
    propagation; source SHA, CI run, profile, and authority values must still
-   match exactly. A partial provider-mutation receipt is immutable and is not
+   match exactly. After Firebase reports deployment completion, the combined
+   Hosting, Firestore Rules, and active Functions readback is retried every
+   five seconds for at most 13 attempts so a still-converging Function revision
+   does not create a false terminal failure. These retries are read-only and
+   never repeat provider mutation; the last validation error remains the
+   receipt outcome when convergence does not complete inside the bound. A
+   partial provider-mutation receipt is immutable and is not
    retried; a corrected attempt requires a newly published, newly qualified
    source SHA. Firebase-all verification
    binds Hosting, active Functions revisions and fail-closed runtime readback,
@@ -210,6 +265,11 @@ explicit owner promotion after real-run review.
    is not passed; blocked is not N/A and prevents production qualification.
    Candidate receipt filenames include both target and profile so same-SHA
    safe-off and bounded positive evidence cannot overwrite one another.
+   Firebase candidate preflight must verify enabled metadata for every secret
+   bound by the current Functions source before it reserves that immutable
+   receipt; it never reads or creates secret values. If a reserved attempt
+   becomes `partial`, preserve it without replacement or retry and correct the
+   failure on a fresh source SHA with new exact-head CI evidence.
    `npm run release:uat:items -- --target <profile> --sms-provider <provider>`
    remains the all-positive target contract. The exact-main v4 attestation
    accepts only an eligible profile's complete set, binds the profile and its
@@ -236,8 +296,14 @@ git tag v<major>.<minor>.<patch>
 git push origin v<major>.<minor>.<patch>
 ```
 10. Dispatch `Deploy Firebase Production` or `Deploy Vercel Production` with
-    the release SHA, exact-SHA CI run id, target rollback SHA, exact scope, and
-    typed confirmation. Firebase uses GitHub OIDC through the reviewed
+    the release SHA, exact-SHA CI run id, target rollback SHA, exact scope,
+    release profile, and typed confirmation. `safe-off` is valid for every
+    production target. `email-active` is valid only for an explicitly
+    authorized Firebase `backend`/`all` deployment and changes only
+    `NOTIFICATIONS_EMAIL_PROVIDER` from `none` to `resend`; Hosting-only and
+    Vercel deployments reject it. SMS, buyer access, Commercial Change,
+    staffing authority, and both Revenue Autopilot gates remain off. Firebase
+    uses GitHub OIDC through the reviewed
     `FIREBASE_WORKLOAD_IDENTITY_PROVIDER` and
     `FIREBASE_DEPLOY_SERVICE_ACCOUNT` repository variables and rejects legacy
     token or static-key authentication. Its mutation client must be the
@@ -293,6 +359,27 @@ last-known-good provider receipt and provider-native rollback sequence in
 If a topic changes, only update the owning doc and cross-link from others.
 
 ## Production Interface Controls
+- Production release profile: `release_profile`
+  - `safe-off` remains the universal default and proves the email provider is
+    `none` in Firebase Functions readback.
+  - `email-active` is restricted to Firebase `backend`/`all`, materializes the
+    approved Resend provider from the immutable dispatch profile, and requires
+    every active Function to report that exact profile after deployment. The
+    source allowlist and repository configuration must identify
+    `QuotePilot by MBMApps <quotepilot@quietpilot.us>`, matching the verified
+    `quietpilot.us` domain returned by the configured Resend account.
+  - A new Secret Manager version, repository variable, source merge, or green
+    deployment alone is not message-delivery evidence. One separately
+    authorized controlled send must keep QuotePilot provider acceptance,
+    Resend delivery/bounce, recipient inbox receipt, and human review distinct.
+  - `all-qualified-features` is restricted to `firebase-all` and `vercel` and
+    must be used for both targets when coordinating this release. It does not
+    create a cross-provider rollback unit: each dispatch retains its own
+    target-specific last-known-good ancestor and provider receipt. The profile
+    is blocked unless the Inquiry Turnstile public key is reviewed and every
+    required Firebase secret has an enabled metadata version. An enabled
+    OpenAI key version does not prove usable provider credit or a successful
+    model request.
 - Firebase workflow input: `firebase_scope`
   - Default operator selection: `hosting`.
   - `backend` deploys `firestore,functions:default`; `backend` and `all` never
@@ -365,3 +452,40 @@ If a topic changes, only update the owning doc and cross-link from others.
 - Product truth decision: `docs/adr/ADR-0002-product-truth-observability.md`
 - Product truth design: `docs/design/product-truth-observability-design.md`
 - Product truth work plan: `docs/plans/20260828-feature-product-truth-observability.md`
+
+## Time-bound browser fixtures
+
+Release-gate fixtures that represent active portal or provider-bound access must
+derive their issuance and bounded expiry from the test execution clock. A fixed
+historical issuance can cross QuotePilot's authoritative validity window and
+silently turn an active-path test into an expired-path test. Explicit expiry
+fixtures remain fixed and separate so terminal recovery behavior is still
+deterministic. Changing fixture time does not change production validity policy.
+
+Shared emulator seeders that can create Auth or Firestore records must fail
+closed before Firebase Admin initialization unless the requested project uses
+the `demo-*` namespace and every required emulator endpoint is loopback. Runner
+configuration alone is not an adequate production-write boundary. These
+seeders belong to a headless developer-infrastructure capability contract even
+when their only functional change is test-fixture freshness.
+
+## RagnaKoK workflow activation profile
+
+The `ragnakok-workflows` profile is restricted to Firebase backend/all and the
+exact approved runtime tenant `mm05366-sandbox` (brand `RagnaKoK Inc`). It retains
+Resend, sets a tenant-scoped runtime override, and leaves global authority flags
+off. The same exact-tag, main CI, protected environment, rollback and per-Function
+readback gates apply. Other organizations cannot use the override. Hosting and
+Vercel retain their safe-off deployment profile and include role/tenant-gated
+workflow presentation. Follow [the activation and rollback procedure](LAUNCH_RUNBOOK.md#ragnakok-tenant-workflow-release)
+only after successful backend deployment. Source publication is not activation
+or policy publication.
+
+
+RagnaKoK test access also admits operational staffing and Revenue Autopilot
+preparation through the same exact-tenant runtime guard. The staffing tenant
+setting remains required. Revenue policy configuration remains explicit; no
+outreach policy is invented or published during activation. The global scheduler
+receives no tenant scope and stays disabled, and the outbound-send gate stays
+off. Other tenants cannot use these scoped authorities. Existing explicit
+operator email actions retain their normal authorization and confirmations.

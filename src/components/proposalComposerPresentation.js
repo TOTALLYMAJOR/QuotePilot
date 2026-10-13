@@ -11,6 +11,27 @@ import { calculateQuote, currency, serviceChargeLabel } from "../lib/quoteCalcul
 import { isValidEmail } from "../lib/wizardUi";
 
 export const PROPOSAL_COMPOSER_MODEL = "proposal-composer-v1";
+export const COMMERCIAL_WORKBENCH_MODEL = "commercial-workbench-v1";
+
+export const WORKBENCH_DOMAINS = Object.freeze([
+  Object.freeze({ id: "event", label: "Event" }),
+  Object.freeze({ id: "customer", label: "Customer" }),
+  Object.freeze({ id: "experience", label: "Experience" }),
+  Object.freeze({ id: "staffing", label: "Staffing" }),
+  Object.freeze({ id: "commercials", label: "Commercials" })
+]);
+
+const BLOCKER_DOMAIN = Object.freeze({
+  "guest-count": "event",
+  "event-type": "event",
+  "event-date": "event",
+  "event-name": "event",
+  venue: "event",
+  "client-name": "customer",
+  "client-email": "customer",
+  "client-email-format": "customer",
+  "menu-selection": "experience"
+});
 
 function text(value) {
   return String(value ?? "").trim();
@@ -24,6 +45,88 @@ function count(value) {
 function money(value) {
   const numeric = Number(value);
   return Number.isFinite(numeric) ? Math.round(numeric * 100) / 100 : 0;
+}
+
+export function workbenchDomainForBlocker(blocker = {}) {
+  return BLOCKER_DOMAIN[String(blocker?.id || "").trim()] || "commercials";
+}
+
+export function buildCommercialWorkbenchModel({
+  form = {},
+  totals = {},
+  catalog = {},
+  completeness = null,
+  blockers = [],
+  staffing = null
+} = {}) {
+  const resolvedCompleteness = completeness || buildSectionCompleteness({ form, totals, catalog });
+  const resolvedStaffing = staffing || buildStaffingRecommendation(form);
+  const blockerList = Array.isArray(blockers) ? blockers.filter(Boolean) : [];
+  const blockersByDomain = blockerList.reduce((result, blocker) => {
+    const domainId = workbenchDomainForBlocker(blocker);
+    result[domainId].push({ ...blocker, domainId });
+    return result;
+  }, Object.fromEntries(WORKBENCH_DOMAINS.map((domain) => [domain.id, []])));
+  const menuCount = Array.isArray(form.menuItems) ? form.menuItems.length : 0;
+  const rentalCount = Array.isArray(form.rentals) ? form.rentals.length : 0;
+  const enhancementCount = Array.isArray(form.addons) ? form.addons.length : 0;
+  const staffCount = count(form.servers) + count(form.chefs) + count(form.bartenders);
+  const eventSummary = [formatEventDateLong(form.date), text(form.venue), count(form.guests) > 0 ? `${count(form.guests)} guests` : ""]
+    .filter(Boolean).join(" · ") || "Date, venue, and guest count need review";
+  const customerSummary = [text(form.name), text(form.clientOrg), text(form.email)]
+    .filter(Boolean).join(" · ") || "Client identity and contact details need review";
+  const experienceSummary = [
+    text((catalog.packages || []).find((item) => item?.id === form.pkg)?.name),
+    text(form.style),
+    menuCount > 0 ? `${menuCount} menu item${menuCount === 1 ? "" : "s"}` : "Menu not selected",
+    rentalCount > 0 ? `${rentalCount} rental${rentalCount === 1 ? "" : "s"}` : "",
+    enhancementCount > 0 ? `${enhancementCount} enhancement${enhancementCount === 1 ? "" : "s"}` : ""
+  ].filter(Boolean).join(" · ") || "Package, service, and menu need review";
+  const staffingSummary = resolvedStaffing.available
+    ? `${staffCount} quoted · ${resolvedStaffing.meetsRule ? "House ratio met" : "Recommendation differs"}`
+    : `${staffCount} quoted · Add guests and service style to compare`;
+  const commercialSummary = money(totals.total) > 0
+    ? `${currency(money(totals.total))} total · ${currency(money(totals.deposit))} deposit`
+    : "Pricing and save readiness need review";
+  const summaries = {
+    event: eventSummary,
+    customer: customerSummary,
+    experience: experienceSummary,
+    staffing: staffingSummary,
+    commercials: commercialSummary
+  };
+  const complete = {
+    event: Boolean(resolvedCompleteness.event),
+    customer: Boolean(resolvedCompleteness.client),
+    experience: Boolean(resolvedCompleteness.experience && resolvedCompleteness.menu),
+    staffing: Boolean(resolvedCompleteness.staffing),
+    commercials: Boolean(resolvedCompleteness.investment && blockerList.length === 0)
+  };
+
+  return {
+    modelId: COMMERCIAL_WORKBENCH_MODEL,
+    domains: WORKBENCH_DOMAINS.map((domain) => {
+      const domainBlockers = blockersByDomain[domain.id];
+      const recommendationAttention = domain.id === "staffing"
+        && resolvedStaffing.available
+        && !resolvedStaffing.meetsRule;
+      return {
+        ...domain,
+        summary: summaries[domain.id],
+        blockers: domainBlockers,
+        blockerCount: domainBlockers.length,
+        status: domainBlockers.length > 0 || recommendationAttention
+          ? "attention"
+          : complete[domain.id]
+            ? "complete"
+            : "incomplete"
+      };
+    }),
+    blockerTargets: blockerList.map((blocker) => ({
+      ...blocker,
+      domainId: workbenchDomainForBlocker(blocker)
+    }))
+  };
 }
 
 // ---------------------------------------------------------------------------

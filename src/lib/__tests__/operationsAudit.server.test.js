@@ -66,6 +66,18 @@ describe("operations audit snapshot", () => {
         authenticatedAtISO: "2026-08-06T17:29:00.000Z",
         appCheckAppId: "private-app-id"
       }],
+      resendAcceptanceReceipts: [{
+        schemaVersion: 1,
+        requestId: `email_test_${"a".repeat(32)}`,
+        organizationId: "org-a",
+        recipientEmail: "flightcontrol@quietpilot.us",
+        state: "provider_accepted",
+        requestedAtISO: "2026-08-06T17:44:59.000Z",
+        acceptedAtISO: "2026-08-06T17:45:00.000Z",
+        actorEmail: "owner@example.com",
+        actorUid: "private-email-test-actor",
+        providerMessageId: "private-provider-message-id"
+      }],
       settings: {
         pricingConfirmation: {
           actorUid: "admin-1",
@@ -82,23 +94,26 @@ describe("operations audit snapshot", () => {
     expect(result.sync.successRate).toBe(50);
     expect(result.roles).toEqual({ admin: 1, sales: 1, staff: 2 });
     expect(result.actions.map((row) => row.action)).toEqual([
+      "resend_acceptance_test",
       "organization_role_changed",
       "convert_to_contract",
       "quote_delivery_confirmed_not_sent",
       "catalog_pricing_confirmed"
     ]);
     expect(result.security).toMatchObject({
-      taxonomyVersion: 1,
-      receiptBackedActionCount: 2,
+      taxonomyVersion: 2,
+      receiptBackedActionCount: 3,
       legacyObservationCount: 2,
       storageRetention: "indefinite_server_record",
       clearPolicy: "not_available",
       exportPolicy: "not_available",
       privacy: "bounded_projection"
     });
-    expect(result.actions.slice(0, 2).every((row) => row.authority === "server_receipt")).toBe(true);
-    expect(result.actions.slice(2).every((row) => row.authority === "server_projection")).toBe(true);
-    expect(JSON.stringify(result.actions)).not.toMatch(/private-owner-uid|private-target-uid|private-app-id|authenticatedAtISO/);
+    expect(result.actions.slice(0, 3).every((row) => row.authority === "server_receipt")).toBe(true);
+    expect(result.actions.slice(3).every((row) => row.authority === "server_projection")).toBe(true);
+    expect(JSON.stringify(result.actions)).not.toMatch(
+      /private-owner-uid|private-target-uid|private-app-id|private-email-test-actor|private-provider-message-id|authenticatedAtISO/
+    );
   });
 
   test("deduplicates replayed receipts, drops cross-tenant rows, retains failed executions, and bounds projection", () => {

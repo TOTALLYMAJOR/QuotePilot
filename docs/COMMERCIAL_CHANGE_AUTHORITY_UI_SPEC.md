@@ -2,6 +2,7 @@
 
 Status: Accepted implementation contract for CWF-15B-a and CWF-15C source work
 Date: August 9, 2026
+Last updated: 2026-09-08 00:18:31 CDT
 Owners: QuotePilot maintainers
 
 Target requirements: `docs/CUSTOMER_CENTERED_WORKSPACE_PLAN.md` CWF-15
@@ -19,6 +20,29 @@ dependent decision, reconcile it, or publish a replacement artifact.
 The source implementation remains behind the commercial-dependency authority
 feature gate until its hosted acceptance gate is recorded. Provider actions,
 production backfills, deployment, and gate promotion are separate decisions.
+
+## QP-UXR-001 reference composition
+
+Quote Edit is the reference consequential-mutation surface. For eligible
+`draft`, `sent`, and `viewed` records it assembles the existing protocol as:
+
+`current commitment -> proposed change -> semantic difference -> authoritative simulation -> consequence -> required authority -> atomic application -> preserved truth -> invalidated truth -> receipt -> next valid action`
+
+The dominant object is the commercial amendment, not the backend protocol.
+Current total/deposit, revision, lifecycle requirement, grouped business
+consequences, and supported protected evidence remain visible before action.
+Exact graph and receipt identifiers stay behind disclosure unless needed for
+recovery. After success, focus moves to a `Changed / Preserved / Needs
+attention / Next` receipt; navigation to the updated quote becomes an explicit
+next action rather than replacing the outcome.
+
+Dormant and enforced no-impact saves carry the same exact simulation envelope
+through the existing trusted edit authority. Dormant mode never presents named
+invalidation as persisted truth. Accepted/booked/paid and other terminal
+commitments remain locked because the existing trusted write does not authorize
+their amendment; visible controls omit ordinary Edit and a copied direct-edit
+URL fails closed before hydrating any form state. This reference slice does not
+manufacture that missing authority.
 
 ## Surface map
 

@@ -2,8 +2,13 @@
 import React, { act } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+vi.hoisted(() => { vi.stubEnv("VITE_EVENT_OPERATING_SPINE_ENABLED", "true"); });
+vi.mock("../QuoteAttendancePanel", () => ({ default: function AttendancePanel(props) {
+  return <section data-testid="native-attendance" data-source-version={props.sourceVersionId} data-acceptance-receipt={props.acceptanceReceiptId}>Recorded final guest count</section>;
+} }));
 import AmbientLivingOpportunity from "../AmbientLivingOpportunity";
 import { AmbientContextProvider } from "../../context/AmbientContext";
+import { scheduleQuoteCompletionDestinationFocus } from "../../lib/quoteCompletionDestination";
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -204,9 +209,27 @@ beforeEach(() => {
 afterEach(() => {
   act(() => root.unmount());
   container.remove();
+  vi.useRealTimers();
 });
 
 describe("AmbientLivingOpportunity", () => {
+  test("hands an accepted opportunity to the exact Calendar event without mutating it", () => {
+    const onOpenCalendar = vi.fn();
+    mount({
+      quote: { ...QUOTE, status: "booked" },
+      onOpenCalendar
+    });
+
+    const calendarAction = button("Open Calendar");
+    expect(calendarAction).toBeTruthy();
+    expect(calendarAction.dataset.exactEventId).toBe("quote-alpha");
+    act(() => calendarAction.click());
+
+    expect(onOpenCalendar).toHaveBeenCalledWith("quote-alpha", {
+      actionId: "open-opportunity-calendar:quote-alpha"
+    });
+  });
+
   test("resolves only an exact canonical Living Opportunity arrival after focusing its object", async () => {
     const onArrivalResolution = vi.fn();
     mount({
@@ -354,6 +377,34 @@ describe("AmbientLivingOpportunity", () => {
     expect(container.hasAttribute("aria-hidden")).toBe(false);
     expect(container.hasAttribute("inert")).toBe(false);
     expect(document.activeElement).toBe(trigger);
+  });
+
+  test("keeps quote number, current saved revision, and unsaved preview state in the context bar", async () => {
+    mount();
+
+    const contextBar = container.querySelector('[data-testid="quick-updates-context-bar"]');
+    const contextSummary = contextBar.querySelector('[aria-label="Current saved quote context"]');
+    expect(contextSummary.textContent).toContain("Q-ALPHA");
+    expect(contextSummary.textContent).toContain("Current saved revision version-alpha");
+    expect(contextSummary.textContent).toContain("Saved quote");
+    expect(contextSummary.dataset.opportunityDraftState).toBe("saved");
+
+    act(() => container.querySelector('[aria-label="Change Guest count scenario"]').click());
+    const input = container.querySelector('input[type="number"]');
+    act(() => {
+      const valueSetter = Object.getOwnPropertyDescriptor(
+        window.HTMLInputElement.prototype,
+        "value"
+      ).set;
+      valueSetter.call(input, "150");
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    act(() => button("Apply change").click());
+    await settle();
+
+    expect(contextSummary.textContent).toContain("Unsaved preview");
+    expect(contextSummary.dataset.opportunityDraftState).toBe("unsaved_preview");
+    expect(contextSummary.textContent).toContain("Current saved revision version-alpha");
   });
 
   test("hides Quick Updates when a saved opportunity has no authoritative version identity", () => {
@@ -600,6 +651,7 @@ describe("AmbientLivingOpportunity", () => {
     expect(dialog.textContent).toContain("Customer inquiry · Aug 11, 2026");
     expect(dialog.textContent).toContain("Final count due Sep 12, 2026");
     expect(dialog.textContent).toContain("4 days remain until the final guest-count lock date");
+    expect(dialog.textContent).not.toContain("Decision Debt");
     expect(dialog.querySelector('[data-attendance-dimension="commercial-basis"]')).toBeTruthy();
     expect(dialog.querySelector('[data-attendance-dimension="best-evidence"]')).toBeTruthy();
     expect(dialog.querySelector('[data-attendance-dimension="decision-timing"]')).toBeTruthy();
@@ -633,6 +685,48 @@ describe("AmbientLivingOpportunity", () => {
     expect(dialog.textContent).toContain("120 guests");
     expect(dialog.textContent).toContain("Attendance evidence needs review");
     expect(dialog.textContent).not.toContain("Final count applied");
+  });
+
+  test("uses only exact-source closeout attendance and keeps staffing tied to the priced revision", async () => {
+    const receiptId = `closeout_attendance_${"a".repeat(48)}`;
+    mount({
+      quote: {
+        ...QUOTE,
+        status: "booked",
+        acceptanceReceipt: { receiptId: "accept-alpha" },
+        workflow: {
+          postEventCloseout: {
+            sourceVersionId: "version-alpha",
+            acceptanceReceiptId: "accept-alpha",
+            actualAttendance: {
+              schemaVersion: 1,
+              revision: 1,
+              count: 116,
+              sourceType: "staff_observed",
+              note: "Lead server confirmed the final served headcount.",
+              sourceReferenceId: receiptId,
+              recordedAtISO: "2026-09-27T15:30:00.000Z",
+              recordedBy: { email: "owner@example.test", role: "admin" },
+              lastReceiptId: receiptId
+            }
+          }
+        }
+      }
+    });
+
+    act(() => button("See connections").click());
+    let dialog = container.querySelector('[role="dialog"]');
+    expect(dialog.textContent).toContain("Actual attendance: 116 guests");
+    expect(dialog.textContent).toContain(receiptId);
+    act(() => dialog.querySelector('[aria-label="Close context"]').click());
+    await settle();
+
+    act(() => button("Review staffing").click());
+    dialog = container.querySelector('[role="dialog"]');
+    expect(dialog.textContent).toContain("Attendance basis");
+    expect(dialog.textContent).toContain("Saved priced count 120 · revision version-alpha");
+    expect(dialog.textContent).toContain("Actual attendance 116 was recorded after service");
+    expect(dialog.textContent).toContain("does not rewrite this staffing plan");
   });
 
   test("opens populated five-domain Money evidence and restores its exact trigger", async () => {
@@ -688,6 +782,8 @@ describe("AmbientLivingOpportunity", () => {
   });
 
   test("mounts exact Proposal evidence, restores focus, and routes only to governed controls", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-08-13T10:42:00.000Z"));
     const proposalQuote = Object.freeze({
       ...QUOTE,
       updatedAtISO: "2026-08-12T10:42:00.000Z",
@@ -804,6 +900,161 @@ describe("AmbientLivingOpportunity", () => {
       draftPatch: null
     });
     expect(QUOTE).toEqual(before);
+  });
+
+  test("routes the quote-completion proposal gap through the existing exact editor handoff", async () => {
+    const exactField = document.createElement("button");
+    exactField.type = "button";
+    exactField.dataset.ambientActionId = "pc-edit-hours";
+    document.body.append(exactField);
+    const onEditQuote = vi.fn((_quote, options) => {
+      scheduleQuoteCompletionDestinationFocus(options.quoteCompletionDestination, {
+        root: document
+      });
+      return { status: "opened" };
+    });
+    mount({
+      onEditQuote,
+      quoteCompletionCommandPathEnabled: true,
+      quoteActionController: {
+        actionState: {
+          state: { versionSaved: true, providerAccepted: false },
+          actions: {
+            send_quote: {
+              id: "send_quote",
+              label: "Send proposal",
+              visible: true,
+              enabled: true
+            }
+          },
+          primaryAction: {
+            id: "send_quote",
+            label: "Send proposal",
+            visible: true,
+            enabled: true
+          }
+        }
+      }
+    });
+    await settle();
+    await vi.dynamicImportSettled();
+    await vi.waitFor(() => {
+      expect(container.querySelector('[data-capability-id="quote-completion-command-path"]')).not.toBeNull();
+    });
+    const command = container.querySelector('[data-capability-id="quote-completion-command-path"]');
+
+    expect(command?.dataset.capabilityState).toBe("blocked");
+    await act(async () => command.querySelector("button").click());
+
+    expect(onEditQuote).toHaveBeenCalledOnce();
+    expect(onEditQuote.mock.calls[0][0]).toBe(QUOTE);
+    expect(onEditQuote.mock.calls[0][1]).toMatchObject({
+      arrivalContext: {
+        object: {
+          id: "proposal",
+          type: "customer-decision-artifact",
+          opportunityId: "quote-alpha"
+        },
+        reason: expect.stringContaining("exact proposal completeness"),
+        consequence: expect.stringContaining("Nothing is repriced, saved, published, sent, rotated, or recovered"),
+        nextResolution: expect.stringContaining("Save only through the existing authoritative quote workflow")
+      },
+      draftPatch: null,
+      quoteCompletionDestination: {
+        surfaceId: "proposal-composer",
+        step: 1,
+        selector: '[data-ambient-action-id="pc-edit-hours"]',
+        activate: true
+      }
+    });
+    expect(onEditQuote.mock.calls[0][1].arrivalContext).not.toHaveProperty("kind");
+    await settle();
+    await vi.waitFor(() => expect(document.activeElement).toBe(exactField));
+    expect(command.dataset.commandState).toBe("success");
+    exactField.remove();
+  });
+
+  test("routes a sendable quote-completion action through the exact governed proposal-controls handoff", async () => {
+    const quote = Object.freeze({
+      ...QUOTE,
+      updatedAtISO: "2026-08-12T10:42:00.000Z",
+      customer: Object.freeze({
+        ...QUOTE.customer,
+        phone: "205-555-0142"
+      }),
+      event: Object.freeze({
+        ...QUOTE.event,
+        hours: 6
+      }),
+      totals: Object.freeze({
+        subtotal: 7_800,
+        tax: 600,
+        total: 8_400,
+        deposit: 2_520
+      }),
+      pricing: Object.freeze({
+        authority: "server_authoritative",
+        calculatedAt: "2026-08-12T10:41:30.000Z",
+        grandTotal: 8_400
+      }),
+      portalKey: "proposal-living-opportunity-key-000001",
+      portalIssuedAtISO: "2026-08-12T10:42:00.000Z",
+      portalExpiresAtISO: "2027-09-11T10:42:00.000Z",
+      workflow: Object.freeze({ quoteDelivery: Object.freeze({}) })
+    });
+    const onOpenLegacyWorkspace = vi.fn(() => ({ status: "opened" }));
+    mount({
+      quote,
+      source: "firebase",
+      onOpenLegacyWorkspace,
+      quoteCompletionCommandPathEnabled: true,
+      quoteActionController: {
+        actionState: {
+          state: { versionSaved: true, providerAccepted: false },
+          actions: {
+            send_quote: {
+              id: "send_quote",
+              label: "Send proposal",
+              visible: true,
+              enabled: true
+            }
+          },
+          primaryAction: {
+            id: "send_quote",
+            label: "Send proposal",
+            visible: true,
+            enabled: true
+          }
+        }
+      }
+    }, {
+      ...CONTEXT,
+      role: "admin",
+      sourceFreshness: { state: "fresh", observedAt: "2026-08-12T10:42:01.000Z" }
+    });
+    await settle();
+    await vi.dynamicImportSettled();
+    await vi.waitFor(() => {
+      expect(container.querySelector('[data-capability-id="quote-completion-command-path"]')).not.toBeNull();
+    });
+    const command = container.querySelector('[data-capability-id="quote-completion-command-path"]');
+
+    expect(command?.dataset.capabilityState).toBe("sendable");
+    await act(async () => command.querySelector("button").click());
+
+    expect(onOpenLegacyWorkspace).toHaveBeenCalledOnce();
+    expect(onOpenLegacyWorkspace.mock.calls[0][0]).toMatchObject({
+      object: { id: "proposal", type: "customer-decision-artifact", label: "Proposal" },
+      reason: expect.stringContaining("Prepare proposal, Send proposal, Replace customer link, or Review delivery"),
+      consequence: expect.stringContaining("independently recheck role, exact revision"),
+      nextResolution: expect.stringContaining("Choose Prepare, Send, Replace customer link, or Review delivery"),
+      quoteCompletionDestination: {
+        surfaceId: "quote-administration",
+        actionId: "send_quote",
+        quoteId: quote.id
+      }
+    });
+    expect(command.dataset.commandState).toBe("success");
   });
 
   test("presents a missing phone as recommended contact detail without proposal-blocking language", () => {
@@ -1261,6 +1512,86 @@ describe("AmbientLivingOpportunity", () => {
     expect(QUOTE).toEqual(beforeQuote);
   });
 
+  test("uses a real selector only when several saved menu items can be replacement sources", () => {
+    mount();
+
+    act(() => button("Review menu").click());
+
+    const field = container.querySelector('[data-adaptive-choice-mode="select"]');
+    const selector = field?.querySelector("select");
+    expect(field).not.toBeNull();
+    expect(selector?.value).toBe("salad");
+    expect([...selector.querySelectorAll("option")].map((option) => option.value)).toEqual([
+      "",
+      "salad",
+      "chicken"
+    ]);
+  });
+
+  test("presents one saved menu replacement source as confirmed read-only context", () => {
+    const singleMenuQuote = {
+      ...QUOTE,
+      selection: {
+        ...QUOTE.selection,
+        menuItems: ["salad"],
+        menuItemsSnapshot: [QUOTE.selection.menuItemsSnapshot[0]],
+        menuItemNames: ["Garden salad"],
+        menuItemQuantities: { salad: 2 }
+      }
+    };
+    mount({ quote: singleMenuQuote });
+
+    act(() => button("Review menu").click());
+
+    const field = container.querySelector('[data-adaptive-choice-mode="single"]');
+    expect(field).not.toBeNull();
+    expect(field.querySelector("select")).toBeNull();
+    expect(field.querySelector('[data-adaptive-choice-value="salad"]')?.textContent)
+      .toContain("Garden salad");
+    expect(field.textContent).toContain("only saved menu item");
+    expect(field.textContent).toContain("Read-only");
+  });
+
+  test("explains and recovers when no exact saved menu item can be a replacement source", async () => {
+    const onOpenLegacyWorkspace = vi.fn(async () => {
+      throw new Error("Quote workspace route failed.");
+    });
+    const emptyMenuQuote = {
+      ...QUOTE,
+      selection: {
+        ...QUOTE.selection,
+        menuItems: [],
+        menuItemsSnapshot: [],
+        menuItemNames: [],
+        menuItemQuantities: {}
+      }
+    };
+    mount({ quote: emptyMenuQuote, onOpenLegacyWorkspace });
+
+    act(() => container.querySelector('[data-intelligent-object="menu"] button').click());
+
+    const field = container.querySelector('[data-menu-replacement-source-state="unavailable"]');
+    expect(field).not.toBeNull();
+    expect(field.dataset.adaptiveChoiceMode).toBe("empty");
+    expect(field.querySelector("select")).toBeNull();
+    expect(field.textContent).toContain("Unavailable");
+    expect(field.textContent).toContain("does not record a menu selection");
+    const recovery = field.querySelector("button");
+    expect(recovery?.dataset.ambientActionId)
+      .toBe("open-full-opportunity-controls");
+
+    await act(async () => {
+      recovery.click();
+      await Promise.resolve();
+    });
+    await settle();
+
+    expect(onOpenLegacyWorkspace).toHaveBeenCalledOnce();
+    expect(container.querySelector('[data-result-kind="recovery"]')?.textContent)
+      .toContain("Quote workspace route failed.");
+    expect(container.textContent).toContain("Full opportunity controls were not opened");
+  });
+
   test("offers visible keyboard-equivalent menu moves and hands the exact reorder intent to the editor", () => {
     const onEditQuote = vi.fn(() => ({ status: "opened" }));
     const beforeQuote = structuredClone(QUOTE);
@@ -1646,4 +1977,43 @@ describe("AmbientLivingOpportunity", () => {
       .toContain("Guest scenario remains at 120");
     expect(container.querySelector('[aria-label="Change Guest count scenario"]')).not.toBeNull();
   });
+});
+
+
+test.each(["accepted", "booked"])("eligible %s count review replaces no-action cue and returns focus to its exact trigger", async (status) => {
+  const onEditQuote = vi.fn();
+  mount({ quote: { ...QUOTE, status, acceptanceReceipt: { receiptId: "accept-alpha" } }, source: "firebase", ordinaryEditAllowed: false, attendanceEnabled: true, principalId: "sales-alpha", onEditQuote, onOpenWorkflow: undefined });
+  const next = container.querySelector('.ambient-mobile-remote__next button');
+  expect(next.textContent).toContain("Review final guest count");
+  expect(container.querySelector('.ambient-mobile-remote__next').textContent).not.toContain("No role-safe action");
+  expect(next.dataset.ambientActionId).toBe("inspect-guest-count");
+  act(() => { next.focus(); next.click(); });
+  await settle();
+  const panel = container.querySelector('[data-testid="native-attendance"]');
+  expect(panel.dataset.sourceVersion).toBe("version-alpha");
+  expect(panel.dataset.acceptanceReceipt).toBe("accept-alpha");
+  expect(container.querySelector('.attendance-supporting-context').open).toBe(false);
+  expect(onEditQuote).not.toHaveBeenCalled();
+  expect(container.querySelector(".ambient-action-acknowledgement").textContent).toContain("The saved quote stays unchanged");
+  expect(container.querySelector(".ambient-action-acknowledgement").textContent).not.toContain("Try another guest count");
+  act(() => container.querySelector('[aria-label="Close context"]').click());
+  await settle();
+  expect(document.activeElement).toBe(next);
+});
+
+test.each([
+  ["disabled", { attendanceEnabled: false }],
+  ["local", { source: "local" }],
+  ["unaccepted", { quote: { ...QUOTE, status: "draft" } }],
+  ["missing source receipt", { quote: { ...QUOTE, status: "booked" } }],
+  ["foreign organization", { quote: { ...QUOTE, organizationId: "other-org", status: "booked", acceptanceReceipt: { receiptId: "accept-alpha" } } }]
+])("does not offer native final-count work for %s scope", (_name, overrides) => {
+  mount({ quote: { ...QUOTE, status: "booked", acceptanceReceipt: { receiptId: "accept-alpha" } }, source: "firebase", ordinaryEditAllowed: false, attendanceEnabled: true, principalId: "sales-alpha", ...overrides });
+  expect([...container.querySelectorAll('button')].some(node => node.textContent.includes("Review final guest count"))).toBe(false);
+});
+
+
+test("keeps final-count work unavailable to non-staff roles", () => {
+  mount({ quote: { ...QUOTE, status: "booked", acceptanceReceipt: { receiptId: "accept-alpha" } }, source: "firebase", ordinaryEditAllowed: false, attendanceEnabled: true, principalId: "finance-alpha" }, { ...CONTEXT, role: "finance" });
+  expect([...container.querySelectorAll('button')].some(node => node.textContent.includes("Review final guest count"))).toBe(false);
 });

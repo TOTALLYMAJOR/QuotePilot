@@ -120,11 +120,11 @@ export function QuoteVersionComparisonPresentation({
               <summary>{section.label} · {section.summary.changed} changed</summary>
               <dl>
                 {section.fields.map((field) => (
-                  <div key={field.id} data-comparison-state={field.comparison}>
+                  <div key={field.id} data-comparison-state={field.comparison} data-comparison-value-type={field.valueType}>
                     <dt>{field.label}</dt>
                     <dd>
-                      <span>Before: {displayComparisonValue(field.before, field.valueType)}</span>
-                      <span>After: {displayComparisonValue(field.after, field.valueType)}</span>
+                      <span className="workspace-comparison-value" data-value-side="before">Before: {displayComparisonValue(field.before, field.valueType)}</span>
+                      <span className="workspace-comparison-value" data-value-side="after">After: {displayComparisonValue(field.after, field.valueType)}</span>
                     </dd>
                   </div>
                 ))}

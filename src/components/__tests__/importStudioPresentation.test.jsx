@@ -3,23 +3,26 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, test, vi } from "vitest";
 
 vi.mock("../../lib/importBatchService", () => ({
+  createCustomerImportSession: vi.fn(),
   createCustomerImportBatchId: vi.fn(() => "customer_test"),
   createImportBatchId: vi.fn(() => "catalog_test"),
-  createImportBatch: vi.fn(),
   isCatalogImportType: vi.fn(() => false),
-  MAX_IMPORT_RECORDS: 350,
+  MAX_IMPORT_SESSION_RECORDS: 1500,
+  preflightCustomerImport: vi.fn(),
   rollbackImportBatch: vi.fn()
 }));
 
 import ImportStudioModal, {
   ImportMutationStatus,
   ImportStudioView,
+  IMPORT_REVIEW_PAGE_SIZE,
   advanceImportFileReadGeneration,
   buildImportMutationPresentation,
   buildImportMutationResetGuard,
   classifyImportMutationFailure,
   isDefinitiveImportMutationError,
   isImportFileReadGenerationCurrent,
+  paginateImportReviewRows,
   resolveImportBatchIdentity
 } from "../ImportStudioModal";
 
@@ -43,6 +46,24 @@ function renderImportMutationState(props) {
 }
 
 describe("Import Studio presentation", () => {
+  test("orients a Library first-quote arrival to menu intake without implying import or publication", () => {
+    const html = renderToStaticMarkup(
+      <ImportStudioView
+        {...importStudioProps}
+        initialImportType="menuItems"
+        arrivalSource="library-first-quote"
+      />
+    );
+
+    expect(html).toContain('data-import-arrival="library-first-quote"');
+    expect(html).toContain('data-import-type="menuItems"');
+    expect(html).toContain("Start with your real menu");
+    expect(html).toContain("quotepilot-menu-items-template.csv");
+    expect(html).toContain('download="quotepilot-menu-items-template.csv"');
+    expect(html).toContain("Downloading or filling this template does not import, save, or publish anything");
+    expect(html).not.toContain("Import completed");
+  });
+
   test("exposes an embedded route without changing the modal wrapper contract", () => {
     const embeddedHtml = renderToStaticMarkup(
       <ImportStudioView {...importStudioProps} />
@@ -51,15 +72,18 @@ describe("Import Studio presentation", () => {
       <ImportStudioModal {...importStudioProps} />
     );
 
-    expect(embeddedHtml).toContain("container workspace-route-main embedded-workspace-route");
-    expect(embeddedHtml).toContain('role="region"');
+    expect(embeddedHtml).toContain('<main class="container workspace-route-main embedded-workspace-route"');
     expect(embeddedHtml).toContain("workspace-route-card");
     expect(embeddedHtml).not.toContain('aria-modal="true"');
+    expect(embeddedHtml).toContain('<h1 id="import-studio-title">Import Studio</h1>');
+    expect(embeddedHtml).toContain('aria-label="Choose CSV or PDF source"');
+    expect(embeddedHtml).toContain('aria-label="Import Workbench progress" tabindex="0"');
     expect(embeddedHtml).toContain(">Back to Home</button>");
 
     expect(modalHtml).toContain("modal-overlay");
     expect(modalHtml).toContain('role="dialog"');
     expect(modalHtml).toContain('aria-modal="true"');
+    expect(modalHtml).toContain('<h2 id="import-studio-title">Import Studio</h2>');
     expect(modalHtml).toContain(">Close</button>");
   });
 
@@ -93,6 +117,11 @@ describe("Import Studio presentation", () => {
       operation: "import",
       readyCount: 3
     });
+    const partialHtml = renderImportMutationState({
+      phase: "partial",
+      operation: "import",
+      error: "Part 2 needs attention."
+    });
 
     expect(uncertainHtml).toContain('data-mutation-state="uncertain"');
     expect(uncertainHtml).toContain('data-capability-state="uncertain"');
@@ -106,6 +135,18 @@ describe("Import Studio presentation", () => {
     expect(reconciliationHtml).toContain("The same batch identity is being retried.");
     expect(reconciliationHtml).toContain("source replacement remain locked");
     expect(reconciliationHtml).toContain(">Reconciling import...</button>");
+    expect(partialHtml).toContain('data-capability-state="partial"');
+    expect(partialHtml).toContain("Part of this import is confirmed.");
+    expect(partialHtml).toContain(">Resume this import</button>");
+
+    const partialUndoHtml = renderImportMutationState({
+      phase: "partial",
+      operation: "rollback",
+      error: "One removal still needs reconciliation."
+    });
+    expect(partialUndoHtml).toContain("Part of this undo is confirmed.");
+    expect(partialUndoHtml).toContain("confirmed removals replay safely");
+    expect(partialUndoHtml).toContain(">Resume this undo</button>");
   });
 
   test("renders server receipts and explicit retry recovery without outbound-message claims", () => {
@@ -157,7 +198,7 @@ describe("Import Studio presentation", () => {
   });
 
   test("keeps unresolved import identities locked to their source until reconciliation", () => {
-    for (const phase of ["submitting", "uncertain", "reconciling", "recovery"]) {
+    for (const phase of ["submitting", "uncertain", "partial", "reconciling", "recovery"]) {
       expect(buildImportMutationResetGuard({
         phase,
         pendingImportBatchId: "customer_1234567890abcdef",
@@ -177,6 +218,11 @@ describe("Import Studio presentation", () => {
       pendingImportBatchId: "",
       busy: false
     }).blocked).toBe(false);
+    expect(buildImportMutationResetGuard({
+      phase: "ready",
+      pendingImportBatchId: "customer_existing_batch_1",
+      busy: false
+    }).blocked).toBe(true);
     expect(isDefinitiveImportMutationError({ code: "functions/invalid-argument" })).toBe(true);
     expect(isDefinitiveImportMutationError({ code: "functions/resource-exhausted" })).toBe(true);
     expect(isDefinitiveImportMutationError({ code: "functions/unavailable" })).toBe(false);
@@ -190,6 +236,29 @@ describe("Import Studio presentation", () => {
     expect(preserved).toBe("customer_existing_batch_1");
     expect(created).toBe("customer_explicit_batch_1");
     expect(createCustomerId).toHaveBeenCalledOnce();
+  });
+
+  test("pages every review row without dropping the tail of the source", () => {
+    const rows = Array.from({ length: IMPORT_REVIEW_PAGE_SIZE * 2 + 7 }, (_, index) => ({
+      rowNumber: index + 1
+    }));
+
+    expect(paginateImportReviewRows(rows, 1)).toMatchObject({
+      page: 1,
+      pageCount: 3,
+      total: 107,
+      rangeStart: 1,
+      rangeEnd: 50
+    });
+    const lastPage = paginateImportReviewRows(rows, 99);
+    expect(lastPage).toMatchObject({
+      page: 3,
+      pageCount: 3,
+      total: 107,
+      rangeStart: 101,
+      rangeEnd: 107
+    });
+    expect(lastPage.rows.map((row) => row.rowNumber)).toEqual([101, 102, 103, 104, 105, 106, 107]);
   });
 
   test("preserves stable batch identity for uncertain outcomes and catalog refresh recovery", () => {
@@ -215,6 +284,14 @@ describe("Import Studio presentation", () => {
     })).toEqual({
       phase: "error",
       preserveBatchIdentity: false,
+      requiresCatalogRefresh: false
+    });
+    expect(classifyImportMutationFailure({
+      error: { code: "functions/invalid-argument", partialResult: { childReceipts: [{ ok: true }] } },
+      catalogImport: false
+    })).toEqual({
+      phase: "partial",
+      preserveBatchIdentity: true,
       requiresCatalogRefresh: false
     });
   });

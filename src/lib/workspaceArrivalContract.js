@@ -12,6 +12,9 @@ import {
   WORKSPACE_RETURN_CONTEXT_STATE_KEY
 } from "./workspaceReturnContext";
 
+const DECISION_PACKET_BUILD_ENABLED = import.meta.env.MODE === "test"
+  || import.meta.env.VITE_DECISION_PACKET_ENABLED === "true";
+
 /**
  * Pure transport contract for object-scoped workspace arrivals.
  *
@@ -36,6 +39,7 @@ const DESTINATIONS = /* @__PURE__ */ Object.freeze([
   "approval",
   "messages",
   "schedule",
+  "inventory",
   "reporting",
   "library"
 ]);
@@ -67,19 +71,25 @@ const OBJECT_TYPE_LABELS = /* @__PURE__ */ Object.freeze({
   "commercial-evidence": "Commercial evidence",
   "payment-evidence": "Payment",
   "customer-decision-artifact": "Proposal",
+  "kitchen-beo": "Kitchen BEO",
+  "production-plan": "Production plan",
+  "staffing-plan": "Staffing plan",
+  "inventory-ingredient": "Inventory ingredient",
   "intelligent-object": "Intelligent object",
   "organization-library": "Organization Library",
   "library-section": "Library section",
-  "event-template": "Event template"
+  "event-template": "Event template",
+  "menu-item": "Menu item"
 });
 
 const DESTINATION_OBJECT_TYPES = /* @__PURE__ */ (() => Object.freeze({
   client: Object.freeze(["client"]),
-  opportunity: Object.freeze(["opportunity"]),
+  opportunity: Object.freeze(["opportunity", "staffing-plan"]),
   administration: Object.freeze([
     "opportunity",
     "payment-evidence",
-    "customer-decision-artifact"
+    "customer-decision-artifact",
+    "kitchen-beo"
   ]),
   workflow: Object.freeze([
     "opportunity",
@@ -103,8 +113,10 @@ const DESTINATION_OBJECT_TYPES = /* @__PURE__ */ (() => Object.freeze({
     "schedule-item",
     "event-logistics-evidence",
     "operational-evidence",
-    "intelligent-object"
+    "intelligent-object",
+    "production-plan"
   ]),
+  inventory: Object.freeze(["inventory-ingredient"]),
   reporting: Object.freeze([
     "opportunity",
     "report-signal",
@@ -115,7 +127,8 @@ const DESTINATION_OBJECT_TYPES = /* @__PURE__ */ (() => Object.freeze({
   library: Object.freeze([
     "organization-library",
     "library-section",
-    "event-template"
+    "event-template",
+    "menu-item"
   ])
 }))();
 
@@ -146,6 +159,17 @@ const INTENTS = /* @__PURE__ */ (() => Object.freeze({
       consequence: "The proposal gap remains open; navigation does not stage, save, or send anything.",
       resolutionId: "review_proposal_gap_in_opportunity",
       resolution: "Review the proposal evidence and choose an available resolution for the gap."
+    }),
+    review_staffing_consequence: Object.freeze({
+      reasonId: "commercial_staffing_consequence_selected",
+      reason: "The exact revision-bound staffing consequence was selected for review.",
+      consequenceId: "staffing_plan_remains_unchanged",
+      consequence: "Opening Operational Staffing changes no staffing assignment, quote revision, or commercial evidence.",
+      resolutionId: "review_exact_staffing_consequence",
+      resolution: "Review the exact quote revision's Operational Staffing plan and choose an available role-safe action.",
+      objectTypes: Object.freeze(["staffing-plan"]),
+      focusConsumerState: "supported",
+      consumerObjectTypes: Object.freeze(["staffing-plan"])
     })
   }),
   administration: Object.freeze({
@@ -175,6 +199,28 @@ const INTENTS = /* @__PURE__ */ (() => Object.freeze({
       resolutionId: "review_exact_proposal_controls",
       resolution: "Review the exact quote's proposal controls; any available action must recheck current role, revision, pricing, link, and delivery evidence.",
       objectTypes: Object.freeze(["customer-decision-artifact"])
+    }),
+    review_commercial_proposal_consequence: Object.freeze({
+      reasonId: "commercial_proposal_consequence_selected",
+      reason: "The exact revision-bound proposal consequence was selected for review.",
+      consequenceId: "proposal_remains_unchanged",
+      consequence: "Opening Proposal controls does not prepare, send, replace, retry, or recover anything.",
+      resolutionId: "review_exact_proposal_consequence",
+      resolution: "Review the exact quote revision's role-safe Proposal controls.",
+      objectTypes: Object.freeze(["customer-decision-artifact"]),
+      focusConsumerState: "supported",
+      consumerObjectTypes: Object.freeze(["customer-decision-artifact"])
+    }),
+    review_kitchen_beo_consequence: Object.freeze({
+      reasonId: "commercial_kitchen_beo_consequence_selected",
+      reason: "The exact revision-bound Kitchen BEO consequence was selected for review.",
+      consequenceId: "kitchen_beo_remains_unchanged",
+      consequence: "Opening the Kitchen BEO changes no quote revision, operational note, or generated artifact.",
+      resolutionId: "review_exact_kitchen_beo_consequence",
+      resolution: "Review the exact saved revision's Kitchen BEO and choose an available role-safe action.",
+      objectTypes: Object.freeze(["kitchen-beo"]),
+      focusConsumerState: "supported",
+      consumerObjectTypes: Object.freeze(["kitchen-beo"])
     })
   }),
   workflow: Object.freeze({
@@ -286,6 +332,30 @@ const INTENTS = /* @__PURE__ */ (() => Object.freeze({
       resolution: "Review the focused event and choose an available action for the recorded conflict.",
       focusConsumerState: "supported",
       consumerObjectTypes: Object.freeze(["schedule-item"])
+    }),
+    review_production_consequence: Object.freeze({
+      reasonId: "commercial_production_consequence_selected",
+      reason: "The exact revision-bound production consequence was selected for review.",
+      consequenceId: "production_plan_remains_unchanged",
+      consequence: "Opening the Production plan changes no schedule, assignment, quote revision, or operational evidence.",
+      resolutionId: "review_exact_production_consequence",
+      resolution: "Review the exact quote revision's Production plan and choose an available role-safe action.",
+      objectTypes: Object.freeze(["production-plan"]),
+      focusConsumerState: "supported",
+      consumerObjectTypes: Object.freeze(["production-plan"])
+    })
+  }),
+  inventory: Object.freeze({
+    review_inventory_ingredient_consequence: Object.freeze({
+      reasonId: "commercial_inventory_ingredient_consequence_selected",
+      reason: "The exact revision-bound Inventory ingredient consequence was selected for review.",
+      consequenceId: "inventory_ingredient_remains_unchanged",
+      consequence: "Opening Inventory changes no stock, catalog, recipe, quote revision, or procurement evidence.",
+      resolutionId: "review_exact_inventory_ingredient_consequence",
+      resolution: "Review the exact ingredient and base unit identified by the commercial consequence.",
+      objectTypes: Object.freeze(["inventory-ingredient"]),
+      focusConsumerState: "supported",
+      consumerObjectTypes: Object.freeze(["inventory-ingredient"])
     })
   }),
   reporting: Object.freeze({
@@ -362,6 +432,16 @@ const INTENTS = /* @__PURE__ */ (() => Object.freeze({
       resolution: "Review the focused event template, then use its role-gated controls to make an intentional change.",
       objectTypes: Object.freeze(["event-template"]),
       requiresRecordId: true
+    }),
+    review_imported_menu_item: Object.freeze({
+      reasonId: "imported_menu_item_selected",
+      reason: "An imported menu item was selected for review.",
+      consequenceId: "imported_menu_item_remains_unchanged",
+      consequence: "Opening the imported menu item changes no catalog, quote, pricing, cost, or import evidence.",
+      resolutionId: "review_exact_imported_menu_item",
+      resolution: "Review the exact imported menu item and choose an available role-gated action.",
+      objectTypes: Object.freeze(["menu-item"]),
+      requiresRecordId: true
     })
   })
 }))();
@@ -404,8 +484,14 @@ const DESTINATION_CONFIG = /* @__PURE__ */ (() => Object.freeze({
     focusConsumerState: "supported"
   }),
   schedule: Object.freeze({
-    routeId: WORKSPACE_ROUTE_IDS.SCHEDULE,
+    routeId: WORKSPACE_ROUTE_IDS.OPERATIONS,
     surfaceId: "schedule",
+    focusTransport: "state_only",
+    focusConsumerState: "pending"
+  }),
+  inventory: Object.freeze({
+    routeId: WORKSPACE_ROUTE_IDS.INVENTORY,
+    surfaceId: "inventory",
     focusTransport: "state_only",
     focusConsumerState: "pending"
   }),
@@ -520,6 +606,11 @@ function opaqueId(value) {
   return id;
 }
 
+function positiveRowNumber(value) {
+  if (!Number.isSafeInteger(value) || value < 1) fail("unsafe_identifier");
+  return value;
+}
+
 function normalizeObject(value, destination) {
   const input = exactRecord(value, ["id", "type"]);
   const type = requiredString(input.type);
@@ -546,14 +637,67 @@ function normalizeWorkflowFocus(value, destination, intent) {
   return { quoteId, attentionType, requestId };
 }
 
+function normalizeCommercialFocus(value, { inventory = false } = {}) {
+  const input = exactRecord(value, inventory
+    ? ["quoteId", "sourceRevisionId", "proposedRevisionId", "ingredientId", "baseUnitId"]
+    : ["quoteId", "sourceRevisionId", "proposedRevisionId"]);
+  return {
+    quoteId: opaqueId(input.quoteId),
+    sourceRevisionId: opaqueId(input.sourceRevisionId),
+    proposedRevisionId: opaqueId(input.proposedRevisionId),
+    ...(inventory
+      ? { ingredientId: opaqueId(input.ingredientId), baseUnitId: opaqueId(input.baseUnitId) }
+      : {})
+  };
+}
+
 function normalizeFocus(value, destination, intent) {
   if (destination === "client") {
     const input = exactRecord(value, ["customerId"]);
     return { customerId: opaqueId(input.customerId) };
   }
-  if (destination === "opportunity" || destination === "administration") {
+  if (
+    destination === "opportunity"
+    && intent === INTENTS.opportunity.review_staffing_consequence
+  ) {
+    return normalizeCommercialFocus(value);
+  }
+  if (
+    destination === "administration"
+    && [
+      INTENTS.administration.review_commercial_proposal_consequence,
+      INTENTS.administration.review_kitchen_beo_consequence
+    ].includes(intent)
+  ) {
+    return normalizeCommercialFocus(value);
+  }
+  if (destination === "opportunity") {
     const input = exactRecord(value, ["quoteId"]);
     return { quoteId: opaqueId(input.quoteId) };
+  }
+  if (destination === "administration") {
+    if (!DECISION_PACKET_BUILD_ENABLED) {
+      const input = exactRecord(value, ["quoteId"]);
+      return { quoteId: opaqueId(input.quoteId) };
+    }
+    const input = exactRecord(value, [
+      "quoteId",
+      "acceptedRevisionId",
+      "acceptanceReceiptId"
+    ]);
+    const quoteId = opaqueId(input.quoteId);
+    const hasAcceptedRevision = Object.prototype.hasOwnProperty.call(input, "acceptedRevisionId");
+    const hasAcceptanceReceipt = Object.prototype.hasOwnProperty.call(input, "acceptanceReceiptId");
+    if (hasAcceptedRevision !== hasAcceptanceReceipt) fail("unsupported_combination");
+    if (!hasAcceptedRevision) return { quoteId };
+    if (intent !== INTENTS.administration.review_proposal_controls) {
+      fail("unsupported_combination");
+    }
+    return {
+      quoteId,
+      acceptedRevisionId: opaqueId(input.acceptedRevisionId),
+      acceptanceReceiptId: opaqueId(input.acceptanceReceiptId)
+    };
   }
   if (destination === "workflow" || destination === "approval") {
     return normalizeWorkflowFocus(value, destination, intent);
@@ -569,11 +713,36 @@ function normalizeFocus(value, destination, intent) {
     }
     return { quoteId };
   }
+  if (destination === "schedule" && intent === INTENTS.schedule.review_production_consequence) {
+    return normalizeCommercialFocus(value);
+  }
   if (destination === "schedule") {
     const input = exactRecord(value, ["quoteId"]);
     return { quoteId: opaqueId(input.quoteId) };
   }
+  if (destination === "inventory") return normalizeCommercialFocus(value, { inventory: true });
   if (destination === "library") {
+    if (intent === INTENTS.library.review_imported_menu_item) {
+      const input = exactRecord(value, [
+        "sectionId",
+        "recordId",
+        "eventTypeId",
+        "categoryId",
+        "importBatchId",
+        "sourceRowNumber",
+        "requestId"
+      ]);
+      if (input.sectionId !== "menu") fail("unsupported_combination");
+      return {
+        sectionId: "menu",
+        recordId: opaqueId(input.recordId),
+        eventTypeId: opaqueId(input.eventTypeId),
+        categoryId: opaqueId(input.categoryId),
+        importBatchId: opaqueId(input.importBatchId),
+        sourceRowNumber: positiveRowNumber(input.sourceRowNumber),
+        requestId: opaqueId(input.requestId)
+      };
+    }
     const input = exactRecord(value, ["sectionId", "recordId", "quoteId"]);
     const focus = { sectionId: opaqueId(input.sectionId) };
     const hasRecordId = Object.prototype.hasOwnProperty.call(input, "recordId");
@@ -618,10 +787,19 @@ function validateObjectFocusRelationship(destination, object, focus) {
   if (object.type === "opportunity") {
     if (!focus.quoteId || object.id !== focus.quoteId) fail("unsupported_combination");
   }
+  if (["staffing-plan", "production-plan"].includes(object.type)) {
+    if (!focus.quoteId || object.id !== focus.quoteId) fail("unsupported_combination");
+  }
   if (
     destination === "administration"
-    && ["payment-evidence", "customer-decision-artifact"].includes(object.type)
+    && ["payment-evidence", "customer-decision-artifact", "kitchen-beo"].includes(object.type)
     && object.id !== focus.quoteId
+  ) {
+    fail("unsupported_combination");
+  }
+  if (
+    destination === "inventory"
+    && (object.id !== focus.ingredientId || !focus.baseUnitId)
   ) {
     fail("unsupported_combination");
   }
@@ -663,7 +841,7 @@ function validateObjectFocusRelationship(destination, object, focus) {
   }
   if (
     destination === "library"
-    && object.type === "event-template"
+    && ["event-template", "menu-item"].includes(object.type)
     && object.id !== focus.recordId
   ) {
     fail("unsupported_combination");
@@ -678,7 +856,8 @@ function buildPath(destination, focus) {
     return buildWorkflowPath(focus);
   }
   if (destination === "messages") return buildMessagingPath(focus);
-  if (destination === "schedule") return WORKSPACE_PATHS.schedule;
+  if (destination === "schedule") return WORKSPACE_PATHS.operations;
+  if (destination === "inventory") return WORKSPACE_PATHS.inventory;
   if (destination === "library") return WORKSPACE_PATHS.catalog;
   return WORKSPACE_PATHS.reporting;
 }

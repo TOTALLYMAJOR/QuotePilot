@@ -175,7 +175,9 @@ function normalizePlanning(raw) {
         );
       }
     } else if (kind === "approximate") {
-      if (min === null || max === null || min > value || value > max || min === max) {
+      // An approximate count need not invent numerical uncertainty bounds.
+      if (!(min === null && max === null)
+        && (min === null || max === null || min > value || value > max || min === max)) {
         fail(
           "failed-precondition",
           "Approximate planning attendance requires distinct bounds containing the reviewed value."

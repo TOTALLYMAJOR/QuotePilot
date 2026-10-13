@@ -851,3 +851,124 @@ describe("server Commercial Change Authority foundation", () => {
     );
   });
 });
+
+function publishedWorkflowPolicy(overrides = {}) {
+  return {
+    organizationId: ORGANIZATION_ID,
+    definitionPin: { workflowKind: "quote_review", schemaVersion: 2, definitionId: "quote_review", versionId: "quote_review_v1", version: 1, definitionDigest: "e".repeat(64) },
+    approvalPolicy: { basis: "absolute_total_delta_cents", thresholdCents: 0, allowedRoles: ["admin", "sales"] },
+    declaredBy: "tenant-admin", declaredAtISO: "2026-08-01T12:00:00.000Z", ...overrides
+  };
+}
+function attendanceSubmissionBinding(overrides = {}) {
+  return { organizationId: ORGANIZATION_ID, quoteId: QUOTE_ID, sourceVersionId: BASE_REVISION_ID,
+    acceptanceReceiptId: "acceptance-125", submissionReceiptId: "attendance-response-125", submissionReceiptDigest: "f".repeat(64), count: 125, ...overrides };
+}
+function rehashCommercialReceipt(receipt, patch) {
+  const { receiptDigest: _old, ...body } = { ...structuredClone(receipt), ...patch };
+  for (const key of Object.keys(body)) if (body[key] === undefined) delete body[key];
+  return { ...body, receiptDigest: require("node:crypto").createHash("sha256").update(graphCore.canonicalSerialize(body)).digest("hex") };
+}
+
+describe("workflow-pinned commercial authority", () => {
+  test("converts authoritative USD totals by deterministic decimal minor units", () => {
+    const { authoritativeMoneyToCents } = require("../../../functions/commercialChangeAuthority.js");
+    expect([0, 1.005, 2.675, 1e-7, 1e12].map(authoritativeMoneyToCents)).toEqual([0, 101, 268, 0, 1e14]);
+    for (const value of [-1, NaN, Infinity, "1.00", 1e12 + 1]) expectAuthorityError(() => authoritativeMoneyToCents(value), "failed-precondition");
+  });
+
+  test("workflow policy adds exact threshold approval without removing the impact floor", () => {
+    const high = publishedWorkflowPolicy({ approvalPolicy: { basis: "absolute_total_delta_cents", thresholdCents: 1e9, allowedRoles: ["admin", "sales"] } });
+    const simulation = makeSimulation({ context: { ...trustedContext(), workflowPolicy: high } }).receipt;
+    expect(simulation.schemaVersion).toBe("commercial-change-simulation-receipt-v2");
+    expect(simulation.approvalEvaluation).toMatchObject({ beforeTotalCents: 1248000, proposedTotalCents: 1692000, absoluteTotalDeltaCents: 444000, impactApprovalRequired: true, thresholdApprovalRequired: false });
+    expect(simulation.authorizationRequired).toBe(true);
+    const authorization = makeAuthorization(simulation).receipt;
+    const applied = makeApply(simulation, authorization).receipt;
+    expect(authorization.schemaVersion).toBe("commercial-change-authorization-receipt-v2");
+    expect(applied.schemaVersion).toBe("commercial-change-apply-receipt-v2");
+    expect(applied.workflowPolicy).toEqual(simulation.workflowPolicy);
+    expect(applied.approvalEvaluation).toEqual(simulation.approvalEvaluation);
+    expect(applied.authorizationConsumed).toBe(true);
+  });
+
+  test("an explicit zero threshold requires real admin authorization even for no impact", () => {
+    const simulation = makeSimulation({ form: proposedForm({ guests: 125 }), proposedPricing: pricing(), context: { ...trustedContext(), workflowPolicy: publishedWorkflowPolicy() } }).receipt;
+    expect(simulation.impact.counts.total).toBe(0);
+    expect(simulation.approvalEvaluation).toMatchObject({ absoluteTotalDeltaCents: 0, impactApprovalRequired: false, thresholdApprovalRequired: true });
+    expect(simulation.authorizationRequired).toBe(true);
+    expectAuthorityError(() => makeApply(simulation, null), "failed-precondition");
+    expectAuthorityError(() => makeAuthorization(simulation, { trustedContext: trustedContext() }), "permission-denied");
+    const authorization = makeAuthorization(simulation).receipt;
+    const applied = makeApply(simulation, authorization).receipt;
+    expect(applied.newRevisionId).toBe(TARGET_REVISION_ID);
+    expect(applied.invalidationReceipts).toEqual([]);
+  });
+
+  test("pinned allowed roles restrict simulation and apply without widening authorization", () => {
+    const policy = publishedWorkflowPolicy({ approvalPolicy: { basis: "absolute_total_delta_cents", thresholdCents: null, allowedRoles: ["admin"] } });
+    expectAuthorityError(() => makeSimulation({ context: { ...trustedContext(), workflowPolicy: policy } }), "permission-denied");
+    const simulation = makeSimulation({ form: proposedForm({ guests: 125 }), proposedPricing: pricing(), context: { ...trustedContext({ actor: ADMIN_ACTOR }), workflowPolicy: policy } }).receipt;
+    expectAuthorityError(() => makeApply(simulation, null), "permission-denied");
+    expect(makeApply(simulation, null, { trustedContext: trustedContext({ actor: ADMIN_ACTOR }) }).receipt.appliedBy.role).toBe("admin");
+  });
+
+  test("equal attendance becomes applied evidence only through an exact new commercial revision", () => {
+    const attendanceBinding = attendanceSubmissionBinding();
+    const simulation = makeSimulation({ form: proposedForm({ guests: 125 }), proposedPricing: pricing(), context: { ...trustedContext(), attendanceBinding } }).receipt;
+    expect(simulation.workflowPolicy).toBeNull();
+    expect(simulation.authorizationRequired).toBe(false);
+    const applied = makeApply(simulation, null).receipt;
+    expect(applied.attendanceBinding).toEqual(attendanceBinding);
+    expect(applied.baseRevisionId).toBe(BASE_REVISION_ID);
+    expect(applied.newRevisionId).toBe(TARGET_REVISION_ID);
+    expectAuthorityError(() => makeApply(simulation, null, { request: applyRequest(APPLY_REQUEST_ID, BASE_REVISION_ID) }), "invalid-argument");
+    const outcome = makeApplyOutcome(simulation, null, { applyReceipt: applied, current: { activeRevisionId: TARGET_REVISION_ID } }).receipt;
+    expect(outcome).toBeTruthy();
+  });
+
+  test("attendance and policy bindings reject changed source count scope and immutable retry", () => {
+    const baseline = { form: proposedForm({ guests: 125 }), proposedPricing: pricing() };
+    for (const [patch, code] of [[{ quoteId: "foreign" }, "permission-denied"], [{ organizationId: "foreign" }, "permission-denied"], [{ sourceVersionId: "old" }, "aborted"], [{ count: 126 }, "failed-precondition"], [{ count: 0 }, "failed-precondition"]]) {
+      expectAuthorityError(() => makeSimulation({ ...baseline, context: { ...trustedContext(), attendanceBinding: attendanceSubmissionBinding(patch) } }), code);
+    }
+    expectAuthorityError(() => makeSimulation({ context: { ...trustedContext(), workflowPolicy: publishedWorkflowPolicy({ organizationId: "foreign" }) } }), "permission-denied");
+    const first = makeSimulation({ ...baseline, context: { ...trustedContext(), attendanceBinding: attendanceSubmissionBinding() } }).receipt;
+    expect(makeSimulation({ ...baseline, context: { ...trustedContext(), attendanceBinding: attendanceSubmissionBinding() }, existingReceipt: first }).idempotent).toBe(true);
+    expectAuthorityError(() => makeSimulation({ ...baseline, context: { ...trustedContext(), attendanceBinding: attendanceSubmissionBinding({ submissionReceiptId: "different-receipt" }) }, existingReceipt: first }), "already-exists");
+  });
+
+  test("rehashing cannot remove threshold approval or replace the binding across receipt types", () => {
+    const simulation = makeSimulation({ form: proposedForm({ guests: 125 }), proposedPricing: pricing(), context: { ...trustedContext(), workflowPolicy: publishedWorkflowPolicy() } }).receipt;
+    expectAuthorityError(() => authority.validateSimulationReceipt(rehashCommercialReceipt(simulation, { authorizationRequired: false })), "failed-precondition");
+    expectAuthorityError(() => authority.validateSimulationReceipt(rehashCommercialReceipt(simulation, { approvalEvaluation: { ...simulation.approvalEvaluation, beforeTotalCents: 0 } })), "failed-precondition");
+    const authorization = makeAuthorization(simulation).receipt;
+    const replaced = rehashCommercialReceipt(authorization, { workflowPolicy: { ...authorization.workflowPolicy, definitionPin: { ...authorization.workflowPolicy.definitionPin, versionId: "quote_review_v2", version: 2 } } });
+    expectAuthorityError(() => makeApply(simulation, replaced), "failed-precondition");
+    const missingSchema = rehashCommercialReceipt(makeApply(simulation, authorization).receipt, { schemaVersion: undefined });
+    expectAuthorityError(() => authority.validateApplyReceipt(missingSchema), "failed-precondition");
+  });
+
+  test("version one receipts cannot claim workflow or attendance seals", () => {
+    const legacy = makeSimulation().receipt;
+    expect(legacy.schemaVersion).toBe("commercial-change-simulation-receipt-v1");
+    expect(legacy).not.toHaveProperty("workflowPolicy");
+    expectAuthorityError(() => authority.validateSimulationReceipt(rehashCommercialReceipt(legacy, { workflowPolicy: publishedWorkflowPolicy() })), "failed-precondition");
+  });
+});
+
+test("versioned workflow bindings reject coerced strings and mismatched authorization replay seals", () => {
+  for (const value of [42, ["tenant-admin"], " tenant-admin "]) {
+    expectAuthorityError(() => makeSimulation({ context: { ...trustedContext(), workflowPolicy: publishedWorkflowPolicy({ declaredBy: value }) } }), "failed-precondition");
+  }
+  expectAuthorityError(() => makeSimulation({ context: { ...trustedContext(), workflowPolicy: publishedWorkflowPolicy({ declaredAtISO: ["2026-08-01T12:00:00.000Z"] }) } }), "failed-precondition");
+  const uppercase = publishedWorkflowPolicy(); uppercase.definitionPin.definitionDigest = "E".repeat(64);
+  expectAuthorityError(() => makeSimulation({ context: { ...trustedContext(), workflowPolicy: uppercase } }), "failed-precondition");
+  for (const patch of [{ acceptanceReceiptId: ["acceptance-125"] }, { submissionReceiptId: ["attendance-response-125"] }, { submissionReceiptDigest: ["f".repeat(64)] }]) {
+    expectAuthorityError(() => makeSimulation({ form: proposedForm({ guests: 125 }), proposedPricing: pricing(), context: { ...trustedContext(), attendanceBinding: attendanceSubmissionBinding(patch) } }), "failed-precondition");
+  }
+  const simulation = makeSimulation({ context: { ...trustedContext(), workflowPolicy: publishedWorkflowPolicy() } }).receipt;
+  const authorization = makeAuthorization(simulation).receipt;
+  const replaced = rehashCommercialReceipt(authorization, { workflowPolicy: { ...authorization.workflowPolicy, declaredBy: "different-admin" } });
+  expectAuthorityError(() => makeAuthorization(simulation, { existingReceipt: replaced }), "failed-precondition");
+});

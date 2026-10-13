@@ -1,0 +1,41 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "bounce-easing",
+        "value": "animation: var(--ease-spring)",
+        "createdAt": "2026-10-11T02:34:44.828Z",
+        "reason": "one-shot drag assignment landing feedback is causal and already bypassed for reduced motion; preserved after current visual review"
+      },
+      {
+        "rule": "side-tab",
+        "value": "*",
+        "files": [
+          "src/components/attendanceWorkflowPresentation.css"
+        ],
+        "createdAt": "2026-10-11T02:34:50.573Z",
+        "reason": "repository attendance outcome alerts use one semantic status rail; preserved after current visual review"
+      },
+      {
+        "rule": "side-tab",
+        "value": "*",
+        "files": [
+          "src/components/scheduleMotion.css"
+        ],
+        "createdAt": "2026-10-11T02:34:51.404Z",
+        "reason": "after repair the only remaining side-tab is the domain-appropriate calendar event color bar; preserved after current visual review"
+      },
+      {
+        "rule": "bounce-easing",
+        "value": "*",
+        "files": [
+          "src/components/scheduleMotion.css"
+        ],
+        "createdAt": "2026-10-11T02:35:05.465Z",
+        "reason": "one-shot drag assignment landing feedback is causal and already bypassed for reduced motion; preserved after current visual review"
+      }
+    ]
+  }
+}

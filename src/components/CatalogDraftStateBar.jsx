@@ -11,8 +11,91 @@ export function catalogDraftCapabilityState(draftState = {}) {
   return "ready";
 }
 
+export function catalogDraftOperatorPresentation(draftState = {}, {
+  publishedCatalogAvailable = true
+} = {}) {
+  const status = draftState?.status || "idle";
+  const changedRecordCount = Number(draftState?.changedRecordCount || 0);
+  const unchangedOutcome = publishedCatalogAvailable
+    ? "Published pricing remains active."
+    : "No shared catalog or pricing changed.";
+  if (status === "saving") {
+    return {
+      title: "Saving the Library draft",
+      description: "Publication stays unavailable until the draft save finishes."
+    };
+  }
+  if (status === "conflict") {
+    return {
+      title: "A newer Library version needs attention",
+      description: "This draft was not published. Load the latest shared version and reconcile the changes before trying again."
+    };
+  }
+  if (status === "saved" && draftState?.receipt) {
+    return {
+      title: publishedCatalogAvailable ? "Library published" : "Library update recorded locally",
+      description: publishedCatalogAvailable
+        ? "The published catalog is active for new quote calculations."
+        : "Publishing is unavailable from this source. No shared catalog or pricing changed."
+    };
+  }
+  if (status === "sync_failed" && draftState?.deviceOnly) {
+    return {
+      title: "Library changes are waiting to save",
+      description: `The changes are preserved here, but they are not in the shared draft and cannot be published yet. ${unchangedOutcome}`
+    };
+  }
+  if (status === "sync_failed" && changedRecordCount === 0) {
+    return publishedCatalogAvailable
+      ? {
+          title: "Library draft is unavailable",
+          description: "You can inspect the published Library, but changes cannot be checked or published right now. Published pricing remains active."
+        }
+      : {
+          title: "Library is available in this workspace",
+          description: "The shared draft cannot be reached from this source. Publishing remains unavailable, and no shared catalog or pricing changed."
+        };
+  }
+  if (status === "recovery") {
+    return {
+      title: "Library needs to reconnect",
+      description: `The draft cannot be checked or published right now. ${unchangedOutcome}`
+    };
+  }
+  if (status === "error" || status === "sync_failed") {
+    return {
+      title: "The Library draft could not be saved",
+      description: publishedCatalogAvailable
+        ? "Nothing was published. The current published catalog and pricing remain active."
+        : "Nothing was published. No shared catalog or pricing changed."
+    };
+  }
+  if (!publishedCatalogAvailable) {
+    return changedRecordCount > 0
+      ? {
+          title: "Library changes are in this workspace only",
+          description: `${changedRecordCount} ${changedRecordCount === 1 ? "change is" : "changes are"} available here. Publishing is unavailable from this source. No shared catalog or pricing changed.`
+        }
+      : {
+          title: "Library is available in this workspace",
+          description: "Publishing is unavailable from this source. No shared catalog or pricing changed."
+        };
+  }
+  if (changedRecordCount > 0) {
+    return {
+      title: "Draft ready to check",
+      description: `${changedRecordCount} ${changedRecordCount === 1 ? "change is" : "changes are"} in the shared draft. ${unchangedOutcome}`
+    };
+  }
+  return {
+    title: "Published Library is active",
+    description: "New quotes use the current published catalog and pricing."
+  };
+}
+
 export default function CatalogDraftStateBar({
   draftState,
+  publishedCatalogAvailable = true,
   disabled = false,
   onRetry,
   onReview,
@@ -26,9 +109,29 @@ export default function CatalogDraftStateBar({
   const changedRecordCount = Number(draftState?.changedRecordCount || 0);
   const busy = status === "saving" || reviewing || publishing;
   const canReview = changedRecordCount > 0
+    && publishedCatalogAvailable
     && !draftState?.deviceOnly
     && status !== "conflict"
     && !busy;
+  const showReviewAction = changedRecordCount > 0
+    && publishedCatalogAvailable
+    && !draftState?.deviceOnly
+    && status !== "conflict"
+    && (canReview || reviewing);
+  const presentation = catalogDraftOperatorPresentation(draftState, {
+    publishedCatalogAvailable
+  });
+  const technicalDetail = (
+    error
+    || draftState?.error
+    || ["conflict", "sync_failed", "recovery", "error"].includes(status)
+  )
+    ? [draftState?.label, error || draftState?.error]
+      .map((value) => String(value || "").trim())
+      .filter(Boolean)
+      .filter((value, index, values) => values.indexOf(value) === index)
+      .join(" — ")
+    : "";
 
   const handleReview = async () => {
     setReviewing(true);
@@ -62,34 +165,35 @@ export default function CatalogDraftStateBar({
       className="catalog-draft-state-bar"
       data-capability-id="catalog-draft-publish-authority"
       data-capability-state={catalogDraftCapabilityState(draftState)}
-      aria-label="Catalog draft status"
+      aria-label="Library draft status"
     >
       <div>
-        <strong role="status" aria-live="polite">{draftState?.label || "Draft saved"}</strong>
-        <small>
-          {draftState?.deviceOnly
-            ? "These edits remain on this device until synchronization succeeds."
-            : changedRecordCount > 0
-              ? `${changedRecordCount} changed ${changedRecordCount === 1 ? "record" : "records"}; active pricing is unchanged.`
-              : "The published catalog is the active pricing authority."}
-        </small>
-        {(error || draftState?.error) && <span className="field-error">{error || draftState.error}</span>}
+        <strong role="status" aria-live="polite">{presentation.title}</strong>
+        <small>{presentation.description}</small>
+        {technicalDetail && (
+          <details className="admin-menu-disclosure catalog-draft-state-details">
+            <summary>Technical details</summary>
+            <div className="admin-menu-disclosure-body">
+              <small>{technicalDetail}</small>
+            </div>
+          </details>
+        )}
       </div>
       <div className="catalog-draft-state-actions">
-        {(status === "sync_failed" || draftState?.deviceOnly) && (
+        {!busy && (status === "sync_failed" || draftState?.deviceOnly) && (
           <button type="button" className="ghost" onClick={onRetry} disabled={disabled || busy}>
-            Retry sync
+            {draftState?.deviceOnly ? "Try saving again" : "Try reconnecting"}
           </button>
         )}
-        {review?.readyToPublish ? (
+        {review?.readyToPublish && publishedCatalogAvailable ? (
           <button type="button" className="cta" onClick={handlePublish} disabled={disabled || busy}>
-            {publishing ? "Publishing…" : "Publish reviewed catalog"}
+            {publishing ? "Publishing…" : "Publish Library"}
           </button>
-        ) : (
+        ) : showReviewAction ? (
           <button type="button" className="cta" onClick={handleReview} disabled={disabled || !canReview}>
-            {reviewing ? "Reviewing…" : "Review and publish catalog"}
+            {reviewing ? "Checking…" : "Check draft before publishing"}
           </button>
-        )}
+        ) : null}
       </div>
     </aside>
   );

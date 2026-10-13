@@ -64,6 +64,21 @@ async function settle() {
 }
 
 describe("Reporting exact-arrival resolution", () => {
+  test("resolves operational analytics independently of quotes and waits for analytics refresh", () => {
+    const context = {
+      destination: "reporting", surfaceId: "reporting", focusConsumerState: "supported",
+      intentId: "review_operational_report",
+      object: { id: "ambient-interaction-health", type: "report-signal" },
+      focus: { reportScope: "operations", reportSignal: "ambient-interaction-health", quoteId: "" }
+    };
+    expect(buildReportingArrivalResolution({ context, reportingState: reportingState({
+      loading: true, loadedAtISO: "", analyticsLoading: false
+    }) })).toMatchObject({ status: "resolved", targetId: "reporting-ambient-interaction-health" });
+    expect(buildReportingArrivalResolution({ context, reportingState: reportingState({
+      analyticsLoading: true
+    }) })).toMatchObject({ status: "pending" });
+  });
+
   test("requires the exact same-organization opportunity without changing aggregate evidence", () => {
     const quote = {
       id: QUOTE_ID,
@@ -317,6 +332,20 @@ describe("ReportingDashboardView exact arrival", () => {
       itemId: expectedSignal,
       focus: expect.objectContaining({ reportSignal: expectedSignal })
     }));
+  });
+
+  test("shows quote-record results while analytics remain pending", async () => {
+    let finishAnalytics;
+    mocks.getProductAnalyticsSummary.mockReturnValueOnce(new Promise((resolve) => { finishAnalytics = resolve; }));
+    await act(async () => {
+      root.render(<ReportingDashboardView open onClose={() => {}} organizationId={ORGANIZATION_ID} />);
+    });
+    await settle();
+    expect(container.querySelector('[data-capability-state="loading"]')).toBeNull();
+    expect(container.textContent).toContain("Loading wizard analytics");
+    expect(container.textContent).not.toContain("No wizard sessions recorded yet");
+    await act(async () => finishAnalytics({ source: "firebase", sessionsStarted: 0, funnel: [], addons: [] }));
+    expect(container.textContent).toContain("No wizard sessions recorded yet");
   });
 
   test("recovers on an organization mismatch without focusing or substituting the aggregate quote", async () => {

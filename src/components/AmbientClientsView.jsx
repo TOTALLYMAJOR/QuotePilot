@@ -10,6 +10,16 @@ import {
 } from "../lib/ambientClients";
 import { classifyQuoteStatus } from "../lib/statusSemantics";
 import {
+  ArrowRight,
+  CalendarBlank,
+  ChatCircleDots,
+  EnvelopeSimple,
+  FileText,
+  Info,
+  NotePencil,
+  User
+} from "./ProductIcons";
+import {
   formatWorkspaceDate,
   formatWorkspaceDateTime,
   formatWorkspaceInteger,
@@ -25,6 +35,13 @@ function role(value) {
   return text(value).toLowerCase() || "staff";
 }
 
+const DIRECTORY_FILTER_LABELS = /* @__PURE__ */ Object.freeze({
+  all: "All clients",
+  linked: "With linked work",
+  upcoming: "Upcoming events",
+  contact_gap: "Contact to add"
+});
+
 function scheduleFrame(callback) {
   if (typeof window !== "undefined" && typeof window.requestAnimationFrame === "function") {
     const frame = window.requestAnimationFrame(callback);
@@ -32,6 +49,12 @@ function scheduleFrame(callback) {
   }
   const timer = setTimeout(callback, 0);
   return () => clearTimeout(timer);
+}
+
+function settleAsyncCallback(response, onResolved, onRejected) {
+  if (!response || typeof response.then !== "function") return false;
+  Promise.resolve(response).then(onResolved).catch(onRejected);
+  return true;
 }
 
 function actionResult(action, kind, overrides = {}) {
@@ -137,9 +160,9 @@ function clientDirectoryState(row = {}) {
   return { key: "unlinked", label: "No linked work in this view", tone: "neutral" };
 }
 
-function clientRecordedContactDetails(row = {}) {
+function clientRecordedContactDetails(row = {}, { includeCompany = true } = {}) {
   const identity = clientIdentity(row);
-  const details = [identity.company, identity.email, identity.phone].filter(Boolean);
+  const details = [includeCompany ? identity.company : "", identity.email, identity.phone].filter(Boolean);
   return details.length
     ? details.join(" · ")
     : "No recorded contact details are shown on this page yet.";
@@ -185,6 +208,7 @@ function fallbackReviewClientAction(row, currentUserRole) {
 export function AmbientClientsDirectory({
   model = {},
   searchDraft = "",
+  appliedSearch = "",
   cursorHistoryLength = 0,
   directoryFilter: controlledDirectoryFilter,
   onDirectoryFilterChange,
@@ -234,6 +258,8 @@ export function AmbientClientsDirectory({
   const remainingRows = featuredRow
     ? visibleRows.filter((row) => row !== featuredRow)
     : visibleRows;
+  const filterLabel = DIRECTORY_FILTER_LABELS[directoryFilter] || DIRECTORY_FILTER_LABELS.all;
+  const resultLabel = `${filterLabel}. Showing ${formatWorkspaceInteger(visibleRows.length)} of ${formatWorkspaceInteger(rows.length)} ${rows.length === 1 ? "client" : "clients"} on this loaded page${text(appliedSearch) ? ` for “${text(appliedSearch)}”` : ""}.`;
 
   const announce = (result, message) => {
     setAcknowledgement({ result, message });
@@ -290,6 +316,21 @@ export function AmbientClientsDirectory({
     const action = row.primaryAction || fallbackReviewClientAction(row, currentUserRole);
     if (!action.enabled) return;
     announce(actionResult(action, "pending"), "Opening this client with the relationship context already in view.");
+    const recover = (reason = "The exact client overview could not be opened.") => {
+      const visibleReason = text(reason) || "The exact client overview could not be opened.";
+      announce(actionResult(action, "recovery", {
+        reason: visibleReason,
+        consequence: "The current client list remains visible and no record changed.",
+        nextResolution: "Review the current row, then try again."
+      }), `${visibleReason} The current client list remains visible and no record changed. Try again from this row.`);
+    };
+    const settle = (response, resolvedAsync = false) => {
+      if (response?.status === "recovery") {
+        recover(response.reason);
+      } else if (response?.status === "resolved" || (resolvedAsync && response?.status !== "pending")) {
+        announce(actionResult(action, "context"), "The exact client overview is ready to review.");
+      }
+    };
     try {
       const response = onOpenClient?.({
         customerId: text(row.customerId || row.clientId || row.id),
@@ -299,19 +340,15 @@ export function AmbientClientsDirectory({
         consequence: action.arrivalContract.consequence,
         nextResolutionId: action.arrivalContract.nextResolutionIds[0]
       });
-      if (response?.status === "recovery") {
-        announce(actionResult(action, "recovery", {
-          reason: response.reason || "The exact client overview could not be opened.",
-          consequence: "The current client list remains visible and no record changed.",
-          nextResolution: response.nextResolution || "Review the current row, then try again."
-        }), response.reason || "The exact client overview could not be opened.");
+      if (!settleAsyncCallback(
+        response,
+        (result) => settle(result, true),
+        (error) => recover(error instanceof Error ? error.message : "The exact client overview could not be opened.")
+      )) {
+        settle(response);
       }
     } catch (error) {
-      announce(actionResult(action, "recovery", {
-        reason: error instanceof Error ? error.message : "The exact client overview could not be opened.",
-        consequence: "The current client list remains visible and no record changed.",
-        nextResolution: "Review the current row, then try again."
-      }), "The exact client overview could not be opened. No record changed.");
+      recover(error instanceof Error ? error.message : "The exact client overview could not be opened.");
     }
   };
 
@@ -320,7 +357,30 @@ export function AmbientClientsDirectory({
     announce(actionResult(refreshAction, "pending", {
       nextResolution: "Review the client list when the refresh finishes."
     }), "Refreshing clients. The current page stays visible while newer information loads.");
-    onRefresh?.();
+    const recover = (error) => {
+      const reason = error instanceof Error && text(error.message)
+        ? text(error.message)
+        : "The client list could not be refreshed.";
+      announce(actionResult(refreshAction, "recovery", {
+        reason,
+        consequence: "The current client page remains visible and no record changed.",
+        nextResolution: "Check the current connection, then try this refresh again."
+      }), `${reason} The current page is unchanged; try this refresh again.`);
+    };
+    try {
+      const response = onRefresh?.();
+      settleAsyncCallback(response, (result) => {
+        if (result?.status === "recovery") {
+          recover(new Error(result.reason || "The client list could not be refreshed."));
+          return;
+        }
+        if (result?.status !== "pending") {
+          announce(actionResult(refreshAction, "context"), "The client refresh finished. Review this page for the latest available information.");
+        }
+      }, recover);
+    } catch (error) {
+      recover(error);
+    }
   };
 
   const start = () => {
@@ -328,14 +388,72 @@ export function AmbientClientsDirectory({
     announce(actionResult(startAction, "pending", {
       nextResolution: "Add the client and event details needed for a priced draft."
     }), "Opening a new editable opportunity. Nothing has been sent.");
-    onStartOpportunity?.({
-      actionId: startAction.id,
-      object: startAction.arrivalContract.object,
-      reason: startAction.arrivalContract.reason,
-      consequence: startAction.arrivalContract.consequence,
-      nextResolutionId: startAction.arrivalContract.nextResolutionIds[0]
-    });
+    const recover = (error) => {
+      const reason = error instanceof Error && text(error.message)
+        ? text(error.message)
+        : "A new opportunity could not be opened.";
+      announce(actionResult(startAction, "recovery", {
+        reason,
+        consequence: "The Clients view remains visible and no draft was created here.",
+        nextResolution: "Review the current client context, then try again."
+      }), `${reason} The Clients view is unchanged; try again when you are ready.`);
+    };
+    try {
+      const response = onStartOpportunity?.({
+        actionId: startAction.id,
+        object: startAction.arrivalContract.object,
+        reason: startAction.arrivalContract.reason,
+        consequence: startAction.arrivalContract.consequence,
+        nextResolutionId: startAction.arrivalContract.nextResolutionIds[0]
+      });
+      settleAsyncCallback(response, (result) => {
+        if (result?.status === "recovery") {
+          recover(new Error(result.reason || "A new opportunity could not be opened."));
+        } else if (result?.status !== "pending") {
+          announce(actionResult(startAction, "context"), "The new opportunity is ready for client and event details.");
+        }
+      }, recover);
+    } catch (error) {
+      recover(error);
+    }
   };
+
+  const renderDirectoryControls = (className = "") => (
+    <div className={`ambient-clients__directory-controls${className ? ` ${className}` : ""}`}>
+      <form className="ambient-clients__toolbar" role="search" onSubmit={onApplySearch}>
+        <label className="ambient-clients__search">
+          <span className="visually-hidden">Find a client by name or email</span>
+          <input
+            type="search"
+            value={searchDraft}
+            autoComplete="off"
+            placeholder="Search clients"
+            onChange={(event) => onSearchDraftChange?.(event.target.value)}
+          />
+        </label>
+        <button type="submit" className="ghost">Search</button>
+        {searchDraft ? <button type="button" className="ghost" onClick={onClear}>Clear</button> : null}
+      </form>
+      <p className="source-note" data-client-search-boundary>
+        Search stays in this browser tab and clears after a reload.
+      </p>
+      {(rows.length > 1 || directoryFilter !== "all") && (
+        <label className="ambient-clients__filter-select">
+          <span className="visually-hidden">Filter clients</span>
+          <select
+            data-view-filter="client-relationship"
+            value={directoryFilter}
+            onChange={(event) => changeDirectoryFilter(event.target.value)}
+          >
+            <option value="all">All clients</option>
+            <option value="linked">With linked work</option>
+            <option value="upcoming">Upcoming events</option>
+            <option value="contact_gap">Contact to add</option>
+          </select>
+        </label>
+      )}
+    </div>
+  );
 
   return (
     <main
@@ -432,11 +550,15 @@ export function AmbientClientsDirectory({
             <header className="ambient-clients__populated-hero">
               <div>
                 <p className="ambient-clients__label">Client relationships</p>
-                <h1 ref={headingRef} id="ambient-clients-title" className="workspace-route-heading" tabIndex={-1}>Relationships, in context.</h1>
-                <p>Recorded event context first, followed by details worth carrying forward.</p>
+                <h1 ref={headingRef} id="ambient-clients-title" className="workspace-route-heading" tabIndex={-1}>Clients</h1>
+                <p>Every opportunity, proposal, request, and event stays connected to the relationship it belongs to.</p>
               </div>
-              <img className="ambient-clients__hospitality-image" src="/images/quote-workspace-wedding-table-v1.webp" alt="" />
             </header>
+
+            <section className="ambient-clients__mobile-directory-access" aria-labelledby="ambient-clients-mobile-search-title">
+              <h2 id="ambient-clients-mobile-search-title">Find a client</h2>
+              {renderDirectoryControls("ambient-clients__directory-controls--mobile")}
+            </section>
 
             {featuredRow && (() => {
               const customerId = text(featuredRow.customerId || featuredRow.clientId || featuredRow.id);
@@ -450,6 +572,7 @@ export function AmbientClientsDirectory({
                   data-client-id={customerId}
                   data-featured-source={featuredSelection.source}
                 >
+                  <p className="ambient-clients__featured-label">Relationship in context</p>
                   <div
                     className="ambient-clients__featured-heading"
                     data-client-summary-part="identity"
@@ -482,6 +605,7 @@ export function AmbientClientsDirectory({
                   <button
                     type="button"
                     className="ambient-client__primary"
+                    aria-label={`${action.outcomeLabel}: ${identity.name}`}
                     data-ambient-action-id={action.id}
                     data-client-summary-part="action"
                     disabled={!action.enabled}
@@ -490,12 +614,6 @@ export function AmbientClientsDirectory({
                   >
                     {action.outcomeLabel}<span aria-hidden="true">→</span>
                   </button>
-                  <img
-                    className="ambient-clients__featured-image"
-                    data-client-summary-part="image"
-                    src="/images/quote-workspace-wedding-table-v1.webp"
-                    alt=""
-                  />
                 </article>
               );
             })()}
@@ -503,41 +621,16 @@ export function AmbientClientsDirectory({
             <section className="ambient-clients__directory" aria-labelledby="ambient-clients-list-title">
               <div className="ambient-clients__directory-heading">
                 <h2 id="ambient-clients-list-title">All clients</h2>
-              </div>
-              <div className="ambient-clients__directory-controls">
-                <form className="ambient-clients__toolbar" role="search" onSubmit={onApplySearch}>
-                  <label className="ambient-clients__search">
-                    <span className="visually-hidden">Find a client by name or email</span>
-                    <input
-                      type="search"
-                      value={searchDraft}
-                      autoComplete="off"
-                      placeholder="Search clients"
-                      onChange={(event) => onSearchDraftChange?.(event.target.value)}
-                    />
-                  </label>
-                  <button type="submit" className="ghost">Search</button>
-                  {searchDraft ? <button type="button" className="ghost" onClick={onClear}>Clear</button> : null}
-                </form>
-                <p className="source-note" data-client-search-boundary>
-                  Search stays in this browser tab and clears after a reload.
+                <p
+                  className="source-note"
+                  data-client-result-scope
+                  role="status"
+                  aria-live="polite"
+                >
+                  {resultLabel}
                 </p>
-                {(rows.length > 1 || directoryFilter !== "all") && (
-                  <label className="ambient-clients__filter-select">
-                    <span className="visually-hidden">Filter clients</span>
-                    <select
-                      data-view-filter="client-relationship"
-                      value={directoryFilter}
-                      onChange={(event) => changeDirectoryFilter(event.target.value)}
-                    >
-                      <option value="all">All clients</option>
-                      <option value="linked">With linked work</option>
-                      <option value="upcoming">Upcoming events</option>
-                      <option value="contact_gap">Contact to add</option>
-                    </select>
-                  </label>
-                )}
               </div>
+              {renderDirectoryControls()}
 
               {remainingRows.length ? (
                 <ol className="ambient-clients__relationship-list">
@@ -552,11 +645,12 @@ export function AmbientClientsDirectory({
                         <article className="ambient-clients__relationship-row" data-client-id={customerId}>
                           <div><h3>{identity.name}</h3>{identity.company && <p>{identity.company}</p>}</div>
                           <div><strong>{event.title}</strong><span>{event.date}{event.reference ? ` · ${event.reference}` : ""}</span></div>
-                          <p>{clientRecordedContactDetails(row)}</p>
+                          <p data-client-row-contact>{clientRecordedContactDetails(row, { includeCompany: false })}</p>
                           <span className="ambient-clients__relationship-state" data-tone={relationshipState.tone}>{relationshipState.label}</span>
                           <button
                             type="button"
                             className="ambient-client__primary"
+                            aria-label={`${action.outcomeLabel}: ${identity.name}`}
                             data-ambient-action-id={action.id}
                             disabled={!action.enabled}
                             title={action.disabledReason || undefined}
@@ -702,6 +796,105 @@ function relationshipTarget(model = {}) {
   return model.primaryTarget || model.nextAction?.target || model.target || {};
 }
 
+function relationshipQuote(workspace, quoteId) {
+  return (Array.isArray(workspace?.quotes) ? workspace.quotes : [])
+    .find((quote) => text(quote?.id || quote?.quoteId) === text(quoteId)) || null;
+}
+
+function relationshipRequest(workspace, quoteId) {
+  const quote = relationshipQuote(workspace, quoteId);
+  const decision = quote?.portalDecision || {};
+  if (text(decision.decision).toLowerCase() !== "changes_requested") return null;
+  return {
+    message: text(decision.message),
+    submittedAtISO: text(decision.submittedAtISO),
+    requestId: text(decision.requestId)
+  };
+}
+
+function relationshipHistory(workspace) {
+  const activity = Array.isArray(workspace?.recentActivity) ? workspace.recentActivity : [];
+  const requested = new Set(activity
+    .filter((entry) => entry?.label === "Customer requested changes")
+    .map((entry) => `${text(entry.quoteId)}:${text(entry.atISO)}`));
+
+  return activity
+    .filter((entry) => !(
+      entry?.label === "Customer sent a conversation message"
+      && requested.has(`${text(entry.quoteId)}:${text(entry.atISO)}`)
+    ))
+    .slice(0, 5)
+    .map((entry) => {
+      const quote = relationshipQuote(workspace, entry.quoteId);
+      const request = entry.label === "Customer requested changes"
+        ? relationshipRequest(workspace, entry.quoteId)
+        : null;
+      return {
+        ...entry,
+        detail: request?.message
+          || (entry.label === "Proposal sent" ? "Proposal status recorded as sent."
+            : entry.label === "Quote drafted" ? "Opportunity created."
+              : text(quote?.event?.name || quote?.quoteNumber)),
+        meta: entry.label === "Customer requested changes"
+          ? "Needs review"
+          : text(entry.quoteNumber)
+      };
+    });
+}
+
+function relationshipStageModel(workspace, opportunity, client = {}) {
+  const quoteId = text(opportunity?.quoteId || opportunity?.id);
+  const quote = relationshipQuote(workspace, quoteId) || opportunity || {};
+  const status = text(quote.status).toLowerCase();
+  const versionNumber = Number(quote.latestVersionNumber);
+  const sentAtISO = text(quote.lifecycle?.sentAtISO || quote.sentAtISO);
+  const eventDate = text(quote.event?.date || opportunity?.eventDate);
+  const proposalStatus = ["sent", "viewed", "accepted", "booked"].includes(status)
+    ? `Version ${Number.isFinite(versionNumber) && versionNumber > 0 ? versionNumber : "current"} ${status === "sent" ? "sent" : status}`
+    : `Version ${Number.isFinite(versionNumber) && versionNumber > 0 ? versionNumber : "current"}`;
+  const eventStatus = status === "booked"
+    ? "Booked"
+    : status === "accepted"
+      ? "Accepted"
+      : "Not accepted or booked";
+  return [
+    {
+      key: "client",
+      label: "Client",
+      title: text(workspace?.customer?.name || workspace?.customer?.email || client.name || client.email) || "Unnamed client",
+      detail: text(workspace?.customer?.company || workspace?.customer?.organization || client.company),
+      Icon: User
+    },
+    {
+      key: "opportunity",
+      label: "Opportunity",
+      title: text(quote.event?.name || opportunity?.eventName || quote.quoteNumber) || "Untitled opportunity",
+      detail: text(quote.quoteNumber || opportunity?.quoteNumber),
+      Icon: FileText
+    },
+    {
+      key: "proposal",
+      label: "Proposal",
+      title: proposalStatus,
+      detail: sentAtISO ? formatWorkspaceDate(sentAtISO) : "No sent date recorded",
+      Icon: EnvelopeSimple
+    },
+    {
+      key: "event",
+      label: "Event",
+      title: eventStatus,
+      detail: eventDate ? formatWorkspaceDate(eventDate) : "No event date recorded",
+      Icon: CalendarBlank
+    }
+  ];
+}
+
+function historyIcon(label) {
+  if (label === "Customer requested changes") return ChatCircleDots;
+  if (label === "Proposal sent") return EnvelopeSimple;
+  return FileText;
+}
+
 export function AmbientClientRelationship({
   model = {},
   workspace = null,
@@ -806,12 +999,48 @@ export function AmbientClientRelationship({
     announce(actionResult(refreshAction, "pending", {
       nextResolution: "Review the client overview when the refresh finishes."
     }), "Refreshing this client. The current view stays visible while newer information loads.");
-    onRefresh?.();
+    const recover = (error) => {
+      const reason = error instanceof Error && text(error.message)
+        ? text(error.message)
+        : "This client could not be refreshed.";
+      announce(actionResult(refreshAction, "recovery", {
+        reason,
+        consequence: "The current client overview remains visible and no record changed.",
+        nextResolution: "Check the current connection, then try this refresh again."
+      }), `${reason} The current client overview is unchanged; try this refresh again.`);
+    };
+    try {
+      const response = onRefresh?.();
+      settleAsyncCallback(response, (result) => {
+        if (result?.status === "recovery") {
+          recover(new Error(result.reason || "This client could not be refreshed."));
+        } else if (result?.status !== "pending") {
+          announce(actionResult(refreshAction, "context"), "The client refresh finished. Review this overview for the latest available information.");
+        }
+      }, recover);
+    } catch (error) {
+      recover(error);
+    }
   };
 
   const resolveAction = (action, target = {}) => {
     if (!action?.enabled) return;
     announce(actionResult(action, "pending"), `Opening ${action.outcomeLabel.toLowerCase()} with this client’s context attached.`);
+    const recover = (reason = "The exact destination could not be opened.") => {
+      const visibleReason = text(reason) || "The exact destination could not be opened.";
+      announce(actionResult(action, "recovery", {
+        reason: visibleReason,
+        consequence: "The client overview remains visible and no record changed.",
+        nextResolution: "Review the current context, then try again."
+      }), `${visibleReason} The client overview remains visible and no record changed. Try again from this context.`);
+    };
+    const settle = (response, resolvedAsync = false) => {
+      if (response?.status === "recovery") {
+        recover(response.reason);
+      } else if (response?.status === "resolved" || (resolvedAsync && response?.status !== "pending")) {
+        announce(actionResult(action, "context"), "The requested client context is ready to review.");
+      }
+    };
     try {
       let response = null;
       const destination = text(target.destination || target.kind || action.executionTarget?.surfaceId);
@@ -855,21 +1084,15 @@ export function AmbientClientRelationship({
       } else {
         throw new Error("This next step has no exact destination in the client overview.");
       }
-      if (response?.status === "recovery") {
-        announce(actionResult(action, "recovery", {
-          reason: response.reason || "The exact destination could not be opened.",
-          consequence: "The client overview remains visible and no record changed.",
-          nextResolution: response.nextResolution || "Review the current context, then try again."
-        }), response.reason || "The exact destination could not be opened.");
-      } else if (response?.status === "resolved") {
-        announce(actionResult(action, "context"), "The requested client context is ready to review.");
+      if (!settleAsyncCallback(
+        response,
+        (result) => settle(result, true),
+        (error) => recover(error instanceof Error ? error.message : "The exact destination could not be opened.")
+      )) {
+        settle(response);
       }
     } catch (error) {
-      announce(actionResult(action, "recovery", {
-        reason: error instanceof Error ? error.message : "The exact destination could not be opened.",
-        consequence: "The client overview remains visible and no record changed.",
-        nextResolution: "Review the current context, then try again."
-      }), "The exact destination could not be opened. No record changed.");
+      recover(error instanceof Error ? error.message : "The exact destination could not be opened.");
     }
   };
 
@@ -927,15 +1150,20 @@ export function AmbientClientRelationship({
     resolveAction(action, { destination: "conversation", quoteId });
   };
 
-  const relationshipContext = model.relationshipContext || model.summary || {};
-  const bounded = model.boundary?.currentComplete === false;
-  const activeCount = relationshipContext.activeOpportunityCount ?? opportunities.length;
-  const attentionCount = relationshipContext.attentionCount ?? workspace?.attention?.itemCount ?? 0;
-  const activeLabel = relationshipContext.activeOpportunityLabel
-    || `${formatWorkspaceInteger(activeCount)} active ${activeCount === 1 ? "opportunity" : "opportunities"}${bounded ? " shown" : ""}`;
-  const attentionLabel = relationshipContext.attentionLabel
-    || `${formatWorkspaceInteger(attentionCount)} needing review${bounded ? " in this view" : ""}`;
-  const nextEvent = relationshipContext.nextEvent || workspace?.briefing?.nextEvent || null;
+  const focusedOpportunity = opportunities.find((opportunity) => (
+    text(opportunity.quoteId || opportunity.id) === primaryOpportunityId
+  )) || opportunities[0] || null;
+  const focusedQuoteId = text(focusedOpportunity?.quoteId || focusedOpportunity?.id || primaryOpportunityId);
+  const focusedQuote = relationshipQuote(workspace, focusedQuoteId) || focusedOpportunity || {};
+  const focusedStatus = classifyQuoteStatus(focusedQuote.status);
+  const request = relationshipRequest(workspace, focusedQuoteId);
+  const stages = relationshipStageModel(workspace, focusedOpportunity, client);
+  const history = relationshipHistory(workspace);
+  const hasActionableRequest = Boolean(
+    request?.message
+    && primaryAction?.enabled
+    && text(primaryTarget.attentionType).toLowerCase() === "change_request"
+  );
 
   return (
     <section
@@ -945,14 +1173,16 @@ export function AmbientClientRelationship({
       data-surface-density="editorial"
       data-client-id={customerId}
       data-client-overview-state={model.state || "success"}
+      data-client-relationship-layout="ledger"
     >
-      <button type="button" className="workspace-text-link ambient-client-overview__back" onClick={onBack}>
-        Back to Clients
-      </button>
+      <nav className="ambient-client-overview__breadcrumb" aria-label="Breadcrumb">
+        <button type="button" className="workspace-text-link ambient-client-overview__back" onClick={onBack}>Clients</button>
+        <span aria-hidden="true">/</span>
+        <strong>{formatWorkspaceText(client.name || client.email, { emptyLabel: "Unnamed client" })}</strong>
+      </nav>
 
       <header className="ambient-client-overview__identity">
         <div>
-          <p className="ambient-client-overview__label">Client</p>
           <h1 ref={rootHeadingRef} id="ambient-client-overview-title" className="workspace-route-heading" tabIndex={-1}>
             {formatWorkspaceText(client.name || client.email, { emptyLabel: "Unnamed client" })}
           </h1>
@@ -961,16 +1191,6 @@ export function AmbientClientRelationship({
             {![client.company, client.email, client.phone].some(text) && <span>No contact details recorded</span>}
           </p>
         </div>
-        <button
-          type="button"
-          className="ambient-client-overview__secondary"
-          data-ambient-action-id={refreshAction.id}
-          disabled={!refreshAction.enabled}
-          title={refreshAction.disabledReason || undefined}
-          onClick={refresh}
-        >
-          {model.boundary?.loading ? "Refreshing…" : refreshAction.outcomeLabel}
-        </button>
       </header>
 
       {acknowledgement && (
@@ -987,28 +1207,21 @@ export function AmbientClientRelationship({
         </div>
       )}
 
-      <section className="ambient-client-overview__summary" aria-labelledby="ambient-client-at-a-glance-title">
-        <div>
-          <p className="ambient-client-overview__label">At a glance</p>
-          <h2 id="ambient-client-at-a-glance-title" className="visually-hidden">Client relationship at a glance</h2>
-          <dl className="ambient-client-overview__signals">
-            <div><dt>Current work</dt><dd>{activeLabel}</dd></div>
-            <div><dt>Needs review</dt><dd>{attentionLabel}</dd></div>
-            <div>
-              <dt>Next dated event</dt>
-              <dd>{nextEvent ? formatWorkspaceDate(nextEvent.date) : model.boundary?.truncated ? "Not shown in the current results" : "None recorded"}</dd>
-            </div>
-          </dl>
-        </div>
-        <article className="ambient-client-overview__next" data-next-state={caughtUp ? "caught-up" : "action"}>
-          <div>
-            <p className="ambient-client-overview__label">Suggested next step</p>
-            <h2>{caughtUp
+      <section className="ambient-client-overview__relationship" aria-label="Current client relationship">
+        <article className="ambient-client-overview__decision" data-next-state={caughtUp ? "caught-up" : "action"}>
+          <p className="ambient-client-overview__label">{hasActionableRequest ? "Needs review" : "Next relationship step"}</p>
+          <h2>{hasActionableRequest
+            ? `“${request.message}”`
+            : caughtUp
               ? "No tracked follow-up is due"
               : primaryAction?.outcomeLabel || model.nextAction?.label || "Review this client"}</h2>
-            <p>{caughtUp
-              ? model.caughtUp?.reason || "No follow-up in the current client view needs attention."
-              : primaryAction?.arrivalContract?.reason || model.nextAction?.reason || "Review the available client context and choose the next step."}</p>
+          <div className="ambient-client-overview__evidence">
+            <p><Info size={18} aria-hidden="true" />{hasActionableRequest
+              ? "No resolution is recorded for this customer request."
+              : caughtUp
+                ? model.caughtUp?.reason || "No follow-up in the current client view needs attention."
+                : primaryAction?.arrivalContract?.reason || "Review the available client context and choose the next step."}</p>
+            {!caughtUp && <p><NotePencil size={18} aria-hidden="true" />Nothing changes until this next step is reviewed.</p>}
           </div>
           {!caughtUp && primaryAction?.enabled && (
             <button
@@ -1022,56 +1235,98 @@ export function AmbientClientRelationship({
                 ? { ...primaryTarget, returnFocusControlId: "client-next-action" }
                 : primaryTarget)}
             >
-              {primaryAction.outcomeLabel}
-              <span aria-hidden="true">→</span>
+              {primaryAction.outcomeLabel}<ArrowRight size={18} aria-hidden="true" />
             </button>
           )}
         </article>
+
+        <div className="ambient-client-overview__relationship-main">
+          <section className="ambient-client-overview__spine" aria-labelledby="ambient-client-relationship-title" data-client-relationship-spine>
+            <p className="ambient-client-overview__label">Relationship overview</p>
+            <h2 id="ambient-client-relationship-title" className="visually-hidden">Relationship overview</h2>
+            <ol>
+              {stages.map(({ key, label, title, detail, Icon }, index) => (
+                <li key={key} data-relationship-stage={key}>
+                  <span className="ambient-client-overview__stage-icon"><Icon size={22} aria-hidden="true" /></span>
+                  <span className="ambient-client-overview__stage-label">{label}</span>
+                  <strong>{title}</strong>
+                  {detail && <span>{detail}</span>}
+                  {index < stages.length - 1 && <ArrowRight className="ambient-client-overview__stage-arrow" size={18} aria-hidden="true" />}
+                </li>
+              ))}
+            </ol>
+          </section>
+
+          <section className="ambient-client-overview__opportunity" aria-labelledby="ambient-client-opportunities-title">
+            <p className="ambient-client-overview__label">Active opportunity</p>
+            <h2 id="ambient-client-opportunities-title">{focusedOpportunity
+              ? formatWorkspaceText(focusedOpportunity.eventName || focusedOpportunity.event?.name || focusedOpportunity.quoteNumber, { emptyLabel: "Untitled opportunity" })
+              : "No active opportunity"}</h2>
+            {focusedOpportunity ? (
+              <div className="ambient-client-overview__opportunity-row" data-opportunity-id={focusedQuoteId}>
+                <p>
+                  {formatWorkspaceText(focusedOpportunity.quoteNumber, { emptyLabel: "Quote number pending" })}
+                  {text(focusedOpportunity.eventDate || focusedOpportunity.event?.date) ? ` · ${formatWorkspaceDate(focusedOpportunity.eventDate || focusedOpportunity.event?.date)}` : ""}
+                  {text(focusedQuote.event?.guests) ? ` · ${formatWorkspaceInteger(focusedQuote.event.guests)} guests` : ""}
+                  {text(focusedQuote.event?.venue) ? ` · ${focusedQuote.event.venue}` : ""}
+                </p>
+                <StatusChip family={focusedStatus.family} label={focusedStatus.label} />
+                <button
+                  type="button"
+                  className="ambient-client-overview__secondary"
+                  data-ambient-action-id={`review-client-opportunity:${focusedQuoteId}`}
+                  data-return-focus-control="client-opportunity-row"
+                  onClick={() => reviewOpportunity(focusedOpportunity)}
+                >
+                  Open opportunity<ArrowRight size={16} aria-hidden="true" />
+                </button>
+              </div>
+            ) : <p className="source-note">No active opportunity appears in the current client information.</p>}
+            {opportunities.length > 1 && (
+              <details className="ambient-client-overview__more-opportunities">
+                <summary>{formatWorkspaceInteger(opportunities.length)} active opportunities</summary>
+                <ol className="ambient-client-overview__opportunities">
+                  {opportunities.slice(1).map((opportunity) => (
+                    <li key={text(opportunity.quoteId || opportunity.id)}>
+                      <span>{formatWorkspaceText(opportunity.eventName || opportunity.quoteNumber, { emptyLabel: "Untitled opportunity" })}</span>
+                      <button type="button" className="ambient-client-overview__secondary" onClick={() => reviewOpportunity(opportunity)}>Open opportunity</button>
+                    </li>
+                  ))}
+                </ol>
+              </details>
+            )}
+          </section>
+        </div>
       </section>
 
-      <section className="ambient-client-overview__section" aria-labelledby="ambient-client-opportunities-title">
-        <div className="ambient-client-overview__section-head">
-          <h2 id="ambient-client-opportunities-title">Active opportunities</h2>
-          <p>{model.boundary?.truncated ? "Only active opportunities available in this view are shown." : "Current quotes still in progress for this client."}</p>
-        </div>
-        {opportunities.length === 0 ? (
-          <p className="source-note">No active opportunity appears in the current client information.</p>
-        ) : (
-          <ol className="ambient-client-overview__opportunities">
-            {opportunities.map((opportunity) => {
-              const quoteId = text(opportunity.quoteId || opportunity.id);
-              const status = classifyQuoteStatus(opportunity.status);
+      <section className="ambient-client-overview__history" aria-labelledby="ambient-client-history-title" data-client-history-ledger>
+        <p className="ambient-client-overview__label">Recent relationship history</p>
+        <h2 id="ambient-client-history-title" className="visually-hidden">Recent relationship history</h2>
+        {history.length ? (
+          <ol>
+            {history.map((entry) => {
+              const HistoryIcon = historyIcon(entry.label);
               return (
-                <li key={quoteId} data-opportunity-id={quoteId}>
-                  <div>
-                    <h3>{formatWorkspaceText(opportunity.eventName || opportunity.event?.name || opportunity.quoteNumber, { emptyLabel: "Untitled opportunity" })}</h3>
-                    <p>
-                      {formatWorkspaceText(opportunity.quoteNumber, { emptyLabel: "Quote number pending" })}
-                      {text(opportunity.eventDate || opportunity.event?.date) ? ` · ${formatWorkspaceDate(opportunity.eventDate || opportunity.event?.date)}` : ""}
-                    </p>
-                    <StatusChip family={status.family} label={status.label} />
-                  </div>
-                  <button
-                    type="button"
-                    className="ambient-client-overview__secondary"
-                    data-ambient-action-id={`review-client-opportunity:${quoteId}`}
-                    data-return-focus-control="client-opportunity-row"
-                    onClick={() => reviewOpportunity(opportunity)}
-                  >
-                    Review opportunity
-                  </button>
+                <li key={`${entry.quoteId}:${entry.label}:${entry.atISO}`}>
+                  <span className="ambient-client-overview__history-icon"><HistoryIcon size={21} aria-hidden="true" /></span>
+                  <time dateTime={entry.atISO}>{formatWorkspaceDateTime(entry.atISO)}</time>
+                  <div><strong>{entry.label}</strong>{entry.detail && <span>{entry.detail}</span>}</div>
+                  <span className="ambient-client-overview__history-meta">{entry.meta}</span>
                 </li>
               );
             })}
           </ol>
-        )}
+        ) : <p className="source-note">No recent relationship activity appears in the current client information.</p>}
       </section>
 
-      <section className="ambient-client-overview__section" aria-labelledby="ambient-client-conversations-title">
-        <div className="ambient-client-overview__section-head">
-          <h2 id="ambient-client-conversations-title">Conversations</h2>
-          <p>Each conversation stays attached to its quote. Opening one sends nothing and marks nothing read.</p>
-        </div>
+      <div className="ambient-client-overview__footer">
+      <details className="ambient-client-overview__conversation-disclosure" data-client-disclosure="conversations">
+        <summary><ChatCircleDots size={20} aria-hidden="true" />Conversations<span>{conversations.length ? `${formatWorkspaceInteger(conversations.length)} linked` : "None shown"}</span></summary>
+        <section className="ambient-client-overview__section" aria-labelledby="ambient-client-conversations-title">
+          <div className="ambient-client-overview__section-head">
+            <h2 id="ambient-client-conversations-title">Quote conversations</h2>
+            <p>Each conversation stays attached to its quote. Opening one sends nothing and marks nothing read.</p>
+          </div>
         {conversations.length === 0 ? (
           <p className="source-note">No conversation linked to a quote appears in the current client information.</p>
         ) : (
@@ -1093,21 +1348,35 @@ export function AmbientClientRelationship({
             ))}
           </ol>
         )}
-      </section>
+        </section>
+      </details>
 
-      <aside className="ambient-client-overview__boundary" aria-labelledby="ambient-client-boundary-title">
-        <div>
-          <p className="ambient-client-overview__label">About this information</p>
-          <h2 id="ambient-client-boundary-title">{boundary.sourceLabel || "Client relationship"}</h2>
-        </div>
-        <div>
-          <p>{boundary.sourceBoundary || boundary.outcome || "This view summarizes only the client information and linked quotes available here."}</p>
-          {boundary.loadedAtISO && <p>Last checked on this device {formatWorkspaceDateTime(boundary.loadedAtISO)}.</p>}
-          {Array.isArray(boundary.messages || boundary.issues) && (boundary.messages || boundary.issues).length > 0 && (
-            <ul>{(boundary.messages || boundary.issues).map((message) => <li key={message}>{message}</li>)}</ul>
-          )}
-        </div>
-      </aside>
+      <details className="ambient-client-overview__about" data-client-disclosure="about">
+        <summary><Info size={20} aria-hidden="true" />About this view</summary>
+        <aside className="ambient-client-overview__boundary" aria-labelledby="ambient-client-boundary-title">
+          <div>
+            <p className="ambient-client-overview__label">Source and scope</p>
+            <h2 id="ambient-client-boundary-title">{boundary.sourceLabel || "Client relationship"}</h2>
+          </div>
+          <div>
+            <p>{boundary.sourceBoundary || boundary.outcome || "This view summarizes only the client information and linked quotes available here."}</p>
+            {boundary.loadedAtISO && <p>Last checked on this device {formatWorkspaceDateTime(boundary.loadedAtISO)}.</p>}
+            {Array.isArray(boundary.messages || boundary.issues) && (boundary.messages || boundary.issues).length > 0 && (
+              <ul>{(boundary.messages || boundary.issues).map((message) => <li key={message}>{message}</li>)}</ul>
+            )}
+            <button
+              type="button"
+              className="ambient-client-overview__secondary"
+              data-ambient-action-id={refreshAction.id}
+              disabled={!refreshAction.enabled}
+              title={refreshAction.disabledReason || undefined}
+              onClick={refresh}
+            >
+              {model.boundary?.loading ? "Refreshing…" : refreshAction.outcomeLabel}
+            </button>
+          </div>
+        </aside>
+      </details>
 
       {recordSections && (
         <details
@@ -1120,6 +1389,7 @@ export function AmbientClientRelationship({
           <div className="ambient-client-overview__record-body">{recordSections}</div>
         </details>
       )}
+      </div>
     </section>
   );
 }

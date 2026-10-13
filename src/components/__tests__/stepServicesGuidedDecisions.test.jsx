@@ -1,7 +1,7 @@
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, test } from "vitest";
-import { StepServices } from "../WizardSteps";
+import { StepEvent, StepServices } from "../WizardSteps";
 
 const catalog = {
   packages: [{ id: "classic", name: "Classic", ppp: 18 }],
@@ -43,6 +43,28 @@ function renderStep(props = {}) {
   );
 }
 
+function renderEventStep({ eventTypes, eventTypeId = "", settings = {}, styles = [] }) {
+  return renderToStaticMarkup(
+    <StepEvent
+      form={{
+        eventTypeId,
+        date: "",
+        time: "",
+        hours: 4,
+        guests: 0,
+        servers: 0,
+        chefs: 0,
+        bartenders: 0,
+        includeDisposables: false
+      }}
+      setForm={() => {}}
+      styles={styles}
+      settings={settings}
+      eventTypes={eventTypes}
+    />
+  );
+}
+
 describe("StepServices pilot guided-selling decide cards", () => {
   test("keeps the existing recommendation panel while the flag is off", () => {
     const markup = renderStep({ pilotGuidedSelling: false });
@@ -68,4 +90,59 @@ describe("StepServices pilot guided-selling decide cards", () => {
     expect(markup).toContain(">Auto<");
     expect(markup).toContain("disabled");
   });
+
+  test("renders the only package as confirmed read-only instead of a false select", () => {
+    const markup = renderStep();
+
+    expect(markup).toContain('data-choice-field="package-tier"');
+    expect(markup).toContain('data-adaptive-choice-mode="single"');
+    expect(markup).toContain('data-field-state-primary="confirmed"');
+    expect(markup).not.toContain('data-ambient-field="pkg"');
+  });
+
+  test("keeps a real package select only when multiple active offers exist", () => {
+    const markup = renderStep({
+      catalog: {
+        ...catalog,
+        packages: [
+          catalog.packages[0],
+          { id: "deluxe", name: "Deluxe", ppp: 32 }
+        ]
+      }
+    });
+
+    expect(markup).toContain('data-ambient-field="pkg"');
+    expect(markup).toContain('data-choice-control="package-tier"');
+  });
+
+  test("explains why package selection is unavailable when no active offers exist", () => {
+    const markup = renderStep({ catalog: { ...catalog, packages: [] } });
+
+    expect(markup).toContain('data-choice-field="package-tier"');
+    expect(markup).toContain('data-field-state-primary="unknown"');
+    expect(markup).toContain("must publish a current offer");
+    expect(markup).not.toContain('data-choice-control="package-tier"');
+  });
+
+  test("adapts event type selection across zero, one, and multiple choices", () => {
+    const emptyMarkup = renderEventStep({ eventTypes: [] });
+    const singleMarkup = renderEventStep({
+      eventTypes: [{ id: "wedding", name: "Wedding" }],
+      eventTypeId: "wedding"
+    });
+    const multipleMarkup = renderEventStep({
+      eventTypes: [
+        { id: "wedding", name: "Wedding" },
+        { id: "corporate", name: "Corporate" }
+      ],
+      eventTypeId: "wedding"
+    });
+
+    expect(emptyMarkup).toContain('data-field-state-primary="not_provided"');
+    expect(emptyMarkup).toContain("No event types are published");
+    expect(singleMarkup).toContain('data-adaptive-choice-mode="single"');
+    expect(singleMarkup).not.toContain('data-choice-control="event-type"');
+    expect(multipleMarkup).toContain('data-choice-control="event-type"');
+  });
+
 });

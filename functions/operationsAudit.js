@@ -2,7 +2,7 @@ function text(value, max = 160) {
   return String(value || "").trim().slice(0, max);
 }
 
-const OPERATIONS_AUDIT_TAXONOMY_VERSION = 1;
+const OPERATIONS_AUDIT_TAXONOMY_VERSION = 2;
 const OPERATIONS_AUDIT_PROJECTION_LIMIT = 50;
 const OPERATIONS_AUDIT_SOURCE_SAMPLE_LIMIT = 200;
 const STAFF_ROLES = new Set(["admin", "sales"]);
@@ -97,7 +97,12 @@ function roleSummary(roles) {
   return { ...counts, staff: counts.admin + counts.sales };
 }
 
-function receiptActionLog({ executions, roleAuthorityReceipts, organizationId }) {
+function receiptActionLog({
+  executions,
+  roleAuthorityReceipts,
+  resendAcceptanceReceipts,
+  organizationId
+}) {
   const rows = [];
   executions.forEach((execution) => {
     const occurredAtISO = iso(execution?.completedAtISO);
@@ -159,6 +164,37 @@ function receiptActionLog({ executions, roleAuthorityReceipts, organizationId })
       evidenceClass: "immutable_receipt"
     });
   });
+
+  resendAcceptanceReceipts.forEach((receipt) => {
+    const requestId = text(receipt?.requestId || receipt?.id, 80).toLowerCase();
+    const receiptOrganizationId = text(receipt?.organizationId);
+    const state = text(receipt?.state, 40).toLowerCase();
+    const occurredAtISO = iso(receipt?.acceptedAtISO || receipt?.failedAtISO || receipt?.requestedAtISO);
+    const recipientEmail = text(receipt?.recipientEmail, 254).toLowerCase();
+    const actorEmail = text(receipt?.actorEmail, 254).toLowerCase();
+    if (
+      receipt?.schemaVersion !== 1
+      || !/^email_test_[a-f0-9]{32}$/.test(requestId)
+      || receiptOrganizationId !== organizationId
+      || !["dispatching", "provider_accepted", "definite_failure", "outcome_unknown"].includes(state)
+      || !occurredAtISO
+      || !recipientEmail
+      || !actorEmail
+    ) {
+      return;
+    }
+    rows.push({
+      id: `resend:${requestId}`,
+      occurredAtISO,
+      action: "resend_acceptance_test",
+      state,
+      targetEmail: recipientEmail,
+      actorEmail,
+      actorRole: "admin",
+      authority: "server_receipt",
+      evidenceClass: "immutable_receipt"
+    });
+  });
   return rows;
 }
 
@@ -201,6 +237,7 @@ function buildOperationsAuditSnapshot({
   quotes = [],
   executions = [],
   roleAuthorityReceipts = [],
+  resendAcceptanceReceipts = [],
   roles = [],
   settings = {},
   organizationId = "",
@@ -210,6 +247,7 @@ function buildOperationsAuditSnapshot({
   const receiptActions = receiptActionLog({
     executions,
     roleAuthorityReceipts,
+    resendAcceptanceReceipts,
     organizationId: text(organizationId)
   });
   const legacyActions = legacyActionLog({ quotes, settings, roles });
@@ -223,7 +261,11 @@ function buildOperationsAuditSnapshot({
     roles: roleSummary(roles),
     security: {
       taxonomyVersion: OPERATIONS_AUDIT_TAXONOMY_VERSION,
-      inScopeActionTypes: ["organization_role_change", "quote_approval_execution"],
+      inScopeActionTypes: [
+        "organization_role_change",
+        "quote_approval_execution",
+        "resend_acceptance_test"
+      ],
       receiptBackedActionCount: receiptActions.length,
       legacyObservationCount: legacyActions.length,
       projectionLimit: OPERATIONS_AUDIT_PROJECTION_LIMIT,

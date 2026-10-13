@@ -2,6 +2,7 @@ import {
   normalizeEventHours,
   resolveFirstValidPackageId
 } from "./wizardUi";
+import { buildCommercialAmendmentContext } from "./commercialAmendmentContext";
 
 function text(value) {
   return String(value ?? "").trim();
@@ -66,6 +67,16 @@ export function hydrateSavedQuoteDraftBase({
       reason: "The selected quote has no stable identifier.",
       consequence: "No editor route opened and the current work remains unchanged.",
       nextResolution: "Return to Opportunities and select a valid saved quote."
+    });
+  }
+  const commercialAmendment = buildCommercialAmendmentContext(quote);
+  if (!commercialAmendment.editable) {
+    return immutableQuoteDraftValue({
+      ok: false,
+      code: "quote_lifecycle_not_editable",
+      reason: `${commercialAmendment.protocol.label}. ${commercialAmendment.protocol.explanation}`,
+      consequence: "No editable draft was opened, and the saved commitment and its historical evidence remain unchanged.",
+      nextResolution: commercialAmendment.protocol.nextAction
     });
   }
   const patch = normalizedPatch || { values: {}, fields: [], source: "" };
@@ -188,7 +199,8 @@ export function hydrateSavedQuoteDraftBase({
       selection: record(quote.selection) ? { ...quote.selection } : {},
       baseForm: { ...form },
       rebooking: record(quote.rebooking) ? { ...quote.rebooking } : null,
-      portalDecision: record(quote.portalDecision) ? { ...quote.portalDecision } : null
+      portalDecision: record(quote.portalDecision) ? { ...quote.portalDecision } : null,
+      commercialAmendment
     }
   });
 }

@@ -1,13 +1,13 @@
 # QuotePilot Package Workspace Program
 
 Status: MVP locally complete; later domain phases gated
-Last updated: 2026-08-29 01:20:25 CDT
+Last updated: 2026-09-04 21:58:00 CDT
 Owner: Product and engineering
 
 ## Purpose
 
-Replace the current `Library -> Packages` relational form with a workflow-first
-workspace where an operator can answer, in about five seconds:
+Present the existing Package Workspace through `Library -> Offers` as a
+workflow-first workspace where an operator can answer, in about five seconds:
 
 > What am I selling, what does it include, is it profitable, is it ready, and
 > what should I do next?
@@ -16,12 +16,27 @@ This program does not introduce a commercial simulation engine, executable
 offer test suite, or AI-owned pricing logic.
 
 Current source status: the current-schema MVP is discoverable in `Library ->
-Packages`. It includes a stable package navigator, selected-package overview,
-deterministic health, reviewed Apply/Cancel inclusion selectors, readiness-
-gated activation, dependency-aware deletion, package-level revert, and one
-in-flow staged save bar. Focused tests and fresh local browser acceptance at
-390, 768, and 1440 pixels pass. Hosted role acceptance, deployment, production
-data, human comprehension, and later Phase 5/6 scope remain open.
+Offers` while retaining Package as the stored catering record type. The
+selected presentation uses a compact stable-ID Offer navigator and one broad
+selected-Offer workspace. Identity, price, quoting availability, included
+components, derived margin, and one deterministic next action lead; detailed
+cost/contribution, readiness evidence, immutable identity, revision, pricing
+confirmation, and quote behavior remain under secondary disclosures rather
+than a permanent health rail. Recorded choice groups project read-only with
+their attention state; this workspace does not author them or claim native
+quote selection. Reviewed Apply/Cancel inclusion selectors, readiness-gated activation,
+dependency-aware deletion, Offer-scoped revert, and the one in-flow staged save
+bar retain their existing authority. Prior Package Workspace tests and browser
+acceptance remain historical evidence for the earlier presentation. Current
+local Chromium evidence passes Ambient Library 17/17 and Calm Four 10/10 with
+`VITE_OPERATIONAL_STAFFING_ENABLED=true`; exact 390/768/1440 captures and
+combined comparisons received a **9.5/10 — GO** local visual-review verdict.
+The exact rendered implementation is local commit
+`b593fe4d2c45ff5db20bafe205461157952b9ab4`. Full unit, build, bundle,
+capability/document governance, and CWV checks pass; `check:env` and therefore
+the aggregate release lane remain blocked by six absent local Firebase web
+configuration values. Hosted role acceptance, deployment, production data, human
+comprehension, and later Phase 5/6 scope remain open.
 
 ## Canonical Documents
 
@@ -36,13 +51,16 @@ data, human comprehension, and later Phase 5/6 scope remain open.
 ## Evidence Boundary
 
 The baseline diagnosis is grounded in the supplied Package Settings screenshot
-and current source. The implemented MVP has fresh local real-route browser
-evidence at 390, 768, and 1440 pixels: zero Axe violations, zero document or
-workspace overflow, no visible target below 44 pixels, mobile search-sheet
-focus, Escape cancellation/focus restoration, staged Apply, dirty package
-switching, activation blocking, dependency review, and package revert. This is
-not authenticated hosted-role, deployment, production-data, or human-
-comprehension evidence.
+and source at the original MVP checkpoint. That implementation had local
+real-route browser evidence at 390, 768, and 1440 pixels for Axe, overflow,
+44-pixel targets, mobile search-sheet focus, Escape cancellation/focus
+restoration, staged Apply, dirty Package switching, activation blocking,
+dependency review, and Package revert. The selected Offer presentation now
+has worktree-local 390/768/1440 captures, combined comparisons, and the 17-case
+Ambient Library browser result. They are bound to rendered implementation
+`b593fe4d2c45ff5db20bafe205461157952b9ab4`. Neither evidence set establishes
+authenticated hosted roles, deployment, production-data correctness, or human
+comprehension.
 
 ## Existing Experience Diagnosis
 
@@ -57,7 +75,7 @@ comprehension evidence.
 - Cost values preserve the difference between missing and recorded zero, which
   supports fail-closed margin presentation.
 
-### Visual and presentation defects
+### Baseline visual and presentation defects
 
 - Every package expands into a large form, so the page has no usable overview
   of price, cost, margin, readiness, or package differentiation.
@@ -104,13 +122,13 @@ comprehension evidence.
 
 | Stage | QuotePilot package workflow |
 |---|---|
-| Actor | Catering owner, catalog administrator, sales administrator, or operations manager with existing Library authority |
+| Actor | A catalog administrator edits; authorized admin and sales staff inspect under the existing Library role boundary |
 | Intent | Understand and safely prepare a package for quoting |
 | Business object | One organization-scoped catalog package plus its referenced menu, add-on, and rental records |
 | State | Persisted lifecycle, derived readiness, draft state, catalog revision, and pricing-confirmation state |
 | Blocker | Missing name/price/cost, unavailable references, no eligible event context, stale revision, unresolved draft, or missing pricing confirmation |
 | Authority | Existing role-gated Library route and `saveCatalog`; authoritative pricing remains server-owned |
-| Action | Edit identity/economics, add or remove inclusions, resolve warnings, save draft, then explicitly activate when ready |
+| Action | Administrators edit identity/economics, add or remove inclusions, resolve warnings, save the draft, and explicitly activate when ready; sales remains read-only |
 | State transition | Clean -> dirty -> saving -> saved, or conflict/recovery; lifecycle changes are separate guarded intents |
 | Proof | Exact catalog revision, save receipt/reconciliation outcome, derived readiness reasons, and unchanged authoritative pricing result for legacy fields |
 | Next best action | One deterministic action selected from the highest-severity unresolved readiness reason |
@@ -119,20 +137,21 @@ comprehension evidence.
 
 The first viewport follows this order:
 
-1. Identity: which package is selected and what customer promise it represents.
-2. Economics: selling price, recorded cost, contribution, and margin status.
-3. Readiness: whether QuotePilot can recommend activation and why.
-4. Composition: what is included now, summarized before editing controls.
-5. Eligibility: where the package may be offered, when that data exists.
-6. Quote behavior: exactly what Quote Builder will allow and charge.
-7. Action: the single highest-value next step.
+1. Identity: which Offer is selected and which Package record it represents.
+2. Price and availability: what it sells for and whether it can be quoted.
+3. Action: the single highest-value next decision.
+4. Composition: which Menu, Service/Add-on, and Rental components are included.
+5. Economics and readiness: the derived margin outcome remains in the summary;
+   recorded cost, contribution detail, and deterministic reasons are disclosed.
+6. Record and quote behavior: stable Package ID, revision, pricing confirmation,
+   and exactly what Quote Builder will allow and charge under disclosure.
 
 ## Product Decisions
 
-- Use three desktop zones: Package Navigator, Selected Package Workspace, and
-  Package Health.
-- Use a single-column workspace with a package switcher and collapsible health
-  summary on mobile.
+- Use two desktop zones: a compact Offer Navigator and one broad Selected Offer
+  Workspace. Do not keep a permanent Package Health rail.
+- Use a single-column workspace with an Offer switcher and the existing full-
+  viewport inclusion picker on mobile. Preserve the desktop semantic order.
 - Keep staged editing. Show `Unsaved changes`, `Saving`, `Saved`, `Conflict`, or
   `Save failed`; show Save and Revert only while the draft is dirty.
 - Separate persisted lifecycle (`draft`, `active`, `archived`) from derived
@@ -146,9 +165,17 @@ The first viewport follows this order:
 
 ## Delivery State
 
-The discoverable role-safe surface and executable local state tests now ship
-together in source, so the Feature Matrix and User Manual describe the MVP at
-that proof level. Phase 5 lifecycle persistence and Phase 6 eligibility, rules,
-preview, and comparison remain contract changes requiring separate approval.
-Do not call the program deployed or accepted until hosted roles, production
-data, release receipts, and operator acceptance are independently recorded.
+The discoverable role-safe surface and executable local state tests remain
+together in source. The selected Library convergence changes presentation only:
+Package records appear as Offers, the permanent health rail is removed, and
+secondary evidence is disclosed without changing lifecycle, readiness,
+inclusions, persistence, or pricing authority. The Feature Matrix and User
+Manual describe that source boundary. Local responsive/browser and visual-review
+evidence has passed against exact rendered implementation
+`b593fe4d2c45ff5db20bafe205461157952b9ab4`. The environment-dependent
+aggregate release lane remains blocked as described above. Phase 5 lifecycle
+persistence and Phase 6 eligibility,
+rules, preview, and comparison remain contract changes requiring separate
+approval. Do not call the program deployed or accepted until hosted roles,
+production data, release receipts, and operator acceptance are independently
+recorded.

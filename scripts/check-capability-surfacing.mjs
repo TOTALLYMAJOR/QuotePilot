@@ -37,6 +37,7 @@ const CAPABILITY_KINDS = new Set([
   "read_surface",
   "mutation_surface",
   "mixed_surface",
+  "presentation_surface",
   "headless_operational",
   "security_private",
   "developer_infrastructure"
@@ -70,10 +71,13 @@ const ALLOWED_CONTRACT_FIELDS = new Set([
   "surfaceReviewNote",
   "stateEvidence",
   "stateExceptions",
+  "surfaceId",
+  "surfaceStates",
   "headlessReason",
   "safeOutcome"
 ]);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const GIT_OUTPUT_MAX_BUFFER_BYTES = 8 * 1024 * 1024;
 const FUNCTIONS_ENTRYPOINT_PATH = "functions/index.js";
 const FUNCTION_EXPORT_DECLARATION_PATTERN = /^[\t ]*exports\.([A-Za-z_$][A-Za-z0-9_$]*)\s*=(?!=|>)/gm;
 const MUTATION_EXPORT_NAME_PATTERN = /^(?:accept|activate|apply|approve|archive|book|cancel|charge|claim|close|confirm|convert|create|deactivate|decline|delete|dispatch|duplicate|ensure|expire|finalize|hardDelete|invite|link|mark|mutate|notify|pay|persist|provision|publish|purge|reconcile|record|refund|reopen|repair|request|reschedule|rollback|rotate|save|schedule|send|set|sign|submit|sync|update|upsert|void|write)/i;
@@ -92,6 +96,8 @@ const CLIENT_PRESENTATION_EXCLUSIONS = new Set([
   "src/context/WorkspaceNavigationContext.jsx",
   "src/hooks/useBrowserLocation.js",
   "src/hooks/useCommercialWorkspaceSnapshot.js",
+  "src/hooks/useDisclosureRefreshAnchor.js",
+  "src/hooks/useReducedMotionPreference.js",
   "src/hooks/useWorkspaceRouteHeadingFocus.js",
   "src/lib/aiui01CompatibilityBaseline.js",
   "src/lib/ambientContracts.js",
@@ -103,9 +109,12 @@ const CLIENT_PRESENTATION_EXCLUSIONS = new Set([
   "src/lib/ambientPricingPreview.js",
   "src/lib/ambientQuoteDraftPatch.js",
   "src/lib/ambientSignals.js",
+  "src/lib/commercialConsequenceNavigation.js",
   "src/lib/impactPreviewAdapter.js",
   "src/lib/quoteDraftRuntime.js",
   "src/lib/quoteDraftRuntimeBase.js",
+  "src/lib/routeFonts.js",
+  "src/lib/routePerformance.js",
   "src/lib/statusSemantics.js",
   "src/lib/workspacePresentation.js",
   "src/lib/workspaceRoutes.js",
@@ -520,6 +529,9 @@ function validateLocators({
       const segment = stripComments(executableTestSegment(content, locator));
       const assertionOccurrences = countStringLiteralValueOccurrences(segment, assertionLocator);
       const canonicalAssertionCount = countCanonicalStateAssertions(segment, assertionLocator);
+      if (contract.surfaceId && countCanonicalStateAssertions(segment, `data-capability-id="${contract.surfaceId}"`) !== 1) {
+        errors.push(`${contract.id}: ${field}[${index}] must assert its own surface ID exactly once in the same executable test as the state.`);
+      }
       if (
         assertionLocator.length < 12
         || assertionOccurrences !== 1
@@ -542,7 +554,17 @@ function requiredStatesForCapability(capabilityKind) {
 }
 
 function validateStateEvidence({ contract, testPaths, pathExists, readPath, errors }) {
-  const requiredStates = requiredStatesForCapability(contract.capabilityKind);
+  const presentation = contract.capabilityKind === "presentation_surface";
+  const declared = stringList(contract.surfaceStates);
+  const allowed = new Set([...REQUIRED_USER_STATES, "blocked", "review_required", "sendable", "sent", "accepted", "idle", "failure", "unavailable"]);
+  if (presentation && (!contract.surfaceId || !declared.length || declared.some((state) => !allowed.has(state)) || new Set(declared).size !== declared.length)) {
+    errors.push(`${contract.id}: presentation surfaces require an exact surfaceId and a unique supported surfaceStates list.`);
+  }
+  if (!presentation && contract.surfaceStates) errors.push(`${contract.id}: read and mutation surfaces cannot override their required state model.`);
+  if (contract.surfaceId && !locatorList(contract.entryPointLocators).some((entry) => entry.locator === `data-capability-id="${contract.surfaceId}"`)) {
+    errors.push(`${contract.id}: surfaceId must match a canonical entry-point marker.`);
+  }
+  const requiredStates = presentation ? declared : requiredStatesForCapability(contract.capabilityKind);
   const requiredStateSet = new Set(requiredStates);
   const stateExceptions = contract?.stateExceptions && typeof contract.stateExceptions === "object"
     && !Array.isArray(contract.stateExceptions)
@@ -863,6 +885,9 @@ export function validateCapabilitySurfacing({
     if (!CAPABILITY_KINDS.has(contract?.capabilityKind)) {
       errors.push(`${contract.id}: capabilityKind is not recognized.`);
     }
+    if (contract?.capabilityKind === "presentation_surface" && stringList(contract.backendExports).length) {
+      errors.push(`${contract.id}: presentation surfaces cannot own callable exports; retain read or mutation exports in their authority contract.`);
+    }
     if (contract?.deliveryType === "user_relevant" && HEADLESS_KINDS.has(contract?.capabilityKind)) {
       errors.push(`${contract.id}: headless capability kinds cannot be user_relevant.`);
     }
@@ -1010,7 +1035,8 @@ function runGit(args, { allowFailure = false } = {}) {
     return execFileSync("git", args, {
       cwd: ROOT,
       encoding: "utf8",
-      stdio: ["ignore", "pipe", "pipe"]
+      stdio: ["ignore", "pipe", "pipe"],
+      maxBuffer: GIT_OUTPUT_MAX_BUFFER_BYTES
     }).trim();
   } catch (error) {
     if (allowFailure) return "";

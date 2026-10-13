@@ -6,6 +6,8 @@ import { describe, expect, test } from "vitest";
 import {
   RELEASE_CANDIDATE_POLICY,
   RELEASE_CANDIDATE_PROVIDER_UAT_PROFILE,
+  RELEASE_CANDIDATE_EVENT_SPINE_UAT_PROFILE,
+  candidateEventSpineRequirements,
   RELEASE_CANDIDATE_STAFFING_UAT_PROFILE,
   RELEASE_CANDIDATE_UAT_PROFILE,
   CANDIDATE_REQUIRED_SECRET_METADATA,
@@ -26,10 +28,13 @@ import {
 } from "../../../scripts/release-candidate-policy.mjs";
 import {
   buildVercelOutputConfig,
+  writeCandidateManifest,
   collectVercelBuildFiles,
   isEnabledFirebaseSecretVersion,
   providerRequestHeaders,
   resolveGitHubToken,
+  retryFirebaseProviderReadback,
+  validateFunctionsDependencyInstall,
   validateHostedManifest,
   vercelAutomationBypassToken,
   vercelDeploymentPayload
@@ -118,6 +123,31 @@ describe("governed release candidate deployment", () => {
     })).toThrow(/GITHUB_TOKEN, GH_TOKEN, or an authenticated GitHub CLI session/i);
   });
 
+  test("rejects an incomplete Functions dependency install before provider work", () => {
+    expect(validateFunctionsDependencyInstall({
+      root: "/tmp/quotepilot-release-fixture",
+      inspect: (_command, args) => ({
+        status: 0,
+        stdout: JSON.stringify({
+          dependencies: {
+            "firebase-functions": { version: "7.3.2" }
+          }
+        }),
+        args
+      })
+    })).toMatchObject({
+      source: "npm dependency tree",
+      packageName: "firebase-functions",
+      version: "7.3.2"
+    });
+    expect(() => validateFunctionsDependencyInstall({
+      inspect: () => ({ status: 1, stdout: "{}" })
+    })).toThrow(/npm ci --prefix functions/i);
+    expect(() => validateFunctionsDependencyInstall({
+      inspect: () => ({ status: 0, stdout: "{}" })
+    })).toThrow(/firebase-functions is unavailable/i);
+  });
+
   test("binds Firebase Rules user-ADC requests to the fixed staging quota project", () => {
     expect(providerRequestHeaders({
       token: "opaque-token",
@@ -165,6 +195,10 @@ describe("governed release candidate deployment", () => {
   });
 
   test("uses fixed provider identities and SHA-bound confirmations", () => {
+    expect(RELEASE_CANDIDATE_POLICY.repository).toEqual({
+      id: 1167899098,
+      fullName: "TOTALLYMAJOR/QuotePilot"
+    });
     expect(RELEASE_CANDIDATE_POLICY.firebase.projectId).toBe("quotepilot-staging-20260804");
     expect(RELEASE_CANDIDATE_POLICY.vercel.projectName).toBe("quoteflow");
     expect(candidateConfirmation("firebase-all", SHA)).toContain(`quotepilot-staging-20260804 ${SHA}`);
@@ -200,7 +234,14 @@ describe("governed release candidate deployment", () => {
       "REVENUE_AUTOPILOT_TOKEN_SECRET",
       "SMS_CONTACT_DIGEST_SECRET",
       "STRIPE_SECRET_KEY",
-      "TWILIO_AUTH_TOKEN"
+      "TWILIO_AUTH_TOKEN",
+      "INQUIRY_TURNSTILE_SECRET",
+      "INQUIRY_RATE_LIMIT_SECRET",
+      "GOOGLE_CALENDAR_OAUTH_CLIENT_ID",
+      "GOOGLE_CALENDAR_OAUTH_CLIENT_SECRET",
+      "GOOGLE_CALENDAR_OAUTH_STATE_SECRET",
+      "GOOGLE_CALENDAR_TOKEN_ENCRYPTION_KEY",
+      "INTENT_PARSER_OPENAI_KEY"
     ]));
     const source = fs.readFileSync(SCRIPT, "utf8");
     expect(source).toContain('"functions:secrets:get"');
@@ -236,6 +277,7 @@ describe("governed release candidate deployment", () => {
     );
     const rulesPreflightOffset = source.lastIndexOf("await readFirebaseRulesReleases(firebaseRulesAccessToken)");
     const vercelPreflightOffset = source.lastIndexOf("await validateVercelProjectAccess(vercelToken)");
+    const functionsDependencyOffset = source.lastIndexOf("validateFunctionsDependencyInstall()");
     const reserveOffset = source.lastIndexOf("reservation = reserveCandidateReceipt");
     const mutationOffset = source.indexOf("attempt.providerMutationAttempted = true");
     const firebaseMutation = source.slice(mutationOffset, source.indexOf("response = parseJsonOutput", mutationOffset));
@@ -246,6 +288,8 @@ describe("governed release candidate deployment", () => {
     expect(reserveOffset).toBeGreaterThan(providerSafeOffOffset);
     expect(reserveOffset).toBeGreaterThan(rulesPreflightOffset);
     expect(reserveOffset).toBeGreaterThan(vercelPreflightOffset);
+    expect(functionsDependencyOffset).toBeGreaterThan(0);
+    expect(reserveOffset).toBeGreaterThan(functionsDependencyOffset);
     expect(firebaseMutation).toContain("capture(firebaseCliPath");
     expect(firebaseMutation).not.toContain('capture("npx"');
     expect(firebaseMutation).not.toContain("FIREBASE_TOOLS");
@@ -257,6 +301,7 @@ describe("governed release candidate deployment", () => {
       .toMatchObject({
         AUTH_PLATFORM_ADMIN_EMAILS: "flightcontrol@quietpilot.us",
         OPERATIONAL_STAFFING_AUTHORITY_ENABLED: "false",
+        INQUIRY_SHOWCASE_ENABLED: "false",
         platformAdminCount: 1
       });
     expect(() => validateCandidateFunctionsEnvironment(functionsEnvironment({
@@ -281,6 +326,18 @@ describe("governed release candidate deployment", () => {
     expect(() => validateCandidateFunctionsEnvironment(functionsEnvironment({
       TWILIO_ACCOUNT_SID: "disabled-provider-residue"
     }))).toThrow(/must be empty/i);
+    expect(() => validateCandidateFunctionsEnvironment(functionsEnvironment({
+      INQUIRY_TURNSTILE_HOSTNAMES: "quotepilot-staging-20260804.web.app"
+    }))).toThrow(/must be empty/i);
+    expect(() => validateCandidateFunctionsEnvironment(functionsEnvironment({
+      INQUIRY_TURNSTILE_SECRET: "plaintext-fixture"
+    }))).toThrow(/Secret Manager/i);
+    expect(() => validateCandidateFunctionsEnvironment(functionsEnvironment({
+      GOOGLE_CALENDAR_OAUTH_CLIENT_SECRET: "plaintext-fixture"
+    }))).toThrow(/Secret Manager/i);
+    expect(() => validateCandidateFunctionsEnvironment(functionsEnvironment({
+      INTENT_PARSER_OPENAI_KEY: "plaintext-fixture"
+    }))).toThrow(/Secret Manager/i);
   });
 
   test("opens only the controlled test-provider profile and rejects browser test keys", () => {
@@ -321,7 +378,9 @@ describe("governed release candidate deployment", () => {
     )).toMatchObject({
       VITE_BUYER_ACCESS_ENABLED: "true",
       VITE_BUYER_ACCESS_PUBLIC_CTA_ENABLED: "true",
-      VITE_BUYER_ACCESS_TURNSTILE_SITE_KEY: "0x4AAAAAReviewedStagingKey123"
+      VITE_BUYER_ACCESS_TURNSTILE_SITE_KEY: "0x4AAAAAReviewedStagingKey123",
+      VITE_INQUIRY_SHOWCASE_ENABLED: "false",
+      VITE_INQUIRY_TURNSTILE_SITE_KEY: ""
     });
     expect(() => validateCandidateBrowserEnvironment({
       ...browser,
@@ -610,10 +669,13 @@ describe("governed release candidate deployment", () => {
       VITE_PILOT_DECISION_ROOM_ENABLED: "true",
       VITE_AMBIENT_UI_ENABLED: "true",
       VITE_OPERATIONAL_STAFFING_ENABLED: "true",
+      VITE_INVENTORY_AUTHORITY_ENABLED: "true",
       VITE_PILOT_MEMORY_ENABLED: "false",
       VITE_PILOT_MODEL_ENABLED: "false",
       VITE_BUYER_ACCESS_ENABLED: "false",
       VITE_BUYER_ACCESS_PUBLIC_CTA_ENABLED: "false",
+      VITE_INQUIRY_SHOWCASE_ENABLED: "false",
+      VITE_INQUIRY_TURNSTILE_SITE_KEY: "",
       VITE_E2E_BYPASS_AUTH: "false",
       VITE_USE_FIREBASE_EMULATORS: "false",
       VITE_ALLOW_LOCAL_CATALOG_FALLBACK: "false",
@@ -625,6 +687,16 @@ describe("governed release candidate deployment", () => {
       encoding: "utf8"
     });
     expect(candidate.status).toBe(0);
+    const inquiryResidue = spawnSync(process.execPath, [path.join(ROOT, "scripts", "check-env.mjs")], {
+      cwd: ROOT,
+      env: {
+        ...stagingEnv,
+        VITE_INQUIRY_TURNSTILE_SITE_KEY: "public-inquiry-key-fixture"
+      },
+      encoding: "utf8"
+    });
+    expect(inquiryResidue.status).not.toBe(0);
+    expect(inquiryResidue.stderr).toMatch(/must remain empty/i);
     const defaultProfile = spawnSync(process.execPath, [path.join(ROOT, "scripts", "check-env.mjs")], {
       cwd: ROOT,
       env: { ...stagingEnv, QUOTEPILOT_BUILD_PROFILE: "" },
@@ -716,6 +788,37 @@ describe("governed release candidate deployment", () => {
     expect(manifestUrl).toBe("https://candidate.example/release-candidate.json");
     expect(fetchCount).toBe(31);
     expect(waitCount).toBe(30);
+  });
+
+  test("retries bounded Firebase provider readback while deployed revisions converge", async () => {
+    let readCount = 0;
+    let waitCount = 0;
+    const evidence = { functions: { functionCount: 152 } };
+    const result = await retryFirebaseProviderReadback({
+      readProviderEvidence: async () => {
+        readCount += 1;
+        if (readCount < 3) throw new Error("provider revision is still converging");
+        return evidence;
+      },
+      attempts: 3,
+      delayMs: 1,
+      wait: async () => { waitCount += 1; }
+    });
+    expect(result).toBe(evidence);
+    expect(readCount).toBe(3);
+    expect(waitCount).toBe(2);
+  });
+
+  test("preserves the last Firebase readback failure after the bounded retry window", async () => {
+    const errors = [new Error("first"), new Error("final")];
+    let readCount = 0;
+    await expect(retryFirebaseProviderReadback({
+      readProviderEvidence: async () => { throw errors[readCount++]; },
+      attempts: 2,
+      delayMs: 0,
+      wait: async () => {}
+    })).rejects.toBe(errors[1]);
+    expect(readCount).toBe(2);
   });
 
   test("builds a deterministic Vercel Build Output v3 payload without a runtime CLI", () => {
@@ -811,5 +914,84 @@ describe("governed release candidate deployment", () => {
       source.indexOf("await deployFirebase(context)")
     );
     expect(source).toContain('status: attempt.providerMutationAttempted ? "partial" : "failed"');
+  });
+});
+
+
+describe("isolated Event Operating Spine candidate profile", () => {
+  function browserEnvironment() {
+    const firebase = RELEASE_CANDIDATE_POLICY.firebase;
+    return { VITE_FIREBASE_API_KEY: "public-test-web-config", VITE_FIREBASE_PROJECT_ID: firebase.projectId,
+      VITE_FIREBASE_AUTH_DOMAIN: firebase.authDomain, VITE_FIREBASE_STORAGE_BUCKET: firebase.storageBucket,
+      VITE_FIREBASE_MESSAGING_SENDER_ID: firebase.messagingSenderId, VITE_FIREBASE_APP_ID: firebase.appId };
+  }
+  test("event candidate profile binds explicit server browser and separate tenant gates without changing old profiles", () => {
+    const oldRuntime = candidateFunctionsRuntimeExpected(RELEASE_CANDIDATE_UAT_PROFILE);
+    const staffing = candidateFunctionsRuntimeExpected(RELEASE_CANDIDATE_STAFFING_UAT_PROFILE);
+    expect(staffing).toEqual({ ...oldRuntime, OPERATIONAL_STAFFING_AUTHORITY_ENABLED: "true" });
+    expect(oldRuntime).not.toHaveProperty("EVENT_OPERATING_SPINE_ENABLED");
+    expect(staffing).not.toHaveProperty("EVENT_OPERATING_SPINE_ENABLED");
+    expect(candidateFunctionsRuntimeExpected(RELEASE_CANDIDATE_PROVIDER_UAT_PROFILE)).not.toHaveProperty("EVENT_OPERATING_SPINE_ENABLED");
+    expect(() => validateCandidateFunctionsEnvironment({ ...candidateFunctionsRuntimeExpected(RELEASE_CANDIDATE_PROVIDER_UAT_PROFILE), EVENT_OPERATING_SPINE_ENABLED: "true" }, RELEASE_CANDIDATE_PROVIDER_UAT_PROFILE)).toThrow(/unreviewed variables/);
+    expect(() => validateCandidateFunctionsEnvironment(functionsEnvironment({ EVENT_OPERATING_SPINE_ENABLED: "true" }))).toThrow(/unreviewed variables/);
+    const runtime = candidateFunctionsRuntimeExpected(RELEASE_CANDIDATE_EVENT_SPINE_UAT_PROFILE);
+    expect(runtime).toEqual({
+      ...oldRuntime,
+      OPERATIONAL_STAFFING_AUTHORITY_ENABLED: "true",
+      EVENT_OPERATING_SPINE_ENABLED: "true",
+      COMMERCIAL_CHANGE_AUTHORITY_ENABLED: "true",
+      INVENTORY_AUTHORITY_ENABLED: "true",
+      TENANT_WORKFLOW_ORGANIZATION_ID: "mm05366-sandbox"
+    });
+    expect(runtime).toMatchObject({ NOTIFICATIONS_EMAIL_PROVIDER: "none", NOTIFICATIONS_SMS_PROVIDER: "none", REVENUE_AUTOPILOT_SENDS_ENABLED: "false", BUYER_ACCESS_ENABLED: "false", COMMERCIAL_CHANGE_AUTHORITY_ENABLED: "true" });
+    const oldBrowser = validateCandidateBrowserEnvironment(browserEnvironment());
+    expect(validateCandidateBrowserEnvironment(browserEnvironment(), RELEASE_CANDIDATE_STAFFING_UAT_PROFILE)).toEqual(oldBrowser);
+    expect(oldBrowser).not.toHaveProperty("VITE_EVENT_OPERATING_SPINE_ENABLED");
+    expect(validateCandidateBrowserEnvironment(browserEnvironment(), RELEASE_CANDIDATE_EVENT_SPINE_UAT_PROFILE)).toEqual({ ...oldBrowser, VITE_EVENT_OPERATING_SPINE_ENABLED: "true" });
+    expect(validateCandidateBrowserEnvironment(browserEnvironment(), RELEASE_CANDIDATE_EVENT_SPINE_UAT_PROFILE).VITE_AMBIENT_UI_ENABLED).toBe("true");
+    expect(() => validateCandidateFunctionsEnvironment(functionsEnvironment(), RELEASE_CANDIDATE_EVENT_SPINE_UAT_PROFILE)).toThrow(/COMMERCIAL_CHANGE_AUTHORITY_ENABLED|EVENT_OPERATING_SPINE_ENABLED/);
+    expect(validateCandidateFunctionsEnvironment({ ...runtime }, RELEASE_CANDIDATE_EVENT_SPINE_UAT_PROFILE)).toMatchObject({
+      EVENT_OPERATING_SPINE_ENABLED: "true",
+      COMMERCIAL_CHANGE_AUTHORITY_ENABLED: "true",
+      OPERATIONAL_STAFFING_AUTHORITY_ENABLED: "true",
+      INVENTORY_AUTHORITY_ENABLED: "true",
+      TENANT_WORKFLOW_ORGANIZATION_ID: "mm05366-sandbox"
+    });
+    expect(() => validateCandidateFunctionsEnvironment({
+      ...runtime,
+      TENANT_WORKFLOW_ORGANIZATION_ID: "another-organization"
+    }, RELEASE_CANDIDATE_EVENT_SPINE_UAT_PROFILE)).toThrow(/TENANT_WORKFLOW_ORGANIZATION_ID/);
+    const requirements = candidateEventSpineRequirements(RELEASE_CANDIDATE_EVENT_SPINE_UAT_PROFILE);
+    expect(requirements).toMatchObject({ tenantActivationIncluded: false, tenantSelectionRequired: true, operatorAcceptanceEstablished: false,
+      tenantGate: { field: "eventOperatingSpineEnabled", requiredValue: true, availability: "not_yet_available", observedValue: null } });
+    expect(requirements.commercialServerFlag).toEqual({ name: "COMMERCIAL_CHANGE_AUTHORITY_ENABLED", value: true });
+    expect(requirements.commercialTenantGate).toMatchObject({ field: "commercialChangeAuthorityEnabled", requiredValue: true, observedValue: null, availability: "not_yet_available" });
+    expect(oldRuntime.COMMERCIAL_CHANGE_AUTHORITY_ENABLED).toBe("false");
+    expect(staffing.COMMERCIAL_CHANGE_AUTHORITY_ENABLED).toBe("false");
+    expect(() => validateCandidateFunctionsEnvironment({
+      ...runtime,
+      COMMERCIAL_CHANGE_AUTHORITY_ENABLED: "false"
+    }, RELEASE_CANDIDATE_EVENT_SPINE_UAT_PROFILE)).toThrow(/COMMERCIAL_CHANGE_AUTHORITY_ENABLED/);
+    expect(candidateEventSpineRequirements(RELEASE_CANDIDATE_UAT_PROFILE)).toBeNull();
+  });
+  test("event candidate manifest and reserved receipt keep rollout requirements separate from activation proof", () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "event-profile-test-"));
+    try {
+      const runtime = candidateFunctionsRuntimeExpected(RELEASE_CANDIDATE_EVENT_SPINE_UAT_PROFILE);
+      const manifest = writeCandidateManifest(path.join(root, "output"), SHA, 123, RELEASE_CANDIDATE_EVENT_SPINE_UAT_PROFILE, runtime);
+      expect(manifest).toMatchObject({ sourceSha: SHA, eventOperatingSpineBrowserEnabled: true, eventOperatingSpineAuthorityEnabled: true, rolloutRequirements: { tenantActivationIncluded: false } });
+      expect(JSON.parse(fs.readFileSync(path.join(root, "output", "release-candidate.json"), "utf8"))).toEqual(manifest);
+      const reservation = reserveVercelCandidateReceipt(root, RELEASE_CANDIDATE_EVENT_SPINE_UAT_PROFILE);
+      const receipt = JSON.parse(fs.readFileSync(reservation.receiptPath, "utf8"));
+      expect(receipt.rolloutRequirements.tenantGate.observedValue).toBeNull();
+      expect(receipt.providerMutationAttempted).toBe(false);
+      expect(() => updateCandidateReceipt(reservation, { rolloutRequirements: {} })).toThrow(/immutable/);
+      const old = writeCandidateManifest(path.join(root, "old-output"), SHA, 123, RELEASE_CANDIDATE_UAT_PROFILE, candidateFunctionsRuntimeExpected());
+      expect(old).not.toHaveProperty("eventOperatingSpineBrowserEnabled"); expect(old).not.toHaveProperty("rolloutRequirements");
+      const source = fs.readFileSync(SCRIPT, "utf8");
+      expect(source).toContain("candidateBrowserEnvironment(firebaseCliPath, candidateProfile)");
+      expect(source).toMatch(/validateCandidateBrowserEnvironment\(\{[\s\S]*?\.\.\.providerConfig,[\s\S]*?\}, candidateProfile\)/);
+      expect(source).toContain("VITE_EVENT_OPERATING_SPINE_ENABLED: true");
+    } finally { fs.rmSync(root, { recursive: true, force: true }); }
   });
 });

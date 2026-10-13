@@ -4,6 +4,10 @@ import { cloudFunctions, firebaseReady } from "./firebase";
 export const PORTAL_CONVERSATION_BODY_MAX_LENGTH = 1200;
 const GET_CONVERSATION_CALLABLE = "getQuotePortalConversation";
 const SEND_MESSAGE_CALLABLE = "sendQuotePortalConversationMessage";
+const CONVERSATION_LOAD_CACHE_TTL_MS = 30_000;
+const CONVERSATION_LOAD_CACHE_LIMIT = 25;
+const conversationLoadCache = new Map();
+const conversationLoadsInFlight = new Map();
 
 function text(value, maxLength = 500) {
   return String(value ?? "").trim().slice(0, maxLength);
@@ -61,10 +65,24 @@ function normalizeMessage(message = {}) {
   return { messageId, actorType, actorName, body, createdAtISO };
 }
 
+function normalizeConversationCursor(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const createdAtMs = Number(value.createdAtMs);
+  const messageId = strictText(value.messageId, 160);
+  if (
+    !Number.isSafeInteger(createdAtMs)
+    || createdAtMs < 0
+    || !/^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$/.test(messageId)
+  ) return null;
+  return { createdAtMs, messageId };
+}
+
 function normalizeConversationResponse(data = {}) {
   if (data?.ok !== true || !data?.organizationId || !data?.quoteId) {
     throw new Error("Conversation did not return a valid quote scope.");
   }
+  const oldestCursor = normalizeConversationCursor(data?.page?.oldestCursor);
+  const newestCursor = normalizeConversationCursor(data?.page?.newestCursor);
   return {
     organizationId: text(data.organizationId, 160),
     quoteId: text(data.quoteId, 160),
@@ -76,8 +94,58 @@ function normalizeConversationResponse(data = {}) {
       .filter(Boolean),
     limits: data?.limits && typeof data.limits === "object" ? { ...data.limits } : {},
     idempotent: data.idempotent === true,
-    message: normalizeMessage(data.message)
+    message: normalizeMessage(data.message),
+    page: {
+      pageSize: Math.max(0, Math.floor(Number(data?.page?.pageSize) || 0)),
+      returned: Math.max(0, Math.floor(Number(data?.page?.returned) || 0)),
+      hasOlder: data?.page?.hasOlder === true,
+      hasNewer: data?.page?.hasNewer === true,
+      oldestCursor,
+      newestCursor
+    }
   };
+}
+
+function conversationAccessPrefix(payload) {
+  return `${[
+    payload.accessMode,
+    payload.organizationId,
+    payload.quoteId,
+    payload.portalKey
+  ].map((value) => String(value || "").trim()).join(":")}:`;
+}
+
+function conversationLoadKey(payload, cacheScope = "") {
+  return `${conversationAccessPrefix(payload)}${[
+    payload.before?.createdAtMs,
+    payload.before?.messageId,
+    payload.after?.createdAtMs,
+    payload.after?.messageId,
+    strictText(cacheScope, 500)
+  ].map((value) => String(value || "").trim()).join(":")}`;
+}
+
+function invalidateConversationLoadCache(payload) {
+  const prefix = conversationAccessPrefix(payload);
+  for (const key of conversationLoadCache.keys()) {
+    if (key.startsWith(prefix)) conversationLoadCache.delete(key);
+  }
+}
+
+function pruneConversationLoadCache(nowMs = Date.now()) {
+  for (const [key, entry] of conversationLoadCache) {
+    if (nowMs - entry.cachedAtMs > CONVERSATION_LOAD_CACHE_TTL_MS) {
+      conversationLoadCache.delete(key);
+    }
+  }
+  while (conversationLoadCache.size > CONVERSATION_LOAD_CACHE_LIMIT) {
+    conversationLoadCache.delete(conversationLoadCache.keys().next().value);
+  }
+}
+
+export function clearConversationLoadMemory() {
+  conversationLoadCache.clear();
+  conversationLoadsInFlight.clear();
 }
 
 export function portalConversationAvailable() {
@@ -92,12 +160,56 @@ export function buildPortalConversationClientRequestId() {
   return `conversation:${Date.now().toString(36)}:${random.padEnd(16, "0")}`;
 }
 
-export async function loadQuotePortalConversation(access) {
+export async function loadQuotePortalConversation(access, {
+  cacheScope = "",
+  forceRefresh = false,
+  before = null,
+  after = null
+} = {}) {
   requireConnectedConversation();
-  const payload = normalizeAccess(access);
-  const call = httpsCallable(cloudFunctions, GET_CONVERSATION_CALLABLE);
-  const response = await call(payload);
-  return normalizeConversationResponse(response?.data || {});
+  if (before && after) {
+    throw new Error("Conversation history and catch-up cursors cannot be combined.");
+  }
+  const payload = {
+    ...normalizeAccess(access),
+    ...(before ? { before: normalizeConversationCursor(before) } : {}),
+    ...(after ? { after: normalizeConversationCursor(after) } : {})
+  };
+  if (before && !payload.before) {
+    throw new Error("Conversation page cursor is invalid.");
+  }
+  if (after && !payload.after) {
+    throw new Error("Conversation catch-up cursor is invalid.");
+  }
+  const key = conversationLoadKey(payload, cacheScope);
+  const nowMs = Date.now();
+  pruneConversationLoadCache(nowMs);
+  if (!forceRefresh) {
+    const cached = conversationLoadCache.get(key);
+    if (cached && nowMs - cached.cachedAtMs <= CONVERSATION_LOAD_CACHE_TTL_MS) {
+      return cached.result;
+    }
+  }
+  const existing = conversationLoadsInFlight.get(key);
+  if (existing) return existing;
+
+  const request = (async () => {
+    const call = httpsCallable(cloudFunctions, GET_CONVERSATION_CALLABLE);
+    const response = await call(payload);
+    const result = normalizeConversationResponse(response?.data || {});
+    conversationLoadCache.delete(key);
+    conversationLoadCache.set(key, { cachedAtMs: Date.now(), result });
+    pruneConversationLoadCache();
+    return result;
+  })();
+  conversationLoadsInFlight.set(key, request);
+  try {
+    return await request;
+  } finally {
+    if (conversationLoadsInFlight.get(key) === request) {
+      conversationLoadsInFlight.delete(key);
+    }
+  }
 }
 
 export async function sendQuotePortalConversationMessage({
@@ -128,5 +240,6 @@ export async function sendQuotePortalConversationMessage({
   if (!result.message) {
     throw new Error("Message send did not return a valid receipt.");
   }
+  invalidateConversationLoadCache(payload);
   return result;
 }

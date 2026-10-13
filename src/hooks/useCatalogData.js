@@ -1,5 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { deleteField, doc, getDoc, getDocs, runTransaction, serverTimestamp } from "firebase/firestore";
+import {
+  deleteField,
+  doc,
+  documentId,
+  getDoc,
+  getDocs,
+  limit as firestoreLimit,
+  orderBy,
+  query,
+  runTransaction,
+  serverTimestamp,
+  startAfter
+} from "firebase/firestore";
 import {
   DEFAULT_ADDONS,
   DEFAULT_PACKAGES,
@@ -31,6 +43,8 @@ import {
   applyStarterCatalogPackWithCompatibility,
   confirmCatalogPricing
 } from "../lib/catalogStarterPackService";
+import { readCompletePages } from "../lib/completePageReader";
+import { coalesceScopedRead } from "../lib/scopedReadCoalescer";
 
 const LEGACY_LOCAL_KEY = "quoteWizard.catalog";
 const EDITABLE_SETTINGS_KEYS = Object.freeze(Object.keys(DEFAULT_SETTINGS));
@@ -39,6 +53,7 @@ const ALLOW_LOCAL_CATALOG_FALLBACK =
   && ["1", "true", "yes", "on"].includes(
     String(import.meta.env.VITE_ALLOW_LOCAL_CATALOG_FALLBACK || "").trim().toLowerCase()
   );
+const CATALOG_PAGE_SIZE = 200;
 
 function localCatalogStorageKey(organizationId = "", { allowLocalDeviceScope = false } = {}) {
   const resolvedOrganizationId = resolveOrganizationId(organizationId, "");
@@ -171,16 +186,29 @@ function hasCatalogRecords(catalog) {
   );
 }
 
+async function loadCompleteCatalogCollection(collectionName, organizationId) {
+  const collectionRef = getOrganizationCollectionRef(collectionName, organizationId);
+  return readCompletePages({
+    pageSize: CATALOG_PAGE_SIZE,
+    readPage: async ({ afterId, pageSize }) => {
+      const constraints = [orderBy(documentId()), firestoreLimit(pageSize)];
+      if (afterId) constraints.splice(1, 0, startAfter(afterId));
+      const snapshot = await getDocs(query(collectionRef, ...constraints));
+      return snapshot.docs.map((item) => ({ id: item.id, ...item.data() }));
+    }
+  });
+}
+
 async function loadFromFirebaseByOrganization(organizationId = "") {
   const resolvedOrganizationId = resolveOrganizationId(organizationId, "");
   if (!resolvedOrganizationId) {
     throw new Error("organizationId is required for catalog reads.");
   }
 
-  const [pkgSnap, addSnap, rentSnap, settingsSnap] = await Promise.all([
-    getDocs(getOrganizationCollectionRef("catalogPackages", resolvedOrganizationId)),
-    getDocs(getOrganizationCollectionRef("catalogAddons", resolvedOrganizationId)),
-    getDocs(getOrganizationCollectionRef("catalogRentals", resolvedOrganizationId)),
+  const [packageRead, addonRead, rentalRead, settingsSnap] = await Promise.all([
+    loadCompleteCatalogCollection("catalogPackages", resolvedOrganizationId),
+    loadCompleteCatalogCollection("catalogAddons", resolvedOrganizationId),
+    loadCompleteCatalogCollection("catalogRentals", resolvedOrganizationId),
     getDoc(getOrganizationSubDocRef("settings", "config", resolvedOrganizationId))
   ]);
   if (!settingsSnap.exists()) {
@@ -188,19 +216,25 @@ async function loadFromFirebaseByOrganization(organizationId = "") {
   }
 
   const orgCatalog = reflectCurrentPricingConfirmation(normalizeCatalog({
-    packages: pkgSnap.docs.map((d) => ({ id: d.id, ...d.data() })),
-    addons: addSnap.docs.map((d) => ({ id: d.id, ...d.data() })),
-    rentals: rentSnap.docs.map((d) => ({ id: d.id, ...d.data() })),
+    packages: packageRead.items,
+    addons: addonRead.items,
+    rentals: rentalRead.items,
     settings: settingsSnap.data()
   }));
 
   return {
     catalog: orgCatalog,
     source: "firebase-org",
+    complete: true,
+    collectionStats: {
+      packages: { recordCount: packageRead.recordCount, pageCount: packageRead.pageCount, pageSize: packageRead.pageSize },
+      addons: { recordCount: addonRead.recordCount, pageCount: addonRead.pageCount, pageSize: addonRead.pageSize },
+      rentals: { recordCount: rentalRead.recordCount, pageCount: rentalRead.pageCount, pageSize: rentalRead.pageSize }
+    },
     serverFingerprints: {
-      packages: Object.fromEntries(pkgSnap.docs.map((item) => [item.id, fingerprint(item.data())])),
-      addons: Object.fromEntries(addSnap.docs.map((item) => [item.id, fingerprint(item.data())])),
-      rentals: Object.fromEntries(rentSnap.docs.map((item) => [item.id, fingerprint(item.data())])),
+      packages: Object.fromEntries(packageRead.items.map(({ id, ...data }) => [id, fingerprint(data)])),
+      addons: Object.fromEntries(addonRead.items.map(({ id, ...data }) => [id, fingerprint(data)])),
+      rentals: Object.fromEntries(rentalRead.items.map(({ id, ...data }) => [id, fingerprint(data)])),
       settings: fingerprint(settingsSnap.data())
     }
   };
@@ -531,33 +565,205 @@ export function beginCatalogReloadState(state = {}, { background = false } = {})
   };
 }
 
-export function useCatalogData({ enabled = true, organizationId = "" } = {}) {
+function catalogReloadLifecycleError(code, message) {
+  const error = new Error(message);
+  error.name = "CatalogReloadLifecycleError";
+  error.code = code;
+  return error;
+}
+
+export function createCatalogReloadCoordinator() {
+  let active = true;
+  let nextRequestId = 0;
+  let pending = null;
+
+  function rejectPending(error) {
+    if (!pending) return false;
+    const { reject } = pending;
+    pending = null;
+    reject(error);
+    return true;
+  }
+
+  function trackedPromise(executor) {
+    const promise = new Promise(executor);
+    // Some existing reload controls intentionally fire and forget. Registering
+    // a handler here prevents a lifecycle/read rejection from becoming an
+    // unhandled rejection while preserving the original promise's rejection
+    // for callers that await it.
+    void promise.catch(() => undefined);
+    return promise;
+  }
+
+  return {
+    activate() {
+      active = true;
+    },
+    request({ scopeKey = "" } = {}) {
+      const requestId = ++nextRequestId;
+      if (!active) {
+        const error = catalogReloadLifecycleError(
+          "catalog_reload_unmounted",
+          "Catalog reload was cancelled because this catalog surface is no longer mounted."
+        );
+        return {
+          accepted: false,
+          requestId,
+          promise: trackedPromise((resolve, reject) => reject(error))
+        };
+      }
+
+      rejectPending(catalogReloadLifecycleError(
+        "catalog_reload_superseded",
+        "Catalog reload was superseded by a newer refresh request."
+      ));
+
+      let resolveRequest;
+      let rejectRequest;
+      const promise = trackedPromise((resolve, reject) => {
+        resolveRequest = resolve;
+        rejectRequest = reject;
+      });
+      pending = {
+        requestId,
+        scopeKey,
+        resolve: resolveRequest,
+        reject: rejectRequest
+      };
+      return { accepted: true, requestId, promise };
+    },
+    isPending(requestId, scopeKey = "") {
+      return Boolean(
+        pending
+        && pending.requestId === requestId
+        && (!scopeKey || pending.scopeKey === scopeKey)
+      );
+    },
+    resolve(requestId, value) {
+      if (!pending || pending.requestId !== requestId) return false;
+      const { resolve } = pending;
+      pending = null;
+      resolve(value);
+      return true;
+    },
+    reject(requestId, error) {
+      if (!pending || pending.requestId !== requestId) return false;
+      return rejectPending(error);
+    },
+    cancelScope(scopeKey, error = catalogReloadLifecycleError(
+      "catalog_reload_superseded",
+      "Catalog reload was superseded because the catalog scope changed."
+    )) {
+      if (!pending || pending.scopeKey !== scopeKey) return false;
+      return rejectPending(error);
+    },
+    dispose(error = catalogReloadLifecycleError(
+      "catalog_reload_unmounted",
+      "Catalog reload was cancelled because this catalog surface is no longer mounted."
+    )) {
+      active = false;
+      return rejectPending(error);
+    }
+  };
+}
+
+export function useCatalogData({ enabled = true, organizationId = "", principalId = "" } = {}) {
   const baseCatalog = enabled && !firebaseReady && !ALLOW_LOCAL_CATALOG_FALLBACK
     ? blockedCatalog()
     : defaultCatalog();
+  const initialSource = enabled
+    ? firebaseReady
+      ? "firebase"
+      : ALLOW_LOCAL_CATALOG_FALLBACK
+        ? "local-defaults"
+        : "firebase-required"
+    : "auth-required";
+  const reloadScopeKey = `${enabled ? "enabled" : "disabled"}:${resolveOrganizationId(organizationId, "")}`;
   const [state, setState] = useState(() => ({
+    scopeKey: reloadScopeKey,
     loading: enabled,
     saving: false,
-    source: enabled ? (firebaseReady ? "firebase" : ALLOW_LOCAL_CATALOG_FALLBACK ? "local-defaults" : "firebase-required") : "auth-required",
+    source: initialSource,
     error: "",
     observedAtISO: "",
     requiresFirebase: enabled && !firebaseReady && !ALLOW_LOCAL_CATALOG_FALLBACK,
     serverFingerprints: null,
+    complete: false,
+    collectionStats: null,
     authoritativeVersion: 0,
     eventTypes: deriveEventTypesFromSettings(baseCatalog.settings),
     ...baseCatalog
   }));
   const [reloadVersion, setReloadVersion] = useState(0);
+  const [reloadOutcome, setReloadOutcome] = useState(null);
   const backgroundReloadVersionRef = useRef(-1);
+  const reloadCoordinatorRef = useRef(null);
+  if (reloadCoordinatorRef.current === null) {
+    reloadCoordinatorRef.current = createCatalogReloadCoordinator();
+  }
+  const reloadScopeRef = useRef(reloadScopeKey);
+
+  useEffect(() => {
+    const coordinator = reloadCoordinatorRef.current;
+    coordinator.activate();
+    return () => {
+      coordinator.dispose();
+    };
+  }, []);
+
+  useEffect(() => {
+    const previousScopeKey = reloadScopeRef.current;
+    if (previousScopeKey === reloadScopeKey) return;
+    reloadCoordinatorRef.current.cancelScope(previousScopeKey);
+    reloadScopeRef.current = reloadScopeKey;
+    setState((prev) => ({
+      ...prev,
+      scopeKey: reloadScopeKey,
+      loading: enabled,
+      saving: false,
+      source: initialSource,
+      error: "",
+      observedAtISO: "",
+      requiresFirebase: enabled && !firebaseReady && !ALLOW_LOCAL_CATALOG_FALLBACK,
+      serverFingerprints: null,
+      complete: false,
+      collectionStats: null,
+      eventTypes: deriveEventTypesFromSettings(baseCatalog.settings),
+      ...baseCatalog
+    }));
+  }, [reloadScopeKey]);
+
+  useEffect(() => {
+    if (!reloadOutcome) return;
+    const coordinator = reloadCoordinatorRef.current;
+    if (reloadOutcome.status === "fulfilled") {
+      coordinator.resolve(reloadOutcome.requestId, reloadOutcome.value);
+      return;
+    }
+    coordinator.reject(reloadOutcome.requestId, reloadOutcome.error);
+  }, [reloadOutcome]);
 
   useEffect(() => {
     let alive = true;
     const backgroundReload = backgroundReloadVersionRef.current === reloadVersion;
     if (backgroundReload) backgroundReloadVersionRef.current = -1;
 
+    const commitLoadState = (stateUpdater, outcome = null) => {
+      if (!alive) return false;
+      setState(stateUpdater);
+      if (
+        outcome
+        && reloadCoordinatorRef.current.isPending(reloadVersion, reloadScopeKey)
+      ) {
+        setReloadOutcome({ requestId: reloadVersion, ...outcome });
+      }
+      return true;
+    };
+
     if (!enabled) {
       const fallback = defaultCatalog();
-      setState((prev) => ({
+      const readError = new Error("Sign in as staff to refresh the catalog.");
+      commitLoadState((prev) => ({
         ...prev,
         loading: false,
         saving: false,
@@ -568,7 +774,7 @@ export function useCatalogData({ enabled = true, organizationId = "" } = {}) {
         serverFingerprints: null,
         eventTypes: [],
         ...fallback
-      }));
+      }), { status: "rejected", error: readError });
       return () => {
         alive = false;
       };
@@ -577,48 +783,74 @@ export function useCatalogData({ enabled = true, organizationId = "" } = {}) {
     async function load() {
       try {
         if (firebaseReady) {
-          const [{ catalog, source, serverFingerprints }, eventTypes] = await Promise.all([
-            loadFromFirebaseByOrganization(organizationId),
-            getEventTypes({ organizationId })
-          ]);
+          const performRead = async () => {
+            const [catalogResult, eventTypes] = await Promise.all([
+              loadFromFirebaseByOrganization(organizationId),
+              getEventTypes({ organizationId })
+            ]);
+            return { catalogResult, eventTypes };
+          };
+          const { catalogResult, eventTypes } = String(principalId || "").trim()
+            ? await coalesceScopedRead({
+                organizationId,
+                principalId,
+                operation: "catalog.complete",
+                arguments: { pageSize: CATALOG_PAGE_SIZE },
+                read: performRead
+              })
+            : await performRead();
+          const { catalog, source, complete, collectionStats, serverFingerprints } = catalogResult;
           if (!alive) return;
           if (!hasCatalogRecords(catalog)) {
-            if (alive) {
-              setState((prev) => ({
-                ...prev,
-                loading: false,
-                source: `${source}-empty`,
-                error: "",
-                observedAtISO: new Date().toISOString(),
-                requiresFirebase: false,
-                serverFingerprints,
-                authoritativeVersion: prev.authoritativeVersion + 1,
-                eventTypes,
-                ...catalog
-              }));
-            }
+            const observedAtISO = new Date().toISOString();
+            commitLoadState((prev) => ({
+              ...prev,
+              loading: false,
+              source: `${source}-empty`,
+              error: "",
+              observedAtISO,
+              requiresFirebase: false,
+              serverFingerprints,
+              complete,
+              collectionStats,
+              authoritativeVersion: prev.authoritativeVersion + 1,
+              eventTypes,
+              ...catalog
+            }), {
+              status: "fulfilled",
+              value: { source: `${source}-empty`, observedAtISO }
+            });
             return;
           }
           writeLocalCatalogCache(localStorage, organizationId, catalog);
-          setState((prev) => ({
+          const observedAtISO = new Date().toISOString();
+          commitLoadState((prev) => ({
             ...prev,
             loading: false,
             source,
             error: "",
-            observedAtISO: new Date().toISOString(),
+            observedAtISO,
             requiresFirebase: false,
             serverFingerprints,
+            complete,
+            collectionStats,
             authoritativeVersion: prev.authoritativeVersion + 1,
             eventTypes,
             ...catalog
-          }));
+          }), {
+            status: "fulfilled",
+            value: { source, observedAtISO }
+          });
           return;
         }
 
         if (!ALLOW_LOCAL_CATALOG_FALLBACK) {
           const blocked = blockedCatalog();
           if (!alive) return;
-          setState((prev) => ({
+          const readError = new Error(
+            "Firebase catalog is required in this environment. Configure Firebase to continue."
+          );
+          commitLoadState((prev) => ({
             ...prev,
             loading: false,
             source: "firebase-required",
@@ -628,7 +860,7 @@ export function useCatalogData({ enabled = true, organizationId = "" } = {}) {
             error: "Firebase catalog is required in this environment. Configure Firebase to continue.",
             eventTypes: [],
             ...blocked
-          }));
+          }), { status: "rejected", error: readError });
           return;
         }
 
@@ -639,17 +871,22 @@ export function useCatalogData({ enabled = true, organizationId = "" } = {}) {
           ? reflectCurrentPricingConfirmation(normalizeCatalog(JSON.parse(cached)))
           : defaultCatalog();
         if (!alive) return;
-        setState((prev) => ({
+        const source = cached ? "local-cache" : "local-defaults";
+        const observedAtISO = new Date().toISOString();
+        commitLoadState((prev) => ({
           ...prev,
           loading: false,
-          source: cached ? "local-cache" : "local-defaults",
+          source,
           error: "",
-          observedAtISO: new Date().toISOString(),
+          observedAtISO,
           requiresFirebase: false,
           serverFingerprints: null,
           eventTypes: deriveEventTypesFromSettings(catalog.settings),
           ...catalog
-        }));
+        }), {
+          status: "fulfilled",
+          value: { source, observedAtISO }
+        });
       } catch (err) {
         if (!alive) return;
         recordDiagnosticError(err, {
@@ -657,18 +894,18 @@ export function useCatalogData({ enabled = true, organizationId = "" } = {}) {
           action: "load"
         });
         if (backgroundReload) {
-          setState((prev) => ({
+          commitLoadState((prev) => ({
             ...prev,
             loading: false,
             error: err?.message || "Failed to refresh the latest catalog."
-          }));
+          }), { status: "rejected", error: err });
           return;
         }
         const shouldUseLocalFallback = !firebaseReady && ALLOW_LOCAL_CATALOG_FALLBACK;
         const fallback = shouldUseLocalFallback ? defaultCatalog() : blockedCatalog();
         const readError = err?.message || "Failed to load catalog.";
         const requiresFirebaseNow = !shouldUseLocalFallback && !firebaseReady;
-        setState((prev) => ({
+        commitLoadState((prev) => ({
           ...prev,
           loading: false,
           source: shouldUseLocalFallback ? "fallback-defaults" : "firebase-failed",
@@ -682,7 +919,7 @@ export function useCatalogData({ enabled = true, organizationId = "" } = {}) {
               : readError,
           eventTypes: deriveEventTypesFromSettings(fallback.settings),
           ...fallback
-        }));
+        }), { status: "rejected", error: err });
       }
     }
 
@@ -690,16 +927,16 @@ export function useCatalogData({ enabled = true, organizationId = "" } = {}) {
     return () => {
       alive = false;
     };
-  }, [enabled, organizationId, reloadVersion]);
+  }, [enabled, organizationId, principalId, reloadVersion]);
 
   const reload = useCallback(({ background = false } = {}) => {
+    const request = reloadCoordinatorRef.current.request({ scopeKey: reloadScopeKey });
+    if (!request.accepted) return request.promise;
     setState((prev) => beginCatalogReloadState(prev, { background }));
-    setReloadVersion((version) => {
-      const nextVersion = version + 1;
-      backgroundReloadVersionRef.current = background ? nextVersion : -1;
-      return nextVersion;
-    });
-  }, []);
+    backgroundReloadVersionRef.current = background ? request.requestId : -1;
+    setReloadVersion(request.requestId);
+    return request.promise;
+  }, [reloadScopeKey]);
 
   const acceptCatalogMutation = useCallback(({ catalogSettings } = {}) => {
     if (!catalogSettings || typeof catalogSettings !== "object") return;
@@ -738,8 +975,10 @@ export function useCatalogData({ enabled = true, organizationId = "" } = {}) {
     }
     try {
       validateCatalogSettingsMoney(nextCatalog?.settings || {});
+      const { validateCommercialPublication } = await import("../lib/commercialPlatform");
+      validateCommercialPublication({ ...nextCatalog, menuInventoryComplete: false });
     } catch (error) {
-      return { ok: false, error: error?.message || "Catalog pricing contains an invalid amount." };
+      return { ok: false, error: error?.message || "Catalog commercial configuration is invalid." };
     }
     const normalized = normalizeCatalog(nextCatalog);
     const hasPricedPackage = normalized.packages.some((item) => {
@@ -1044,8 +1283,26 @@ export function useCatalogData({ enabled = true, organizationId = "" } = {}) {
     return normalizeMenuSectionsFromEvent(categories, items);
   }, [organizationId]);
 
+  const visibleState = state.scopeKey === reloadScopeKey
+    ? state
+    : {
+        ...state,
+        scopeKey: reloadScopeKey,
+        loading: enabled,
+        saving: false,
+        source: initialSource,
+        error: "",
+        observedAtISO: "",
+        requiresFirebase: enabled && !firebaseReady && !ALLOW_LOCAL_CATALOG_FALLBACK,
+        serverFingerprints: null,
+        complete: false,
+        collectionStats: null,
+        eventTypes: deriveEventTypesFromSettings(baseCatalog.settings),
+        ...baseCatalog
+      };
+
   return {
-    ...state,
+    ...visibleState,
     reload,
     acceptCatalogMutation,
     saveCatalog,

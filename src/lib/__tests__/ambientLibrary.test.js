@@ -75,8 +75,9 @@ describe("Ambient Library contracts", () => {
       objectScopes: [
         "tenant-catalog",
         "catalog-section",
-        "event-template",
-        "pricing-settings"
+    "event-template",
+        "pricing-settings",
+        "configuration-rules"
       ],
       purposes: ["clarify", "advance", "resolve", "reveal_context"],
       allowedEmptyState: {
@@ -90,7 +91,7 @@ describe("Ambient Library contracts", () => {
 });
 
 describe("buildAmbientLibrary", () => {
-  test("projects six exact sections, current pricing evidence, and dependency-safe templates", () => {
+  test("projects seven exact sections, current pricing evidence, bounded rules, and dependency-safe templates", () => {
     const result = build();
 
     expect(result.modelId).toBe(AMBIENT_LIBRARY_MODEL);
@@ -118,11 +119,34 @@ describe("buildAmbientLibrary", () => {
       confirmedAt: CONFIRMED_AT
     });
     expect(result.sections.map((section) => section.id)).toEqual(AMBIENT_LIBRARY_SECTION_ORDER);
+    expect(result.sections.find((section) => section.id === "rules")?.summary).toMatchObject({
+      totalCount: 0,
+      activeCount: 0
+    });
     expect(result.sections.find((section) => section.id === "menu")?.summary).toMatchObject({
       availability: "available",
       totalCount: 1,
       activeCount: 1,
       sectionCount: 1
+    });
+    expect(result.sections.find((section) => section.id === "packages")?.records).toEqual([
+      { id: "package-plated", name: "Plated dinner", active: true }
+    ]);
+    expect(result.sections.find((section) => section.id === "menu")?.records).toEqual([
+      {
+        id: "menu-chicken",
+        name: "Herb chicken",
+        active: true,
+        sectionId: "dinner",
+        sectionName: "Dinner"
+      }
+    ]);
+    expect(result.sections.find((section) => section.id === "templates")?.records[0]).toMatchObject({
+      id: "wedding",
+      name: "Wedding",
+      active: true,
+      dependencyState: "resolved",
+      style: "Plated"
     });
     expect(result.templates).toHaveLength(1);
     expect(result.templates[0]).toMatchObject({
@@ -360,7 +384,7 @@ describe("buildAmbientLibrary", () => {
       editAllowed: false,
       reason: null
     });
-    expect(result.sections).toHaveLength(6);
+    expect(result.sections).toHaveLength(7);
     expect(result.templates).toHaveLength(1);
     expect(result.capabilities.openSection).toBe(false);
     expect(result.capabilities.openTemplate).toBe(false);

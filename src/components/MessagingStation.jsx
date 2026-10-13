@@ -12,6 +12,10 @@ import { useConversationInbox } from "../hooks/useConversationInbox";
 import { useWorkspaceRouteHeadingFocus } from "../hooks/useWorkspaceRouteHeadingFocus";
 import { filterConversationThreads, groupConversationThreads } from "../lib/conversationInbox";
 import {
+  messagingNow,
+  recordMessagingPerformanceMilestone
+} from "../lib/messagingPerformance";
+import {
   formatWorkspaceDate,
   formatWorkspaceDateTime,
   formatWorkspaceMoney,
@@ -159,6 +163,9 @@ export default function MessagingStation({
   onOpenCustomer = null
 }) {
   const inbox = useConversationInbox({ organizationId, seedQuotes });
+  const performanceStartedAtRef = useRef(messagingNow());
+  const routeMeasuredRef = useRef(false);
+  const inboxMeasuredRef = useRef(false);
   const eligibleThreads = useMemo(
     () => inbox.threads.filter((thread) => thread.conversationAvailable || thread.messageCount > 0),
     [inbox.threads]
@@ -202,6 +209,25 @@ export default function MessagingStation({
     exactArrivalActive && arrivalContext?.focus?.messageId
   );
   const strictArrivalActive = exactArrivalActive || Boolean(arrivalAttempted);
+
+  useEffect(() => {
+    if (routeMeasuredRef.current) return;
+    routeMeasuredRef.current = true;
+    recordMessagingPerformanceMilestone({
+      milestone: "route_usable",
+      durationMs: messagingNow() - performanceStartedAtRef.current
+    });
+  }, []);
+
+  useEffect(() => {
+    if (inboxMeasuredRef.current || !["ready", "stale"].includes(inbox.status)) return;
+    inboxMeasuredRef.current = true;
+    recordMessagingPerformanceMilestone({
+      milestone: "inbox_visible",
+      durationMs: messagingNow() - performanceStartedAtRef.current,
+      threadCount: eligibleThreads.length
+    });
+  }, [eligibleThreads.length, inbox.status]);
 
   const reportArrivalResolution = useCallback((resolution) => {
     if (!exactArrivalActive || typeof onArrivalResolution !== "function") return;

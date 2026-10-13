@@ -140,6 +140,7 @@ let originalRequestAnimationFrame;
 let originalCancelAnimationFrame;
 
 beforeEach(() => {
+  vi.setSystemTime(new Date("2026-09-19T12:00:00.000Z"));
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
@@ -152,6 +153,7 @@ beforeEach(() => {
 afterEach(() => {
   act(() => root.unmount());
   container.remove();
+  vi.useRealTimers();
   window.requestAnimationFrame = originalRequestAnimationFrame;
   window.cancelAnimationFrame = originalCancelAnimationFrame;
 });
@@ -216,7 +218,8 @@ describe("AmbientClientsView", () => {
     expect(parsedEmpty.textContent).not.toContain("New relationships");
 
     expect(success).toContain('data-ambient-clients-state="success"');
-    expect(success).toContain("Relationships, in context.");
+    expect(success).toContain(">Clients</h1>");
+    expect(success).toContain("Relationship in context");
     expect(success).toContain("Client 1");
     expect(success).toContain("Event 1");
     expect(success).toContain("Firestore client records");
@@ -225,11 +228,10 @@ describe("AmbientClientsView", () => {
       .toBe("recorded-event-date");
     const featured = parsedSuccess.querySelector(".ambient-clients__featured");
     const featuredImage = featured?.querySelector(".ambient-clients__featured-image");
-    expect(featuredImage).not.toBeNull();
-    expect(featuredImage?.getAttribute("alt")).toBe("");
+    expect(featuredImage).toBeNull();
     expect([...featured.querySelectorAll("[data-client-summary-part]")]
       .map((part) => part.dataset.clientSummaryPart))
-      .toEqual(["identity", "contact", "status", "action", "image"]);
+      .toEqual(["identity", "contact", "status", "action"]);
     expect(featured.querySelectorAll(".ambient-client__primary")).toHaveLength(1);
     expect(parsedSuccess.querySelector(".ambient-clients__filter-empty")).toBeNull();
     expect(parsedSuccess.textContent).toMatch(/recorded contact details/iu);
@@ -333,7 +335,25 @@ describe("AmbientClientsView", () => {
       expect(primaryActions[0].textContent).toContain("Review client");
       expect(primaryActions[0].getAttribute("data-ambient-action-id"))
         .toMatch(/^review-client:/u);
+      expect(primaryActions[0].getAttribute("aria-label"))
+        .toMatch(/^Review client: Client [12]$/u);
     }
+  });
+
+  test("does not repeat company text inside the relationship row contact summary", () => {
+    const markup = renderToStaticMarkup(
+      <AmbientClientsDirectory
+        model={directoryModel({ rows: [directoryRow(1), directoryRow(2)] })}
+        {...DIRECTORY_CALLBACKS}
+      />
+    );
+    const parsed = document.createElement("div");
+    parsed.innerHTML = markup;
+    const row = parsed.querySelector('.ambient-clients__relationship-row[data-client-id="client-2"]');
+
+    expect(row.querySelector("div:first-child p").textContent).toBe("Company 2");
+    expect(row.querySelector("[data-client-row-contact]").textContent).not.toContain("Company 2");
+    expect(row.querySelector("[data-client-row-contact]").textContent).toContain("client-2@example.com");
   });
 
   test("introduces search and relationship filters only for a populated bounded page", () => {
@@ -363,6 +383,8 @@ describe("AmbientClientsView", () => {
     expect(container.querySelectorAll("[data-client-id]")).toHaveLength(2);
     expect(container.textContent).toContain("Contact details to add");
     expect(container.textContent).toContain("No linked opportunity in this view");
+    expect(container.querySelector("[data-client-result-scope]").textContent)
+      .toBe("All clients. Showing 2 of 2 clients on this loaded page.");
 
     const select = container.querySelector(".ambient-clients__filter-select select");
     act(() => {
@@ -372,6 +394,8 @@ describe("AmbientClientsView", () => {
     expect(container.querySelectorAll("[data-client-id]")).toHaveLength(1);
     expect(container.textContent).toContain("Contact Gap Client");
     expect(container.textContent).not.toContain("Client 1");
+    expect(container.querySelector("[data-client-result-scope]").textContent)
+      .toBe("Contact to add. Showing 1 of 2 clients on this loaded page.");
 
     act(() => {
       select.value = "upcoming";
@@ -380,6 +404,22 @@ describe("AmbientClientsView", () => {
     expect(container.querySelectorAll("[data-client-id]")).toHaveLength(2);
     expect(container.textContent).toContain("Client 1");
     expect(container.textContent).toContain("Contact Gap Client");
+    expect(container.querySelector("[data-client-result-scope]").textContent)
+      .toBe("Upcoming events. Showing 2 of 2 clients on this loaded page.");
+  });
+
+  test("names the applied search without implying organization-wide completeness", () => {
+    mount(
+      <AmbientClientsDirectory
+        model={directoryModel({ rows: [directoryRow(1)] })}
+        appliedSearch="Maya"
+        {...DIRECTORY_CALLBACKS}
+      />
+    );
+
+    const scope = container.querySelector("[data-client-result-scope]");
+    expect(scope.textContent).toBe("All clients. Showing 1 of 1 client on this loaded page for “Maya”.");
+    expect(scope.textContent).not.toContain("organization");
   });
 
   test("keeps populated relationship filtering available without a separate mobile dashboard block", async () => {
@@ -483,6 +523,52 @@ describe("AmbientClientsView", () => {
     });
   });
 
+  test("turns a rejected async client handoff into terminal recovery", async () => {
+    const onOpenClient = vi.fn(() => Promise.reject(new Error("The selected client route is temporarily unavailable.")));
+    mount(
+      <AmbientClientsDirectory
+        model={directoryModel({ rows: [directoryRow(42, { customerId: CLIENT_ID })] })}
+        currentUserRole="sales"
+        onOpenClient={onOpenClient}
+        {...DIRECTORY_CALLBACKS}
+      />
+    );
+
+    await act(async () => {
+      container.querySelector(`[data-client-id="${CLIENT_ID}"] .ambient-client__primary`).click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const acknowledgement = container.querySelector(".ambient-clients__acknowledgement");
+    expect(acknowledgement.getAttribute("data-result-kind")).toBe("recovery");
+    expect(acknowledgement.getAttribute("role")).toBe("alert");
+    expect(acknowledgement.textContent).toContain("selected client route is temporarily unavailable");
+    expect(acknowledgement.textContent).toContain("current client list remains visible");
+  });
+
+  test("turns a rejected async directory refresh into retryable recovery", async () => {
+    const onRefresh = vi.fn(() => Promise.reject(new Error("The client service did not answer.")));
+    mount(
+      <AmbientClientsDirectory
+        model={directoryModel()}
+        onRefresh={onRefresh}
+        onStartOpportunity={() => {}}
+      />
+    );
+
+    await act(async () => {
+      container.querySelector(".ambient-clients__refresh").click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const acknowledgement = container.querySelector(".ambient-clients__acknowledgement");
+    expect(acknowledgement.getAttribute("data-result-kind")).toBe("recovery");
+    expect(acknowledgement.textContent).toContain("client service did not answer");
+    expect(acknowledgement.textContent).toContain("try this refresh again");
+  });
+
   test("makes relationship identity, state, risk, and the next action understandable at the top layer", () => {
     const markup = renderToStaticMarkup(
       <AmbientClientRelationship model={relationshipModel()} currentUserRole="sales" />
@@ -493,11 +579,13 @@ describe("AmbientClientsView", () => {
     const primary = overview.querySelector(".ambient-client-overview__primary");
 
     expect(overview.getAttribute("data-client-overview-state")).toBe("attention");
+    expect(overview.getAttribute("data-client-relationship-layout")).toBe("ledger");
     expect(overview.querySelector("h1").textContent).toBe("Jordan Lee");
-    expect(overview.textContent).toContain("2 active opportunities");
-    expect(overview.textContent).toContain("1 client reply needs review");
     expect(overview.textContent).toContain("Sep 20, 2026");
-    expect(overview.textContent).toContain("Suggested next step");
+    expect(overview.textContent).toContain("Next relationship step");
+    expect(overview.querySelectorAll("[data-relationship-stage]")).toHaveLength(4);
+    expect(overview.querySelector("[data-relationship-stage='client']").textContent).toContain("Jordan Lee");
+    expect(overview.querySelector("[data-relationship-stage='opportunity']").textContent).toContain("Foundation dinner");
     expect(primary.textContent).toContain("Review client reply");
     expect(overview.textContent).toContain("A recorded client reply needs review.");
     expect(overview.textContent).not.toMatch(/bounded read|non-terminal|read context/iu);
@@ -624,6 +712,29 @@ describe("AmbientClientsView", () => {
     });
     expect(container.querySelector(".ambient-client-overview__primary")
       .getAttribute("data-workspace-task-id")).toBe(action.id);
+  });
+
+  test("turns a rejected async relationship action into terminal recovery", async () => {
+    const onOpenConversation = vi.fn(() => Promise.reject(new Error("The conversation is not reachable right now.")));
+    mount(
+      <AmbientClientRelationship
+        model={relationshipModel()}
+        currentUserRole="sales"
+        onOpenConversation={onOpenConversation}
+      />
+    );
+
+    await act(async () => {
+      container.querySelector(".ambient-client-overview__primary").click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const acknowledgement = container.querySelector(".ambient-client-overview__acknowledgement");
+    expect(acknowledgement.getAttribute("data-result-kind")).toBe("recovery");
+    expect(acknowledgement.getAttribute("role")).toBe("alert");
+    expect(acknowledgement.textContent).toContain("conversation is not reachable right now");
+    expect(acknowledgement.textContent).toContain("client overview remains visible");
   });
 
   test("distinguishes the prominent opportunity action as the exact return-focus control", () => {

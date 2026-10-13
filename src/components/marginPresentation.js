@@ -15,7 +15,17 @@ export const MARGIN_MODEL = "margin-presentation-v1";
 
 const MAX_MISSING_NAMED = 6;
 
+// Presentation-only disclosure rule: healthy recorded evidence stays compact,
+// while missing evidence or a recorded target miss starts expanded for review.
+export function marginRequiresExpandedEvidence(margin) {
+  if (!margin) return false;
+  if (!margin.available) return true;
+  if (margin.target === null || margin.target === undefined) return false;
+  return margin.marginPct < margin.target;
+}
+
 function num(value) {
+  if (value === null || value === undefined || value === "") return null;
   const numeric = Number(value);
   return Number.isFinite(numeric) ? numeric : null;
 }

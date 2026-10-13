@@ -61,6 +61,7 @@ describe("EventRunOfShowPanel", () => {
     expect(markup).toContain("Source: Firestore staff records. Authority: Canonical tenant staff records.");
     expect(markup).toContain("showing 1 of 1 accepted or booked records derived from 1 loaded quotes");
     expect(markup).toContain("<details");
+    expect(markup).not.toMatch(/<details[^>]*\sopen=/);
     expect(markup).toContain("Q-2026-0042: Spring Gala");
     expect(markup).toContain("Proposal acceptance: Accepted");
     expect(markup).toContain("Booking: Not booked");
@@ -174,12 +175,13 @@ describe("EventRunOfShowPanel", () => {
     expect(retry).toHaveBeenCalledOnce();
   });
 
-  test("is discoverable inside the routed Schedule region during its true loading state", () => {
+  test("is discoverable inside the routed Schedule main during its true loading state", () => {
     const markup = renderToStaticMarkup(
       <EventScheduleView open onClose={() => {}} organizationId="org-a" />
     );
 
-    expect(markup).toContain('role="region"');
+    expect(markup).toContain('<main class="container workspace-route-main embedded-workspace-route"');
+    expect(markup).toContain('<h1 id="event-schedule-title"');
     expect(markup).toContain('data-capability-id="event-run-of-show"');
     expect(markup).toContain('data-capability-state="loading"');
     expect(markup).toContain("Loading run-of-show records for this day.");

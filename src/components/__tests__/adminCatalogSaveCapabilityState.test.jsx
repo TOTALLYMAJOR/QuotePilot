@@ -4,7 +4,7 @@ import { createRoot } from "react-dom/client";
 import { act } from "react-dom/test-utils";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { AdminCatalogView } from "../AdminCatalogModal";
-import { getMenuCategories, getMenuItems } from "../../lib/menuService";
+import { getEventTypes, getMenuCategories, getMenuItems } from "../../lib/menuService";
 
 const setupDraft = vi.hoisted(() => ({ current: null }));
 const setupPreset = vi.hoisted(() => ({ stage: vi.fn() }));
@@ -82,6 +82,7 @@ beforeEach(() => {
     review: vi.fn(async () => ({ readyToPublish: true })),
     publish: vi.fn(async () => ({ catalogRevisionAfter: 2 }))
   };
+  vi.mocked(getEventTypes).mockResolvedValue([{ id: "evt-1", name: "Dinner" }]);
   vi.mocked(getMenuCategories).mockResolvedValue([{ id: "cat-1", eventTypeId: "evt-1", name: "Starters" }]);
   vi.mocked(getMenuItems).mockResolvedValue([]);
   container = document.createElement("div");
@@ -115,8 +116,8 @@ function renderView(props = {}) {
 // native-setter tracking on text/number inputs.
 function makeUnsavedEdit() {
   const checkbox = [...container.querySelectorAll('input[type="checkbox"]')]
-    .find((input) => input.getAttribute("aria-label") === "Package 1 active");
-  expect(checkbox, "Package 1 active checkbox").toBeTruthy();
+    .find((input) => input.getAttribute("aria-label") === "Offer 1 active");
+  expect(checkbox, "Offer 1 active checkbox").toBeTruthy();
   act(() => {
     checkbox.dispatchEvent(new MouseEvent("click", { bubbles: true }));
   });
@@ -124,8 +125,8 @@ function makeUnsavedEdit() {
 
 function clickSave() {
   const button = [...container.querySelectorAll("button")]
-    .find((element) => element.textContent.trim() === "Sync draft now");
-  expect(button, 'button "Sync draft now"').toBeTruthy();
+    .find((element) => element.textContent.trim() === "Save draft now");
+  expect(button, 'button "Save draft now"').toBeTruthy();
   return act(async () => {
     button.dispatchEvent(new MouseEvent("click", { bubbles: true }));
   });
@@ -140,6 +141,17 @@ function setInputValue(input, value) {
 }
 
 describe("AdminCatalogModal save capability state", () => {
+  test("preserves hook order when the Library view closes and reopens", async () => {
+    renderView();
+    await act(async () => Promise.resolve());
+
+    expect(() => renderView({ open: false })).not.toThrow();
+    expect(container.innerHTML).toBe("");
+
+    expect(() => renderView({ open: true })).not.toThrow();
+    expect(container.querySelector("#catalog-admin-title")).toBeTruthy();
+  });
+
   test("organizes Menu Builder as context, item list, and focused editor", async () => {
     vi.mocked(getMenuItems).mockResolvedValue([{
       id: "item-1",
@@ -161,9 +173,470 @@ describe("AdminCatalogModal save capability state", () => {
       .toContain("Cocktail meatballs");
   });
 
+  test("resolves an imported menu receipt to its exact item after async menu loading", async () => {
+    vi.mocked(getEventTypes).mockResolvedValue([
+      { id: "evt-1", name: "Dinner" },
+      { id: "evt-2", name: "Reception" }
+    ]);
+    vi.mocked(getMenuCategories).mockImplementation(async (eventTypeId) => eventTypeId === "evt-2"
+      ? [{ id: "cat-2", eventTypeId: "evt-2", name: "Canapes" }]
+      : [{ id: "cat-1", eventTypeId: "evt-1", name: "Entrees" }]);
+    const importProvenance = {
+      kind: "catalog_import",
+      importBatchId: "batch-1",
+      importType: "menuItems",
+      sourceKind: "csv",
+      sourceFileName: "menu-items.csv",
+      sourceRowNumber: 2
+    };
+    vi.mocked(getMenuItems).mockImplementation(async (eventTypeId) => eventTypeId === "evt-2"
+      ? [{ id: "menu-other", eventTypeId: "evt-2", categoryId: "cat-2", name: "Other bite", price: 4, cost: null, active: true }]
+      : []);
+    setupDraft.current = {
+      ...setupDraft.current,
+      changedRecordCount: 1,
+      changes: [{
+        collection: "menuItems",
+        recordId: "menu-imported",
+        intent: "create",
+        payload: { eventTypeId: "evt-2", categoryId: "cat-2", name: "Imported bite", priceMinor: 800, costMinor: 0, active: false },
+        provenance: importProvenance
+      }]
+    };
+    const onFocusResolution = vi.fn();
+    renderView({
+      presentation: "modal",
+      initialTab: "starter",
+      focusRequest: {
+        sectionId: "menu",
+        recordId: "menu-imported",
+        eventTypeId: "evt-2",
+        categoryId: "cat-2",
+        importBatchId: "batch-1",
+        status: "staged",
+        sourceRowNumber: 2,
+        requestId: "catalog-import:batch-1:menu-imported:2"
+      },
+      onFocusResolution,
+      inventoryRecipeExtension: {
+        enabled: true,
+        ingredients: [],
+        recipesByMenuItemId: {},
+        menuCostProjectionsByMenuItemId: {},
+        activeMenuItemId: "menu-imported",
+        activeMenuCostProjectionState: "current"
+      }
+    });
+
+    await vi.waitFor(() => {
+      expect(container.querySelector('[data-menu-item-id="menu-imported"]')).not.toBeNull();
+    });
+
+    const importedRow = container.querySelector('[data-menu-item-id="menu-imported"]');
+    expect(importedRow.classList.contains("is-import-focus")).toBe(true);
+    expect(importedRow.querySelector('button[aria-pressed="true"]')).not.toBeNull();
+    await vi.waitFor(() => {
+      expect(document.activeElement).toBe(importedRow.querySelector("button"));
+    });
+    expect(container.textContent).toContain("Recorded cost: $0.00");
+    expect(container.textContent).toContain("operator-declared import value, not a recipe-derived cost");
+    expect(container.textContent).toContain("Publish this staged menu item before attaching a recipe");
+    expect(container.querySelector('[aria-label="Recipe for Imported bite"]')).toBeNull();
+    expect(onFocusResolution).toHaveBeenCalledWith(expect.objectContaining({
+      requestId: "catalog-import:batch-1:menu-imported:2",
+      status: "focused",
+      object: { type: "menu-item", id: "menu-imported" }
+    }));
+  });
+
+  test("reloads a published menu when a receipt-bound shared-draft item arrives later", async () => {
+    const importProvenance = {
+      kind: "catalog_import",
+      importBatchId: "batch-late",
+      importType: "menuItems",
+      sourceKind: "csv",
+      sourceFileName: "late-menu-items.csv",
+      sourceRowNumber: 2
+    };
+    const focusRequest = {
+      sectionId: "menu",
+      recordId: "menu-imported-late",
+      eventTypeId: "evt-1",
+      categoryId: "cat-1",
+      importBatchId: "batch-late",
+      status: "staged",
+      sourceRowNumber: 2,
+      requestId: "catalog-import:batch-late:menu-imported-late:2"
+    };
+    const onFocusResolution = vi.fn();
+
+    setupDraft.current = {
+      ...setupDraft.current,
+      loading: true,
+      status: "loading"
+    };
+    renderView({ initialTab: "menu", focusRequest, onFocusResolution });
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 20)));
+    const publishedLoadCount = vi.mocked(getMenuItems).mock.calls.length;
+    expect(publishedLoadCount).toBeGreaterThan(0);
+    expect(onFocusResolution).not.toHaveBeenCalled();
+    expect(container.querySelector('[data-menu-item-id="menu-imported-late"]')).toBeNull();
+
+    setupDraft.current = {
+      ...setupDraft.current,
+      loading: false,
+      status: "idle",
+      generation: 1,
+      changedRecordCount: 1,
+      changes: [{
+        collection: "menuItems",
+        recordId: "menu-imported-late",
+        intent: "create",
+        payload: {
+          eventTypeId: "evt-1",
+          categoryId: "cat-1",
+          name: "Late imported bite",
+          priceMinor: 1200,
+          costMinor: 0,
+          active: true
+        },
+        provenance: importProvenance
+      }]
+    };
+    renderView({ initialTab: "menu", focusRequest, onFocusResolution });
+
+    await vi.waitFor(() => {
+      expect(container.querySelector('[data-menu-item-id="menu-imported-late"]')).not.toBeNull();
+    });
+    expect(vi.mocked(getMenuItems).mock.calls.length).toBeGreaterThan(publishedLoadCount);
+    await vi.waitFor(() => {
+      expect(onFocusResolution).toHaveBeenCalledWith(expect.objectContaining({
+        requestId: focusRequest.requestId,
+        status: "focused"
+      }));
+    });
+  });
+
+  test("recovers without substituting the first menu item when the receipt target is absent", async () => {
+    vi.mocked(getMenuItems).mockResolvedValue([{
+      id: "menu-missing",
+      eventTypeId: "evt-1",
+      categoryId: "cat-1",
+      name: "Reused identity",
+      price: 5,
+      active: true,
+      importProvenance: {
+        kind: "catalog_import",
+        importBatchId: "different-batch",
+        importType: "menuItems",
+        sourceKind: "csv",
+        sourceFileName: "other.csv",
+        sourceRowNumber: 9
+      }
+    }]);
+    const onFocusResolution = vi.fn();
+    renderView({
+      initialTab: "menu",
+      focusRequest: {
+        sectionId: "menu",
+        recordId: "menu-missing",
+        eventTypeId: "evt-1",
+        categoryId: "cat-1",
+        importBatchId: "batch-1",
+        sourceRowNumber: 2,
+        requestId: "catalog-import:batch-1:menu-missing:2"
+      },
+      onFocusResolution
+    });
+
+    await vi.waitFor(() => {
+      expect(onFocusResolution).toHaveBeenCalledWith(expect.objectContaining({
+        status: "recovery",
+        object: { type: "menu-item", id: "menu-missing" },
+        consequence: expect.stringContaining("No different menu item")
+      }));
+    });
+    expect(container.querySelector('button[aria-pressed="true"]')).toBeNull();
+  });
+
+  test("keeps a dirty recipe mounted by locking every menu-context control until recovery", async () => {
+    vi.mocked(getEventTypes).mockResolvedValue([
+      { id: "evt-1", name: "Dinner" },
+      { id: "evt-2", name: "Reception" }
+    ]);
+    vi.mocked(getMenuCategories).mockImplementation(async (eventTypeId) => eventTypeId === "evt-2"
+      ? [{ id: "cat-3", eventTypeId: "evt-2", name: "Canapes" }]
+      : [
+          { id: "cat-1", eventTypeId: "evt-1", name: "Entrees" },
+          { id: "cat-2", eventTypeId: "evt-1", name: "Desserts" }
+        ]);
+    vi.mocked(getMenuItems).mockImplementation(async (eventTypeId) => eventTypeId === "evt-2"
+      ? [{ id: "item-3", eventTypeId: "evt-2", categoryId: "cat-3", name: "Bruschetta", price: 8, active: true }]
+      : [
+          { id: "item-1", eventTypeId: "evt-1", categoryId: "cat-1", name: "Chicken Alfredo", price: 18, active: true },
+          { id: "item-2", eventTypeId: "evt-1", categoryId: "cat-1", name: "Pasta Primavera", price: 16, active: true },
+          { id: "item-4", eventTypeId: "evt-1", categoryId: "cat-2", name: "Tiramisu", price: 9, active: true }
+        ]);
+    const onEventTypeChange = vi.fn();
+    const publishRecipe = vi.fn(async () => {
+      throw Object.assign(new Error("Catalog revision changed."), {
+        inventoryDefinitive: true,
+        inventoryAttempt: { requestId: "recipe-rejected-1" }
+      });
+    });
+    const previewRecipeDependencies = vi.fn(async () => ({
+      reviewedCatalogRevision: 1,
+      reviewedRecipeRevision: 1,
+      reviewedRecipeDigest: "a".repeat(64),
+      dependencyPreflightDigest: "b".repeat(64),
+      affectedMenuItems: [{ menuItemId: "item-1", name: "Chicken Alfredo" }]
+    }));
+    const resetRecipe = vi.fn(async () => ({ state: "idle" }));
+    const recipeExtension = (recipeRevision = 1, outputYield = "10") => ({
+      enabled: true,
+      ingredients: [{ ingredientId: "chicken", name: "Chicken", baseUnitId: "lb" }],
+      ingredientSourceState: "current",
+      activeMenuItemId: "item-1",
+      activeMenuCostProjectionState: "current",
+      recipesByMenuItemId: {
+        "item-1": {
+          menuItemId: "item-1",
+          recipeRevision,
+          outputYield,
+          outputUnitId: "portion",
+          lines: [{ lineId: "line-chicken", ingredientId: "chicken", quantity: "2", unitKind: "standard", unitId: "lb", quantityBasis: "as_purchased" }]
+        }
+      },
+      menuCostProjectionsByMenuItemId: {
+        "item-1": {
+          menuItemId: "item-1",
+          state: "complete",
+          projectedIngredientCostDisplay: "$6.00",
+          costPerYieldUnitDisplay: "$0.60",
+          recipeDefinition: { outputUnitId: "portion" }
+        }
+      },
+      previewRecipeDependencies,
+      publishRecipe,
+      resetRecipe
+    });
+    const renderRecipeView = (inventoryRecipeExtension) => renderView({
+      initialTab: "menu",
+      onEventTypeChange,
+      catalog: {
+        ...catalog(),
+        source: "firebase",
+        settings: { ...catalog().settings, catalogRevision: 1 }
+      },
+      inventoryRecipeExtension
+    });
+    renderRecipeView(recipeExtension());
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 20)));
+
+    const alternateSelection = container.querySelector('input[aria-label="Select Pasta Primavera"]');
+    act(() => alternateSelection.click());
+    const recipeYield = container.querySelector('[data-inventory-recipe-editor] fieldset input[inputmode="decimal"]');
+    setInputValue(recipeYield, "12");
+    await act(async () => Promise.resolve());
+
+    const eventType = container.querySelector('[data-choice-field="catalog-event-type"] select');
+    const menuSection = container.querySelector('[data-choice-field="catalog-menu-section"] select');
+    const search = container.querySelector('input[type="search"][placeholder="Search by name"]');
+    const availabilityFilter = container.querySelector(".admin-menu-availability-filter input");
+    const alternateItem = [...container.querySelectorAll(".admin-menu-item-choice")]
+      .find((button) => button.textContent.includes("Pasta Primavera"));
+    const lockMessage = container.querySelector("#inventory-recipe-context-lock");
+
+    expect(lockMessage?.textContent).toContain("Publish or discard recipe changes");
+    expect(lockMessage?.textContent).toContain("recovery actions remain available");
+    expect(eventType.disabled).toBe(true);
+    expect(menuSection.disabled).toBe(true);
+    expect(search.disabled).toBe(true);
+    expect(availabilityFilter.disabled).toBe(true);
+    expect(alternateItem.disabled).toBe(true);
+    expect(alternateSelection.disabled).toBe(true);
+    expect(container.querySelector(".admin-menu-item-fields input").disabled).toBe(true);
+    expect([...container.querySelectorAll(".admin-menu-bulk-bar button")].every((button) => button.disabled)).toBe(true);
+    expect(search.getAttribute("aria-describedby")).toBe("inventory-recipe-context-lock");
+    expect([...container.querySelectorAll("button")].find((button) => button.textContent === "Discard recipe changes")?.disabled).toBe(false);
+
+    // Defense in depth: even if a host removes the DOM disabled property, the
+    // route handler must refuse a context change and preserve the recipe draft.
+    const eventTypeChangeCount = onEventTypeChange.mock.calls.length;
+    eventType.disabled = false;
+    act(() => {
+      Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value").set.call(eventType, "evt-2");
+      eventType.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    expect(onEventTypeChange).toHaveBeenCalledTimes(eventTypeChangeCount);
+    expect(container.querySelector("[data-inventory-recipe-editor]")?.dataset.menuItemId).toBe("item-1");
+    expect(container.querySelector('[data-inventory-recipe-editor] fieldset input[inputmode="decimal"]').value).toBe("12");
+
+    act(() => {
+      [...container.querySelectorAll("button")]
+        .find((button) => button.textContent === "Discard recipe changes")
+        .click();
+    });
+    expect(container.querySelector("#inventory-recipe-context-lock")).toBeNull();
+    expect(container.querySelector('[data-choice-field="catalog-event-type"] select').disabled).toBe(false);
+    expect(container.querySelector('input[type="search"][placeholder="Search by name"]').disabled).toBe(false);
+
+    setInputValue(container.querySelector('[data-inventory-recipe-editor] fieldset input[inputmode="decimal"]'), "13");
+    const publishRecipeButton = container.querySelector('[data-inventory-recipe-editor] button[type="submit"]');
+    expect(
+      publishRecipeButton.disabled,
+      container.querySelector("[data-recipe-publish-disabled]")?.textContent || "recipe publish should be enabled"
+    ).toBe(false);
+    await act(async () => publishRecipeButton.click());
+    expect(previewRecipeDependencies).toHaveBeenCalledOnce();
+    await act(async () => publishRecipeButton.click());
+    expect(container.querySelector("[data-recipe-operation-state='rejected']")).not.toBeNull();
+
+    renderRecipeView(recipeExtension(2, "14"));
+    await act(async () => Promise.resolve());
+    act(() => [...container.querySelectorAll("button")]
+      .find((button) => button.textContent.includes("Use current recipe"))?.click());
+    expect(container.querySelector('[data-inventory-recipe-editor] fieldset input[inputmode="decimal"]').value).toBe("14");
+    expect(container.querySelector("#inventory-recipe-context-lock")?.textContent)
+      .toContain("Finish the current recipe outcome review");
+    expect(container.querySelector('input[type="search"][placeholder="Search by name"]').disabled).toBe(true);
+
+    await act(async () => [...container.querySelectorAll("button")]
+      .find((button) => button.textContent.includes("Review and retry"))?.click());
+    expect(resetRecipe).toHaveBeenCalledWith({ requestId: "recipe-rejected-1" });
+    expect(container.querySelector("#inventory-recipe-context-lock")).toBeNull();
+  });
+
   test("starts ready with no unsaved changes and no message", () => {
     renderView({ onSave: async () => ({ ok: true }) });
     expect(container.innerHTML).toContain('data-capability-state="ready"');
+  });
+
+  test("moves between Library sections with standard tab keys", () => {
+    renderView();
+    const offers = container.querySelector('[data-admin-tab-id="packages"]');
+    const addons = container.querySelector('[data-admin-tab-id="addons"]');
+    act(() => {
+      offers.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
+    });
+    expect(addons.getAttribute("aria-selected")).toBe("true");
+
+    act(() => {
+      addons.dispatchEvent(new KeyboardEvent("keydown", { key: "Home", bubbles: true }));
+    });
+    expect(offers.getAttribute("aria-selected")).toBe("true");
+  });
+
+  test("edits the authoritative rule JSON source through structured controls", () => {
+    renderView({
+      initialTab: "rules",
+      catalog: {
+        ...catalog(),
+        settings: {
+          ...catalog().settings,
+          configurationRules: [{
+            id: "large-event-staffing",
+            type: "requirement",
+            conditions: [{
+              path: "event.guests",
+              operator: "gte",
+              value: 100,
+              futureConditionField: "preserve"
+            }],
+            effect: {
+              operator: "require",
+              target: "resources.servers",
+              value: 4,
+              futureEffectField: "preserve"
+            },
+            reason: "Large events need coverage.",
+            futureRuleField: "preserve"
+          }]
+        }
+      }
+    });
+
+    const editor = container.querySelector('[data-configuration-rule-editor="0"]');
+    act(() => editor.querySelector("summary").click());
+    const operator = editor.querySelector('[aria-label="Rule 1 condition 1 operator"]');
+    act(() => {
+      operator.value = "lte";
+      operator.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+
+    const source = container.querySelector("[data-configuration-rules-editor]").value;
+    const [updated] = JSON.parse(source);
+    expect(updated.conditions[0]).toMatchObject({
+      operator: "lte",
+      futureConditionField: "preserve"
+    });
+    expect(updated.effect.futureEffectField).toBe("preserve");
+    expect(updated.futureRuleField).toBe("preserve");
+    expect(container.querySelector(".modal-foot").textContent)
+      .toContain("Quote rule updated in this Library draft.");
+  });
+
+  test("opening Advanced policy keeps its business groups collapsed and fields singular", () => {
+    renderView({ initialTab: "pricing" });
+    const advanced = container.querySelector('[data-pricing-policy-group="advanced"]');
+    expect(advanced.open).toBe(false);
+    act(() => advanced.querySelector(":scope > summary").click());
+    expect(advanced.open).toBe(true);
+
+    const childGroups = [...advanced.querySelectorAll("[data-pricing-policy-advanced-section]")];
+    expect(childGroups.length).toBeGreaterThanOrEqual(7);
+    childGroups.forEach((group) => expect(group.open).toBe(false));
+
+    const labelCount = (copy) => [...advanced.querySelectorAll("label")]
+      .filter((label) => label.textContent.includes(copy)).length;
+    expect(labelCount("Retry limit")).toBe(1);
+    expect(labelCount("Enable guided selling recommendations")).toBe(1);
+    expect(labelCount("Quote prepared by")).toBe(1);
+    expect(labelCount("Business name")).toBe(1);
+    expect(labelCount("Event Templates JSON")).toBe(1);
+  });
+
+  test("keeps an edited component draft when its object and collection disclosures change", () => {
+    renderView({
+      initialTab: "addons",
+      catalog: {
+        ...catalog(),
+        addons: [{
+          id: "coffee-service",
+          name: "Coffee service",
+          pricingType: "per_event",
+          type: "per_event",
+          price: 125,
+          active: true
+        }],
+        rentals: [{
+          id: "linen-set",
+          name: "Linen set",
+          pricingType: "per_item",
+          type: "per_item",
+          price: 12,
+          qtyPerGuests: 8,
+          active: true
+        }]
+      }
+    });
+
+    const component = container.querySelector('[data-commercial-component-id="coffee-service"]');
+    const summary = component.querySelector("summary");
+    act(() => summary.click());
+    expect(component.open).toBe(true);
+
+    const nameInput = component.querySelector('[aria-label="Add-on 1 display name"]');
+    setInputValue(nameInput, "Espresso service");
+    expect(nameInput.value).toBe("Espresso service");
+
+    act(() => container.querySelector('[data-admin-tab-id="rentals"]').click());
+    expect(container.querySelector('[data-commercial-component-id="linen-set"]')).toBeTruthy();
+    act(() => container.querySelector('[data-admin-tab-id="addons"]').click());
+
+    expect(container.querySelector('[aria-label="Add-on 1 display name"]').value)
+      .toBe("Espresso service");
+    expect(container.textContent).toContain("Espresso service");
   });
 
   test("reports dirty state and clears it after confirmed discard", () => {
@@ -271,7 +744,7 @@ describe("AdminCatalogModal save capability state", () => {
     renderView({ onSave: async () => ({ ok: true }), onInteractionStateChange });
     makeUnsavedEdit();
     const changedCheckbox = [...container.querySelectorAll('input[type="checkbox"]')]
-      .find((input) => input.getAttribute("aria-label") === "Package 1 active");
+      .find((input) => input.getAttribute("aria-label") === "Offer 1 active");
     expect(changedCheckbox.checked).toBe(false);
 
     renderView({
@@ -288,7 +761,7 @@ describe("AdminCatalogModal save capability state", () => {
     expect(container.querySelector(".modal-foot").textContent)
       .toContain("A newer Library version is ready");
     expect([...container.querySelectorAll("button")]
-      .find((element) => element.textContent.trim() === "Sync draft now").disabled).toBe(true);
+      .find((element) => element.textContent.trim() === "Save draft now").disabled).toBe(true);
     expect(onInteractionStateChange).toHaveBeenLastCalledWith({ dirty: true, busy: false });
   });
 
@@ -362,7 +835,7 @@ describe("AdminCatalogModal save capability state", () => {
       onCatalogMutation
     });
     const packagesTab = [...container.querySelectorAll("button")]
-      .find((button) => button.textContent.trim() === "Packages");
+      .find((button) => button.textContent.trim() === "Offers");
     expect(packagesTab).toBeTruthy();
     act(() => packagesTab.click());
     await act(async () => Promise.resolve());
@@ -516,7 +989,9 @@ describe("AdminCatalogModal save capability state", () => {
 
     const itemEditor = container.querySelector('[aria-label="Edit Roasted chicken"]');
     expect(itemEditor.querySelector('input[type="number"]').value).toBe("12.34");
-    expect(container.textContent).toContain("Device-only changes");
+    expect(container.textContent).toContain("Changes waiting to save");
+    expect(container.textContent).toContain("Library changes are waiting to save");
+    expect(container.textContent).toContain("cannot be published yet");
     expect(container.textContent).not.toContain("All changes saved");
   });
 });

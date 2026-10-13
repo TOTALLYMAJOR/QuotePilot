@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest";
 import {
+  buildEventTemplateObjectPresentation,
   buildEventTemplateWarnings,
   flattenEventTemplateMenuItems,
   nextEventTemplateId
@@ -75,5 +76,66 @@ describe("EventTemplatesEditor model helpers", () => {
     });
 
     expect(warnings.map((warning) => warning.code)).not.toContain("missing-menu-item");
+  });
+
+  test("derives nested object summaries without adding template state", () => {
+    const presentation = buildEventTemplateObjectPresentation({
+      id: "wedding",
+      name: "Wedding",
+      eventTypeId: "wedding",
+      pkg: "deluxe",
+      style: "Plated",
+      hours: 6,
+      menuItems: ["salad", "steak"],
+      addons: ["coffee"],
+      rentals: ["linens", "china"],
+      bartenders: 2,
+      milesRT: 28,
+      staffingRateTypeId: "staff-premium",
+      bartenderRateTypeId: "bar-standard",
+      payMethod: "ach",
+      taxRegion: "out_of_state",
+      seasonProfileId: "holiday",
+      templateVersion: "v2"
+    }, {
+      eventTypes: [{ id: "wedding", name: "Wedding" }],
+      packages: [{ id: "deluxe", name: "Deluxe" }],
+      warnings: [],
+      menuInventoryComplete: true
+    });
+
+    expect(presentation).toEqual(expect.objectContaining({
+      identity: { id: "wedding", name: "Wedding" },
+      completeness: expect.objectContaining({ state: "ready", label: "Ready to use" })
+    }));
+    expect(presentation.groups).toEqual({
+      startingOffer: "Deluxe",
+      eventContext: "Wedding · Plated · 6 hours",
+      preselectedComponents: "2 menu items",
+      serviceRentalDefaults: "1 service · 2 rentals",
+      staffingResources: "2 bartenders · 28 round-trip miles · 2 rate policies",
+      pricingPolicyDefaults: "Bank transfer · Tax: out_of_state · Season: holiday",
+      remainsOpen: "Ready to use",
+      advanced: "Identity and source recorded"
+    });
+  });
+
+  test("keeps partial menu evidence distinct from ready and attention states", () => {
+    const partial = buildEventTemplateObjectPresentation({ id: "wedding" }, {
+      eventTypes: [],
+      packages: [],
+      warnings: [],
+      menuInventoryComplete: false
+    });
+    const needsAttention = buildEventTemplateObjectPresentation({ id: "wedding" }, {
+      warnings: [{ code: "missing-package", message: "Choose an offer." }],
+      menuInventoryComplete: true
+    });
+
+    expect(partial.completeness.state).toBe("check");
+    expect(needsAttention.completeness).toEqual(expect.objectContaining({
+      state: "attention",
+      label: "1 detail needs attention"
+    }));
   });
 });

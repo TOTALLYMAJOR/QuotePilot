@@ -5,6 +5,21 @@ import { join } from "node:path";
 import { createRoot } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+
+const navigationMocks = vi.hoisted(() => ({ adapter: null }));
+const performanceMocks = vi.hoisted(() => ({ markRouteStage: vi.fn() }));
+
+vi.mock("../../lib/routePerformance", async (importOriginal) => ({
+  ...await importOriginal(),
+  ...performanceMocks
+}));
+
+vi.mock("../../context/WorkspaceNavigationContext", () => ({
+  useWorkspaceReturnContextAdapter: (adapter) => {
+    navigationMocks.adapter = adapter;
+  }
+}));
+
 import AmbientNowView from "../AmbientNowView";
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
@@ -64,6 +79,8 @@ const baseProps = {
   nowDate: NOW_DATE,
   onRefresh: () => {},
   onOpenWorkflow: () => ({ status: "pending" }),
+  onOpenCustomer: () => ({ status: "pending" }),
+  onOpenCalendar: () => ({ status: "pending" }),
   onNewQuote: () => {}
 };
 
@@ -71,6 +88,10 @@ let container;
 let root;
 
 beforeEach(() => {
+  navigationMocks.adapter = null;
+  performanceMocks.markRouteStage.mockClear();
+  window.requestAnimationFrame = (callback) => window.setTimeout(() => callback(Date.now()), 0);
+  window.cancelAnimationFrame = (handle) => window.clearTimeout(handle);
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
@@ -88,6 +109,80 @@ function mount(props = {}) {
 }
 
 describe("AmbientNowView", () => {
+  test("marks core before supplemental work settles and emits each readiness stage only once", () => {
+    mount({ snapshot: snapshot({ loading: true, attentionSummary: null, reads: {
+      attention: { status: "loading" }, history: { status: "loading" }
+    } }) });
+    expect(performanceMocks.markRouteStage).not.toHaveBeenCalled();
+    mount({ snapshot: snapshot({ loading: true, partial: true, reads: {
+      attention: { status: "success" }, history: { status: "loading" }
+    } }) });
+    expect(performanceMocks.markRouteStage.mock.calls).toEqual([[{
+      routeId: "now", stage: "usable-core", outcome: "ready"
+    }]]);
+    mount();
+    mount();
+    expect(performanceMocks.markRouteStage.mock.calls).toEqual([
+      [{ routeId: "now", stage: "usable-core", outcome: "ready" }],
+      [{ routeId: "now", stage: "supplemental-complete", outcome: "ready" }]
+    ]);
+  });
+
+  test("does not mark failed-first or supplemental-only reads as usable core", () => {
+    mount({ snapshot: snapshot({ loading: true, error: "Attention failed", loadedAt: 0, reads: {
+      attention: { status: "error", error: "Attention failed" },
+      history: { status: "loading" }, unreadReplies: { status: "success" }
+    } }) });
+    expect(performanceMocks.markRouteStage).not.toHaveBeenCalled();
+  });
+
+  test("keeps usable primary evidence ready when a supplemental read fails", () => {
+    mount({ snapshot: snapshot({ error: "Replies failed", partial: true, reads: {
+      attention: { status: "success" }, history: { status: "success" },
+      unreadReplies: { status: "error", error: "Replies failed" }
+    } }) });
+    expect(performanceMocks.markRouteStage.mock.calls).toEqual([
+      [{ routeId: "now", stage: "usable-core", outcome: "ready" }],
+      [{ routeId: "now", stage: "supplemental-complete", outcome: "partial" }]
+    ]);
+  });
+
+  test.each([["history", "attention"], ["attention", "history"]])(
+    "keeps core ready when %s fails before %s succeeds", (failedRead, successfulRead) => {
+      mount({ snapshot: snapshot({ loading: true, error: "Primary read failed", loadedAt: 0, reads: {
+        [failedRead]: { status: "error" }, [successfulRead]: { status: "loading" },
+        unreadReplies: { status: "loading" }
+      } }) });
+      expect(performanceMocks.markRouteStage).not.toHaveBeenCalled();
+      mount({ snapshot: snapshot({ error: "Primary read failed", partial: true, loadedAt: 0, reads: {
+        [failedRead]: { status: "error" }, [successfulRead]: { status: "success" },
+        unreadReplies: { status: "success" }
+      } }) });
+      expect(performanceMocks.markRouteStage.mock.calls).toEqual([
+        [{ routeId: "now", stage: "usable-core", outcome: "ready" }],
+        [{ routeId: "now", stage: "supplemental-complete", outcome: "partial" }]
+      ]);
+    }
+  );
+
+  test.each(["loading", "pending"])("does not call unresolved %s reads supplemental completion", (status) => {
+    mount({ snapshot: snapshot({ reads: { attention: { status: "success" }, history: { status } } }) });
+    expect(performanceMocks.markRouteStage).toHaveBeenCalledTimes(1);
+    expect(performanceMocks.markRouteStage).toHaveBeenCalledWith({ routeId: "now", stage: "usable-core", outcome: "ready" });
+  });
+
+  test.each([
+    [{ error: "Read failed", reads: { attention: { status: "error" } } }, "error", "error"],
+    [{ partial: true, reads: { attention: { status: "success" }, history: { status: "unavailable" } } }, "ready", "partial"],
+    [{ stale: true }, "partial", "partial"]
+  ])("labels each stage by its own available evidence", (overrides, core, supplemental) => {
+    mount({ snapshot: snapshot(overrides) });
+    expect(performanceMocks.markRouteStage.mock.calls).toEqual([
+      [{ routeId: "now", stage: "usable-core", outcome: core }],
+      [{ routeId: "now", stage: "supplemental-complete", outcome: supplemental }]
+    ]);
+  });
+
   test("renders the approved editorial home with at most three state-ordered priorities", () => {
     const items = [0, 1, 2, 3].map((index) => attentionItem(index));
     const markup = renderToStaticMarkup(
@@ -100,19 +195,27 @@ describe("AmbientNowView", () => {
       />
     );
 
-    expect(markup).toContain("Today, in clear view.");
-    expect(markup).toContain("The work that needs you, followed by what is coming next.");
-    expect(markup).toContain('/images/quote-workspace-wedding-table-v1.webp');
-    expect(markup).toContain("Three things deserve attention");
+    expect(markup).toContain("Three urgent items need you today.");
+    expect(markup).toContain("Needs you");
+    expect(markup).toContain('data-now-urgency-count="3"');
+    expect(markup).toContain('data-now-waiting-count="0"');
+    expect(markup).toContain("Overdue follow-up");
+    expect(markup).toContain("No follow-up outcome is recorded yet.");
+    expect(markup).toContain("Next 7 days");
     expect(markup).toContain("1 more priority remains in Workflow");
     expect(markup.match(/class="ambient-now-priority"/gu)).toHaveLength(3);
     expect(markup.match(/data-ambient-action-id="review-now-priority:/gu)).toHaveLength(3);
     expect(markup.match(/data-workspace-task-id="review-now-priority:/gu)).toHaveLength(3);
+    expect(markup).toContain('id="ambient-now-priorities-title" class="sr-only ambient-now__return-anchor" tabindex="-1"');
     expect(markup).toContain("Event 0");
     expect(markup).toContain("Customer 0");
+    expect(markup).toContain("Saved quote total");
+    expect(markup).toContain("Value unavailable");
+    expect(markup).toContain("Why it matters");
     expect(markup).not.toContain("Event 3");
-    expect(markup.indexOf("Today, in clear view.")).toBeLessThan(markup.indexOf("Event 0"));
+    expect(markup.indexOf("Three urgent items need you today.")).toBeLessThan(markup.indexOf("Event 0"));
     expect(markup.indexOf("Event 0")).toBeLessThan(markup.indexOf("About this view"));
+    expect(markup).not.toContain('ambient-now-priority__number');
     expect(markup).not.toContain("Start a quote");
     expect(markup).not.toMatch(/bounded workspace snapshot|current workspace snapshot/iu);
   });
@@ -159,6 +262,18 @@ describe("AmbientNowView", () => {
       attentionType: "follow_up",
       requestId: "follow-up:quote-1",
       actionId: "review-now-priority:follow-up:quote-1"
+    }, {
+      preserveReturnContext: true,
+      returnContextSurfaceId: "commercial-priority",
+      returnContextHint: {
+        focus: {
+          kind: "priority-action",
+          objectId: "quote-1",
+          actionId: "review-now-priority:follow-up:quote-1",
+          controlId: "follow-up:quote-1",
+          attentionType: "follow_up"
+        }
+      }
     });
     expect(container.querySelector(".ambient-now__acknowledgement").textContent).toContain("Opening follow up");
   });
@@ -185,7 +300,136 @@ describe("AmbientNowView", () => {
       attentionType: "change_request",
       requestId: "request-1",
       actionId: "review-now-priority:change-request:quote-1"
+    }, expect.objectContaining({
+      preserveReturnContext: true,
+      returnContextSurfaceId: "commercial-priority"
+    }));
+  });
+
+  test("restores the same quote's newly current action only after a newer source generation", async () => {
+    const onRefresh = vi.fn();
+    const initial = attentionItem(1);
+    mount({
+      onRefresh,
+      snapshot: snapshot({
+        attentionSummary: { itemCount: 1, items: [initial] },
+        quotes: [quote(1)]
+      })
     });
+    const view = navigationMocks.adapter.capture({
+      focus: {
+        kind: "priority-action",
+        objectId: "quote-1",
+        actionId: "review-now-priority:follow-up:quote-1",
+        controlId: "follow-up:quote-1",
+        attentionType: "follow_up"
+      }
+    });
+    let outcomePromise;
+    act(() => {
+      outcomePromise = navigationMocks.adapter.restore(view);
+    });
+    expect(onRefresh).toHaveBeenCalledWith({ force: true });
+
+    const current = attentionItem(1, { id: "follow-up:quote-1:updated" });
+    mount({
+      onRefresh,
+      snapshot: snapshot({
+        loadedAt: LOADED_AT + 1,
+        attentionSummary: { itemCount: 1, items: [current] },
+        quotes: [quote(1)]
+      })
+    });
+    let outcome;
+    await act(async () => {
+      outcome = await outcomePromise;
+    });
+
+    expect(outcome).toEqual({ status: "restored" });
+    expect(document.activeElement?.dataset.ambientActionId)
+      .toBe("review-now-priority:follow-up:quote-1:updated");
+  });
+
+  test("focuses the revealed resolved anchor without substituting another quote", async () => {
+    const onRefresh = vi.fn();
+    mount({
+      onRefresh,
+      snapshot: snapshot({
+        attentionSummary: { itemCount: 1, items: [attentionItem(1)] },
+        quotes: [quote(1)]
+      })
+    });
+    const view = navigationMocks.adapter.capture({
+      focus: {
+        kind: "priority-action",
+        objectId: "quote-1",
+        actionId: "review-now-priority:follow-up:quote-1",
+        controlId: "follow-up:quote-1",
+        attentionType: "follow_up"
+      }
+    });
+    let outcomePromise;
+    act(() => {
+      outcomePromise = navigationMocks.adapter.restore(view);
+    });
+    mount({
+      onRefresh,
+      snapshot: snapshot({
+        loadedAt: LOADED_AT + 1,
+        attentionSummary: { itemCount: 1, items: [attentionItem(2)] },
+        quotes: [quote(1), quote(2)]
+      })
+    });
+    let outcome;
+    await act(async () => {
+      outcome = await outcomePromise;
+    });
+
+    const anchor = container.querySelector("#ambient-now-priorities-title");
+    expect(outcome).toEqual({ status: "restored" });
+    expect(document.activeElement).toBe(anchor);
+    expect(anchor.classList.contains("sr-only")).toBe(true);
+    expect(document.activeElement?.closest('[data-now-priority-quote-id="quote-2"]')).toBeNull();
+  });
+
+  test("returns recovery when the forced source refresh fails", async () => {
+    const onRefresh = vi.fn();
+    mount({
+      onRefresh,
+      snapshot: snapshot({
+        attentionSummary: { itemCount: 1, items: [attentionItem(1)] },
+        quotes: [quote(1)]
+      })
+    });
+    const view = navigationMocks.adapter.capture({
+      focus: {
+        kind: "priority-action",
+        objectId: "quote-1",
+        actionId: "review-now-priority:follow-up:quote-1",
+        controlId: "follow-up:quote-1",
+        attentionType: "follow_up"
+      }
+    });
+    let outcomePromise;
+    act(() => {
+      outcomePromise = navigationMocks.adapter.restore(view);
+    });
+    mount({
+      onRefresh,
+      snapshot: snapshot({
+        error: "Refresh failed.",
+        stale: true,
+        attentionSummary: { itemCount: 1, items: [attentionItem(1)] },
+        quotes: [quote(1)]
+      })
+    });
+    let outcome;
+    await act(async () => {
+      outcome = await outcomePromise;
+    });
+
+    expect(outcome).toEqual({ status: "recovery" });
+    expect(document.activeElement).toBe(container.querySelector(".workspace-route-heading"));
   });
 
   test("keeps refresh as an explicit non-mutating view action", () => {
@@ -219,9 +463,28 @@ describe("AmbientNowView", () => {
     );
 
     expect(healthy).toContain('data-caught-up="true"');
-    expect(healthy).toContain("You are caught up on the work tracked here.");
+    expect(healthy.match(/You(?:'|&#x27;)re caught up on the work tracked here\./g)).toHaveLength(1);
+    expect(healthy).not.toContain("Nothing tracked in this view currently needs you.");
     expect(paymentPending).toContain('data-caught-up="false"');
     expect(paymentPending).toContain("recorded payment steps remain below");
+  });
+
+  test("does not invent an unpaid deposit obligation when payment evidence is missing", () => {
+    const markup = renderToStaticMarkup(
+      <AmbientNowView
+        {...baseProps}
+        snapshot={snapshot({
+          quotes: [quote(1, {
+            status: "accepted",
+            totals: { deposit: 1200 }
+          })]
+        })}
+      />
+    );
+
+    expect(markup).toContain('data-caught-up="true"');
+    expect(markup).not.toContain("Payment steps");
+    expect(markup).not.toContain("Deposit due");
   });
 
   test("shows only internal receipt-backed quiet progress", () => {
@@ -243,9 +506,12 @@ describe("AmbientNowView", () => {
       />
     );
 
-    expect(markup).toContain("Recently completed");
-    expect(markup).toContain("Follow-up marked complete internally");
-    expect(markup).toContain("do not imply customer contact or provider delivery");
+    expect(markup).toContain("Quiet progress");
+    expect(markup).toContain("Recently handled");
+    expect(markup).toContain("Follow-up completed");
+    expect(markup).toContain("Yesterday");
+    expect(markup).not.toContain("delivered");
+    expect(markup).not.toContain("paid");
   });
 
   test("shows only recorded upcoming work and keeps its chronological projection", () => {
@@ -263,7 +529,7 @@ describe("AmbientNowView", () => {
       <AmbientNowView {...baseProps} snapshot={snapshot({ quotes: [later, sooner] })} />
     );
 
-    expect(markup).toContain("Upcoming work");
+    expect(markup).toContain("Coming up");
     expect(markup.indexOf("Thursday Dinner")).toBeLessThan(markup.indexOf("Friday Dinner"));
     expect(markup).toContain("17:00 · Garden Terrace");
     expect(markup).toContain("30 guests");
@@ -284,10 +550,54 @@ describe("AmbientNowView", () => {
     expect(css).not.toMatch(/position:\s*(?:fixed|absolute|sticky)/u);
     expect(css).not.toMatch(/\bz-index\s*:/u);
     expect(css).toMatch(/min-height:\s*44px/u);
-    expect(css).toMatch(/@media \(max-width: 980px\)/u);
-    expect(css).toMatch(/@media \(max-width: 720px\)/u);
-    expect(css).toMatch(/@media \(max-width: 430px\)/u);
+    expect(css).toMatch(/@media \(max-width: 1020px\)/u);
+    expect(css).toMatch(/@media \(max-width: 760px\)/u);
+    expect(css).toMatch(/@media \(max-width: 470px\)/u);
     expect(css).toContain("var(--font-editorial)");
+    expect(css).toMatch(/\.ambient-now-priority\s*\{[^}]*display:\s*block;/su);
+    expect(css).not.toContain(".ambient-now-priority__number");
+    expect(css).not.toMatch(/\.ambient-now-priority\s*\{[^}]*grid-template-columns:/su);
+    expect(css).toContain(".ambient-now__return-anchor.sr-only:focus");
+  });
+
+  test("keeps provider-dependent payment states in the quiet waiting band", () => {
+    const markup = renderToStaticMarkup(
+      <AmbientNowView
+        {...baseProps}
+        snapshot={snapshot({
+          quotes: [quote(1, {
+            status: "accepted",
+            payment: { depositStatus: "sent" },
+            totals: { deposit: 1200 }
+          })]
+        })}
+      />
+    );
+
+    expect(markup).toContain('data-progress-group="waiting"');
+    expect(markup).toContain("Waiting on others");
+    expect(markup).toContain("Deposit requested");
+    expect(markup).toContain("$1,200.00");
+  });
+
+  test("routes repeat-event attention to the exact existing Customer continuation", () => {
+    const onOpenCustomer = vi.fn(() => ({ status: "pending" }));
+    const item = attentionItem(1, {
+      id: "anniversary:quote-1",
+      type: "anniversary_rebooking",
+      state: "available",
+      eventName: "Rivera Dinner"
+    });
+    mount({
+      onOpenCustomer,
+      snapshot: snapshot({
+        attentionSummary: { itemCount: 1, items: [item] },
+        quotes: [quote(1, { customerId: "customer-1" })]
+      })
+    });
+
+    act(() => container.querySelector('[data-ambient-action-id^="review-now-priority:"]').click());
+    expect(onOpenCustomer).toHaveBeenCalledWith("customer-1");
   });
 
   test("replaces an unavailable read with one safe productive recovery", () => {

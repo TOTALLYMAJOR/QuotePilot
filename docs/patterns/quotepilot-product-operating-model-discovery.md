@@ -1,5 +1,7 @@
 # Pattern Record: Domain Operating Model Discovery
 
+Last updated: 2026-09-10 15:09:08 CDT
+
 ## Classification
 
 This methodology **combines and refines existing patterns**.

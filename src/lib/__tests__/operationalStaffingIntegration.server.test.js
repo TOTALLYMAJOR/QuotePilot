@@ -49,8 +49,8 @@ describe("operational staffing callable authority integration", () => {
     expect(plan).not.toContain("assertAdminStaff(");
   });
 
-  test("requires both global and transaction-read tenant authority gates", () => {
-    expect(FUNCTIONS_SOURCE).toContain("process.env.OPERATIONAL_STAFFING_AUTHORITY_ENABLED");
+  test("requires both scoped runtime and transaction-read tenant authority gates", () => {
+    expect(FUNCTIONS_SOURCE).toContain('tenantWorkflowRuntimeEnabled("OPERATIONAL_STAFFING_AUTHORITY_ENABLED", organizationId)');
     expect(RUNTIME_SOURCE).toContain("settings?.operationalStaffingAuthorityEnabled === true");
     [
       callableSource("getOperationalStaffingSnapshot", "configureOperationalStaffProfile"),
@@ -60,7 +60,7 @@ describe("operational staffing callable authority integration", () => {
       callableSource("saveStaffRecord", "applyOperationalStaffingPlan")
     ].forEach((source) => {
       expect(source).toContain("tx.get(refs.settingsRef)");
-      expect(source).toContain("assertOperationalStaffingStorageEnabled(settingsSnap)");
+      expect(source).toContain("assertOperationalStaffingStorageEnabled(settingsSnap, scope.organizationId)");
     });
   });
 

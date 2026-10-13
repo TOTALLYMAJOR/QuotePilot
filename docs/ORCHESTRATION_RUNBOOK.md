@@ -1,7 +1,6 @@
 # Orchestration Runbook
 
-Last updated: 2026-08-28 17:25:14 CDT
-
+Last updated: 2026-10-10 19:54:09 CDT
 ## Purpose
 Operational usage guide for orchestration lanes, CI behavior, and release evidence expectations.
 
@@ -17,6 +16,21 @@ Machine-readable runner handoff:
 npm run plan:task -- --task "Review Firestore role authority" \
   --files firestore.rules,src/lib/authClient.js --json
 ```
+
+Named enhancements must exist in `docs/enhancement-impact-manifest.json`:
+```bash
+node scripts/check-enhancement-impact-contract.mjs
+npm run plan:task -- --task "Implement enhancement 97" \
+  --enhancement 97 \
+  --files scripts/task-orchestration-plan.mjs,docs/enhancement-impact-manifest.json
+```
+
+The declaration supplies affected routes, authority identifiers, and runnable
+tests. A presentation-only item must use `authorities: []`; if its bounded file
+set crosses a registered pricing, commercial-quote, or Inventory authority
+path, planning fails and the authority work must be separated or truthfully
+reclassified. Exact IDs in task text are detected automatically;
+`--enhancement` is the unambiguous runner form.
 
 The output recommends a model and reasoning effort, but the external runner
 must apply that selection before task execution. In a dirty worktree, always
@@ -36,11 +50,69 @@ Copy `lifecycle.recordedAt` into the completion report. Governed documentation
 uses the local `Last updated: YYYY-MM-DD HH:MM:SS TZ` header instead; the docs
 gate requires that value to advance whenever the document changes.
 
+Inspect `productIntelligence` in the same packet. When its disposition is
+`required`, record the actor, catering job or decision, expected improvement,
+outcome or metric IDs, guardrail IDs, evidence need, and release/experiment
+ledger entry before implementation. When it is `not_applicable_allowed`, use
+`not_applicable` only for genuinely mechanical work and record the rationale.
+
+Validate the layered evaluation plan without running its checks:
+```bash
+npm run eval:layered -- --dry-run
+```
+
+Run every automated dimension, or select the smallest affected dimensions:
+```bash
+npm run eval:layered
+npm run eval:layered -- --eval EVAL-001 --eval EVAL-002
+```
+
+Successful non-dry runs write create-only receipts under
+`.cache/layered-evaluations/`. A receipt proves only its declared evidence
+class for the exact candidate and environment. Manual operator, assistive-
+technology, hosted, provider, production, and outcome evidence must be recorded
+separately; no result authorizes deployment or owner adoption.
 For a UI-classified plan, confirm `dependencies.requiredSkills` contains
 `design-language` before editing. Load it completely, then read
 `docs/DESIGN_SYSTEM.md` and `docs/DESIGN_PRINCIPLES.md`. If the skill and local
 product language differ, the repository documents govern QuotePilot-specific
 behavior and the conflict must be reported rather than silently blended.
+
+## Catering-Domain Reconsideration
+
+The planner's execution profile and catering-domain classification are
+orthogonal. A task may be `ui` plus `event_operations` and `staffing`, or
+`core` plus `commercial` and `payments`. Inspect the packet:
+
+```text
+domainClassification:
+  applicable: true|false
+  contexts: [...]
+  matchedSignals: ...
+  authorityReads: [...]
+  referenceSlices: [...]
+```
+
+When `applicable` is true:
+
+1. Load `catering-domain-intelligence` from `requiredSkills`.
+2. Read the packet's `authorityReads` through the normal `readFirst` list and
+   inspect the task-owned implementation.
+3. Reconstruct the objective and form a provisional intended action.
+4. Read only `referenceSlices`; do not load the whole knowledge pack.
+5. Reconcile domain guidance with current QuotePilot authority and code.
+6. Record internally whether the action is retained, refined, replaced,
+   expanded, bounded, or has no material domain effect.
+7. Carry material consequences into implementation and validation.
+
+Routine retain/no-effect outcomes need no domain narration. Explain a revision
+or authority conflict only when it helps the owner understand the work. Domain
+prose alone is not evidence that the decision improved.
+
+When `taskGraph` includes `expertise_eval`, complete deterministic verification
+first, then run the skill's versioned cases in a genuinely fresh agent session.
+Keep the scored model-behavior result and human acceptance separate from source,
+CI, hosted, provider, and production evidence.
 
 ## Product Truth Reconciliation (Source/Local Active, CI Advisory)
 
@@ -140,10 +212,10 @@ npm run plan:task -- --task "<bounded work>" \
 ```
 
 The runner must consume the selected model, reasoning effort, read-first files,
-required skills, documentation obligations, validations, and task graph before
-implementation. If the emitted profile is `frontier`, stop and confirm the
-task really has authority, payment, migration, provider, production, security,
-or deployment scope before changing files.
+required skills, domain classification, documentation obligations, validations,
+and task graph before implementation. If the emitted profile is `frontier`,
+stop and confirm the task really has authority, payment, migration, provider,
+production, security, or deployment scope before changing files.
 
 4. Run the cheapest relevant checks before expanding:
 ```bash
@@ -156,6 +228,7 @@ documentation, UI, and core changes, the minimum closeout remains:
 ```bash
 npm run check:env
 npm run build
+npm run check:product-intelligence
 npm run check:docs:governance
 ```
 

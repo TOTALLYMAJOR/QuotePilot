@@ -1,4 +1,136 @@
+# Commercial Decision Surface image-to-code QA
+
+Final comparison: 2026-09-13 21:50:41 CDT
+
+## Comparison target
+
+- Selected visual direction: the user-attached 1536 x 1024 Commercial Decision
+  Surface screenshot in the implementation request.
+- Supporting file-backed reference:
+  `docs/design-references/quotepilot-commercial-decision-surface-desktop-v1.png`
+  at 1536 x 1024.
+- Written acceptance brief:
+  `/home/administrator/.codex/attachments/e0524194-3a73-4c1e-a916-2f70699d4008/pasted-text.txt`.
+- Implementation: the saved-quote editor's
+  `commercial-scenario-workbench` surface in
+  `src/components/CommercialScenarioWorkbench.jsx` and
+  `src/components/FulfillmentIntelligence.jsx`.
+- Browser state: local Firebase-free saved-quote editor, Current at 60 guests,
+  Scenario B at 80 guests, with the commercial, staffing, supply, and BEO checks
+  still in progress. This state is intentionally presented as `Not yet`; it is
+  not represented as a live Conditional decision.
+
+The file-backed 1536 x 1024 reference and the 1440 implementation surface were
+opened together at original resolution. The newer user-attached source remained
+visible in the same conversation context but was not exposed as a filesystem
+path, so no fabricated local source path or pixel-diff score is claimed.
+
+## Responsive evidence
+
+Each route capture uses Chromium at device scale factor 1. The component
+captures isolate the decision surface from the host's sticky navigation and
+mobile quote bar; the matching route captures retain those real host elements.
+
+| CSS viewport | Before surface | After surface | Honest route |
+| --- | --- | --- | --- |
+| 1440 x 1000 | `output/playwright/commercial-decision-before/surface-before-1440.png` | `output/playwright/commercial-scenario-current/surface-local-review-1440.png` | `output/playwright/commercial-scenario-current/route-local-review-1440.png` |
+| 1008 x 900 | `output/playwright/commercial-decision-before/surface-before-1008.png` | `output/playwright/commercial-scenario-current/surface-local-review-1008.png` | `output/playwright/commercial-scenario-current/route-local-review-1008.png` |
+| 768 x 900 | `output/playwright/commercial-decision-before/surface-before-768.png` | `output/playwright/commercial-scenario-current/surface-local-review-768.png` | `output/playwright/commercial-scenario-current/route-local-review-768.png` |
+| 390 x 844 | `output/playwright/commercial-decision-before/surface-before-390.png` | `output/playwright/commercial-scenario-current/surface-local-review-390.png` | `output/playwright/commercial-scenario-current/route-local-review-390.png` |
+
+The element captures are 1106 x 1345, 926 x 1368, 698 x 1860, and 332 x
+2309 pixels respectively. Full-surface inspection kept the decision card,
+four-domain consequence strip, active comparison, controls, and final action
+legible at native resolution; the decision card was also compared as the
+focused first region in the 1440 pair.
+
+## Findings
+
+No actionable P0, P1, or P2 mismatch remains.
+
+- Typography: the existing editorial/sans pairing reproduces the reference's
+  premium event-title and decisive status hierarchy without introducing a new
+  font system. Type scales down without clipped headings or orphaned labels.
+- Layout and spacing: commitment and proposed change lead, the support answer
+  follows, and Commercial, People, Supply, and Execution stay in that order.
+  The comparison and scenario controls remain secondary. Desktop uses a wide
+  decision strip and split lower region; tablet moves to a two-by-two domain
+  grid; mobile becomes one deliberate reading column.
+- Color and finish: warm paper, ink, quiet gold, green commercial value, fine
+  dividers, restrained borders, and existing radius tokens match the selected
+  visual language. No gradients, decorative dashboard chrome, or invented
+  surface styling were added.
+- Icons and imagery: existing `ProductIcons` provide the four domain marks. No
+  emoji, handcrafted SVG, placeholder photography, or duplicate icon language
+  was introduced.
+- Copy: visible operator language now says `Not yet`, `Checking`, `Still
+  checking staffing`, `Still checking supply`, and `BEO impact has not been
+  checked`. Internal terms such as projection, evidence, authority, revision,
+  digest, generation, boundary, read model, and unverifiable are absent from the
+  rendered workbench. Machine-readable attributes remain for testing and state
+  safety only.
+- Truthfulness: unavailable local inputs remain unavailable. No margin, BEO
+  regeneration, final-count reopening, named covered ingredient, or staffing
+  conclusion is invented. Exact totals, role deltas, and shortages appear only
+  when their existing records support them.
+- Interaction and accessibility: the existing scenario state, guest controls,
+  duplicate/discard actions, retry/review path, and domain handoffs remain
+  attached to their original handlers. Enabled controls meet the 44-pixel
+  target, horizontal overflow stays within one pixel, details are closed by
+  default, and the scoped axe run has no violations.
+
+P3: the selected screenshots show an illustrative full workspace shell and a
+fully available Conditional example. This implementation deliberately keeps the
+repository's existing host shell and captures the locally available `Not yet`
+state; those are content/state differences, not component-fidelity defects.
+
+## Iteration history
+
+1. The first pass exposed a P1 hierarchy defect: controls and implementation
+   terminology led the experience. The event/change context and support answer
+   were moved first, and visible source/revision/authority language was removed.
+2. The first 390-pixel capture exposed a P2 oversized flex basis that left a
+   large blank header region. The mobile header basis was corrected and the
+   action group was reflowed into two quiet controls plus one full-width action.
+3. The first lower region was too dense and compared every scenario at once.
+   It became a four-row Current-versus-active-scenario summary with compact
+   scenario controls and collapsed menu/BEO detail.
+4. The first unavailable Commercial cell inherited the source's large value
+   scale and wrapped aggressively. A state-specific type treatment restored the
+   four-domain rhythm at 1440 and 1008.
+5. Tablet and mobile locator screenshots initially stitched the host sticky bar
+   through the component. Final proof now records both an isolated component
+   capture and an unaltered route capture at every requested viewport.
+6. The final language pass replaced `Unverifiable` and `Updating` with `Not yet`
+   and `Checking`, then reran the browser matrix and visible-copy assertion.
+
+## Verification result
+
+- Focused component suite: 23/23 tests passed.
+- Saved-quote editor Playwright acceptance: 1/1 Chromium-admin test passed at
+  390, 768, 1008, and 1440 pixels.
+- Browser assertions: no scoped axe violations, horizontal overflow, undersized
+  enabled controls, open-by-default disclosures, or forbidden visible system
+  language.
+- Production build: passed. Vite emitted the pre-existing mixed dynamic/static
+  import advisory for `quoteCatalogRevisionReview.js`.
+- Repository gates: `check:env`, `check:docs:governance`,
+  `check:project-state`, and `check:capability-surfaces` passed.
+- Full unit suite: 5836 passed, 100 skipped, and 16 failed across 10 unrelated
+  existing margin-gate, quote-history, and workspace-route test files. None of
+  the failures names or imports this workbench; the focused 23-test ownership
+  set passes independently.
+
+Local visual score: **9.4/10 - GO**. This is local source/rendered proof, not
+hosted, production-data, assistive-technology, or human-acceptance proof.
+
+final result: passed
+
+---
+
 # QuotePilot v0.16 Calm Four design QA
+
+Last updated: 2026-09-05 00:28:05 CDT
 
 ## Scope
 
@@ -46,6 +178,434 @@ captured viewport.
 - Current captures: `output/playwright/v16-calm-four-current/`
 - Behavioral gate: `e2e/v16-calm-four-acceptance.spec.js`
 - Acceptance ledger: `docs/acceptance/quotepilot-v16-calm-four-acceptance-matrix.md`
+
+final result: passed
+
+---
+
+# Customer 360 proposal decision-center design QA
+
+Final comparison: 2026-09-05 00:28:05 CDT
+
+## Comparison target
+
+- Source visual truth:
+  `/home/administrator/.codex/generated_images/01a06d52-7d2c-7890-8137-dbbc614f1938/exec-1b0bd100-d2e0-4afe-8c02-e496b7f94b3a.png`.
+- Exact implementation:
+  `output/playwright/ambient-intelligence-current/customer-decision-room-1487.png`.
+- Responsive implementation:
+  `customer-decision-room-1440.png`, `customer-decision-room-768.png`, and
+  `customer-decision-room-390.png` in the same output directory.
+- State: exact opaque portal token, sent proposal Q-ROOM-1042, decision pending,
+  unpaid deposit, two reversible optional additions, assumptions and terms
+  collapsed, browser-local Northstar/Maya fixture.
+
+The source and exact implementation are both 1487 x 1058 pixels. The
+implementation uses a 1487 x 1058 CSS viewport at device scale factor 1 and a
+viewport screenshot rather than a full-page crop. Both images were opened in
+the same comparison input at original resolution. The responsive captures use
+390 x 844, 768 x 900, and 1440 x 1000 CSS viewports at device scale factor 1;
+the latter three are full-page captures so the complete responsive flow remains
+inspectable.
+
+## Findings
+
+No actionable P0, P1, or P2 mismatch remains.
+
+- Typography: the final event title stays on one desktop line, the package
+  heading retains the selected title case, and the existing editorial/sans
+  pairing preserves the source hierarchy without adding another font system.
+- Spacing and layout: the public route no longer inherits the absent staff
+  sidebar's 236-pixel offset. The proposal story and decision rail now own the
+  full desktop canvas in the selected proportion; event facts, package/menu,
+  optional rows, and both quiet disclosures fit the exact source viewport.
+- Colors and tokens: warm paper, ink, gold, green readiness, hairlines, and
+  restrained borders use existing portal tokens. No gradient, decorative
+  surface, or duplicate state color was introduced.
+- Image and icon fidelity: the source contains no photography. Existing
+  `ProductIcons` supply every visible icon; no handcrafted SVG, CSS drawing,
+  emoji, placeholder, or duplicate icon language was added.
+- Copy and content: `Required deposit` intentionally replaces the illustrative
+  source's `Deposit to secure date` because payment alone is not booking
+  confirmation. The exact venue address and recorded payment state remain
+  visible because they are authoritative portal evidence. `Ask a question`
+  appears only when the existing conversation authority is available.
+- Interaction and accessibility: decision, signature, payment, option-request,
+  contextual question, mutation recovery, and exact-token behavior remain on
+  their existing handlers. Price detail, assumptions, and terms are collapsed
+  by default. All enabled controls retain 44-pixel targets, the page has no
+  clipping or horizontal overflow, and scoped axe reports zero violations.
+- Responsive behavior: tablet and mobile preserve one proposal and one decision
+  flow rather than introducing another model. Identity, status, event scope,
+  commercial summary, response, additions, and disclosures remain attached in
+  that order.
+
+Focused crops were not needed because the exact-resolution 1487 x 1058 pair
+keeps the typography, icons, controls, rail boundaries, and row-level copy
+legible. The three responsive captures were also inspected individually.
+
+## Comparison history
+
+1. The first implementation comparison found a P2 title wrap and a right-rail
+   alignment drift. The event-title scale was tightened and the decision
+   workspace was aligned with the commercial rail; the 390/768/1440 browser
+   matrix then passed.
+2. The first exact 1487 x 1058 comparison exposed a P2 full-canvas defect: the
+   customer portal inherited the staff shell's 236-pixel desktop offset. It also
+   showed that optional-addition explanation and response guidance consumed
+   substantially more vertical space than the selected composition.
+3. The portal-only shell offset was removed, proposal top rhythm was tightened,
+   optional additions became the selected compact two-row section, and response
+   guidance moved before the choices. The post-fix exact comparison shows the
+   selected two-column relationship and the complete left proposal within the
+   source viewport.
+
+## Behavioral evidence
+
+- Focused Customer Portal component suite: 49/49 passed.
+- `e2e/customer-decision-room.spec.js`: 5/5 Chromium-admin cases passed at
+  390, 768, 1440, and exact-source 1487 pixels, including reversible option
+  requests with quote selection, totals, and revision unchanged.
+- Browser checks: no overflow, clipping, declared child collision, undersized
+  enabled control, serious accessibility violation, or console/page error.
+- Production build: passed after the composition implementation; it will be
+  rerun at the final documentation head.
+
+## Fidelity score
+
+Local design score: **9.5/10 - GO**.
+
+| Dimension | Weight | Result |
+| --- | ---: | ---: |
+| Selected event-story composition | 3.0 | 3.0 |
+| Commercial and decision hierarchy | 2.0 | 2.0 |
+| Responsive and accessibility execution | 1.5 | 1.5 |
+| Authority and route continuity | 1.5 | 1.5 |
+| Pixel-level finish and product specificity | 2.0 | 1.5 |
+
+This is a local visual-review judgment, not exact-head CI, hosted, production,
+assistive-technology, recipient, or human acceptance.
+
+final result: passed
+
+---
+
+# Client 360 relationship-led design QA
+
+Final comparison: 2026-09-04 23:41:46 CDT
+
+## Comparison target
+
+- Selected visual authority:
+  `/home/administrator/.codex/generated_images/01a06d52-7d2c-7890-8137-dbbc614f1938/exec-9c294527-3fbc-4103-8150-4dcf6500d129.png`
+  at 1487×1058.
+- Exact implementation:
+  `output/playwright/ambient-intelligence-current/ambient-client-overview-1440.png`.
+- Responsive implementation:
+  `ambient-client-overview-768.png` and `ambient-client-overview-390.png` in
+  the same output directory.
+
+The selected source and exact implementation capture were opened together in
+one comparison input. The implementation preserves the repository's global
+Current task rail, exact lifecycle labels, and evidence-safe consequence copy;
+the illustrative source's invented operational impact and duplicate activity
+row were intentionally not reproduced.
+
+## Findings
+
+- P0: none.
+- P1: none.
+- P2: none.
+- P3: the existing detailed-record disclosure remains one full-width row below
+  the relationship presentation because its owner is the parent Customer
+  Workspace. Conversations and source detail remain collapsed immediately
+  above it, preserving capability reachability without restructuring authority.
+
+The result reproduces the selected identity-led composition, customer-request
+decision, four-stage relationship spine, living opportunity, restrained recent
+history, warm editorial type, hairline rhythm, and quiet disclosures. It adds no
+route, model, customer activity, urgency, lifecycle, conversation, or mutation
+authority. The populated directory adopts the same relationship language and
+removes its unrelated decorative image; the empty-state hospitality image is
+unchanged.
+
+## Fidelity score
+
+Local design score: **9.5/10 — GO**.
+
+| Dimension | Weight | Result |
+| --- | ---: | ---: |
+| Selected composition and relationship hierarchy | 3.0 | 3.0 |
+| Evidence semantics and next-decision clarity | 2.0 | 2.0 |
+| Responsive composition and scanability | 1.5 | 1.5 |
+| Accessibility and route continuity | 1.5 | 1.5 |
+| Pixel-level finish and product specificity | 2.0 | 1.5 |
+
+This is a local visual-review judgment, not exact-head CI, hosted, production,
+assistive-technology, or human acceptance.
+
+## Behavioral and accessibility evidence
+
+- `src/components/__tests__/ambientClientsView.test.jsx`: 16/16 passed.
+- `e2e/ambient-clients.spec.js`: 3/3 Chromium-admin cases at 390, 768, and
+  1440 pixels.
+- Exact opaque-client arrival, Opportunity handoff, persisted quote/history
+  equality, 44px targets, horizontal containment, declared-layout containment,
+  and zero scoped axe violations passed.
+- The same-quote, same-timestamp customer request and conversation-summary
+  activity is presented once; the underlying records remain unchanged.
+- Production build passed.
+
+final result: passed
+
+---
+
+# Ambient Now decision-ledger design QA
+
+Final comparison: 2026-09-04 23:03:12 CDT
+
+## Comparison target
+
+- Selected visual authority:
+  `/home/administrator/.codex/generated_images/01a06d52-7d2c-7890-8137-dbbc614f1938/exec-1638bb79-e312-4905-869c-5f802960c156.png`
+  at 1487×1058.
+- Exact-viewport implementation:
+  `output/playwright/ambient-now/ambient-now-reference-1487x1058.png`.
+- Mandatory combined comparison input:
+  `output/playwright/ambient-now/ambient-now-side-by-side.png`.
+- Responsive implementation captures:
+  `output/playwright/ambient-now/ambient-now-768.png` and
+  `output/playwright/ambient-now/ambient-now-390.png`.
+
+The exact implementation and reference were inspected together. Fixture names,
+amounts, current dates, and the existing deterministic Workflow order are
+authoritative content differences rather than presentation defects.
+
+## Findings
+
+- P0: none.
+- P1: none.
+- P2: none.
+- P3: the product's evidence-authoritative order places the current customer
+  request before the overdue follow-up, while the illustrative reference places
+  overdue work first. Preserving the existing ranking authority is intentional.
+  The explicit urgency count, warm attention field, consequence, and headline
+  keep the overdue item perceptible without introducing a second sort.
+
+The implementation reproduces the selected open editorial composition: a
+decision-specific masthead, broad Needs-you ledger, secondary temporal/event
+column, full-width Quiet-progress band, and quiet evidence footer. Decorative
+numeric ranks, the former hospitality image, duplicate dashboard state, and
+infrastructure-first copy are absent. Existing ProductIcons, tokens, type,
+hairlines, and action grammar remain intact.
+
+## Fidelity score
+
+Local design score: **9.5/10 — GO**.
+
+| Dimension | Weight | Result |
+| --- | ---: | ---: |
+| Selected composition and visual hierarchy | 3.0 | 3.0 |
+| Evidence semantics and next-decision clarity | 2.0 | 2.0 |
+| Responsive composition and scanability | 1.5 | 1.5 |
+| Accessibility and interaction continuity | 1.5 | 1.5 |
+| Pixel-level density and product finish | 2.0 | 1.5 |
+
+This is a local visual-review judgment, not exact-head CI, hosted, production,
+assistive-technology, or human acceptance.
+
+## Behavioral and accessibility evidence
+
+- `ambient-now.spec.js`: 2/2 local Chromium-admin cases.
+- Exact Workflow request arrival and exact Operations event identity both pass.
+- 390, 768, and 1487×1058 remain horizontally contained and retain the same
+  semantic order.
+- Serious/critical axe violations: zero in the audited Now region.
+- Focused model/component cohort: 42/42.
+- Production build: pass.
+
+final result: passed
+
+---
+
+# Library commercial convergence design QA
+
+Final comparison: 2026-09-04 21:33:00 CDT
+
+## Comparison target
+
+- Selected authority: Option 2 Library composition with Option 3 restraint.
+- Candidate base: `7a139aa530da1ea66b1d86ec8c5190f7475c35e5`.
+- Implementation commit: `b593fe4d2c45ff5db20bafe205461157952b9ab4`.
+- Responsive overview captures:
+  `output/playwright/ambient-intelligence-current/ambient-library-390.png`,
+  `ambient-library-768.png`, and `ambient-library-1440.png`.
+- Same-viewport desktop reference:
+  `output/playwright/ambient-intelligence-current/ambient-library-reference-1487x1058.png`.
+- Combined overview comparison:
+  `output/playwright/ambient-intelligence-current/ambient-library-comparison-2974x1058.png`.
+- Combined nested comparisons: `nested-comparison-offer.png`,
+  `nested-comparison-rules.png`, `nested-comparison-pricing.png`, and
+  `nested-comparison-template-mobile.png` in the same directory.
+
+The exact 390, 768, and 1440 overview captures and the combined overview/nested
+comparisons were inspected together against that exact rendered implementation.
+This remains local worktree evidence.
+
+## Findings
+
+- P0: none.
+- P1: none.
+- P2: none.
+- The broad commercial ledger remains primary and the right readiness rail is
+  visibly secondary. Its semantic icons reinforce state, while adjacent text
+  remains the authority.
+- Offers keep selling identity, availability, inclusion, derived margin, and
+  next decision prominent. Recorded choice groups are read-only projections.
+- Add-ons and Rentals expose visible derived Usage and subordinate stable IDs.
+- Templates use independent disclosures and the selected eight-group business
+  hierarchy. Rules are structured-first with Advanced raw recovery. Pricing
+  separates ordinary policy groups before Advanced policy.
+- Mobile preserves object summaries and compact disclosure flow. Ordinary text
+  remains at least 12px and interactive targets retain the 44px boundary.
+- Recovery presents one owning save/retry action. Changing an embedded editor
+  tab synchronizes the breadcrumb/title without remounting or draft loss.
+
+## Fidelity score
+
+Local design score: **9.5/10 — GO**.
+
+| Dimension | Weight | Result |
+| --- | ---: | ---: |
+| Selected Option 2/3 composition and hierarchy | 3.0 | 3.0 |
+| Nested commercial-object coherence | 2.0 | 2.0 |
+| Information density and progressive disclosure | 1.5 | 1.5 |
+| Responsive and accessibility execution | 1.5 | 1.5 |
+| Visual finish and product specificity | 2.0 | 1.5 |
+
+This is a local visual-review judgment, not exact-head CI, hosted, production,
+assistive-technology, or human acceptance.
+
+## Behavioral evidence
+
+- `e2e/ambient-library.spec.js`: **17/17** local Chromium cases.
+- `VITE_OPERATIONAL_STAFFING_ENABLED=true` with
+  `e2e/v16-calm-four-acceptance.spec.js`: **10/10** local Chromium cases.
+- The responsive captures cover 390, 768, and 1440 pixels; the nested capture
+  inventory covers Offers, Components, Templates, Rules, Pricing, recovery, and
+  sales read-only presentation.
+- Existing catalog draft/save/revision/publication, Package, Template, Rule,
+  server-pricing, and role authorities remain unchanged. **Your bundle** remains
+  derived from one quote draft and has no independent record or save path.
+
+final result: passed
+
+---
+
+# Calendar-first Operations selected-composition QA
+
+Final comparison: 2026-09-04 18:01:21 CDT
+
+## Comparison target
+
+- Selected Month composition: `/home/administrator/.codex/generated_images/01a06d52-7d2c-7890-8137-dbbc614f1938/exec-de40cdfa-0b4e-41fa-989a-d9ae0abd04a6.png`
+- Selected Week composition: `/home/administrator/.codex/generated_images/01a06d52-7d2c-7890-8137-dbbc614f1938/exec-9d59baa3-fa05-4b3f-b7c0-19675d5abd5d.png`
+- Exact rendered source: `5dd97a20133b592f210d56e2454e699c17d45200`
+- Month implementation: `output/playwright/ux-convergence-operations-fidelity/implementation-month-1487x1058-5dd97a20133b.png`
+- Week implementation: `output/playwright/ux-convergence-operations-fidelity/implementation-week-1487x1058-5dd97a20133b.png`
+- Month side-by-side input: `output/playwright/ux-convergence-operations-fidelity/comparison-month-selected-vs-5dd97a20133b.png`
+- Week side-by-side input: `output/playwright/ux-convergence-operations-fidelity/comparison-week-selected-vs-5dd97a20133b.png`
+
+Both selected references and both implementation captures are 1487×1058 at
+device scale factor 1. The comparison uses the same browser-local administrator
+fixture: Sunday, September 6, 2026 selected; Q-OPS-1 focused; Q-OPS-2
+overlapping; capacity threshold exceeded. Each source and implementation pair
+was placed in one side-by-side comparison input and inspected together.
+
+## Findings
+
+- P0: none.
+- P1: none.
+- P2: Month's five-week grid is about 60–70 pixels taller than the selected
+  reference, so less of the lower conflict workflow appears in the first
+  viewport. The required full-width-calendar-over-context relationship remains
+  intact.
+- P2: Month's lower workspace uses the existing inset panel token instead of
+  the reference's near-full-bleed sheet edge. Its selected-day, focused-event,
+  conflict, and collapsed-domain zones retain the selected composition.
+- P2: Week's secondary rail is slightly narrower and denser than the selected
+  reference, but remains subordinate to the temporal grid and keeps the focused
+  event plus consequence visible.
+- P2: Week omits the illustrative footer legend. Selection and conflict meaning
+  remain explicit through labels, borders, `aria-pressed`, and the contextual
+  conflict workflow.
+
+None of these differences changes the selected spatial relationships, hides a
+required action, creates another authority, or weakens responsive or accessible
+use.
+
+## Fidelity score
+
+Local design score: **9.5/10**.
+
+| Dimension | Weight | Result |
+| --- | ---: | ---: |
+| Defining Month/Week spatial composition | 4.0 | 4.0 |
+| Temporal and conflict legibility | 2.0 | 2.0 |
+| Information hierarchy and progressive disclosure | 1.5 | 1.5 |
+| Interaction and authority continuity | 1.0 | 1.0 |
+| Pixel-level density and finish | 1.5 | 1.0 |
+
+This score is a local implementation/design-QA judgment, not hosted or human
+acceptance.
+
+## Contract verification
+
+- Month gives the full horizontal content canvas to the reused month calendar;
+  no permanent detail rail sits beside it.
+- Selecting the conflict day reveals selected day, exact focused event,
+  consequence, and collapsed Run of show, Production, Kitchen timing, and
+  Staffing domains beneath the calendar.
+- Week renders one vertical time axis, seven dated columns, and event geometry
+  derived from real start time and duration. Q-OPS-1 and Q-OPS-2 occupy visible
+  collision lanes in the same day column.
+- The selected event is visually and semantically distinguished; the secondary
+  rail retains exact event identity, consequence, conflict comparison, and
+  Opportunity continuation.
+- Month → Week → Month preserves the selected date and exact event.
+- The 390px agenda consumes the same scheduled-event and conflict projection;
+  it is not another Calendar implementation.
+- The selected reference's manual **Mark as resolved** action was intentionally
+  excluded. Derived conflicts clear only when authoritative Opportunity inputs
+  change and the existing conflict model recomputes.
+- The illustrative **Week Conflict Lens** title was not copied. Both
+  presentations remain one canonical **Operations** workspace.
+
+## Behavioral and accessibility evidence
+
+- `e2e/ux-convergence-operations.spec.js`: 12/12 at exact rendered source,
+  covering 390, 768, 1440, and 1487×1058; Month/Week geometry; selection
+  continuity; capability gates; exact Now/Opportunity/Calendar handoffs;
+  staffing/checklist persistence; route compatibility; browser history; and
+  duplicate-navigation prevention.
+- Serious/critical axe violations: zero at all four captured widths.
+- Browser console errors: zero in all four responsive presentation cases.
+- Focused Operations unit/route/shell cohort: 131/131.
+- Independent authority review: one scheduled-event projection, one conflict
+  derivation, and only the pre-existing staffing, kitchen, and checklist write
+  paths.
+
+## Comparison history
+
+1. The preceding implementation inverted the selected compositions: Month used
+   a permanent right rail and Week stacked detail below a non-temporal card
+   layout. The owner rejected that mapping.
+2. Month was corrected to calendar-first full width with contextual content
+   below. Week was rebuilt only at the presentation layer as a true time grid
+   with collision lanes and a secondary rail.
+3. Exact 1487×1058 captures exposed density and viewport-position differences.
+   Calendar cell density, collision stacking, canvas alignment, and capture
+   scroll were tightened, then both side-by-side inputs were inspected again.
 
 final result: passed
 

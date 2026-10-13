@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import crypto from "node:crypto";
 import os from "node:os";
 import path from "node:path";
 
@@ -43,6 +44,33 @@ function fixture({ marker = "LegacyQuoteHistoryModal-test.js", bytes = 12 } = {}
     }
   }));
   return root;
+}
+
+function pinOptionalTool(root, content = "parser-runtime") {
+  const runtimePath = "dist/vendor/example-tool/runtime.mjs";
+  write(root, runtimePath, content);
+  write(root, "dist/vendor/example-tool/LICENSE", "license");
+  write(root, "docs/performance/optional-tool-budget.json", JSON.stringify({
+    schemaVersion: "optional-tool-budget-v1",
+    tools: [{
+      id: "example-tool",
+      distributionDirectory: "vendor/example-tool",
+      maxRuntimeBytes: Buffer.byteLength(content),
+      maxSingleRuntimeAssetBytes: Buffer.byteLength(content),
+      requiredFiles: [
+        {
+          path: "LICENSE",
+          bytes: 7,
+          sha256: crypto.createHash("sha256").update("license").digest("hex")
+        },
+        {
+          path: "runtime.mjs",
+          bytes: Buffer.byteLength(content),
+          sha256: crypto.createHash("sha256").update(content).digest("hex")
+        }
+      ]
+    }]
+  }));
 }
 
 afterEach(() => {
@@ -130,5 +158,40 @@ describe("bundle budget profiles", () => {
     expect(PRODUCTION_FIXTURE_CHUNK_PREFIXES).not.toContain("review-client-");
     expect(PRODUCTION_FIXTURE_PAYLOAD_SENTINELS).not.toContain("local_fixture");
     expect(PRODUCTION_FIXTURE_PAYLOAD_SENTINELS).not.toContain("review-client-");
+  });
+
+  test("pins optional same-origin tools by manifest, size, and digest", () => {
+    const root = fixture();
+    pinOptionalTool(root);
+
+    const result = checkBundleBudget({
+      root,
+      requestedProfile: "compatibility",
+      log: { log() {} }
+    });
+
+    expect(result.optionalTools).toMatchObject({
+      totalRuntimeBytes: 14,
+      largestRuntimeAssetBytes: 14,
+      tools: [{ id: "example-tool", runtimeBytes: 14, largestRuntimeAssetBytes: 14 }]
+    });
+
+    write(root, "dist/vendor/example-tool/runtime.mjs", "changed-runtime");
+    expect(() => checkBundleBudget({
+      root,
+      requestedProfile: "compatibility",
+      log: { log() {} }
+    })).toThrow(/asset runtime\.mjs is|failed its pinned SHA-256 check/);
+  });
+
+  test("fails closed for optional runtime code without a declared budget", () => {
+    const root = fixture();
+    write(root, "dist/vendor/undeclared/runtime.mjs", "unreviewed");
+
+    expect(() => checkBundleBudget({
+      root,
+      requestedProfile: "compatibility",
+      log: { log() {} }
+    })).toThrow("Optional runtime assets were emitted without docs/performance/optional-tool-budget.json");
   });
 });

@@ -1,0 +1,188 @@
+{
+  "schemaVersion": "quotepilot-layered-eval-manifest-v1",
+  "corpusVersion": "2026-09-19.1",
+  "decisionPolicy": {
+    "compositeScore": "prohibited",
+    "ownerDecisionRequired": true
+  },
+  "evaluations": [
+    {
+      "id": "EVAL-001",
+      "name": "Authority and integrity",
+      "dimension": "authority_integrity",
+      "execution": "automated",
+      "releaseBlocking": true,
+      "evidenceClass": "local",
+      "capabilityIds": ["CAP-03", "CAP-04", "CAP-06", "CAP-07", "CAP-12"],
+      "journeyIds": ["JRN-04", "JRN-05", "JRN-06", "JRN-09"],
+      "metricIds": ["MET-17"],
+      "guardrailIds": ["GRD-01", "GRD-02", "GRD-03", "GRD-04", "GRD-05", "GRD-06", "GRD-08"],
+      "thresholds": {
+        "criticalFailuresAllowed": 0,
+        "collapsedAmbiguityAllowed": 0
+      },
+      "ownerDecision": "pending",
+      "checks": [
+        {
+          "id": "authority-integrity-unit",
+          "command": ["npm", "run", "test:unit", "--", "src/lib/__tests__/pricingEngine.authoritative.test.js", "src/lib/__tests__/proposalAcceptance.server.test.js", "src/lib/__tests__/paymentLedger.server.test.js", "src/lib/__tests__/commercialChangeAuthority.server.test.js", "src/lib/__tests__/rebookQuoteDraft.server.test.js", "src/lib/__tests__/paymentApprovalScope.server.test.js"]
+        }
+      ]
+    },
+    {
+      "id": "EVAL-002",
+      "name": "AI groundedness and abstention",
+      "dimension": "ai_groundedness",
+      "execution": "automated",
+      "releaseBlocking": true,
+      "evidenceClass": "local",
+      "capabilityIds": ["CAP-03", "CAP-06", "CAP-12"],
+      "journeyIds": ["JRN-03", "JRN-04"],
+      "metricIds": ["MET-03", "MET-07", "MET-17"],
+      "guardrailIds": ["GRD-01", "GRD-02", "GRD-03", "GRD-06", "GRD-08", "GRD-09", "GRD-15"],
+      "thresholds": {
+        "criticalFailuresAllowed": 0,
+        "safetyFailuresAllowed": 0,
+        "sideEffectFailuresAllowed": 0,
+        "authoritativeNumberFailuresAllowed": 0,
+        "unlabeledClaimsAllowed": 0,
+        "minimumEvidenceCoverageBasisPoints": 9500,
+        "humanConfirmationRequired": true
+      },
+      "ownerDecision": "pending",
+      "checks": [
+        {
+          "id": "steward-and-model-assist-unit",
+          "command": ["npm", "run", "test:unit", "--", "src/lib/__tests__/stewardDifficultQuestionEvaluation.server.test.js", "src/lib/__tests__/intentParser.server.test.js"]
+        }
+      ]
+    },
+    {
+      "id": "EVAL-003",
+      "name": "Critical journey spine",
+      "dimension": "journey_continuity",
+      "execution": "automated",
+      "releaseBlocking": true,
+      "evidenceClass": "local",
+      "capabilityIds": ["CAP-03", "CAP-04", "CAP-05", "CAP-06", "CAP-07", "CAP-08", "CAP-09", "CAP-10"],
+      "journeyIds": ["JRN-03", "JRN-04", "JRN-05", "JRN-06", "JRN-07", "JRN-08", "JRN-09", "JRN-10"],
+      "metricIds": ["MET-03", "MET-06", "MET-07", "MET-11", "MET-13", "MET-14", "MET-15", "MET-17"],
+      "guardrailIds": ["GRD-03", "GRD-04", "GRD-05", "GRD-06", "GRD-07", "GRD-15"],
+      "thresholds": {
+        "identityDiscontinuitiesAllowed": 0,
+        "authoritySubstitutionsAllowed": 0
+      },
+      "ownerDecision": "pending",
+      "checks": [
+        {
+          "id": "critical-journey-browser",
+          "command": ["npm", "run", "test:e2e", "--", "e2e/commitment-to-execution-loop.spec.js", "e2e/customer-centered-workspace.spec.js"]
+        }
+      ]
+    },
+    {
+      "id": "EVAL-004",
+      "name": "Recovery and ambiguity",
+      "dimension": "recovery_ambiguity",
+      "execution": "automated",
+      "releaseBlocking": true,
+      "evidenceClass": "local",
+      "capabilityIds": ["CAP-06", "CAP-07", "CAP-12"],
+      "journeyIds": ["JRN-06", "JRN-08", "JRN-09"],
+      "metricIds": ["MET-05", "MET-13", "MET-17"],
+      "guardrailIds": ["GRD-05", "GRD-06", "GRD-07", "GRD-15"],
+      "thresholds": {
+        "blindRetriesAllowed": 0,
+        "falseSuccessReceiptsAllowed": 0
+      },
+      "ownerDecision": "pending",
+      "checks": [
+        {
+          "id": "recovery-browser-and-payment-unit",
+          "command": ["npm", "run", "test:e2e", "--", "e2e/ui-recovery.spec.js"]
+        },
+        {
+          "id": "payment-ambiguity-unit",
+          "command": ["npm", "run", "test:unit", "--", "src/lib/__tests__/paymentDispatchState.server.test.js", "src/lib/__tests__/paymentSafety.server.test.js"]
+        }
+      ]
+    },
+    {
+      "id": "EVAL-005",
+      "name": "Operator task evaluation",
+      "dimension": "operator_outcome",
+      "execution": "manual",
+      "releaseBlocking": false,
+      "evidenceClass": "human",
+      "capabilityIds": ["CAP-02", "CAP-03", "CAP-05", "CAP-06"],
+      "journeyIds": ["JRN-02", "JRN-04", "JRN-07"],
+      "metricIds": ["MET-11", "MET-12", "MET-14", "MET-16"],
+      "guardrailIds": ["GRD-03", "GRD-07", "GRD-16"],
+      "thresholds": {
+        "participants": 5,
+        "comparableEventsPerParticipant": 2,
+        "targetDurationReductionBasisPoints": 3000,
+        "minimumPreferenceCount": 4,
+        "materialCorrectionIncreaseAllowed": 0,
+        "status": "proposed_until_owner_approved"
+      },
+      "ownerDecision": "pending",
+      "acceptanceCriteria": [
+        "Freeze BASE-04 and BASE-07 tasks and correction rubric before exposure.",
+        "Record elapsed time, repeated entry, corrections, late discoveries, workarounds, comprehension, and preference.",
+        "Keep human preference separate from commercial correctness and integrity guardrails."
+      ]
+    },
+    {
+      "id": "EVAL-006",
+      "name": "Telemetry and metric integrity",
+      "dimension": "telemetry_integrity",
+      "execution": "automated",
+      "releaseBlocking": true,
+      "evidenceClass": "local",
+      "capabilityIds": ["CAP-11", "CAP-12"],
+      "journeyIds": ["JRN-04", "JRN-05", "JRN-09"],
+      "metricIds": ["MET-01", "MET-03", "MET-06", "MET-17", "MET-18"],
+      "guardrailIds": ["GRD-09", "GRD-10", "GRD-14", "GRD-16"],
+      "thresholds": {
+        "privacyFailuresAllowed": 0,
+        "workflowBlockingFailuresAllowed": 0,
+        "missingnessCollapsedToZeroAllowed": 0
+      },
+      "ownerDecision": "pending",
+      "checks": [
+        {
+          "id": "product-analytics-unit",
+          "command": ["npm", "run", "test:unit", "--", "src/lib/__tests__/productAnalytics.client.test.js", "src/lib/__tests__/productAnalytics.core.test.js", "src/lib/__tests__/productAnalytics.server.test.js"]
+        },
+        {
+          "id": "product-intelligence-contract",
+          "command": ["npm", "run", "check:product-intelligence"]
+        }
+      ]
+    },
+    {
+      "id": "EVAL-007",
+      "name": "Human UX and accessibility",
+      "dimension": "human_accessibility",
+      "execution": "manual",
+      "releaseBlocking": false,
+      "evidenceClass": "human",
+      "capabilityIds": ["CAP-06", "CAP-12"],
+      "journeyIds": ["JRN-01", "JRN-02", "JRN-04", "JRN-05", "JRN-07", "JRN-09"],
+      "metricIds": ["MET-16", "MET-17"],
+      "guardrailIds": ["GRD-08", "GRD-11", "GRD-12", "GRD-15"],
+      "thresholds": {
+        "seriousOrCriticalViolationsAllowed": 0,
+        "decisionCriticalClippingAllowed": 0,
+        "assistiveTechnologyReviewRequired": true
+      },
+      "ownerDecision": "pending",
+      "acceptanceCriteria": [
+        "Retain automated Axe, keyboard, focus, overflow, and 390/768/1440 browser checks.",
+        "Verify each role can identify current state, evidence, consequence, and one safe next action.",
+        "Record screen-reader and human comprehension evidence separately from automation."
+      ]
+    }
+  ]
+}

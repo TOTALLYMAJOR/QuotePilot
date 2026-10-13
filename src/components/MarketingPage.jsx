@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import useReducedMotionPreference from "../hooks/useReducedMotionPreference";
 import { isBuyerAccessPublicCtaEnabled } from "../lib/buyerAccessConfig";
 import { PRODUCT_COMPANY, PRODUCT_FULL_NAME } from "../lib/productIdentity";
 import DocumentHero from "./DocumentHero";
@@ -6,7 +7,8 @@ import "../landing.css";
 
 const BUYER_ACCESS_PUBLIC_CTA_ENABLED = isBuyerAccessPublicCtaEnabled(import.meta.env);
 const COMMERCIAL_VIDEO = {
-  src: "/videos/quote-pilot-commercial.mp4",
+  desktopSrc: "/videos/quote-pilot-commercial.mp4",
+  phoneSrc: "/videos/quote-pilot-commercial-phone.mp4",
   poster: "/videos/quote-pilot-commercial-poster.webp",
   track: "/videos/quote-pilot-commercial-captions.vtt",
   title: "QuotePilot commercial"
@@ -19,6 +21,26 @@ const COMMERCIAL_VIDEO_EVENTS = {
   pause: "landing_video_pause",
   ended: "landing_video_complete"
 };
+
+function readCommercialMediaPreference() {
+  if (typeof window === "undefined") {
+    return { restricted: false, reducedMotion: false, saveData: false };
+  }
+  const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches === true;
+  const saveData = window.navigator?.connection?.saveData === true;
+  return {
+    restricted: reducedMotion || saveData,
+    reducedMotion,
+    saveData
+  };
+}
+
+function selectCommercialVideoSource() {
+  if (typeof window !== "undefined" && window.matchMedia?.("(max-width: 767px)")?.matches) {
+    return COMMERCIAL_VIDEO.phoneSrc;
+  }
+  return COMMERCIAL_VIDEO.desktopSrc;
+}
 
 const changeImpact = [
   { label: "Guests", before: "165", after: "175" },
@@ -98,9 +120,20 @@ function BrandLockup() {
 
 export default function MarketingPage() {
   const marketingCommercialRef = useRef(null);
+  const commercialPlayingRef = useRef(false);
+  const pendingCommercialPlayRef = useRef(false);
   const [commercialStarted, setCommercialStarted] = useState(false);
   const [commercialPlaying, setCommercialPlaying] = useState(false);
   const [commercialMuted, setCommercialMuted] = useState(true);
+  const [commercialError, setCommercialError] = useState("");
+  const [commercialSource, setCommercialSource] = useState("");
+  const reducedMotion = useReducedMotionPreference();
+  const [saveData, setSaveData] = useState(() => readCommercialMediaPreference().saveData);
+  const commercialMediaPreference = {
+    restricted: reducedMotion || saveData,
+    reducedMotion,
+    saveData
+  };
 
   const emitMarketingVideoEvent = (type, detail = {}) => {
     if (typeof window === "undefined") return;
@@ -114,7 +147,7 @@ export default function MarketingPage() {
       event: "quotepilot_landing_video",
       section: "commercial",
       videoName: COMMERCIAL_VIDEO.title,
-      videoSrc: COMMERCIAL_VIDEO.src,
+      videoSrc: commercialSource || undefined,
       eventType: type,
       currentSeconds,
       durationSeconds,
@@ -149,12 +182,26 @@ export default function MarketingPage() {
     const video = marketingCommercialRef.current;
     if (!video) return;
 
+    if (!commercialSource) {
+      pendingCommercialPlayRef.current = true;
+      setCommercialError("");
+      emitMarketingVideoEvent("cta_click", {
+        element: "commercial_play_overlay",
+        action: "load_and_play",
+        preferenceOverride: commercialMediaPreference.restricted
+      });
+      setCommercialSource(selectCommercialVideoSource());
+      return;
+    }
+
     video.defaultPlaybackRate = COMMERCIAL_PLAYBACK_RATE;
     video.playbackRate = COMMERCIAL_PLAYBACK_RATE;
 
     if (video.paused) {
+      setCommercialError("");
       emitMarketingVideoEvent("cta_click", { element: "commercial_play_overlay", action: "play" });
       video.play().catch(() => {
+        setCommercialError("The background film could not start. You can retry it without losing your place on this page.");
         emitMarketingVideoEvent("play_error", { element: "commercial_play_overlay" });
       });
     } else {
@@ -190,15 +237,43 @@ export default function MarketingPage() {
     });
 
     if (!nextMuted && video.paused) {
+      setCommercialError("");
       video.play().catch(() => {
+        setCommercialError("The background film could not resume with sound. You can retry it or continue without the film.");
         emitMarketingVideoEvent("play_error", { element: "cinematic_sound_control" });
       });
     }
   };
 
+  const handleCommercialMediaError = () => {
+    setCommercialPlaying(false);
+    setCommercialError("The background film is currently unavailable. Retry the media or continue with the full page content below.");
+    emitMarketingVideoEvent("play_error", { element: "background_film_media" });
+  };
+
+  const retryCommercialMedia = () => {
+    const video = marketingCommercialRef.current;
+    if (!video) return;
+    setCommercialError("");
+    if (!commercialSource) {
+      pendingCommercialPlayRef.current = true;
+      setCommercialSource(selectCommercialVideoSource());
+      return;
+    }
+    video.load();
+    video.defaultPlaybackRate = COMMERCIAL_PLAYBACK_RATE;
+    video.playbackRate = COMMERCIAL_PLAYBACK_RATE;
+    video.play().catch(() => {
+      setCommercialError("The background film is still unavailable. The rest of the QuotePilot story remains available below.");
+      emitMarketingVideoEvent("play_error", { element: "background_film_retry" });
+    });
+  };
+
   const handleCommercialPlayEvent = () => {
+    setCommercialError("");
     setCommercialStarted(true);
     setCommercialPlaying(true);
+    commercialPlayingRef.current = true;
     emitMarketingVideoEvent("play", {
       currentSeconds: Number((marketingCommercialRef.current?.currentTime || 0).toFixed(1))
     });
@@ -206,6 +281,7 @@ export default function MarketingPage() {
 
   const handleCommercialPauseEvent = () => {
     setCommercialPlaying(false);
+    commercialPlayingRef.current = false;
     if (!marketingCommercialRef.current?.ended) {
       emitMarketingVideoEvent("pause", {
         currentSeconds: Number((marketingCommercialRef.current?.currentTime || 0).toFixed(1))
@@ -214,17 +290,67 @@ export default function MarketingPage() {
   };
 
   useEffect(() => {
+    if (!commercialSource || !pendingCommercialPlayRef.current) return;
+    const video = marketingCommercialRef.current;
+    if (!video) return;
+
+    pendingCommercialPlayRef.current = false;
+    video.load();
+    video.defaultPlaybackRate = COMMERCIAL_PLAYBACK_RATE;
+    video.playbackRate = COMMERCIAL_PLAYBACK_RATE;
+    video.play().catch(() => {
+      setCommercialError("The background film could not start. You can retry it without losing your place on this page.");
+      emitMarketingVideoEvent("play_error", { element: "commercial_play_overlay" });
+    });
+  }, [commercialSource]);
+
+  useEffect(() => {
+    const connection = window.navigator?.connection;
+    if (!connection) return undefined;
+    const updateSaveData = () => setSaveData(connection.saveData === true);
+    connection.addEventListener?.("change", updateSaveData);
+    return () => connection.removeEventListener?.("change", updateSaveData);
+  }, []);
+
+  useEffect(() => {
+    const video = marketingCommercialRef.current;
+    if (!video) return undefined;
+
+    const pauseWithoutRewind = () => {
+      if (commercialPlayingRef.current) video.pause();
+    };
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "hidden") pauseWithoutRewind();
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    let videoObserver = null;
+    if ("IntersectionObserver" in window) {
+      videoObserver = new IntersectionObserver((entries) => {
+        entries.forEach((entry) => {
+          if (entry.target === video && !entry.isIntersecting) pauseWithoutRewind();
+        });
+      }, { threshold: 0.01 });
+      videoObserver.observe(video);
+    }
+
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      videoObserver?.disconnect();
+    };
+  }, []);
+
+  useEffect(() => {
     const root = document.documentElement;
     const revealNodes = [...document.querySelectorAll("[data-landing-reveal]")];
-    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
     root.classList.add("qp-landing-motion");
 
-    if (reduceMotion || !("IntersectionObserver" in window)) {
-      if (reduceMotion && marketingCommercialRef.current) {
+    if (reducedMotion || !("IntersectionObserver" in window)) {
+      if (reducedMotion && marketingCommercialRef.current) {
         marketingCommercialRef.current.pause();
-        marketingCommercialRef.current.currentTime = 0;
         setCommercialPlaying(false);
+        commercialPlayingRef.current = false;
       }
       revealNodes.forEach((node) => node.classList.add("is-visible"));
       return () => root.classList.remove("qp-landing-motion");
@@ -247,29 +373,33 @@ export default function MarketingPage() {
       observer.disconnect();
       root.classList.remove("qp-landing-motion");
     };
-  }, []);
+  }, [reducedMotion]);
 
   return (
-    <div className="qp-landing" id="top">
+    <div
+      className="qp-landing"
+      id="top"
+      data-motion-override={commercialSource ? "true" : "false"}
+    >
       <a className="qp-landing-skip" href="#landing-main">Skip to content</a>
 
       <div className="qp-landing-film-layer">
         <video
           ref={marketingCommercialRef}
           id="quote-pilot-commercial-video"
-          autoPlay
           muted={commercialMuted}
           loop
           playsInline
-          preload="metadata"
+          preload="none"
           poster={COMMERCIAL_VIDEO.poster}
           aria-label="QuotePilot catering operations commercial"
           onLoadedMetadata={handleCommercialLoadedMetadata}
           onPlay={handleCommercialPlayEvent}
           onPause={handleCommercialPauseEvent}
           onEnded={handleCommercialEnded}
+          onError={handleCommercialMediaError}
         >
-          <source src={COMMERCIAL_VIDEO.src} type="video/mp4" />
+          {commercialSource ? <source src={commercialSource} type="video/mp4" /> : null}
           <track
             src={COMMERCIAL_VIDEO.track}
             kind="captions"
@@ -403,6 +533,11 @@ export default function MarketingPage() {
 
           <div className="qp-landing-film-status" aria-label="Background film playback controls">
             <span>Background film</span>
+            {commercialMediaPreference.restricted ? (
+              <span data-media-preference="restricted">
+                Your motion or data preference is on, so the film loads only when you ask.
+              </span>
+            ) : null}
             <div>
               <button
                 type="button"
@@ -410,7 +545,13 @@ export default function MarketingPage() {
                 aria-controls="quote-pilot-commercial-video"
                 aria-pressed={!commercialPlaying}
               >
-                {commercialPlaying ? "Pause film" : commercialStarted ? "Resume film" : "Play film"}
+                {commercialPlaying
+                  ? "Pause film"
+                  : commercialStarted
+                    ? "Resume film"
+                    : commercialSource
+                      ? "Play full film"
+                      : "Load and play full film"}
               </button>
               <button
                 type="button"
@@ -422,6 +563,12 @@ export default function MarketingPage() {
               </button>
             </div>
           </div>
+          {commercialError ? (
+            <div className="qp-landing-film-recovery" role="alert">
+              <span>{commercialError}</span>
+              <button type="button" onClick={retryCommercialMedia}>Retry film</button>
+            </div>
+          ) : null}
         </section>
 
         <section className="qp-landing-outcomes" aria-label="QuotePilot outcomes" data-landing-chapter>

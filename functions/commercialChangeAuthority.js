@@ -20,6 +20,114 @@ const COMMERCIAL_CHANGE_RECONCILIATION_EVIDENCE_VERSION =
 const COMMERCIAL_CHANGE_PUBLISH_GATE_VERSION =
   "commercial-change-publish-gate-v1";
 
+const WORKFLOW_RECEIPT_SCHEMAS = Object.freeze({
+  simulation: "commercial-change-simulation-receipt-v2",
+  authorization: "commercial-change-authorization-receipt-v2",
+  apply: "commercial-change-apply-receipt-v2"
+});
+
+// Currency minor-unit conversion belongs to this authority, never a browser
+// threshold evaluator. Decimal-string half-up rounding avoids binary 1.005
+// becoming 100 cents and keeps existing dollar-valued pricing unchanged.
+function authoritativeMoneyToCents(value) {
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 0 || value > 1e12) {
+    fail("failed-precondition", "An explicit bounded authoritative USD total is required.");
+  }
+  const [coefficient, exponent = "0"] = String(value).toLowerCase().split("e");
+  const fraction = (coefficient.split(".")[1] || "").length;
+  const digits = BigInt(coefficient.replace(".", ""));
+  const scale = Number(exponent) - fraction + 2;
+  const denominator = scale < 0 ? 10n ** BigInt(-scale) : 1n;
+  const cents = scale < 0 ? (digits + denominator / 2n) / denominator : digits * 10n ** BigInt(scale);
+  if (cents > BigInt(Number.MAX_SAFE_INTEGER)) fail("failed-precondition", "Authoritative cents exceed safe integer bounds.");
+  return Number(cents);
+}
+function workflowFields(value, fields, label) {
+  if (!isRecord(value) || Object.keys(value).length !== fields.length || fields.some((key) => !Object.hasOwn(value, key))) {
+    fail("failed-precondition", `${label} contains missing or unsupported fields.`);
+  }
+}
+function workflowString(value, validator, label) {
+  if (typeof value !== "string" || validator(value, label) !== value) fail("failed-precondition", `${label} must be an exact canonical string.`);
+}
+function normalizeWorkflowPolicy(value, organizationId) {
+  if (value === null || value === undefined) return null;
+  workflowFields(value, ["organizationId", "definitionPin", "approvalPolicy", "declaredBy", "declaredAtISO"], "Workflow approval policy");
+  if (value.organizationId !== organizationId) fail("permission-denied", "Workflow policy belongs to another organization.");
+  const pin = value.definitionPin;
+  workflowFields(pin, ["workflowKind", "schemaVersion", "definitionId", "versionId", "version", "definitionDigest"], "Workflow definition pin");
+  if (pin.workflowKind !== "quote_review" || pin.definitionId !== "quote_review" || pin.schemaVersion !== 2
+    || !Number.isSafeInteger(pin.version) || pin.version < 1 || pin.version > 50 || pin.versionId !== `quote_review_v${pin.version}`) {
+    fail("failed-precondition", "An exact tenant-published quote review version is required.");
+  }
+  workflowString(pin.definitionDigest, exactDigest, "Workflow definition digest");
+  const policy = value.approvalPolicy;
+  workflowFields(policy, ["basis", "thresholdCents", "allowedRoles"], "Workflow approval policy fields");
+  if (policy.basis !== "absolute_total_delta_cents" || (policy.thresholdCents !== null
+    && (!Number.isSafeInteger(policy.thresholdCents) || policy.thresholdCents < 0 || policy.thresholdCents > 1e9))
+    || !Array.isArray(policy.allowedRoles) || !policy.allowedRoles.includes("admin") || policy.allowedRoles.length > 2
+    || new Set(policy.allowedRoles).size !== policy.allowedRoles.length || policy.allowedRoles.some((role) => !["admin", "sales"].includes(role))) {
+    fail("failed-precondition", "Workflow approval thresholds and roles must be explicitly bounded.");
+  }
+  workflowString(value.declaredBy, exactOpaqueId, "Workflow policy declaring actor");
+  workflowString(value.declaredAtISO, exactISO, "Workflow policy declaration time");
+  return { organizationId, definitionPin: { ...pin }, approvalPolicy: { ...policy, allowedRoles: [...policy.allowedRoles].sort() }, declaredBy: value.declaredBy, declaredAtISO: value.declaredAtISO };
+}
+function normalizeAttendanceBinding(value, scope, baseRevisionId) {
+  if (value === null || value === undefined) return null;
+  workflowFields(value, ["organizationId", "quoteId", "sourceVersionId", "acceptanceReceiptId", "submissionReceiptId", "submissionReceiptDigest", "count"], "Attendance submission binding");
+  if (value.organizationId !== scope.organizationId || value.quoteId !== scope.quoteId) fail("permission-denied", "Attendance submission belongs to another quote or organization.");
+  if (value.sourceVersionId !== baseRevisionId) fail("aborted", "Attendance submission does not match the exact commercial base revision.");
+  for (const key of ["sourceVersionId", "acceptanceReceiptId", "submissionReceiptId"]) workflowString(value[key], exactOpaqueId, `Attendance ${key}`);
+  workflowString(value.submissionReceiptDigest, exactDigest, "Attendance submission digest");
+  if (!Number.isSafeInteger(value.count) || value.count < 1 || value.count > 400) fail("failed-precondition", "A submitted guest count from 1 to 400 is required.");
+  return { ...value };
+}
+function workflowApprovalEvaluation(commercialValues, impact, policy) {
+  if (commercialValues?.currency !== "USD" || commercialValues?.authoritativeTotal?.authority !== "server_authoritative"
+    || !Number.isSafeInteger(impact?.counts?.total) || impact.counts.total < 0 || impact.counts.total > MAX_INVALIDATIONS) {
+    fail("failed-precondition", "Workflow approval requires authoritative USD commercial values.");
+  }
+  const beforeTotalCents = authoritativeMoneyToCents(commercialValues.authoritativeTotal.before);
+  const proposedTotalCents = authoritativeMoneyToCents(commercialValues.authoritativeTotal.proposedAfter);
+  const absoluteTotalDeltaCents = Math.abs(proposedTotalCents - beforeTotalCents);
+  const threshold = policy?.approvalPolicy.thresholdCents ?? null;
+  return { currency: "USD", beforeTotalCents, proposedTotalCents, absoluteTotalDeltaCents,
+    impactApprovalRequired: impact.counts.total > 0,
+    thresholdApprovalRequired: threshold !== null && absoluteTotalDeltaCents >= threshold };
+}
+function workflowSeal(receipt) {
+  return receipt.schemaVersion === WORKFLOW_RECEIPT_SCHEMAS[receipt.receiptType]
+    ? { workflowPolicy: receipt.workflowPolicy, attendanceBinding: receipt.attendanceBinding, approvalEvaluation: receipt.approvalEvaluation }
+    : {};
+}
+function validateWorkflowSeal(receipt, graphCore) {
+  const v2 = receipt.schemaVersion === WORKFLOW_RECEIPT_SCHEMAS[receipt.receiptType];
+  if (!v2) {
+    if (["workflowPolicy", "attendanceBinding", "approvalEvaluation"].some((key) => Object.hasOwn(receipt, key))) fail("failed-precondition", "Version 1 receipts cannot assert workflow policy or attendance application.");
+    return;
+  }
+  const policy = normalizeWorkflowPolicy(receipt.workflowPolicy, receipt.organizationId);
+  const attendance = normalizeAttendanceBinding(receipt.attendanceBinding, receipt, receipt.baseRevisionId);
+  if (!policy && !attendance) fail("failed-precondition", "Version 2 requires an explicit workflow or attendance binding.");
+  if (!Object.hasOwn(receipt, "workflowPolicy") || !Object.hasOwn(receipt, "attendanceBinding")
+    || graphCore.canonicalSerialize(policy) !== graphCore.canonicalSerialize(receipt.workflowPolicy)
+    || graphCore.canonicalSerialize(attendance) !== graphCore.canonicalSerialize(receipt.attendanceBinding)) fail("failed-precondition", "Workflow bindings are not canonical.");
+  const evaluation = receipt.approvalEvaluation;
+  workflowFields(evaluation, ["currency", "beforeTotalCents", "proposedTotalCents", "absoluteTotalDeltaCents", "impactApprovalRequired", "thresholdApprovalRequired"], "Approval evaluation");
+  if (evaluation.currency !== "USD" || [evaluation.beforeTotalCents, evaluation.proposedTotalCents].some((n) => !Number.isSafeInteger(n) || n < 0 || n > 1e14)
+    || evaluation.absoluteTotalDeltaCents !== Math.abs(evaluation.proposedTotalCents - evaluation.beforeTotalCents)
+    || typeof evaluation.impactApprovalRequired !== "boolean"
+    || evaluation.thresholdApprovalRequired !== (policy?.approvalPolicy.thresholdCents !== null && policy !== null && evaluation.absoluteTotalDeltaCents >= policy.approvalPolicy.thresholdCents)) fail("failed-precondition", "Workflow approval evaluation is inconsistent.");
+  const actor = receipt.simulatedBy || receipt.appliedBy || receipt.authorizedFor;
+  if (policy && !policy.approvalPolicy.allowedRoles.includes(actor?.role)) fail("permission-denied", "The pinned workflow policy excludes this commercial participant role.");
+  const at = receipt.simulatedAtISO || receipt.appliedAtISO || receipt.authorizedAtISO;
+  if (policy && policy.declaredAtISO > at) fail("failed-precondition", "The workflow policy was not yet published.");
+}
+function assertWorkflowSealMatch(left, right, graphCore) {
+  if (graphCore.canonicalSerialize(workflowSeal(left)) !== graphCore.canonicalSerialize(workflowSeal(right))) fail("failed-precondition", "Commercial receipts do not share the exact workflow and attendance binding.");
+}
+
 const COMMERCIAL_CHANGE_AUTHORITY = "server_authoritative";
 const COMMERCIAL_CHANGE_DERIVED_AUTHORITY = "server_derived";
 const DEFAULT_SIMULATION_TTL_MS = 15 * 60 * 1000;
@@ -251,7 +359,7 @@ function addReceiptDigest(payload, graphCore) {
 function assertReceiptIntegrity(receipt, type, graphCore) {
   if (
     !isRecord(receipt)
-    || receipt.schemaVersion !== RECEIPT_SCHEMAS[type]
+    || (receipt.schemaVersion !== RECEIPT_SCHEMAS[type] && !(Object.hasOwn(WORKFLOW_RECEIPT_SCHEMAS, type) && receipt.schemaVersion === WORKFLOW_RECEIPT_SCHEMAS[type]))
     || receipt.authority !== COMMERCIAL_CHANGE_AUTHORITY
     || receipt.receiptType !== type
     || !new RegExp(`^${RECEIPT_ID_PREFIXES[type]}_[a-f0-9]{48}$`, "u")
@@ -266,6 +374,7 @@ function assertReceiptIntegrity(receipt, type, graphCore) {
     fail("failed-precondition", `Trusted ${type} receipt failed immutable digest validation.`);
   }
   canonicalDocument(receipt, graphCore, `${type} receipt`);
+  if (["simulation", "authorization", "apply"].includes(type)) validateWorkflowSeal(receipt, graphCore);
   return deepFreeze(canonicalClone(receipt, graphCore, `${type} receipt`));
 }
 
@@ -407,7 +516,11 @@ function validateSimulationReceipt(receipt, graphCore) {
   exactISO(normalized.simulatedAtISO, "Simulation time");
   exactISO(normalized.expiresAtISO, "Simulation expiry");
   normalizeActor(normalized.simulatedBy);
-  if (normalized.authorizationRequired !== (normalized.impact?.counts?.total > 0)) {
+  const evaluation = normalized.schemaVersion === WORKFLOW_RECEIPT_SCHEMAS.simulation
+    ? workflowApprovalEvaluation(normalized.commercialValues, normalized.impact, normalized.workflowPolicy) : null;
+  if (evaluation && graphCore.canonicalSerialize(evaluation) !== graphCore.canonicalSerialize(normalized.approvalEvaluation)) fail("failed-precondition", "Simulation approval evaluation does not match authoritative totals.");
+  if (normalized.authorizationRequired !== (evaluation
+    ? evaluation.impactApprovalRequired || evaluation.thresholdApprovalRequired : normalized.impact?.counts?.total > 0)) {
     fail("failed-precondition", "Simulation authorization gate is invalid.");
   }
   const expectedId = receiptIdentity("simulation", {
@@ -819,8 +932,15 @@ function createCommercialChangeAuthority({
       translateDependencyError(error, "Commercial change simulation failed.");
     }
     const normalized = normalizeImpactResult({ impactResult, preview, graphCore });
+    const workflowPolicy = normalizeWorkflowPolicy(trustedContext.workflowPolicy, scope.organizationId);
+    const attendanceBinding = normalizeAttendanceBinding(trustedContext.attendanceBinding, scope, expectedActiveVersionId);
+    const v2 = Boolean(workflowPolicy || attendanceBinding);
+    if (workflowPolicy && (!workflowPolicy.approvalPolicy.allowedRoles.includes(trusted.actor.role) || workflowPolicy.declaredAtISO > trusted.nowISO)) fail("permission-denied", "Current actor or publication time is outside the pinned workflow policy.");
+    if (attendanceBinding && attendanceBinding.count !== preview.proposedAfterSnapshot.facts["fact.event.guest_count"]) fail("failed-precondition", "The proposed commercial count does not match its attendance submission.");
+    const bindings = v2 ? { workflowPolicy, attendanceBinding } : {};
+    const approvalEvaluation = v2 ? workflowApprovalEvaluation(normalized.commercialValues, normalized.impact, workflowPolicy) : null;
     const proposalDigest = sha256Canonical(
-      preview.proposedAfterSnapshot,
+      v2 ? { snapshot: preview.proposedAfterSnapshot, ...bindings } : preview.proposedAfterSnapshot,
       graphCore,
       "Proposed commercial change"
     );
@@ -829,7 +949,8 @@ function createCommercialChangeAuthority({
       graph: impactResult.graph,
       factDiffs: normalized.factDiffs,
       commercialValues: normalized.commercialValues,
-      impact: normalized.impact
+      impact: normalized.impact,
+      ...bindings
     }, graphCore, "Commercial change impact");
     const receiptId = receiptIdentity("simulation", {
       ...scope,
@@ -855,7 +976,8 @@ function createCommercialChangeAuthority({
 
     const simulatedAtMs = Date.parse(trusted.nowISO);
     const payload = {
-      schemaVersion: COMMERCIAL_CHANGE_SIMULATION_RECEIPT_VERSION,
+      schemaVersion: v2 ? WORKFLOW_RECEIPT_SCHEMAS.simulation : COMMERCIAL_CHANGE_SIMULATION_RECEIPT_VERSION,
+      ...(v2 ? { ...bindings, approvalEvaluation } : {}),
       authority: COMMERCIAL_CHANGE_AUTHORITY,
       receiptType: "simulation",
       receiptId,
@@ -875,7 +997,7 @@ function createCommercialChangeAuthority({
       factDiffs: normalized.factDiffs,
       commercialValues: normalized.commercialValues,
       impact: normalized.impact,
-      authorizationRequired: normalized.impact.counts.total > 0,
+      authorizationRequired: v2 ? approvalEvaluation.impactApprovalRequired || approvalEvaluation.thresholdApprovalRequired : normalized.impact.counts.total > 0,
       simulatedAtISO: trusted.nowISO,
       expiresAtISO: new Date(simulatedAtMs + simulationTtlMs).toISOString(),
       simulatedBy: trusted.actor,
@@ -913,6 +1035,7 @@ function createCommercialChangeAuthority({
     if (existingReceipt) {
       const existing = validateAuthorizationReceipt(existingReceipt, graphCore);
       assertScope(existing, scope, "Authorization receipt");
+      assertWorkflowSealMatch(simulation, existing, graphCore);
       if (
         existing.receiptId !== receiptId
         || existing.simulationReceiptId !== simulation.receiptId
@@ -923,7 +1046,8 @@ function createCommercialChangeAuthority({
       return deepFreeze({ receipt: existing, idempotent: true });
     }
     const payload = {
-      schemaVersion: COMMERCIAL_CHANGE_AUTHORIZATION_RECEIPT_VERSION,
+      schemaVersion: simulation.schemaVersion === WORKFLOW_RECEIPT_SCHEMAS.simulation ? WORKFLOW_RECEIPT_SCHEMAS.authorization : COMMERCIAL_CHANGE_AUTHORIZATION_RECEIPT_VERSION,
+      ...workflowSeal(simulation),
       authority: COMMERCIAL_CHANGE_AUTHORITY,
       receiptType: "authorization",
       receiptId,
@@ -961,12 +1085,14 @@ function createCommercialChangeAuthority({
     const trusted = normalizeTrustedContext(trustedContext);
     assertScope(simulation, scope, "Simulation receipt");
     const currentAuthority = normalizeCurrentAuthority(current);
+    if (simulation.workflowPolicy && !simulation.workflowPolicy.approvalPolicy.allowedRoles.includes(trusted.actor.role)) fail("permission-denied", "The pinned workflow policy excludes this apply role.");
     const identity = applyIdentity(scope, graphCore);
     const receiptId = identity.applyReceiptId;
 
     if (existingReceipt) {
       const existing = validateApplyReceipt(existingReceipt, graphCore);
       assertScope(existing, scope, "Apply receipt");
+      assertWorkflowSealMatch(simulation, existing, graphCore);
       if (
         existing.receiptId !== receiptId
         || existing.simulationReceiptId !== simulation.receiptId
@@ -999,6 +1125,7 @@ function createCommercialChangeAuthority({
     if (simulation.authorizationRequired) {
       authorization = validateAuthorizationReceipt(authorizationReceipt, graphCore);
       assertScope(authorization, scope, "Authorization receipt");
+      assertWorkflowSealMatch(simulation, authorization, graphCore);
       if (
         authorization.simulationReceiptId !== simulation.receiptId
         || authorization.simulationDigest !== simulation.receiptDigest
@@ -1064,7 +1191,8 @@ function createCommercialChangeAuthority({
         state: "open"
       }));
     const payload = {
-      schemaVersion: COMMERCIAL_CHANGE_APPLY_RECEIPT_VERSION,
+      schemaVersion: simulation.schemaVersion === WORKFLOW_RECEIPT_SCHEMAS.simulation ? WORKFLOW_RECEIPT_SCHEMAS.apply : COMMERCIAL_CHANGE_APPLY_RECEIPT_VERSION,
+      ...workflowSeal(simulation),
       authority: COMMERCIAL_CHANGE_AUTHORITY,
       receiptType: "apply",
       receiptId,
@@ -1143,6 +1271,7 @@ function createCommercialChangeAuthority({
     if (simulation.authorizationRequired) {
       authorization = validateAuthorizationReceipt(authorizationReceipt, graphCore);
       assertScope(authorization, scope, "Authorization receipt");
+      assertWorkflowSealMatch(simulation, authorization, graphCore);
       if (
         !requestedAuthorizationReceiptId
         || authorization.receiptId !== requestedAuthorizationReceiptId
@@ -1173,6 +1302,7 @@ function createCommercialChangeAuthority({
     if (applyReceipt) {
       applied = validateApplyReceipt(applyReceipt, graphCore);
       assertScope(applied, scope, "Apply receipt");
+      assertWorkflowSealMatch(simulation, applied, graphCore);
       if (
         applied.receiptId !== identity.applyReceiptId
         || applied.operationId !== identity.operationId
@@ -1466,6 +1596,8 @@ function createCommercialChangeAuthority({
 }
 
 module.exports = {
+  authoritativeMoneyToCents,
+  WORKFLOW_RECEIPT_SCHEMAS,
   COMMERCIAL_CHANGE_APPLY_RECEIPT_VERSION,
   COMMERCIAL_CHANGE_APPLY_OUTCOME_BOUNDARY,
   COMMERCIAL_CHANGE_APPLY_OUTCOME_RECEIPT_VERSION,

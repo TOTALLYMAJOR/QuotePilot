@@ -1,5 +1,16 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
-import ActiveApp from "quotepilot-active-app";
+import AuthGate from "./AuthGate";
+import { createRecoverableLazy, RecoverableErrorBoundary } from "./RecoverableErrorBoundary";
+import "../styles.css";
+
+const ActiveApp = createRecoverableLazy(() => import("quotepilot-active-app"), "ActiveApp");
+function DeferredActiveApp(props) {
+  return <RecoverableErrorBoundary surfaceName="QuotePilot workspace" surfaceKind="route" onRetry={ActiveApp.retry} onClose={() => window.location.assign("/")}>
+    <Suspense fallback={<div className="qp-route-loading" role="status">Loading QuotePilot workspace...</div>}>
+      <ActiveApp {...props} />
+    </Suspense>
+  </RecoverableErrorBoundary>;
+}
 import { EventTypeProvider } from "../context/EventTypeContext";
 import { OrganizationProvider } from "../context/OrganizationContext";
 import {
@@ -141,6 +152,15 @@ export function ScopedWorkspaceRoute({ tenantContext, authSession }) {
     }
   }, [authenticatedUid, replace, route.surface]);
 
+  // Public portal entry keeps its own token authority. Staff code waits for
+  // tenant and authentication resolution; existing App role checks remain.
+  if (route.surface !== "portal" && !committedPortalToken) {
+    if (tenantContext?.loading || authSession.loading) {
+      return <main className="auth-shell container" role="status"><section className="panel"><h1>Welcome Back</h1><p>Getting your QuotePilot workspace ready…</p></section></main>;
+    }
+    if (!authSession.user && !tenantContext?.error && !tenantContext?.blocked) return <AuthGate sessionError={authSession.error} />;
+  }
+
   return (
     <OrganizationProvider key={workspaceScopeKey}>
       <EventTypeProvider>
@@ -177,7 +197,7 @@ export function ScopedWorkspaceRoute({ tenantContext, authSession }) {
                 </Suspense>
               </>
             ) : (
-              <ActiveApp
+              <DeferredActiveApp
                 tenantContext={tenantContext}
                 authSession={authSession}
                 portalRouteAllowed={portalRouteAllowed}
@@ -187,7 +207,7 @@ export function ScopedWorkspaceRoute({ tenantContext, authSession }) {
             )}
           </WorkspaceActionFeedbackProvider>
         ) : (
-          <ActiveApp
+          <DeferredActiveApp
             tenantContext={tenantContext}
             authSession={authSession}
             portalRouteAllowed={portalRouteAllowed}

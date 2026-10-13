@@ -61,7 +61,9 @@ function fixtures() {
       serviceFee: 357.52,
       tax: 504.62,
       total: 6812.39,
-      deposit: 2043.72
+      deposit: 2043.72,
+      totalCents: 681239,
+      depositCents: 204372
     },
     lifecycle: { sentAtISO: ISSUED_AT, viewedAtISO: "2026-08-06T14:00:00.000Z" },
     workflow: { quoteDelivery: delivery }
@@ -86,6 +88,8 @@ function fixtures() {
     venueAddress: "",
     total: 6812.39,
     deposit: 2043.72,
+    totalCents: 681239,
+    depositCents: 204372,
     selection: {
       packageName: "Classic",
       packageInclusions: {
@@ -107,7 +111,9 @@ function fixtures() {
       serviceFee: 357.52,
       tax: 504.62,
       total: 6812.39,
-      deposit: 2043.72
+      deposit: 2043.72,
+      totalCents: 681239,
+      depositCents: 204372
     },
     lifecycle: { sentAtISO: ISSUED_AT, viewedAtISO: "2026-08-06T14:00:00.000Z" },
     deliveryEvidence: delivery
@@ -183,6 +189,12 @@ describe("server proposal acceptance planning", () => {
     expect(Number.isInteger(plan().receiptDocument.proposalSnapshot.totalsMinor.serviceFee)).toBe(true);
     expect(() => moneyToMinor(Number.NaN, "amount")).toThrow(ProposalAcceptanceError);
     expect(() => moneyToMinor(-1, "amount")).toThrow(/invalid/i);
+  });
+
+  test("fails closed when exact authoritative cents diverge from the displayed dollars", () => {
+    const { quote, portal } = fixtures();
+    quote.totals.totalCents += 1;
+    expect(() => plan({ quote, portal })).toThrow(/inconsistent/i);
   });
 
   test("fails closed when the public package inclusions diverge from the quote revision", () => {

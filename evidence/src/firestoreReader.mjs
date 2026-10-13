@@ -25,7 +25,16 @@
 //   organizations/{org}/proposalAcceptanceReceipts/{receipt}
 //   organizations/{org}/settings/config
 
-export const READER_VERSION = "commercial-evidence-firestore-reader-v1";
+import {
+  actualsIdentityForRecord, actualsLedgerIdFor, projectActualsEvidence,
+  unavailableActualsEvidence
+} from "./actualsProjection.mjs";
+
+import {
+  workflowInstanceIdFor, projectWorkflowPolicyEvidence, unavailableWorkflowPolicyEvidence
+} from "./workflowPolicyProjection.mjs";
+
+export const READER_VERSION = "commercial-evidence-firestore-reader-v2";
 
 /**
  * Fields copied out of each source document. Anything absent from these lists
@@ -116,6 +125,120 @@ async function readDoc(ref) {
   return snapshot.exists ? snapshot.data() : null;
 }
 
+// Validate private accepted-source, phase and actuals records before they leave
+// this reader. At most three declaration receipts are read, never full history.
+async function readDeclaredActuals(organizationRef, quoteId, sourceQuote, sourceVersion, acceptanceReceiptDocument) {
+  const refs = actualsIdentityForRecord({ quoteId, quote: sourceQuote });
+  let ledgerId;
+  try { ledgerId = actualsLedgerIdFor(refs); } catch {
+    return unavailableActualsEvidence(refs);
+  }
+  const ledgerRef = organizationRef.collection("eventOperatingLedgers").doc(ledgerId);
+  const [phaseLedger, actualsState] = await Promise.all([
+    readDoc(ledgerRef), readDoc(ledgerRef.collection("actualsState").doc("current"))
+  ]);
+  if (!actualsState) {
+    const retained = await ledgerRef.collection("actualsReceipts").limit(1).get();
+    return unavailableActualsEvidence(refs, retained.empty ? "absent" : "invalid");
+  }
+  for (const [label, value] of [["Event phase", phaseLedger], ["Event actuals", actualsState]]) {
+    if (value) assertTenant(refs.organizationId, value, label);
+  }
+  if (!phaseLedger || !/^event_ops_command_[a-f0-9]{48}$/.test(phaseLedger.lastReceiptId || "")
+    || !/^event_actuals_command_[a-f0-9]{48}$/.test(actualsState.lastReceiptId || "")) {
+    return unavailableActualsEvidence(refs, "invalid");
+  }
+  const [phaseReceipt, actualsReceipt] = await Promise.all([
+    readDoc(ledgerRef.collection("receipts").doc(phaseLedger.lastReceiptId)),
+    readDoc(ledgerRef.collection("actualsReceipts").doc(actualsState.lastReceiptId))
+  ]);
+  for (const [label, value] of [["Event phase receipt", phaseReceipt], ["Event actuals receipt", actualsReceipt]]) {
+    if (value) assertTenant(refs.organizationId, value, label);
+  }
+  if ([actualsState, actualsReceipt].some((value) => value && value.schemaVersion !== 1)) {
+    return unavailableActualsEvidence(refs, "schema_drift");
+  }
+  const declarationReceipts = {};
+  const complete = ["labor", "purchasing", "other"].every((key) =>
+    ["complete", "not_applicable"].includes(actualsState.categories?.[key]?.state));
+  if (complete) {
+    for (const key of ["labor", "purchasing", "other"]) {
+      const id = actualsState.categories[key].lastDeclarationReceiptId;
+      if (!/^event_actuals_command_[a-f0-9]{48}$/.test(id || "")) return unavailableActualsEvidence(refs, "invalid");
+      const receipt = id === actualsState.lastReceiptId ? actualsReceipt
+        : await readDoc(ledgerRef.collection("actualsReceipts").doc(id));
+      if (receipt) assertTenant(refs.organizationId, receipt, "Actuals category declaration");
+      declarationReceipts[id] = receipt;
+    }
+  }
+  const observedPhaseReceipts = {};
+  for (const receipt of [actualsReceipt, ...Object.values(declarationReceipts)]) {
+    const id = receipt?.observedPhaseReceiptId;
+    if (!/^event_ops_command_[a-f0-9]{48}$/.test(id || "")) return unavailableActualsEvidence(refs, "invalid");
+    if (id === phaseLedger.lastReceiptId || Object.hasOwn(observedPhaseReceipts, id)) continue;
+    if (Object.keys(observedPhaseReceipts).length >= 2) return unavailableActualsEvidence(refs, "invalid");
+    const historical = await readDoc(ledgerRef.collection("receipts").doc(id));
+    if (historical) assertTenant(refs.organizationId, historical, "Observed phase receipt");
+    observedPhaseReceipts[id] = historical;
+  }
+  try {
+    return projectActualsEvidence({ ...refs, sourceQuote, sourceVersion, acceptanceReceiptDocument,
+      phaseLedger, phaseReceipt, actualsState, actualsReceipt, declarationReceipts, observedPhaseReceipts });
+  } catch {
+    return unavailableActualsEvidence(refs, "invalid");
+  }
+}
+
+// Read only the existing instance pin, never the tenant's currently active head.
+async function readPinnedComparisonPolicy(organizationRef, quoteId, sourceQuote, sourceVersion, acceptanceReceiptDocument) {
+  const refs = actualsIdentityForRecord({ quoteId, quote: sourceQuote });
+  let instanceIds;
+  let ledgerId;
+  try {
+    instanceIds = [workflowInstanceIdFor(refs), workflowInstanceIdFor(refs, 2)];
+    ledgerId = actualsLedgerIdFor(refs);
+  } catch {
+    return unavailableWorkflowPolicyEvidence(refs);
+  }
+  const candidates = await Promise.all(instanceIds.map(async (id) => {
+    const ref = organizationRef.collection("workflowInstances").doc(id);
+    const instance = await readDoc(ref);
+    const history = instance ? null : await ref.collection("receipts").limit(1).get();
+    return { ref, instance, orphan: Boolean(history && !history.empty) };
+  }));
+  const existing = candidates.filter((candidate) => candidate.instance);
+  if (candidates.some((candidate) => candidate.orphan) || existing.length > 1) return unavailableWorkflowPolicyEvidence(refs, "invalid");
+  if (!existing.length) return unavailableWorkflowPolicyEvidence(refs);
+  const { ref: instanceRef, instance } = existing[0];
+  assertTenant(refs.organizationId, instance.source, "Workflow instance");
+  if (![1, 2].includes(instance.schemaVersion)) return unavailableWorkflowPolicyEvidence(refs, "schema_drift");
+  if (!/^workflow_command_[a-f0-9]{48}$/.test(instance.lastReceiptId || "")) return unavailableWorkflowPolicyEvidence(refs, "invalid");
+  const [instanceReceipt, phaseLedger] = await Promise.all([
+    readDoc(instanceRef.collection("receipts").doc(instance.lastReceiptId)),
+    readDoc(organizationRef.collection("eventOperatingLedgers").doc(ledgerId))
+  ]);
+  if (instanceReceipt) assertTenant(refs.organizationId, instanceReceipt.source, "Workflow receipt");
+  if (phaseLedger) assertTenant(refs.organizationId, phaseLedger, "Workflow phase ledger");
+  if (!phaseLedger || !/^event_ops_command_[a-f0-9]{48}$/.test(phaseLedger.lastReceiptId || "")) return unavailableWorkflowPolicyEvidence(refs, "invalid");
+  const phaseReceipt = await readDoc(organizationRef.collection("eventOperatingLedgers").doc(ledgerId).collection("receipts").doc(phaseLedger.lastReceiptId));
+  if (phaseReceipt) assertTenant(refs.organizationId, phaseReceipt, "Workflow phase receipt");
+  let publishedVersion = null;
+  if (instance.definition?.seed !== true) {
+    const versionId = instance.definitionPin?.versionId;
+    if (instance.definitionPin?.definitionId !== "event_execution"
+      || !/^event_execution_v(?:[1-9]|[1-4][0-9]|50)$/.test(versionId || "")) return unavailableWorkflowPolicyEvidence(refs, "invalid");
+    publishedVersion = await readDoc(organizationRef.collection("workflowDefinitions").doc("event_execution").collection("versions").doc(versionId));
+    if (publishedVersion) assertTenant(refs.organizationId, publishedVersion, "Pinned published workflow definition");
+    if (publishedVersion && ![1, 2].includes(publishedVersion.schemaVersion)) return unavailableWorkflowPolicyEvidence(refs, "schema_drift");
+  }
+  try {
+    return projectWorkflowPolicyEvidence({ ...refs, sourceQuote, sourceVersion, acceptanceReceiptDocument,
+      instance, instanceReceipt, publishedVersion, phaseLedger, phaseReceipt });
+  } catch {
+    return unavailableWorkflowPolicyEvidence(refs, "invalid");
+  }
+}
+
 /**
  * Assemble the exporter `--source` shape for one organization.
  *
@@ -168,9 +291,10 @@ export async function readOrganizationEvidence({
     // when the quote names one; a quote claiming acceptance with no receipt id
     // is left for the exporter to classify rather than papered over here.
     let acceptanceReceipt = null;
+    let rawReceipt = null;
     const receiptId = String(rawQuote?.acceptanceReceipt?.receiptId ?? "").trim();
     if (receiptId) {
-      const rawReceipt = await readDoc(
+      rawReceipt = await readDoc(
         organizationRef.collection("proposalAcceptanceReceipts").doc(receiptId)
       );
       if (rawReceipt) {
@@ -181,9 +305,11 @@ export async function readOrganizationEvidence({
 
     const versionId = String(rawQuote?.activeVersionId ?? "").trim();
     let quoteVersion = null;
+    let rawVersion = null;
     if (versionId) {
-      const rawVersion = await readDoc(quoteRef.collection("versions").doc(versionId));
+      rawVersion = await readDoc(quoteRef.collection("versions").doc(versionId));
       if (rawVersion) {
+        assertTenant(tenant, rawVersion, `Quote version ${versionId}`);
         quoteVersion = { ...pick(rawVersion, VERSION_FIELDS), versionId };
       }
     }
@@ -203,12 +329,18 @@ export async function readOrganizationEvidence({
       }
     }
 
+    const [actualsEvidence, workflowPolicyEvidence] = await Promise.all([
+      readDeclaredActuals(organizationRef, quoteId, rawQuote, rawVersion, rawReceipt),
+      readPinnedComparisonPolicy(organizationRef, quoteId, rawQuote, rawVersion, rawReceipt)
+    ]);
     const record = {
       quoteId,
       quote,
       acceptanceReceipt,
       quoteVersion,
       changeRequestRecord,
+      actualsEvidence,
+      workflowPolicyEvidence,
       organizationSettings: settingsData ? pick(settingsData, SETTINGS_FIELDS) : null
     };
     record.eventCompleted = Boolean(eventCompleted(record));

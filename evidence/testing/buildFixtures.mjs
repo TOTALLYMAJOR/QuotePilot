@@ -1,3 +1,4 @@
+import { createRequire } from "node:module";
 // Fixture generation, shared by the JavaScript tests and the Python tests.
 //
 // Both reconciler fixtures are produced by the real exporter from documents
@@ -18,6 +19,10 @@ import { createPayoutProducer } from "../src/producers/payoutProducer.mjs";
 import { createFeeScheduleProducer } from "../src/producers/feeScheduleProducer.mjs";
 import { createConsumptionProducer } from "../src/producers/consumptionProducer.mjs";
 import { missing } from "../src/availability.mjs";
+
+const require = createRequire(import.meta.url);
+const phaseAuthority = require("../../functions/eventOperations.js");
+const actualsAuthority = require("../../functions/eventOperatingActuals.js");
 
 export const EVALUATED_AT = "2026-08-21T14:00:00.000Z";
 
@@ -48,10 +53,42 @@ function sourceRecord({ eventCompleted = false } = {}) {
   };
 }
 
+/** Real acceptance, phase and actuals planners create this synthetic private proof. */
+export function declaredActualsFixture({ complete = true, costs = { labor: 208000, purchasing: 612000, other: 96000 } } = {}) {
+  const record = sourceRecord();
+  record.quote = { ...record.quote, id: IDS.QUOTE_ID, customerId: "customer-fixture", status: "booked", booking: { bookedAtISO: "2026-08-06T12:00:00.000Z" } };
+  record.quoteVersion = { ...record.quoteVersion, organizationId: IDS.ORGANIZATION_ID, quoteId: IDS.QUOTE_ID, customerId: "customer-fixture", snapshot: { id: IDS.QUOTE_ID, organizationId: IDS.ORGANIZATION_ID, customerId: "customer-fixture", event: { ...record.quote.event } } };
+  const refs = { organizationId: IDS.ORGANIZATION_ID, quoteId: IDS.QUOTE_ID, sourceVersionId: IDS.REVISION_ID, acceptanceReceiptId: IDS.RECEIPT_ID };
+  const actor = { organizationId: refs.organizationId, uid: "actuals-fixture-operator", role: "admin" };
+  const phase = phaseAuthority.planCommand({ source: refs, actor, nowISO: "2026-08-20T12:00:00.000Z", request: { ...refs, requestId: "fixture-actuals-phase-0001", command: "initialize", expectedLedgerRevision: 0, targetPhase: "prepared" } });
+  let last = null;
+  const receipts = [];
+  function apply(command) {
+    const revision = last?.nextActualsState.revision || 0;
+    last = actualsAuthority.planCommand({ source: refs, actor, phaseSnapshot: phase.snapshot,
+      actualsState: last?.nextActualsState, currentReceipt: last?.receipt,
+      nowISO: `2026-08-20T12:00:${String(revision + 1).padStart(2, "0")}.000Z`,
+      request: { ...refs, requestId: `fixture-actuals-command-${String(revision).padStart(4, "0")}`, actualsPolicyVersion: 1, expectedActualsRevision: revision, ...command } });
+    receipts.push(last.receipt);
+  }
+  for (const category of ["labor", "purchasing", "other"]) {
+    apply({ command: "record", category, description: `Private ${category} cost note`, costCents: costs[category], ...(category === "labor" ? { durationMinutes: 480, laborRole: "lead" } : {}) });
+  }
+  if (complete) for (const category of ["labor", "purchasing", "other"]) {
+    apply({ command: "declare_category", category, state: "complete", note: `Private ${category} completeness declaration` });
+  }
+  const declarationReceipts = Object.fromEntries(receipts.filter((receipt) => receipt.request.command === "declare_category").map((receipt) => [receipt.receiptId, receipt]));
+  const proof = { ...refs, sourceQuote: record.quote, sourceVersion: record.quoteVersion,
+    acceptanceReceiptDocument: record.acceptanceReceipt, phaseLedger: phase.nextLedger, phaseReceipt: phase.receipt,
+    actualsState: last.nextActualsState, actualsReceipt: last.receipt, declarationReceipts, observedPhaseReceipts: {} };
+  record.actualsProof = proof;
+  return { record, proof, receipts, actor, phase };
+}
+
 /**
  * What the exporter produces today, against the producers we actually have.
  * Payouts are blocked by the Connect stopping point, no organization has
- * declared a fee schedule, and the event has not been delivered.
+ * declared a fee schedule, and no complete actuals declaration is available.
  */
 export function currentStateBundle() {
   const producers = producerRegistry([
@@ -97,7 +134,7 @@ export function workedExampleBundle() {
       }),
       { missing }
     ),
-    guarded(createConsumptionProducer({ readConsumption: () => null }), { missing })
+    guarded(createConsumptionProducer(), { missing })
   ]);
-  return exportBundle([sourceRecord()], { evaluatedAtISO: EVALUATED_AT, producers });
+  return exportBundle([declaredActualsFixture().record], { evaluatedAtISO: EVALUATED_AT, producers });
 }

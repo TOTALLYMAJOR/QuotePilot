@@ -14,6 +14,8 @@ export const WORKSPACE_TASK_JOURNEY_PERSISTENCE = "session_only";
 export const WORKSPACE_TASK_JOURNEY_MAX_SERIALIZED_LENGTH = 4096;
 export const WORKSPACE_FOLLOW_UP_TASK_VERIFIER_ID = "quote-follow-up-server-readback";
 export const WORKSPACE_FOLLOW_UP_TASK_PROOF_TYPE = "follow-up-completion-confirmation";
+export const WORKSPACE_APPROVAL_TASK_VERIFIER_ID = "quote-approval-server-readback";
+export const WORKSPACE_APPROVAL_TASK_PROOF_TYPE = "approval-resolution-confirmation";
 
 export const WORKSPACE_TASK_JOURNEY_PHASES = /* @__PURE__ */ Object.freeze([
   "in_progress",
@@ -402,6 +404,20 @@ export function workspaceTaskJourneyBelongsToPrincipal(journey, principal) {
   try {
     const current = canonicalJourney(journey);
     return sameJson(current.principal, normalizedPrincipal(principal));
+  } catch {
+    return false;
+  }
+}
+
+/** Returns false for malformed journeys, clocks, TTLs, and future start times. */
+export function isWorkspaceTaskJourneyFresh(journey, options) {
+  try {
+    const current = canonicalJourney(journey);
+    const input = exactRecord(options, ["nowISO", "ttlMs"], "invalid_input");
+    const nowISO = canonicalInstant(input.nowISO, "invalid_input");
+    if (!Number.isSafeInteger(input.ttlMs) || input.ttlMs < 0) return false;
+    const ageMs = Date.parse(nowISO) - Date.parse(current.startedAtISO);
+    return ageMs >= 0 && ageMs <= input.ttlMs;
   } catch {
     return false;
   }

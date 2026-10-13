@@ -691,4 +691,55 @@ describe("server-authoritative pricing setup safety", () => {
       message: expect.stringMatching(/includes unavailable add-on missing-addon/i)
     });
   });
+
+  test("uses authoritative offer choice groups and rejects browser-only inclusion claims", async () => {
+    const packages = [{
+      id: "package-a",
+      name: "Package A",
+      pppMinor: 1000,
+      includedAddonIds: [],
+      includedRentalIds: [],
+      includedMenuItemIds: [],
+      choiceGroups: [{
+        id: "mains",
+        label: "Choose two mains",
+        componentType: "menu_item",
+        componentIds: ["chicken", "fish", "beef"],
+        minChoices: 2,
+        maxChoices: 2
+      }]
+    }];
+    const menuItems = ["chicken", "fish", "beef"].map((id) => ({
+      id,
+      name: id,
+      priceMinor: 500,
+      pricingType: "per_event",
+      active: true
+    }));
+    const request = buildPricingRequest();
+    request.pricingInput.selection.offerChoiceSelections = { mains: ["chicken", "fish"] };
+    request.pricingInput.selection.menuItems = ["chicken", "fish"];
+
+    const result = await calculateQuotePricingAuthoritative({
+      db: buildPricingDb({ settings: confirmedPricingSettings(), packages, menuItems }),
+      data: request,
+      staff: pricingStaff
+    });
+    expect(result.pricing.rulesSnapshot.offerConfiguration).toMatchObject({
+      valid: true,
+      selections: { mains: ["chicken", "fish"] }
+    });
+
+    const missingSelection = buildPricingRequest();
+    missingSelection.pricingInput.selection.offerChoiceSelections = { mains: ["chicken", "fish"] };
+    missingSelection.pricingInput.selection.menuItems = ["chicken"];
+    await expect(calculateQuotePricingAuthoritative({
+      db: buildPricingDb({ settings: confirmedPricingSettings(), packages, menuItems }),
+      data: missingSelection,
+      staff: pricingStaff
+    })).rejects.toMatchObject({
+      code: "failed-precondition",
+      message: expect.stringMatching(/must be present in the authoritative quote selection/i)
+    });
+  });
 });

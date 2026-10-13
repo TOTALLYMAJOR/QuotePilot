@@ -46,6 +46,15 @@ describe("final-balance payment projection", () => {
       .toEqual({ totalCents: 50001, depositCents: 12500, finalBalanceCents: 37501 });
   });
 
+  test("uses authoritative exact-minor totals directly and rejects divergent dollar projections", () => {
+    expect(quotePaymentAmounts(quote({
+      totals: { total: 500.01, deposit: 125, totalCents: 50001, depositCents: 12500 }
+    }))).toEqual({ totalCents: 50001, depositCents: 12500, finalBalanceCents: 37501 });
+    expect(() => quotePaymentAmounts(quote({
+      totals: { total: 500, deposit: 125, totalCents: 50001, depositCents: 12500 }
+    }))).toThrow(/inconsistent/i);
+  });
+
   test("plans prepared, sent, and paid final-balance evidence monotonically", () => {
     const prepared = planFinalBalanceLedgerTransition({
       quote: quote(),
@@ -128,6 +137,7 @@ describe("final-balance payment projection", () => {
       }
     }));
     expect(scoped.totals.deposit).toBe(375);
+    expect(scoped.totals.depositCents).toBe(37500);
     expect(scoped.payment.stripeSessionId).toBe("cs_test_final_123");
     expect(scoped.payment.depositStatus).toBe("sent");
   });

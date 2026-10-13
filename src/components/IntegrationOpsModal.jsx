@@ -7,6 +7,12 @@ import {
   getOperationsAuditSnapshot,
   sendIntegrationTestSms
 } from "../lib/commerceOps";
+import {
+  buildEmailTestConfirmationToken,
+  createEmailTestRequestId,
+  sendResendAcceptanceTestEmail
+} from "../lib/resendAcceptanceClient";
+import EmailProviderAcceptancePanel from "./EmailProviderAcceptancePanel";
 import SmsProviderPanel, { isSmsProviderAttemptLocked } from "./SmsProviderPanel";
 import {
   archiveOrganizationWorkspace,
@@ -31,6 +37,8 @@ import {
 import { useModalDialog } from "../hooks/useModalDialog";
 import CustomerProvisioningAuthorityState from "./CustomerProvisioningAuthorityState";
 import OrganizationRoleAuthorityPanel from "./OrganizationRoleAuthorityPanel";
+import AdaptiveChoiceField from "./AdaptiveChoiceField";
+import GoogleCalendarIntegrationPanel from "./GoogleCalendarIntegrationPanel";
 
 const PROVIDERS = ["crm", "webhook", "webhook_bridge", "hubspot", "salesforce"];
 const STATES = ["queued", "success", "error", "retrying", "skipped"];
@@ -323,6 +331,17 @@ export function IntegrationOpsView({
     status: null,
     testMessage: ""
   });
+  const [emailTestState, setEmailTestState] = useState({
+    testing: false,
+    reconciling: false,
+    recovering: false,
+    uncertain: false,
+    error: "",
+    requestId: "",
+    recipientEmail: "",
+    confirmationToken: "",
+    result: null
+  });
   const [provisionState, setProvisionState] = useState({
     loading: false,
     phase: "",
@@ -500,6 +519,71 @@ export function IntegrationOpsView({
         testRequestId: requestId || prev.testRequestId,
         error: err?.message || "Failed to send integration SMS test."
       }));
+    }
+  };
+
+  const handleSendEmailAcceptanceTest = async () => {
+    if (!canProvisionCustomer) {
+      setEmailTestState((prev) => ({
+        ...prev,
+        error: "Platform administrator authority is required for an email acceptance test."
+      }));
+      return;
+    }
+    if (emailTestState.testing || emailTestState.uncertain || emailTestState.result) return;
+    const requestId = emailTestState.requestId || createEmailTestRequestId();
+    setEmailTestState((prev) => ({
+      ...prev,
+      testing: true,
+      reconciling: false,
+      recovering: false,
+      uncertain: false,
+      error: "",
+      requestId
+    }));
+    try {
+      const result = await sendResendAcceptanceTestEmail({
+        requestId,
+        recipientEmail: emailTestState.recipientEmail,
+        confirmationToken: emailTestState.confirmationToken
+      });
+      setEmailTestState((prev) => ({
+        ...prev,
+        testing: false,
+        recovering: false,
+        uncertain: false,
+        error: "",
+        result
+      }));
+      setFeedback(
+        "Resend accepted the controlled request. Delivery still requires provider and inbox evidence."
+      );
+      await load();
+    } catch (err) {
+      const code = String(err?.code || "").trim().toLowerCase().replace(/^functions\//, "");
+      const uncertain = ["aborted", "deadline-exceeded", "internal", "unavailable", "unknown"]
+        .includes(code) || !code;
+      const recovering = code === "failed-precondition";
+      setEmailTestState((prev) => ({
+        ...prev,
+        testing: false,
+        recovering,
+        uncertain,
+        requestId: uncertain ? prev.requestId : "",
+        error: err?.message || (uncertain
+          ? "The provider outcome is unknown. Do not retry this request."
+          : "The controlled email acceptance request was rejected.")
+      }));
+    }
+  };
+
+  const handleReviewEmailAcceptanceRecord = async () => {
+    if (!emailTestState.uncertain || emailTestState.reconciling) return;
+    setEmailTestState((prev) => ({ ...prev, reconciling: true }));
+    try {
+      await load();
+    } finally {
+      setEmailTestState((prev) => ({ ...prev, reconciling: false }));
     }
   };
 
@@ -941,6 +1025,17 @@ export function IntegrationOpsView({
     setProvisionForm(createCustomerProvisioningForm(getCanonicalAppUrl()));
     setBuyerRepairState({ loading: false, error: "", result: null });
     setBuyerRepairForm({ orderId: "", confirmationToken: "" });
+    setEmailTestState({
+      testing: false,
+      reconciling: false,
+      recovering: false,
+      uncertain: false,
+      error: "",
+      requestId: "",
+      recipientEmail: "",
+      confirmationToken: "",
+      result: null
+    });
     if (!provisioningOnly) {
       setCleanupState({
         loading: false,
@@ -989,6 +1084,10 @@ export function IntegrationOpsView({
   );
 
   const integrationStatus = setupState.status || {};
+  const emailStatus = integrationStatus.email || {};
+  const expectedEmailTestConfirmation = buildEmailTestConfirmationToken(
+    emailTestState.recipientEmail
+  );
   const operationsAuditCapabilityState = resolveOperationsAuditCapabilityState(auditState);
   const stripeStatus = integrationStatus.stripe || {};
   const stripeMissingFields = Array.isArray(stripeStatus.missingFields) ? stripeStatus.missingFields : [];
@@ -1015,6 +1114,17 @@ export function IntegrationOpsView({
           : provisionState.error
             ? "error"
             : "ready";
+  const selectedIntegrationQuotePresent = state.quotes.some((quote) => quote.id === form.quoteId);
+  const integrationQuoteOptions = state.quotes.map((quote) => ({
+    value: quote.id,
+    label: `${quote.quoteNumber || quote.id} • ${quote.customer?.name || quote.customer?.email || "-"} • ${quote.event?.date || "-"}`
+  }));
+  if (form.quoteId && !selectedIntegrationQuotePresent && integrationQuoteOptions.length > 0) {
+    integrationQuoteOptions.unshift({
+      value: form.quoteId,
+      label: `Previously selected quote ${form.quoteId} (not in the current read)`
+    });
+  }
 
   const handleRecord = async () => {
     if (!form.quoteId) {
@@ -1052,6 +1162,8 @@ export function IntegrationOpsView({
   const closeBlocked = Boolean(
     saving
     || setupState.testing
+    || emailTestState.testing
+    || emailTestState.reconciling
     || provisionState.loading
     || cleanupState.loading
     || buyerRepairState.loading
@@ -1122,6 +1234,14 @@ export function IntegrationOpsView({
         {feedback && <p className="source-note">{feedback}</p>}
 
         {!provisioningOnly && canManageProviders && <OrganizationRoleAuthorityPanel />}
+
+        {!provisioningOnly && canManageProviders && <GoogleCalendarIntegrationPanel
+          mode="connection"
+          organizationId={organizationId}
+          role="admin"
+          source={state.source || "firebase"}
+          enabled={Boolean(organizationId)}
+        />}
 
         {!provisioningOnly && canManageProviders && <section
           className="admin-section operations-audit-panel"
@@ -1214,6 +1334,36 @@ export function IntegrationOpsView({
           onCopyDisableGuidance={() => handleCopyValue(SMS_DISABLE_GUIDANCE, "SMS disable guidance")}
           setupGuidance={FUNCTIONS_ENV_SETUP_GUIDANCE}
           disableGuidance={SMS_DISABLE_GUIDANCE}
+        />}
+
+        {!provisioningOnly && canProvisionCustomer && <EmailProviderAcceptancePanel
+          emailStatus={emailStatus}
+          recipientEmail={emailTestState.recipientEmail}
+          confirmationToken={emailTestState.confirmationToken}
+          expectedConfirmationToken={expectedEmailTestConfirmation}
+          testing={emailTestState.testing}
+          reconciling={emailTestState.reconciling}
+          recovering={emailTestState.recovering}
+          result={emailTestState.result}
+          error={emailTestState.error}
+          uncertain={emailTestState.uncertain}
+          onRecipientChange={(recipientEmail) => setEmailTestState((prev) => ({
+            ...prev,
+            recipientEmail,
+            confirmationToken: "",
+            requestId: "",
+            result: null,
+            recovering: false,
+            uncertain: false,
+            error: ""
+          }))}
+          onConfirmationChange={(confirmationToken) => setEmailTestState((prev) => ({
+            ...prev,
+            confirmationToken,
+            error: ""
+          }))}
+          onSend={handleSendEmailAcceptanceTest}
+          onReview={handleReviewEmailAcceptanceRecord}
         />}
 
         {!provisioningOnly && canManageProviders && <section className="admin-section">
@@ -1711,20 +1861,33 @@ export function IntegrationOpsView({
             for audit events until a server-authorized CRM connector is enabled.
           </p>
           <div className="admin-grid-settings integration-form-grid">
-            <label>
-              Quote
-              <select
+            <div data-choice-field="integration-audit-quote">
+              <AdaptiveChoiceField
+                label="Quote"
+                options={integrationQuoteOptions}
                 value={form.quoteId}
                 onChange={(event) => setForm((prev) => ({ ...prev, quoteId: event.target.value }))}
-              >
-                <option value="">Select quote</option>
-                {state.quotes.map((quote) => (
-                  <option key={quote.id} value={quote.id}>
-                    {quote.quoteNumber || quote.id} • {quote.customer?.name || quote.customer?.email || "-"} • {quote.event?.date || "-"}
-                  </option>
-                ))}
-              </select>
-            </label>
+                disabled={state.loading}
+                placeholder="Select quote"
+                emptyState="unavailable"
+                emptyReason={form.quoteId && !selectedIntegrationQuotePresent
+                  ? `The previously selected quote ${form.quoteId} is not in the current integration read.`
+                  : state.loading
+                    ? "The integration quote read is still loading."
+                    : "No quote is available to receive an integration audit event."}
+                recoveryAction={{ label: "Reload quotes", onClick: load }}
+                singleChoiceDetail="This is the only quote available for an integration audit event."
+                fieldState={form.quoteId && !selectedIntegrationQuotePresent
+                  ? { evidence: "stale" }
+                  : undefined}
+                fieldStateDetails={form.quoteId && !selectedIntegrationQuotePresent
+                  ? {
+                      reason: "The selected quote is not present in the current integration read.",
+                      recoveryAction: { label: "Reload quotes", onClick: load }
+                    }
+                  : undefined}
+              />
+            </div>
             <label>
               Provider
               <select

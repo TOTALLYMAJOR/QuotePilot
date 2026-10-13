@@ -228,10 +228,55 @@ describe("QuickUpdatesPanel", () => {
     expect(byButton("Staffing").getAttribute("aria-expanded")).toBe("false");
     expect(byButton("Pricing").getAttribute("aria-expanded")).toBe("false");
     expect(dialog.textContent).toContain("Nothing changes until you save");
+    expect(dialog.querySelector('[data-adaptive-choice-mode="select"]')).not.toBeNull();
     expect(Array.from(dialog.querySelectorAll("option")).map((option) => option.value))
-      .toEqual(["Plated", "Buffet", "Stations", "Drop-off"]);
+      .toEqual(["", "Plated", "Buffet", "Stations", "Drop-off"]);
     expect(props.onPreviewQuickUpdate).not.toHaveBeenCalled();
     expect(props.onSaveQuickUpdate).not.toHaveBeenCalled();
+  });
+
+  test("renders service-style zero, one, and stale choice states without inventing a replacement", async () => {
+    const emptyQuote = { ...QUOTE, event: { ...QUOTE.event, style: "" } };
+    render({ quote: emptyQuote, serviceStyles: [] });
+    await settle();
+    expect(document.querySelector('[data-adaptive-choice-mode="empty"]')).not.toBeNull();
+    expect(document.querySelector('[data-field-state-primary="unavailable"]')).not.toBeNull();
+    expect(document.querySelector(".qup-field select")).toBeNull();
+    expect(byButton("Open full Library")).not.toBeUndefined();
+
+    act(() => root.render(null));
+    act(() => root.render(<QuickUpdatesPanel
+      open
+      quote={QUOTE}
+      serviceStyles={["Plated"]}
+      returnFocusRef={{ current: trigger }}
+      onClose={vi.fn()}
+      onPreviewQuickUpdate={vi.fn()}
+      onSaveQuickUpdate={vi.fn()}
+      onOpenQuickUpdatesLibrary={vi.fn()}
+    />));
+    await settle();
+    expect(document.querySelector('[data-adaptive-choice-mode="single"]')).not.toBeNull();
+    expect(document.querySelector('[data-field-state-primary="confirmed"]')).not.toBeNull();
+    expect(document.querySelector(".qup-field select")).toBeNull();
+
+    act(() => root.render(null));
+    act(() => root.render(<QuickUpdatesPanel
+      open
+      quote={QUOTE}
+      serviceStyles={["Buffet", "Stations"]}
+      returnFocusRef={{ current: trigger }}
+      onClose={vi.fn()}
+      onPreviewQuickUpdate={vi.fn()}
+      onSaveQuickUpdate={vi.fn()}
+      onOpenQuickUpdatesLibrary={vi.fn()}
+    />));
+    await settle();
+    const staleSelect = document.querySelector(".qup-field select");
+    expect(staleSelect.value).toBe("Plated");
+    expect(staleSelect.querySelector('option[value="Plated"]').disabled).toBe(true);
+    expect(document.querySelector('[data-field-state-primary="stale"]')).not.toBeNull();
+    expect(document.body.textContent).toContain("saved value remains visible");
   });
 
   test("isolates every background body surface while open and restores prior accessibility state", async () => {
@@ -267,7 +312,7 @@ describe("QuickUpdatesPanel", () => {
 
     act(() => byButton("Menu").click());
     expect(byButton("Menu").getAttribute("aria-expanded")).toBe("false");
-    expect(document.querySelector('select[aria-label="Service style"]')).toBeNull();
+    expect(document.querySelector(".qup-field select")).toBeNull();
 
     act(() => byButton("Staffing").click());
     expect(byButton("Staffing").getAttribute("aria-expanded")).toBe("true");
@@ -278,7 +323,7 @@ describe("QuickUpdatesPanel", () => {
     expect(byButton("Review pricing")).not.toBeUndefined();
 
     act(() => byButton("Menu").click());
-    expect(document.querySelector('select[aria-label="Service style"]').value).toBe("Buffet");
+    expect(document.querySelector(".qup-field select").value).toBe("Buffet");
     expect(document.body.textContent).toContain("1 unsaved change");
     expect(props.onPreviewQuickUpdate).not.toHaveBeenCalled();
     expect(props.onSaveQuickUpdate).not.toHaveBeenCalled();
@@ -583,7 +628,7 @@ describe("QuickUpdatesPanel", () => {
     expect(byButton("Staffing").disabled).toBe(true);
     expect(byButton("Pricing").disabled).toBe(true);
     expect(byButton("Open full Library").disabled).toBe(true);
-    expect(document.querySelector('select[aria-label="Service style"]').disabled).toBe(true);
+    expect(document.querySelector(".qup-field select").disabled).toBe(true);
     act(() => document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
     expect(props.onClose).not.toHaveBeenCalled();
     const unloadWhileSaving = new Event("beforeunload", { cancelable: true });

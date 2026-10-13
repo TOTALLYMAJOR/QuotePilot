@@ -3,6 +3,11 @@ import React from "react";
 import { createRoot } from "react-dom/client";
 import { act } from "react-dom/test-utils";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+
+vi.hoisted(() => {
+  vi.stubEnv("VITE_PILOT_MARGINS_ENABLED", "false");
+});
+
 import PilotCommandBar from "../PilotCommandBar";
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
@@ -467,6 +472,26 @@ describe("PilotCommandBar", () => {
     act(() => recognitionInstances[0].end());
     expect(container.querySelector(".pilot-command-input").value).toBe("add another bartender");
     expect(container.querySelector(".pilot-command-preview")).toBeNull();
+  });
+
+  test("keeps a legacy voice failure visible with typed and retry recovery", () => {
+    enableFakeSpeechRecognition();
+    render({ voiceCaptureMode: "toggle" });
+    const button = [...container.querySelectorAll("button")]
+      .find((element) => element.textContent.trim() === "Speak");
+
+    act(() => button.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+    act(() => recognitionInstances[0].error("network"));
+    act(() => recognitionInstances[0].end());
+
+    const recovery = container.querySelector("#pilot-command-legacy-voice-error");
+    expect(recovery).not.toBeNull();
+    expect(recovery.getAttribute("data-capability-state")).toBe("recovery");
+    expect(recovery.getAttribute("role")).toBe("alert");
+    expect(recovery.textContent).toContain("speech service could not be reached");
+    expect(recovery.textContent).toContain("type your request");
+    expect(button.getAttribute("aria-describedby")).toBe(recovery.id);
+    expect(container.querySelector(".pilot-command-input").value).toBe("");
   });
 
   test("keeps hold-only presentation out of the flag-off toggle control", () => {

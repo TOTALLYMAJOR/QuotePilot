@@ -356,4 +356,26 @@ describe("quote draft runtime", () => {
     expect(resolveQuoteDraftRevisionId({ updatedAtISO: "2026-08-11T12:00:00.000Z" }))
       .toBe("2026-08-11T12:00:00.000Z");
   });
+
+  test.each(["accepted", "booked"])(
+    "refuses to hydrate a %s commitment into an editable draft",
+    (status) => {
+      expect(hydrateSavedQuoteDraftBase({
+        quote: {
+          id: `quote-${status}`,
+          quoteNumber: `Q-${status.toUpperCase()}`,
+          status,
+          activeVersionId: "v0004",
+          event: { guests: 80 },
+          totals: { total: 6400, deposit: 1600 }
+        }
+      })).toMatchObject({
+        ok: false,
+        code: "quote_lifecycle_not_editable",
+        reason: expect.stringContaining("Committed record locked"),
+        consequence: expect.stringContaining("historical evidence remain unchanged"),
+        nextResolution: expect.stringContaining("separately authorized amendment or replacement workflow")
+      });
+    }
+  );
 });

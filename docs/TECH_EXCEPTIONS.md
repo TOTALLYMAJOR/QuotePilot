@@ -1,7 +1,6 @@
 # Technology Exceptions
 
-Last updated: 2026-09-03 12:37:55 CDT
-
+Last updated: 2026-10-11 23:14:06 CDT
 Use this log when a change intentionally departs from stable-first policy or requires temporary governance/performance exception handling.
 
 ## Record Template
@@ -53,11 +52,37 @@ Use this log when a change intentionally departs from stable-first policy or req
   the existing configuration and thresholds. Exact remote CI Quality run
   `33242537210` also passed the unchanged CWV gate under this graph.
 
-- Date: August 13, 2026 (supersedes the August 11 single-profile record)
+- Date: August 13, 2026 (supersedes the August 11 single-profile record;
+  Library profile recalibration reviewed September 4, 2026)
 - Owner: QuotePilot maintainers
 - Change: Enforce separate, detected bundle profiles for the compatibility and
-  production-equivalent Ambient graphs. The Proposal Composer quote-builder
-  candidate (measured 2,943,941 local compatibility bytes, largest chunk
+  production-equivalent Ambient graphs. Guided Inquiry and model-assist update:
+  the exact current CI matrices measure
+  3,517,367 / 385,181 bytes for compatibility and 4,796,685 / 443,563 bytes
+  for Ambient. Their aggregate ceilings are pinned to those literal local
+  graphs, while the existing largest-chunk ceilings remain unchanged. This
+  admits the reviewed public inquiry, Library administration, recovery, staff
+  queue, conversion, and model-gating source without adding discretionary
+  headroom; exact-PR CI must confirm both graphs before release. The v0.20.0
+  combined-open-work update measures 3,652,845 / 385,181 bytes for
+  compatibility and 4,947,989 / 445,422 bytes for Ambient after adding the
+  review-only Delivery Planning slice and the already-lazy Calendar,
+  event-note, attendance, commercial-observation, progressive-client, and
+  Commercial Decision surfaces. Its aggregate ceilings and Ambient
+  largest-chunk ceiling are pinned to those literal local CI-matrix graphs;
+  the compatibility largest-chunk ceiling stays unchanged. Exact-PR CI must
+  confirm both profiles before release. The Quote-to-Confidence update first
+  removes about 153 KB of default-off eager capability code with compile-time
+  gates and lazy presentation boundaries. The config-free local matrix
+  measures 3,657,288 / 385,181 bytes for compatibility and 4,962,837 / 446,522
+  bytes for Ambient. With the exact production CI environment, compatibility
+  measures 3,657,606 / 385,181 bytes and Ambient measures 4,963,155 / 446,541
+  bytes; exact-PR CI run `35265592125` confirmed the compatibility result. The
+  profile ceilings are pinned to those larger literal production-matrix
+  artifacts while compatibility's largest-chunk ceiling remains unchanged.
+  The remaining increase is the reviewed role-safe host
+  integration for the five separately gated workflows; there is no
+  discretionary headroom. The Proposal  Composer quote-builder candidate (measured 2,943,941 local compatibility bytes, largest chunk
   unchanged), the first Live planning and Staff People presentation slice
   (measured 2,963,542 compatibility bytes, largest chunk unchanged), and the
   shared shell and Now visual-system pass (measured 2,964,327 compatibility
@@ -94,6 +119,36 @@ Use this log when a change intentionally departs from stable-first policy or req
   surfaces split and located the increase across the approved shared continuity,
   return-context, and feedback state plus their already-lazy route surfaces;
   reducing it safely remains explicit optimization debt.
+  The later commercial-platform candidate advanced the exact compatibility
+  ceiling to 3,330,544 bytes. The five-primary UX convergence presentation then
+  measures 3,331,404 aggregate bytes with a 394,674-byte largest chunk: an exact
+  860-byte aggregate increase for the shared Operations orientation, direct
+  current-state route, and preserved rollback classification. The compatibility
+  ceiling at that checkpoint was pinned to that literal local graph with no
+  percentage headroom; the Ambient ceiling remained unchanged because its
+  then-measured graph was within the existing absolute limit.
+  Reproducing the complete CI flag matrix after that checkpoint found the
+  pre-Library head at 3,333,438 / 397,090 bytes for compatibility and
+  4,240,261 / 431,619 bytes for Ambient, exposing that both full-profile
+  ceilings were stale before the Library refinement. The selected Library
+  nested-editor implementation at
+  `b593fe4d2c45ff5db20bafe205461157952b9ab4` measures 3,379,162 /
+  397,409 bytes for compatibility and 4,301,701 / 432,490 bytes for Ambient.
+  Exact-head CI run `33951463058` on the completed convergence head
+  `3eecfa89d8bf843089bae9921a2bdf655b715b73` measured the compatibility graph
+  at 3,381,257 / 397,428 bytes after the full Playwright suite passed. The
+  compatibility ceiling is pinned to that larger literal CI artifact.
+  Follow-up run `33952106871` measured the completed Ambient graph at
+  4,319,173 / 432,561 bytes after compatibility passed. The Ambient ceiling is
+  pinned to that larger literal CI artifact. Neither profile adds percentage
+  or future-growth headroom.
+  The field-state, interaction-integrity, and Import Workbench candidate adds
+  the shared state primitive, exact-value review and recovery UI, client
+  preflight adapters, and lazy Import route behavior. Exact local CI-matrix
+  builds measure 3,476,619 / 399,646 bytes for compatibility and 4,427,364 /
+  435,494 bytes for Ambient. The new ceilings are 3,478,714 / 399,665 and
+  4,444,836 / 435,565 respectively: each preceding exact-CI ceiling plus only
+  the corresponding observed local source delta.
 - Exception type: `perf-threshold-temp`
 - Rationale: The strangler architecture intentionally emits materially
   different authenticated workspace graphs. A single ceiling either blocks the
@@ -105,7 +160,13 @@ Use this log when a change intentionally departs from stable-first policy or req
   the measured compatibility graph. This is meaningful mobile download,
   parse, and execution risk even though most code is route-lazy. Passing this
   exception is not Core Web Vitals, hosted, production, or human-acceptance
-  evidence.
+  evidence. The Library increment is concentrated in existing lazy Catalog,
+  Event Template, and Library route boundaries and adds approximately 10.6 KB
+  transferred gzip to compatibility and 14.6 KB to Ambient, but it remains
+  explicit optimization debt rather than free growth capacity. The Workbench
+  also carries a separately pinned 1,667,684-byte PDF parser runtime when a user
+  begins searchable-PDF inspection. It is not an initial-route transfer, but it
+  is real on-demand download and execution cost and remains optimization debt.
 - Performance impact: Local production-equivalent builds measured compatibility
   at 2,769,824 aggregate / 391,596 largest bytes and Ambient at 3,700,202 /
   391,596 before the owner-authority recovery surface. That source-only safety
@@ -159,12 +220,39 @@ Use this log when a change intentionally departs from stable-first policy or req
   environments pass without discretionary growth headroom. The largest-chunk
   ceiling remains 391,901 bytes. This is a combined-candidate reconciliation,
   not a claim that any one capability caused the increase and not general
-  growth headroom.
+  growth headroom. The current field-state, interaction, and import candidate
+  measures 3,476,619 / 399,646 compatibility bytes and 4,427,364 / 435,494
+  Ambient bytes. Relative to the preceding local Library graphs, this is an
+  97,457 / 2,237-byte compatibility delta and a 125,663 / 3,004-byte Ambient delta.
+  The same-origin PDF.js runtime is deliberately outside `dist/assets` and is
+  constrained separately to exactly 1,667,684 runtime bytes, a 1,232,303-byte
+  largest asset, and three pinned files with exact SHA-256 digests.
+  The combined v0.20.0 source is 135,478 aggregate compatibility bytes and
+  151,304 aggregate Ambient bytes above the v0.19.0 ceilings. The Ambient
+  largest chunk increases 1,859 bytes from the last measured 443,563-byte
+  graph. The affected capabilities remain route-lazy where their owning
+  workflows permit, but the aggregate and authenticated-workspace cost remains
+  explicit optimization debt.
+  The Quote-to-Confidence follow-on adds 4,443 aggregate compatibility bytes
+  and 14,848 aggregate Ambient bytes after its default-off feature
+  implementations are compile-gated or lazy. Compatibility's largest emitted
+  chunk remains 385,181 bytes; Ambient's current largest chunk is 446,541
+  bytes, 1,100 bytes above the v0.20.0 ceiling. These exact residuals are the
+  reviewed integration cost, not a general allowance. The v0.21.0 combined
+  release integration subsequently removes 6,197 bytes of dormant production
+  code and retains an exact 9,363-byte local Ambient delta over `f3ff212a` for
+  active Inventory, opportunity, reporting, customer, and actuals behavior.
+  Its 4,978,120-byte temporary aggregate ceiling preserves the prior 2,664-byte
+  environment margin; the 445,422-byte largest-chunk ceiling is unchanged.
+  Exact-PR CI remains required.
 - Rollback plan: Revert the quote-builder decision-flow slice and its exact
   recalibration, then revert Pingram if needed; or revert Team access and its role/App Check adapters
   with the earlier recalibration. The two manual chunks, graph-aware checker,
   CI matrix, prior compatibility ceiling, and clean-main baseline remain
-  recoverable and unchanged.
+  recoverable and unchanged. The Library presentation increment can be rolled
+  back by reverting `b593fe4`; that restores the prior editor presentation but
+  does not by itself repair the already-stale pre-Library full-profile ceilings,
+  which require their own measured reconciliation.
 - Exit criteria: Optimize Ambient to the standard clean-main budget or obtain an
   explicit reviewed clean-main recalibration after merge. Remove the exception,
   pass both production graphs without it, pass authenticated desktop/mobile CWV,
@@ -177,6 +265,12 @@ Use this log when a change intentionally departs from stable-first policy or req
   jobs passed. A fresh CI-equivalent local Ambient build established the larger
   literal ceiling above. A subsequent exact-SHA CI pass, hosted timing, and
   human acceptance remain open.
+  The Quote-to-Confidence config-free local matrix builds measure 3,657,288 /
+  385,181 bytes for compatibility and 4,962,837 / 446,522 bytes for Ambient;
+  the exact production CI environments measure 3,657,606 / 385,181 and
+  4,963,155 / 446,541 bytes respectively. Both
+  profile bundle guards pass against the exact exception values; exact-PR CI,
+  hosted timing, and human acceptance remain open.
   The v0.16 candidate then measured 3,214,012 / 385,130 bytes for compatibility
   and 4,017,689 / 385,130 bytes for the exact production-equivalent Ambient
   graph. The new global destinations, contextual Quick Updates behavior,
@@ -200,7 +294,36 @@ Use this log when a change intentionally departs from stable-first policy or req
   production flag matrix at 4,164,201 / 429,869 bytes; its local reproduction
   measured 4,164,269 / 429,903 bytes. The profile detector selected exactly one
   graph each time; each revised ceiling is the larger literal result rather
-  than a percentage allowance.
+  than a percentage allowance. The controlled Resend acceptance test then
+  isolates its Firebase callable adapter inside the already-lazy Integrations
+  Ops chunk. Exact local CI-flag builds measure compatibility at 3,306,709 /
+  395,916 bytes and Ambient at 4,172,754 / 429,923 bytes. The revised absolute
+  ceilings equal those literal graphs: 4,025 and 8,485 aggregate bytes above
+  the preceding ceilings, and only 20 bytes above each preceding largest-chunk
+  ceiling. No percentage or future-growth allowance is added. Focused
+  authority tests and both profile builds are local evidence; exact-SHA CI,
+  hosted timing, provider acceptance, inbox receipt, and human acceptance
+  remain separate gates.
+  The Library convergence was then built locally with the exact compatibility
+  and Ambient environment matrices from `ci-quality.yml`. Compatibility emits
+  3,379,162 / 397,409 bytes and Ambient emits 4,301,701 / 432,490 bytes. The
+  Library change itself accounts for 45,724 and 61,440 aggregate bytes
+  respectively, primarily in Catalog Admin; approximately 10.6 KB and 14.6 KB
+  are transferred gzip. Source attribution found no low-risk removal capable of
+  restoring the older ceilings without deleting selected nested-editor
+  behavior, and splitting chunks would not change the aggregate budget. Both
+  profile checks pass only against the literal ceilings recorded here.
+  Publication authority was later granted. Exact-head CI run `33951463058`
+  measured the completed compatibility graph at 3,381,257 / 397,428 bytes;
+  all browser behavior passed and only the stale literal ceiling rejected the
+  build. The exception now uses that exact CI measurement with no discretionary
+  margin. Follow-up exact-head run `33952106871` passed compatibility and
+  measured the Ambient graph at 4,319,173 / 432,561 bytes before its stale
+  prior literal ceiling rejected that build. The exception now pins both exact
+  CI artifacts with no discretionary margin, and a new exact-head CI run
+  remains the release gate. The current local candidate builds and optional-tool
+  manifest check pass against the new literal ceilings; exact-head CI, hosted
+  transfer timing, production use, and human acceptance remain open.
 
 ## Superseded Exceptions
 

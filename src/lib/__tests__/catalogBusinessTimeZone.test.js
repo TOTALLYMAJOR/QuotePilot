@@ -16,7 +16,8 @@ const TIME_ZONE_CONSUMERS = Object.freeze([
   "CustomerWorkspaceView",
   "RebookQuoteReviewBanner",
   "QuoteHistoryView",
-  "SalesWorkflowView"
+  "SalesWorkflowView",
+  "EventPlanningView"
 ]);
 
 describe("tenant business time-zone authority", () => {
@@ -50,5 +51,9 @@ describe("tenant business time-zone authority", () => {
     });
     expect(APP_SOURCE.match(/tenantTimeZone=\{tenantTimeZone\}/g))
       .toHaveLength(TIME_ZONE_CONSUMERS.length);
+  });
+
+  test("offers exact Schedule continuation only when its Ambient arrival consumer is active", () => {
+    expect(APP_SOURCE).toContain("scheduleAvailable={eventScheduleEnabled && AMBIENT_UI_ENABLED}");
   });
 });

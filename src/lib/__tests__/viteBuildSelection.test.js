@@ -80,4 +80,16 @@ describe("Vite build-selected compatibility graph", () => {
     expect(selectedFile(config, "quotepilot-active-commercial-persisted-effects"))
       .toMatch(/\/src\/lib\/commercialChangePersistedEffectsEnabled\.js$/);
   });
+
+  test("isolates concurrently served Ambient and compatibility dependency caches", () => {
+    process.env.VITE_AMBIENT_UI_ENABLED = "false";
+    const compatibility = createViteConfig({ command: "serve", mode: "development" });
+    process.env.VITE_AMBIENT_UI_ENABLED = "true";
+    const ambient = createViteConfig({ command: "serve", mode: "development" });
+
+    const compatibilityCache = compatibility.cacheDir ?? "node_modules/.vite";
+    const ambientCache = ambient.cacheDir ?? "node_modules/.vite";
+    expect(compatibilityCache).toBe("node_modules/.vite");
+    expect(ambientCache).not.toBe(compatibilityCache);
+  });
 });

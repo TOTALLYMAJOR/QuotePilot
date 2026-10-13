@@ -1,0 +1,8 @@
+.post-event-learning { min-width: 0; margin-block: 1.5rem; padding-block: 1rem; border-top: 1px solid var(--line, #e4e4e0); overflow-wrap: anywhere; }
+.post-event-learning button, .post-event-learning summary { min-height: 44px; }
+.post-event-learning__rows > div { display: grid; grid-template-columns: minmax(120px, 1fr) minmax(0, 3fr); gap: 1rem; border-bottom: 1px solid var(--line, #e4e4e0); padding-block: .8rem; }
+.post-event-learning dd { margin: 0; }
+.post-event-learning dd > span { display: block; }
+.post-event-learning article { padding-block: 1rem; border-top: 1px solid var(--line, #e4e4e0); }
+.post-event-learning :is(h5,h6) { font-size: 1rem; margin-block: .6rem; }
+@media (max-width: 620px) { .post-event-learning__rows > div { grid-template-columns: 1fr; gap: .3rem; } }

@@ -29,6 +29,7 @@ const STANDARD_ROUTE_CASES = [
 
 const WORKSPACE_ONLY_LEGACY_GAPS = new Set([
   WORKSPACE_ROUTE_IDS.STAFF,
+  WORKSPACE_ROUTE_IDS.INVENTORY,
   WORKSPACE_ROUTE_IDS.CUSTOMER_LIST,
   WORKSPACE_ROUTE_IDS.CUSTOMER_DETAIL,
   WORKSPACE_ROUTE_IDS.MESSAGING
@@ -181,6 +182,31 @@ describe("routed tool authorization and presentation", () => {
     }
   });
 
+  test("fails the Calendar-first Operations route closed with the shared schedule capability", () => {
+    const enabled = buildWorkspaceShellModel({
+      route: route(WORKSPACE_ROUTE_IDS.OPERATIONS),
+      customerCenteredWorkspaceEnabled: true,
+      featureFlags: { eventSchedule: true }
+    });
+    expect(enabled).toMatchObject({
+      routeAuthorized: true,
+      showNotFound: false,
+      primary: { id: "operations", presentation: "embedded" }
+    });
+
+    const disabled = buildWorkspaceShellModel({
+      route: route(WORKSPACE_ROUTE_IDS.OPERATIONS),
+      customerCenteredWorkspaceEnabled: true,
+      featureFlags: { eventSchedule: false }
+    });
+    expect(disabled).toMatchObject({
+      routeAuthorized: false,
+      showNotFound: true,
+      notFoundReason: "feature-disabled",
+      primary: { id: "workspace-not-found", presentation: "not-found" }
+    });
+  });
+
   test("makes the ambient Library readable by sales while retaining admin-only mutation authority", () => {
     const sales = buildWorkspaceShellModel({
       route: route(WORKSPACE_ROUTE_IDS.CATALOG),
@@ -276,6 +302,57 @@ describe("routed tool authorization and presentation", () => {
     });
   });
 
+  test("keeps ingredient Inventory admin-only, triple-gated, and workspace-only", () => {
+    const disabled = buildWorkspaceShellModel({
+      route: route(WORKSPACE_ROUTE_IDS.INVENTORY),
+      customerCenteredWorkspaceEnabled: true,
+      isAdmin: true
+    });
+    expect(disabled).toMatchObject({
+      routedTool: "inventory",
+      routedToolAuthorized: false,
+      showNotFound: true,
+      notFoundReason: "feature-disabled"
+    });
+
+    const sales = buildWorkspaceShellModel({
+      route: route(WORKSPACE_ROUTE_IDS.INVENTORY),
+      customerCenteredWorkspaceEnabled: true,
+      isAdmin: false,
+      featureFlags: { inventoryAuthority: true }
+    });
+    expect(sales).toMatchObject({
+      routedToolAuthorized: false,
+      showNotFound: true,
+      notFoundReason: "role-denied"
+    });
+
+    const admin = buildWorkspaceShellModel({
+      route: route(WORKSPACE_ROUTE_IDS.INVENTORY),
+      customerCenteredWorkspaceEnabled: true,
+      isAdmin: true,
+      featureFlags: { inventoryAuthority: true }
+    });
+    expect(admin).toMatchObject({
+      routedTool: "inventory",
+      routedToolAuthorized: true,
+      showNotFound: false,
+      primary: { id: "inventory", presentation: "embedded" }
+    });
+
+    const legacy = buildWorkspaceShellModel({
+      route: route(WORKSPACE_ROUTE_IDS.INVENTORY),
+      customerCenteredWorkspaceEnabled: false,
+      isAdmin: true,
+      featureFlags: { inventoryAuthority: true }
+    });
+    expect(legacy).toMatchObject({
+      routedToolAuthorized: true,
+      showNotFound: true,
+      notFoundReason: "legacy-unavailable"
+    });
+  });
+
   test.each(TOOL_MATRIX)("projects %s as a legacy modal or workspace embedded route", (toolId, routeId) => {
     const legacy = buildWorkspaceShellModel({ route: route(routeId) });
     expect(legacy.active.routedTools[toolId]).toMatchObject({ open: false, visible: false });
@@ -308,6 +385,7 @@ describe("routed tool authorization and presentation", () => {
     expect(WORKSPACE_SHELL_TOOL_IDS).toEqual([
       "staff",
       "schedule",
+      "inventory",
       "reporting",
       "catalog",
       "imports",

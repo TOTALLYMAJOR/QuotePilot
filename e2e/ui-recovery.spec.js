@@ -68,12 +68,14 @@ test("Escape preserves the Catalog Admin unsaved-change guard", async ({ page })
   const operationsTrigger = page.getByRole("button", { name: "Operations" });
   await openOperationsItem(page, "Catalog Admin");
 
-  const catalog = page.getByRole("dialog", { name: "Catalog Admin" });
+  const catalog = page.getByRole("dialog", { name: "Library settings" });
   await expect(catalog).toBeVisible();
   await catalog.getByRole("tab", { name: "Pricing" }).click();
+  await catalog.locator('[data-pricing-policy-group="advanced"] > summary').click();
+  await catalog.locator('[data-pricing-policy-advanced-section="brand"] > summary').click();
   const businessName = catalog.getByLabel("Business name");
   await businessName.fill(`${await businessName.inputValue()} recovery test`);
-  await expect(catalog.getByLabel("Catalog draft status").getByText(/Sync failed — changes are device-only/u)).toBeVisible();
+  await expect(catalog.getByText("Changes waiting to save", { exact: true })).toBeVisible();
 
   let guardMessage = "";
   page.once("dialog", async (guard) => {
@@ -94,12 +96,14 @@ test("menu deactivation joins the setup draft and preserves unrelated Catalog Ad
   await page.goto("/app");
   await openOperationsItem(page, "Catalog Admin");
 
-  const catalog = page.getByRole("dialog", { name: "Catalog Admin" });
+  const catalog = page.getByRole("dialog", { name: "Library settings" });
   await catalog.getByRole("tab", { name: "Pricing" }).click();
+  await catalog.locator('[data-pricing-policy-group="advanced"] > summary').click();
+  await catalog.locator('[data-pricing-policy-advanced-section="brand"] > summary').click();
   const businessName = catalog.getByLabel("Business name");
   const draftName = `${await businessName.inputValue()} protected draft`;
   await businessName.fill(draftName);
-  await expect(catalog.getByLabel("Catalog draft status").getByText(/Sync failed — changes are device-only/u)).toBeVisible();
+  await expect(catalog.getByText("Changes waiting to save", { exact: true })).toBeVisible();
 
   await catalog.getByRole("tab", { name: "Menu" }).click();
   const eventType = catalog.getByRole("combobox", { name: "Event type", exact: true });
@@ -119,7 +123,7 @@ test("menu deactivation joins the setup draft and preserves unrelated Catalog Ad
 
   await catalog.getByRole("tab", { name: "Pricing" }).click();
   await expect(catalog.getByLabel("Business name")).toHaveValue(draftName);
-  await expect(catalog.getByLabel("Catalog draft status").getByText(/Sync failed — changes are device-only/u)).toBeVisible();
+  await expect(catalog.getByText("Changes waiting to save", { exact: true })).toBeVisible();
 });
 
 test("a failed workspace chunk keeps the app usable with safe executable recovery actions", async ({ page }) => {

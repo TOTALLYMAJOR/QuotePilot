@@ -211,6 +211,16 @@ function stateMarker(state) {
 
 function selectServer() {
   const select = container.querySelector('select[aria-label="Required server assignment"]');
+  if (!select) {
+    const assignOnlyCandidate = Array.from(container.querySelectorAll("button"))
+      .find((button) => (
+        button.textContent === "Assign Avery Cook"
+        && button.closest('[data-adaptive-choice-mode="suggested"]')?.textContent.includes("Required server assignment")
+      ));
+    expect(assignOnlyCandidate).not.toBeUndefined();
+    act(() => assignOnlyCandidate.click());
+    return container.querySelector('[data-adaptive-choice-mode="single"]');
+  }
   act(() => {
     select.value = "staff-one";
     select.dispatchEvent(new Event("change", { bubbles: true }));
@@ -324,7 +334,6 @@ describe("OperationalStaffingPanel read authority", () => {
     mount();
     await flush();
     expect(container.innerHTML).toContain('data-capability-state="ready"');
-    selectServer();
     const apply = Array.from(container.querySelectorAll("button")).find((button) => button.textContent.includes("Save staffing assignments"));
     expect(apply.disabled).toBe(true);
     expect(stateMarker(state)).not.toBeNull();
@@ -332,6 +341,36 @@ describe("OperationalStaffingPanel read authority", () => {
 });
 
 describe("OperationalStaffingPanel role and fallback boundaries", () => {
+  test("renders staffing candidate zero, one, and many states without silently assigning the only candidate", async () => {
+    client.getOperationalStaffingSnapshot.mockResolvedValueOnce(envelope("empty", { profiles: [] }));
+    mount();
+    await flush();
+    expect(container.querySelector('[data-adaptive-choice-mode="empty"]')).not.toBeNull();
+    expect(container.textContent).toContain("No active server candidates have recorded availability");
+    expect(container.querySelector('[data-field-state-primary="blocked"]')).not.toBeNull();
+
+    act(() => root.unmount());
+    root = createRoot(container);
+    client.getOperationalStaffingSnapshot.mockResolvedValueOnce(envelope());
+    mount();
+    await flush();
+    expect(container.querySelector('[data-adaptive-choice-mode="suggested"]')).not.toBeNull();
+    expect(container.textContent).toContain("This is a candidate only");
+    expect(container.querySelector('select[aria-label="Required server assignment"]')).toBeNull();
+    selectServer();
+    expect(container.querySelector('[data-adaptive-choice-mode="single"]')).not.toBeNull();
+
+    act(() => root.unmount());
+    root = createRoot(container);
+    client.getOperationalStaffingSnapshot.mockResolvedValueOnce(envelope("empty", {
+      profiles: [profile(), profile({ staffId: "staff-two", displayName: "Morgan Lead" })]
+    }));
+    mount();
+    await flush();
+    expect(container.querySelectorAll('[data-adaptive-choice-mode="select"]')).toHaveLength(2);
+    expect(container.querySelectorAll(".operational-staffing-slot select")[0].querySelectorAll("option").length).toBe(3);
+  });
+
   test.each([
     ["local", "admin"],
     ["firebase", "customer"]
@@ -351,7 +390,7 @@ describe("OperationalStaffingPanel role and fallback boundaries", () => {
     await flush();
     expect(container.textContent).toContain("Save staffing assignments");
     expect(container.textContent).not.toContain("Add team member");
-    expect(container.textContent).toContain("Recorded availability covers this event");
+    expect(container.textContent).toContain("Schedulable for this event");
   });
 
   test("lets admin add a bounded profile and sends the exact nested DTO", async () => {
@@ -379,10 +418,13 @@ describe("OperationalStaffingPanel role and fallback boundaries", () => {
     await click(Array.from(container.querySelectorAll("button")).find((button) => button.textContent === "Add team member"));
     const name = container.querySelector('input[aria-label="Display name"]');
     act(() => {
-      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set.call(name, "Morgan Lead");
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set.call(name, "Taylor Smith");
       name.dispatchEvent(new Event("input", { bubbles: true }));
     });
-    await click(Array.from(container.querySelectorAll("button")).find((button) => button.textContent === "Save team member"));
+    expect(container.querySelector(".operational-staffing-availability-disclosure").hasAttribute("open")).toBe(false);
+    expect(container.querySelectorAll(".operational-staffing-window")).toHaveLength(0);
+    expect(container.querySelector(".operational-staffing-active-toggle")).toBeNull();
+    await click(Array.from(container.querySelectorAll("button")).find((button) => button.textContent === "Add person"));
 
     expect(client.configureOperationalStaffProfile).toHaveBeenCalledTimes(1);
     const command = client.configureOperationalStaffProfile.mock.calls[0][0];
@@ -392,31 +434,30 @@ describe("OperationalStaffingPanel role and fallback boundaries", () => {
       staffId: expect.stringMatching(/^staff_/),
       expectedRevision: 0,
       profile: {
-        displayName: "Morgan Lead",
+        displayName: "Taylor Smith",
         active: true,
         capabilities: ["server"],
-        availabilityWindows: [{
-          availabilityId: expect.stringMatching(/^availability_/),
-          source: "operator_recorded",
-          state: "available",
-          ...EVENT_WINDOW
-        }]
+        availabilityWindows: []
       }
     });
+    expect(stateMarker("receipt")).not.toBeNull();
+    expect(container.textContent).toContain("Team member rostered");
+    expect(container.textContent).toContain("Taylor Smith is Active and Rostered");
   });
 
   test("keeps an added availability window blank and blocks overlapping or incomplete evidence", async () => {
     mount({ role: "admin" });
     await flush();
     await click(Array.from(container.querySelectorAll("button")).find((button) => button.textContent === "Add team member"));
+    await click(container.querySelector(".operational-staffing-availability-disclosure > summary"));
     await click(Array.from(container.querySelectorAll("button")).find((button) => button.textContent === "Add availability window"));
 
     const windows = container.querySelectorAll(".operational-staffing-window");
-    const addedInputs = windows[1].querySelectorAll('input[type="datetime-local"]');
+    const addedInputs = windows[0].querySelectorAll('input[type="datetime-local"]');
     expect(addedInputs[0].value).toBe("");
     expect(addedInputs[1].value).toBe("");
     expect(container.textContent).toContain("windows may not overlap");
-    expect(Array.from(container.querySelectorAll("button")).find((button) => button.textContent === "Save team member").disabled).toBe(true);
+    expect(Array.from(container.querySelectorAll("button")).find((button) => button.textContent === "Add person").disabled).toBe(true);
   });
 });
 
@@ -592,7 +633,9 @@ describe("OperationalStaffingPanel mutation authority", () => {
     mount();
     await flush();
     expect(stateMarker("uncertain")).not.toBeNull();
-    expect(container.querySelector('select[aria-label="Required server assignment"]').disabled).toBe(true);
+    expect(container.querySelector('[data-adaptive-choice-mode="suggested"]')).not.toBeNull();
+    expect(Array.from(container.querySelectorAll("button")).some((button) => button.textContent === "Assign Avery Cook")).toBe(false);
+    expect(Array.from(container.querySelectorAll("button")).find((button) => button.textContent === "Save staffing assignments").disabled).toBe(true);
   });
 
   test("restores an uncertain profile command after unmount and reconciles the identical identity", async () => {
@@ -616,7 +659,7 @@ describe("OperationalStaffingPanel mutation authority", () => {
       Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set.call(name, "Casey Crew");
       name.dispatchEvent(new Event("input", { bubbles: true }));
     });
-    await click(Array.from(container.querySelectorAll("button")).find((button) => button.textContent === "Save team member"));
+    await click(Array.from(container.querySelectorAll("button")).find((button) => button.textContent === "Add person"));
     expect(stateMarker("uncertain")).not.toBeNull();
     const original = client.configureOperationalStaffProfile.mock.calls[0][0];
 
@@ -644,7 +687,7 @@ describe("OperationalStaffingPanel mutation authority", () => {
       Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set.call(name, "Casey Crew");
       name.dispatchEvent(new Event("input", { bubbles: true }));
     });
-    await click(Array.from(container.querySelectorAll("button")).find((button) => button.textContent === "Save team member"));
+    await click(Array.from(container.querySelectorAll("button")).find((button) => button.textContent === "Add person"));
     expect(stateMarker("uncertain")).not.toBeNull();
 
     act(() => root.unmount());

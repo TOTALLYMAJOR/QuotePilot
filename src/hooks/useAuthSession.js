@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { onAuthStateChanged } from "firebase/auth";
 import { httpsCallable } from "firebase/functions";
 import { doc, getDoc } from "firebase/firestore";
@@ -12,6 +12,7 @@ import { auth, cloudFunctions, db, firebaseReady } from "../lib/firebase";
 import { resolveOrganizationId } from "../lib/organizationService";
 import { recordDiagnosticError, recordDiagnosticEvent } from "../lib/sessionDiagnostics";
 import { clearTenantContextCache } from "../lib/tenantDomainService";
+import { clearScopedReads } from "../lib/scopedReadCoalescer";
 
 const ROLE_VALUES = new Set(["admin", "sales", "customer"]);
 const E2E_AUTH_BYPASS = ["1", "true", "yes", "on"].includes(
@@ -149,6 +150,22 @@ export function useAuthSession({ tenantContext = null } = {}) {
     platformAdmin: false,
     error: ""
   });
+  const previousReadScopeRef = useRef({ organizationId: "", principalId: "" });
+
+  useEffect(() => {
+    const nextScope = {
+      organizationId: String(state.organizationId || "").trim(),
+      principalId: String(state.user?.uid || "").trim()
+    };
+    const previousScope = previousReadScopeRef.current;
+    if (
+      previousScope.organizationId !== nextScope.organizationId
+      || previousScope.principalId !== nextScope.principalId
+    ) {
+      if (previousScope.organizationId || previousScope.principalId) clearScopedReads(previousScope);
+      previousReadScopeRef.current = nextScope;
+    }
+  }, [state.organizationId, state.user?.uid]);
 
   useEffect(() => {
     let active = true;
@@ -321,6 +338,7 @@ export function useAuthSession({ tenantContext = null } = {}) {
     signOut: E2E_AUTH_BYPASS
       ? async () => {
         clearTenantContextCache();
+        clearScopedReads();
         setState({
           loading: false,
           user: null,
@@ -332,6 +350,7 @@ export function useAuthSession({ tenantContext = null } = {}) {
       }
       : async () => {
         clearTenantContextCache();
+        clearScopedReads();
         await signOutCurrentUser();
       }
   };

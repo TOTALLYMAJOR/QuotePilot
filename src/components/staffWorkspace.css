@@ -403,12 +403,18 @@
   background: white;
   color: #9a8f7b;
   cursor: pointer;
+  transition: color 140ms ease, border-color 140ms ease, background-color 140ms ease, transform 140ms ease;
 }
 
 .staff-role-icons > button.is-selected {
   color: #805a19;
   border-color: rgba(168, 114, 25, 0.36);
   background: #fff7e8;
+}
+
+.staff-role-icons > button {
+  width: 44px;
+  height: 44px;
 }
 
 .staff-roster__empty,
@@ -573,6 +579,7 @@
   align-items: center;
   color: var(--text-secondary);
   text-decoration: none;
+  transition: color 140ms ease, background-color 140ms ease, box-shadow 140ms ease;
 }
 
 .staff-profile-tabs a:first-child {
@@ -1126,7 +1133,7 @@
 }
 
 .staff-command-search {
-  min-height: 40px;
+  min-height: 44px;
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
@@ -1145,7 +1152,7 @@
 
 .staff-command-search input {
   min-width: 0;
-  min-height: 38px;
+  min-height: 42px;
   border: 0;
   outline: 0;
   background: transparent;
@@ -1167,7 +1174,7 @@
 
 .staff-command-filters > span,
 .staff-command-filters button {
-  min-height: 34px;
+  min-height: 44px;
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -1199,7 +1206,7 @@
 }
 
 .staff-command-add {
-  min-height: 40px;
+  min-height: 44px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1387,14 +1394,96 @@
 }
 
 .staff-profile-actions .cta {
-  min-height: 40px;
+  min-height: 44px;
 }
 
 .staff-more-button {
-  width: 42px;
-  min-height: 40px;
+  width: 44px;
+  min-height: 44px;
   justify-content: center;
   padding: 0;
+}
+
+.staff-record__controls--roster {
+  max-width: 28ch;
+  color: var(--text-secondary);
+  font-size: 0.78rem;
+  line-height: 1.45;
+  text-align: right;
+}
+
+.staff-quick-add {
+  max-width: 680px;
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(220px, 0.8fr);
+  gap: 18px 20px;
+  margin-top: 8px;
+  padding: clamp(20px, 3vw, 34px);
+  border: 1px solid #cfc5b5;
+  border-radius: 12px;
+  background: var(--surface);
+  box-shadow: 0 18px 48px rgba(37, 32, 24, 0.08);
+}
+
+.staff-quick-add__heading {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 4px;
+  padding-bottom: 15px;
+  border-bottom: 1px solid var(--border);
+}
+
+.staff-quick-add__heading h3,
+.staff-quick-add__heading p {
+  margin: 0;
+}
+
+.staff-quick-add__heading h3 {
+  font-size: clamp(1.35rem, 2.5vw, 1.75rem);
+  letter-spacing: -0.03em;
+}
+
+.staff-quick-add__heading p:last-child {
+  max-width: 62ch;
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  line-height: 1.55;
+}
+
+.staff-quick-add__roles {
+  min-width: 0;
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.staff-quick-add__roles legend {
+  margin-bottom: 6px;
+  color: #5f5444;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.staff-quick-add__roles small {
+  color: var(--text-secondary);
+  font-size: 0.73rem;
+  font-weight: 400;
+  line-height: 1.4;
+}
+
+.staff-quick-add__roles .staff-role-icons {
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.staff-quick-add__submit {
+  grid-column: 1 / -1;
+  min-height: 44px;
+  justify-self: start;
+  min-width: 136px;
 }
 
 .staff-ui-glyph {
@@ -1571,6 +1660,40 @@
   padding: 0;
   font-weight: 790;
   cursor: pointer;
+  border-radius: 4px;
+  transition: color 140ms ease, background-color 140ms ease, transform 140ms ease;
+}
+
+@media (hover: hover) {
+  .staff-role-icons > button:hover {
+    border-color: rgba(128, 90, 25, 0.58);
+    background: #fff7e8;
+    color: #805a19;
+    transform: translateY(-1px);
+  }
+
+  .staff-profile-tabs a:hover {
+    color: var(--ink);
+    background: rgba(168, 114, 25, 0.08);
+    box-shadow: inset 0 -2px 0 rgba(168, 114, 25, 0.45);
+  }
+
+  .staff-text-action:hover {
+    color: #694711;
+    background: rgba(168, 114, 25, 0.09);
+  }
+}
+
+.staff-role-icons > button:focus-visible,
+.staff-profile-tabs a:focus-visible,
+.staff-text-action:focus-visible {
+  outline: 3px solid var(--gold-strong, #9a6817);
+  outline-offset: 3px;
+}
+
+.staff-role-icons > button:active,
+.staff-text-action:active {
+  transform: translateY(1px);
 }
 
 .staff-honest-empty {
@@ -1716,6 +1839,15 @@
   margin-left: 5px;
   border-radius: 50%;
   background: #aaa59b;
+}
+
+.staff-maturity-boundary {
+  margin: 10px 0 0;
+  padding-top: 10px;
+  border-top: 1px solid #e3ded5;
+  color: var(--text-secondary);
+  font-size: 0.7rem;
+  line-height: 1.45;
 }
 
 .staff-evidence-steps li {
@@ -1902,7 +2034,7 @@
   }
 
   .staff-mobile-back {
-    min-height: 40px;
+    min-height: 44px;
     display: inline-flex;
     align-items: center;
     gap: 7px;
@@ -1921,6 +2053,21 @@
 
   .staff-record__controls {
     grid-template-columns: 1fr;
+  }
+
+  .staff-record__controls--roster {
+    max-width: none;
+    text-align: left;
+  }
+
+  .staff-quick-add {
+    grid-template-columns: 1fr;
+    padding: 18px;
+  }
+
+  .staff-quick-add__heading,
+  .staff-quick-add__submit {
+    grid-column: 1;
   }
 
   .staff-record__save {
@@ -1967,5 +2114,44 @@
 
   .staff-workspace__layout {
     display: block;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .staff-role-icons > button,
+  .staff-profile-tabs a,
+  .staff-text-action {
+    transition: none;
+  }
+
+  .staff-role-icons > button:hover,
+  .staff-role-icons > button:active,
+  .staff-text-action:active {
+    transform: none;
+  }
+}
+
+@media (forced-colors: active) {
+  .staff-role-icons > button,
+  .staff-profile-tabs a,
+  .staff-text-action {
+    color: ButtonText;
+    forced-color-adjust: auto;
+  }
+
+  .staff-role-icons > button {
+    border-color: ButtonText;
+  }
+
+  .staff-role-icons > button.is-selected,
+  .staff-profile-tabs a:first-child {
+    color: Highlight;
+    border-color: Highlight;
+  }
+
+  .staff-role-icons > button:focus-visible,
+  .staff-profile-tabs a:focus-visible,
+  .staff-text-action:focus-visible {
+    outline-color: Highlight;
   }
 }

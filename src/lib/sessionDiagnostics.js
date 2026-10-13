@@ -94,27 +94,55 @@ function safeText(value, fallback = "", maxLength = 500) {
   return `${text.slice(0, maxLength)}...`;
 }
 
-function safeContextValue(key, value) {
+function redactContextTree(key, value, seen = new WeakSet(), depth = 0, budget = { remaining: 200 }) {
   if (value === null || value === undefined) return value;
   if (SENSITIVE_KEY_PATTERN.test(String(key || ""))) {
     return value ? REDACTED : value;
   }
   if (typeof value === "number" || typeof value === "boolean") return value;
-  if (value instanceof Date) return value.toISOString();
   if (typeof value === "string") return safeText(value, "", 500);
   try {
-    return safeText(JSON.stringify(value), "", 700);
+    if (value instanceof Date) return Date.prototype.toISOString.call(value);
+    if (typeof value !== "object") return REDACTED;
+    if (depth >= 6 || budget.remaining-- <= 0 || seen.has(value)) return REDACTED;
+    seen.add(value);
+    const result = Array.isArray(value) ? [] : Object.create(null);
+    for (const childKey of Object.keys(value).slice(0, 30)) {
+      // A sparse index must not allocate a huge JSON array before truncation.
+      if (Array.isArray(value) && (!/^(0|[1-9]\d*)$/.test(childKey) || Number(childKey) >= 30)) continue;
+      const descriptor = Object.getOwnPropertyDescriptor(value, childKey);
+      // Do not run getters or custom toJSON/toString methods in diagnostics.
+      result[childKey] = descriptor && "value" in descriptor
+        ? redactContextTree(childKey, descriptor.value, seen, depth + 1, budget)
+        : REDACTED;
+    }
+    seen.delete(value);
+    return result;
   } catch {
-    return safeText(String(value), "", 500);
+    return REDACTED;
+  }
+}
+
+function safeContextValue(key, value) {
+  const sanitized = redactContextTree(key, value);
+  if (!sanitized || typeof sanitized !== "object") return sanitized;
+  try {
+    return safeText(JSON.stringify(sanitized), "", 700);
+  } catch {
+    return REDACTED;
   }
 }
 
 function sanitizeContext(input) {
   if (!input || typeof input !== "object") return {};
-  const entries = Object.entries(input).slice(0, 30);
-  return Object.fromEntries(
-    entries.map(([key, value]) => [key, safeContextValue(key, value)])
-  );
+  try {
+    return Object.fromEntries(Object.keys(input).slice(0, 30).map((key) => {
+      const descriptor = Object.getOwnPropertyDescriptor(input, key);
+      return [key, descriptor && "value" in descriptor ? safeContextValue(key, descriptor.value) : REDACTED];
+    }));
+  } catch {
+    return {};
+  }
 }
 
 function normalizeError(input) {

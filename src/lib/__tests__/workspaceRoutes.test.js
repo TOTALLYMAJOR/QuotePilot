@@ -31,6 +31,7 @@ describe("workspace route parsing and construction", () => {
     ["/app/messages", WORKSPACE_ROUTE_IDS.MESSAGING, "first-release"],
     ["/app/workflow", WORKSPACE_ROUTE_IDS.WORKFLOW, "first-release"],
     ["/app/operations", WORKSPACE_ROUTE_IDS.OPERATIONS, "follow-on"],
+    ["/app/inventory", WORKSPACE_ROUTE_IDS.INVENTORY, "follow-on"],
     ["/app/schedule", WORKSPACE_ROUTE_IDS.SCHEDULE, "follow-on"],
     ["/app/reporting", WORKSPACE_ROUTE_IDS.REPORTING, "follow-on"],
     ["/app/catalog", WORKSPACE_ROUTE_IDS.CATALOG, "follow-on"],
@@ -145,6 +146,7 @@ describe("workspace route parsing and construction", () => {
       .toBe("/app/quotes/q-1/edit");
     expect(buildWorkspacePath(WORKSPACE_ROUTE_IDS.QUOTE_NEW)).toBe(WORKSPACE_PATHS.quoteNew);
     expect(buildWorkspacePath(WORKSPACE_ROUTE_IDS.CLEAR_DECK)).toBe(WORKSPACE_PATHS.clearDeck);
+    expect(buildWorkspacePath(WORKSPACE_ROUTE_IDS.INVENTORY)).toBe(WORKSPACE_PATHS.inventory);
     expect(buildWorkspacePath(WORKSPACE_ROUTE_IDS.EVENT_DETAIL, { quoteId: "q-1" }))
       .toBe("/app/events/q-1");
     expect(buildWorkspacePath(WORKSPACE_ROUTE_IDS.EVENT_LIVE, { quoteId: "q-1" }))
@@ -185,6 +187,15 @@ describe("workspace route parsing and construction", () => {
         adminOnly: false
       },
       {
+        routeId: WORKSPACE_ROUTE_IDS.OPERATIONS,
+        label: "Operations",
+        path: "/app/operations",
+        section: "operations",
+        action: "onOperations",
+        orientation: "operations",
+        adminOnly: false
+      },
+      {
         routeId: WORKSPACE_ROUTE_IDS.CUSTOMER_LIST,
         label: "Clients",
         path: "/app/customers",
@@ -205,6 +216,8 @@ describe("workspace route parsing and construction", () => {
     ]);
     expect(Object.isFrozen(AMBIENT_PRIMARY_WORKSPACE_NAVIGATION)).toBe(true);
     expect(AMBIENT_PRIMARY_WORKSPACE_NAVIGATION.every(Object.isFrozen)).toBe(true);
+    expect(AMBIENT_PRIMARY_WORKSPACE_NAVIGATION.find((item) => item.routeId === WORKSPACE_ROUTE_IDS.OPERATIONS))
+      .toMatchObject({ triggerRef: "operations", capability: "eventSchedule" });
 
     expect(PRIMARY_WORKSPACE_NAVIGATION.map((item) => item.label))
       .toEqual([

@@ -7,6 +7,7 @@ import { cloudFunctions, firebaseReady } from "./firebase";
 import normalizeActivePersistedEffects, {
   COMMERCIAL_CHANGE_PERSISTED_EFFECTS_ENABLED
 } from "quotepilot-active-commercial-persisted-effects";
+import { normalizeEventInventoryPreviewResult } from "./inventoryAuthorityClient";
 
 export const COMMERCIAL_CHANGE_AUTHORITY_CALLABLES = Object.freeze({
   simulate: "simulateCommercialQuoteChange",
@@ -48,6 +49,7 @@ const RECEIPT_SCHEMA_VERSIONS = Object.freeze({
   reconciliation: "commercial-change-reconciliation-receipt-v1"
 });
 const MAX_INVALIDATIONS = 64;
+const MAX_EVENT_INGREDIENT_OUTPUTS = 100;
 const MAX_JSON_BYTES = 262_144;
 const DEFINITIVE_ERROR_CODES = new Set([
   "aborted",
@@ -86,15 +88,15 @@ function compareText(left, right) {
   return left < right ? -1 : left > right ? 1 : 0;
 }
 
-function exactKeys(value, expectedKeys, label) {
-  if (!record(value)) fail(`${label} must be an exact server object.`);
+function exactKeys(value, expectedKeys, label, code = "invalid-server-response") {
+  if (!record(value)) fail(`${label} must be an exact server object.`, code);
   const actual = Object.keys(value).sort(compareText);
   const expected = [...expectedKeys].sort(compareText);
   if (
     actual.length !== expected.length
     || actual.some((key, index) => key !== expected[index])
   ) {
-    fail(`${label} did not match the exact server contract.`);
+    fail(`${label} did not match the exact server contract.`, code);
   }
   return value;
 }
@@ -209,6 +211,49 @@ function boundedNumber(value, label) {
     fail(`${label} is invalid.`);
   }
   return value;
+}
+
+function exactOutputQuantity(value, label) {
+  if (typeof value !== "string" || !/^(0|[1-9]\d*)(?:\.\d{1,6})?$/u.test(value)) {
+    fail(`${label} must be a canonical decimal with at most six places.`, "invalid-argument");
+  }
+  const [whole, fraction = ""] = value.split(".");
+  const micros = BigInt(whole) * 1_000_000n + BigInt(fraction.padEnd(6, "0") || "0");
+  if (micros <= 0n || micros > BigInt(Number.MAX_SAFE_INTEGER)) {
+    fail(`${label} is outside the supported quantity range.`, "invalid-argument");
+  }
+  return value;
+}
+
+function normalizeEventIngredientOutputs(value) {
+  if (!Array.isArray(value) || value.length === 0 || value.length > MAX_EVENT_INGREDIENT_OUTPUTS) {
+    fail(
+      `eventIngredientOutputs must contain 1 to ${MAX_EVENT_INGREDIENT_OUTPUTS} exact output rows.`,
+      "invalid-argument"
+    );
+  }
+  const rows = value.map((entry, index) => {
+    exactKeys(
+      entry,
+      ["menuItemId", "requiredOutputQuantity"],
+      `Event ingredient output ${index + 1}`,
+      "invalid-argument"
+    );
+    return {
+      menuItemId: exactOpaqueId(
+        entry.menuItemId,
+        `Event ingredient output ${index + 1} menuItemId`
+      ),
+      requiredOutputQuantity: exactOutputQuantity(
+        entry.requiredOutputQuantity,
+        `Event ingredient output ${index + 1} requiredOutputQuantity`
+      )
+    };
+  });
+  if (new Set(rows.map(({ menuItemId }) => menuItemId)).size !== rows.length) {
+    fail("eventIngredientOutputs contains duplicate menu items.", "invalid-argument");
+  }
+  return rows;
 }
 
 function exactEmail(value, label, { optional = false } = {}) {
@@ -470,6 +515,67 @@ function sameJson(left, right) {
   return JSON.stringify(left) === JSON.stringify(right);
 }
 
+const WORKFLOW_SEAL_FIELDS = ["workflowPolicy", "attendanceBinding", "approvalEvaluation"];
+function isBoundReceipt(value, kind) {
+  return value?.schemaVersion === `commercial-change-${kind}-receipt-v2`;
+}
+
+// Validate server-declared policy/evidence. These values do not price the browser form.
+function normalizeWorkflowSeal(value, scope, { impact = null, commercialValues = null } = {}) {
+  if (!isBoundReceipt(value, value.receiptType)) return {};
+  const policy = value.workflowPolicy;
+  const attendance = value.attendanceBinding;
+  if (policy === null && attendance === null) fail("Bound receipt has no workflow or attendance evidence.");
+  if (policy !== null) {
+    exactKeys(policy, ["organizationId", "definitionPin", "approvalPolicy", "declaredBy", "declaredAtISO"], "Workflow policy");
+    const pin = policy.definitionPin;
+    exactKeys(pin, ["workflowKind", "schemaVersion", "definitionId", "versionId", "version", "definitionDigest"], "Workflow pin");
+    if (policy.organizationId !== scope.organizationId || pin.workflowKind !== "quote_review" || pin.definitionId !== "quote_review"
+      || pin.schemaVersion !== 2 || !Number.isInteger(pin.version) || pin.version < 1 || pin.version > 50 || pin.versionId !== `quote_review_v${pin.version}`) fail("Workflow pin is outside the quote review scope.");
+    digest(pin.definitionDigest, "Workflow definition digest");
+    const rule = policy.approvalPolicy;
+    exactKeys(rule, ["basis", "thresholdCents", "allowedRoles"], "Approval policy");
+    if (rule.basis !== "absolute_total_delta_cents") fail("Unsupported workflow approval basis.");
+    if (rule.thresholdCents !== null) boundedInteger(rule.thresholdCents, "Approval threshold", 1e9);
+    if (!Array.isArray(rule.allowedRoles) || !rule.allowedRoles.includes("admin") || rule.allowedRoles.length > 2
+      || new Set(rule.allowedRoles).size !== rule.allowedRoles.length || rule.allowedRoles.some(role => !["admin", "sales"].includes(role))
+      || !sameJson(rule.allowedRoles, [...rule.allowedRoles].sort())) fail("Invalid workflow participant roles.");
+    if (!rule.allowedRoles.includes((value.simulatedBy || value.authorizedFor)?.role)) fail("Workflow policy excludes the receipt participant.");
+    exactOpaqueId(policy.declaredBy, "Policy declaring actor", 256, "invalid-server-response");
+    if (exactISO(policy.declaredAtISO, "Policy publication time") > (value.simulatedAtISO || value.authorizedAtISO)) fail("Workflow policy was published after the receipt.");
+  }
+  if (attendance !== null) {
+    exactKeys(attendance, ["organizationId", "quoteId", "sourceVersionId", "acceptanceReceiptId", "submissionReceiptId", "submissionReceiptDigest", "count"], "Attendance binding");
+    if (attendance.organizationId !== scope.organizationId || attendance.quoteId !== scope.quoteId || attendance.sourceVersionId !== value.baseRevisionId) fail("Attendance binding does not match this exact commercial source.");
+    for (const key of ["sourceVersionId", "acceptanceReceiptId", "submissionReceiptId"]) exactOpaqueId(attendance[key], `Attendance ${key}`, 256, "invalid-server-response");
+    digest(attendance.submissionReceiptDigest, "Attendance receipt digest");
+    if (boundedInteger(attendance.count, "Submitted attendance", 400) < 1) fail("Submitted attendance must be positive.");
+  }
+  const evaluation = value.approvalEvaluation;
+  exactKeys(evaluation, ["currency", "beforeTotalCents", "proposedTotalCents", "absoluteTotalDeltaCents", "impactApprovalRequired", "thresholdApprovalRequired"], "Approval evaluation");
+  const before = boundedInteger(evaluation.beforeTotalCents, "Prior total cents", 1e14);
+  const after = boundedInteger(evaluation.proposedTotalCents, "Proposed total cents", 1e14);
+  const threshold = policy?.approvalPolicy.thresholdCents ?? null;
+  if (evaluation.currency !== "USD" || evaluation.absoluteTotalDeltaCents !== Math.abs(after - before)
+    || evaluation.thresholdApprovalRequired !== (threshold !== null && Math.abs(after - before) >= threshold)) fail("Workflow threshold evaluation is inconsistent.");
+  exactBoolean(evaluation.impactApprovalRequired, "Dependency approval requirement");
+  if (impact && evaluation.impactApprovalRequired !== (impact.counts.total > 0)) fail("Workflow dependency approval evaluation is inconsistent.");
+  if (commercialValues) {
+    // Decimal-string half-up matches the owning server's dollar evidence conversion.
+    const cents = (number) => {
+      const [mantissa, exponent = "0"] = String(number).toLowerCase().split("e");
+      const [whole, fraction = ""] = mantissa.split(".");
+      const digits = BigInt(whole + fraction);
+      const shift = 2 + Number(exponent) - fraction.length;
+      if (shift >= 0) return Number(digits * 10n ** BigInt(shift));
+      const divisor = 10n ** BigInt(-shift);
+      return Number((digits + divisor / 2n) / divisor);
+    };
+    if (before !== cents(commercialValues.authoritativeTotal.before) || after !== cents(commercialValues.authoritativeTotal.proposedAfter)) fail("Workflow evaluation differs from authoritative commercial values.");
+  }
+  return jsonClone({ workflowPolicy: policy, attendanceBinding: attendance, approvalEvaluation: evaluation }, "Bound commercial evidence");
+}
+
 function normalizeSimulationReceipt(value, scope, requestId, expectedActiveVersionId) {
   exactKeys(value, [
     "schemaVersion",
@@ -494,10 +600,11 @@ function normalizeSimulationReceipt(value, scope, requestId, expectedActiveVersi
     "expiresAtISO",
     "simulatedBy",
     "boundary",
-    "receiptDigest"
+    "receiptDigest",
+    ...(isBoundReceipt(value, "simulation") ? WORKFLOW_SEAL_FIELDS : [])
   ], "Simulation receipt");
   if (
-    value.schemaVersion !== RECEIPT_SCHEMA_VERSIONS.simulation
+    (!isBoundReceipt(value, "simulation") && value.schemaVersion !== RECEIPT_SCHEMA_VERSIONS.simulation)
     || value.authority !== "server_authoritative"
     || value.receiptType !== "simulation"
     || value.organizationId !== scope.organizationId
@@ -517,7 +624,8 @@ function normalizeSimulationReceipt(value, scope, requestId, expectedActiveVersi
     value.authorizationRequired,
     "Simulation authorization requirement"
   );
-  if (authorizationRequired !== (impact.counts.total > 0)) {
+  const seal = normalizeWorkflowSeal(value, scope, { impact, commercialValues: normalizeCommercialValues(value.commercialValues) });
+  if (authorizationRequired !== (impact.counts.total > 0 || seal.approvalEvaluation?.thresholdApprovalRequired === true)) {
     fail("Simulation authorization requirement does not match its dependency impact.");
   }
   return {
@@ -556,7 +664,8 @@ function normalizeSimulationReceipt(value, scope, requestId, expectedActiveVersi
     expiresAtISO,
     simulatedBy: exactActor(value.simulatedBy, "Simulation actor"),
     boundary: exactText(value.boundary, "Simulation boundary", 2_000),
-    receiptDigest: digest(value.receiptDigest, "Simulation receipt digest")
+    receiptDigest: digest(value.receiptDigest, "Simulation receipt digest"),
+    ...seal
   };
 }
 
@@ -624,6 +733,7 @@ function normalizeSimulationProjection(value, scope, receipt) {
   return {
     schemaVersion: value.schemaVersion,
     advisory: true,
+    ...(isBoundReceipt(receipt, "simulation") ? Object.fromEntries(WORKFLOW_SEAL_FIELDS.map(key => [key, receipt[key]])) : {}),
     receiptId: receipt.receiptId,
     receiptDigest: receipt.receiptDigest,
     authorizationRequired: receipt.authorizationRequired,
@@ -741,10 +851,11 @@ function normalizeAuthorizationReceipt(value, scope, simulationReceiptId, reques
     "authorizedBy",
     "authorizedFor",
     "boundary",
-    "receiptDigest"
+    "receiptDigest",
+    ...(isBoundReceipt(value, "authorization") ? WORKFLOW_SEAL_FIELDS : [])
   ], "Commercial change authorization receipt");
   if (
-    value.schemaVersion !== RECEIPT_SCHEMA_VERSIONS.authorization
+    (!isBoundReceipt(value, "authorization") && value.schemaVersion !== RECEIPT_SCHEMA_VERSIONS.authorization)
     || value.authority !== "server_authoritative"
     || value.receiptType !== "authorization"
     || value.organizationId !== scope.organizationId
@@ -796,7 +907,8 @@ function normalizeAuthorizationReceipt(value, scope, simulationReceiptId, reques
     authorizedBy: exactActor(value.authorizedBy, "Authorizing actor", { adminOnly: true }),
     authorizedFor: exactActor(value.authorizedFor, "Authorized requester"),
     boundary: exactText(value.boundary, "Authorization boundary", 2_000),
-    receiptDigest: digest(value.receiptDigest, "Authorization receipt digest")
+    receiptDigest: digest(value.receiptDigest, "Authorization receipt digest"),
+    ...normalizeWorkflowSeal(value, scope)
   };
 }
 
@@ -1365,6 +1477,322 @@ export function isDefinitiveCommercialChangeError(error) {
   return DEFINITIVE_ERROR_CODES.has(code);
 }
 
+function inventoryReasonCode(value) {
+  const normalized = text(value).toLowerCase();
+  if (!/^[a-z0-9]+(?:_[a-z0-9]+){0,7}$/u.test(normalized) || normalized.length > 96) {
+    fail("Inventory observation reasonCode is invalid.");
+  }
+  return normalized;
+}
+
+function normalizeCommercialInventoryObservation(
+  value,
+  scope,
+  simulationReceipt,
+  proposedQuoteRevisionId,
+  observationRequested
+) {
+  const commonKeys = [
+    "schemaVersion",
+    "authority",
+    "state",
+    "organizationId",
+    "quoteId",
+    "baseQuoteRevisionId",
+    "proposedQuoteRevisionId",
+    "commercialSimulationReceiptId",
+    "commercialSimulationReceiptDigest",
+    "commercialPreviewRevisionId",
+    "observedAtISO",
+    "boundary"
+  ];
+  if (!record(value)) fail("Inventory observation must be an exact server object.");
+  const state = text(value.state).toLowerCase();
+  if (!new Set(["available", "not_requested", "unavailable"]).has(state)) {
+    fail("Inventory observation state is invalid.");
+  }
+  exactKeys(
+    value,
+    state === "available" ? [...commonKeys, "inputDigest", "preview"] : [...commonKeys, "reasonCode"],
+    "Inventory observation"
+  );
+  const proposedRevisionId = exactOpaqueId(
+    proposedQuoteRevisionId,
+    "projected quote revision",
+    256,
+    "invalid-server-response"
+  );
+  if (
+    value.schemaVersion !== "commercial-change-inventory-observation-v1"
+    || value.authority !== "inventory_read_only_observation"
+    || value.organizationId !== scope.organizationId
+    || value.quoteId !== scope.quoteId
+    || value.baseQuoteRevisionId !== simulationReceipt.baseRevisionId
+    || value.proposedQuoteRevisionId !== proposedRevisionId
+    || value.commercialSimulationReceiptId !== simulationReceipt.receiptId
+    || value.commercialSimulationReceiptDigest !== simulationReceipt.receiptDigest
+    || value.commercialPreviewRevisionId !== simulationReceipt.proposedRevisionId
+  ) {
+    fail("Inventory observation crossed its Commercial and Inventory authority boundary.");
+  }
+  if ((!observationRequested && state !== "not_requested")
+    || (observationRequested && state === "not_requested")) {
+    fail("Inventory observation does not match the requested evaluation scope.");
+  }
+  const observation = {
+    schemaVersion: value.schemaVersion,
+    authority: value.authority,
+    state,
+    organizationId: scope.organizationId,
+    quoteId: scope.quoteId,
+    baseQuoteRevisionId: simulationReceipt.baseRevisionId,
+    proposedQuoteRevisionId: proposedRevisionId,
+    commercialSimulationReceiptId: simulationReceipt.receiptId,
+    commercialSimulationReceiptDigest: simulationReceipt.receiptDigest,
+    commercialPreviewRevisionId: simulationReceipt.proposedRevisionId,
+    observedAtISO: exactISO(value.observedAtISO, "Inventory observation time"),
+    boundary: exactText(value.boundary, "Inventory observation boundary", 2_000)
+  };
+  if (state === "available") {
+    observation.inputDigest = digest(value.inputDigest, "Inventory observation input digest");
+    try {
+      observation.preview = normalizeEventInventoryPreviewResult(
+        value.preview,
+        scope.organizationId,
+        scope.quoteId,
+        proposedRevisionId
+      );
+    } catch (error) {
+      fail(error?.message || "Inventory observation preview is invalid.");
+    }
+  } else {
+    observation.reasonCode = inventoryReasonCode(value.reasonCode);
+  }
+  return deepFreeze(observation);
+}
+
+function normalizeStaffingRoleCounts(value, label) {
+  exactKeys(value, ["lead", "server", "chef", "bartender"], label);
+  return Object.freeze({
+    lead: boundedInteger(value.lead, `${label} lead`, 128),
+    server: boundedInteger(value.server, `${label} server`, 128),
+    chef: boundedInteger(value.chef, `${label} chef`, 128),
+    bartender: boundedInteger(value.bartender, `${label} bartender`, 128)
+  });
+}
+
+function normalizeStaffingWindow(value, label) {
+  exactKeys(value, ["startAtISO", "endAtISO"], label);
+  const startAtISO = exactISO(value.startAtISO, `${label} start`);
+  const endAtISO = exactISO(value.endAtISO, `${label} end`);
+  if (Date.parse(endAtISO) <= Date.parse(startAtISO)) {
+    fail(`${label} is not a valid event window.`);
+  }
+  return Object.freeze({ startAtISO, endAtISO });
+}
+
+function normalizeCommercialStaffingObservation(
+  value,
+  scope,
+  simulationReceipt,
+  proposedQuoteRevisionId
+) {
+  const commonKeys = [
+    "schemaVersion",
+    "authority",
+    "state",
+    "organizationId",
+    "quoteId",
+    "baseQuoteRevisionId",
+    "proposedQuoteRevisionId",
+    "commercialSimulationReceiptId",
+    "commercialSimulationReceiptDigest",
+    "commercialPreviewRevisionId",
+    "observedAtISO",
+    "boundary"
+  ];
+  if (!record(value)) fail("Staffing observation must be an exact server object.");
+  const state = text(value.state).toLowerCase();
+  if (!new Set(["available", "unavailable"]).has(state)) {
+    fail("Staffing observation state is invalid.");
+  }
+  exactKeys(
+    value,
+    state === "available" ? [...commonKeys, "inputDigest", "preview"] : [...commonKeys, "reasonCode"],
+    "Staffing observation"
+  );
+  const proposedRevisionId = exactOpaqueId(
+    proposedQuoteRevisionId,
+    "projected quote revision",
+    256,
+    "invalid-server-response"
+  );
+  if (
+    value.schemaVersion !== "commercial-change-staffing-observation-v1"
+    || value.authority !== "operational_staffing_read_only_observation"
+    || value.organizationId !== scope.organizationId
+    || value.quoteId !== scope.quoteId
+    || value.baseQuoteRevisionId !== simulationReceipt.baseRevisionId
+    || value.proposedQuoteRevisionId !== proposedRevisionId
+    || value.commercialSimulationReceiptId !== simulationReceipt.receiptId
+    || value.commercialSimulationReceiptDigest !== simulationReceipt.receiptDigest
+    || value.commercialPreviewRevisionId !== simulationReceipt.proposedRevisionId
+  ) {
+    fail("Staffing observation crossed its Commercial and Staffing authority boundary.");
+  }
+  const observation = {
+    schemaVersion: value.schemaVersion,
+    authority: value.authority,
+    state,
+    organizationId: scope.organizationId,
+    quoteId: scope.quoteId,
+    baseQuoteRevisionId: simulationReceipt.baseRevisionId,
+    proposedQuoteRevisionId: proposedRevisionId,
+    commercialSimulationReceiptId: simulationReceipt.receiptId,
+    commercialSimulationReceiptDigest: simulationReceipt.receiptDigest,
+    commercialPreviewRevisionId: simulationReceipt.proposedRevisionId,
+    observedAtISO: exactISO(value.observedAtISO, "Staffing observation time"),
+    boundary: exactText(value.boundary, "Staffing observation boundary", 2_000)
+  };
+  if (state === "unavailable") {
+    observation.reasonCode = inventoryReasonCode(value.reasonCode);
+    return deepFreeze(observation);
+  }
+
+  exactKeys(value.preview, ["proposed", "currentPlanState", "comparison", "boundary"], "Staffing observation preview");
+  exactKeys(
+    value.preview.proposed,
+    ["quoteRevisionId", "eventWindow", "requirementsByRole", "totalRequired"],
+    "Staffing proposed requirement"
+  );
+  if (value.preview.proposed.quoteRevisionId !== proposedRevisionId) {
+    fail("Staffing proposed requirement crossed its quote revision boundary.");
+  }
+  const requirementsByRole = normalizeStaffingRoleCounts(
+    value.preview.proposed.requirementsByRole,
+    "Staffing proposed role counts"
+  );
+  const totalRequired = boundedInteger(
+    value.preview.proposed.totalRequired,
+    "Staffing proposed total",
+    128
+  );
+  if (Object.values(requirementsByRole).reduce((sum, count) => sum + count, 0) !== totalRequired) {
+    fail("Staffing proposed total does not match its bounded role counts.");
+  }
+  const currentPlanState = text(value.preview.currentPlanState).toLowerCase();
+  if (!["absent", "current", "stale"].includes(currentPlanState)) {
+    fail("Staffing current plan state is invalid.");
+  }
+  exactKeys(value.preview.comparison, ["windowState", "coverage"], "Staffing comparison");
+  const windowState = text(value.preview.comparison.windowState).toLowerCase();
+  if (!["same", "changed", "not_applicable"].includes(windowState)) {
+    fail("Staffing proposed window state is invalid.");
+  }
+  const coverageValue = value.preview.comparison.coverage;
+  exactKeys(coverageValue, [
+    "state",
+    "byRole",
+    "totalRequired",
+    "totalOperatorConfirmedCount",
+    "totalGap",
+    "reasonCode"
+  ], "Staffing proposed coverage");
+  const coverageState = text(coverageValue.state).toLowerCase();
+  if (!["unverified", "not_required", "coverage_confirmed", "attention"].includes(coverageState)) {
+    fail("Staffing proposed coverage state is invalid.");
+  }
+  exactKeys(coverageValue.byRole, ["lead", "server", "chef", "bartender"], "Staffing coverage roles");
+  const byRole = {};
+  let summedConfirmed = 0;
+  let summedGap = 0;
+  for (const role of ["lead", "server", "chef", "bartender"]) {
+    const roleValue = coverageValue.byRole[role];
+    exactKeys(roleValue, ["requiredCount", "operatorConfirmedCount", "gap"], `Staffing ${role} coverage`);
+    const requiredCount = boundedInteger(roleValue.requiredCount, `Staffing ${role} required`, 128);
+    const operatorConfirmedCount = roleValue.operatorConfirmedCount === null
+      ? null
+      : boundedInteger(roleValue.operatorConfirmedCount, `Staffing ${role} confirmed`, 128);
+    const gap = roleValue.gap === null
+      ? null
+      : boundedInteger(roleValue.gap, `Staffing ${role} gap`, 128);
+    if (requiredCount !== requirementsByRole[role]) {
+      fail(`Staffing ${role} coverage does not match the proposed requirement.`);
+    }
+    const roleUnverified = operatorConfirmedCount === null && gap === null;
+    const rolePartiallyMissing = (operatorConfirmedCount === null) !== (gap === null);
+    if (rolePartiallyMissing || (coverageState === "unverified") !== roleUnverified) {
+      fail(`Staffing ${role} coverage does not match the proposed evidence state.`);
+    }
+    if (!roleUnverified) {
+      if (gap !== Math.max(0, requiredCount - operatorConfirmedCount)) {
+        fail(`Staffing ${role} gap does not match its aggregate counts.`);
+      }
+      summedConfirmed += operatorConfirmedCount;
+      summedGap += gap;
+    }
+    byRole[role] = Object.freeze({ requiredCount, operatorConfirmedCount, gap });
+  }
+  const totalOperatorConfirmedCount = coverageValue.totalOperatorConfirmedCount === null
+    ? null
+    : boundedInteger(coverageValue.totalOperatorConfirmedCount, "Staffing confirmed total", 128);
+  const totalGap = coverageValue.totalGap === null
+    ? null
+    : boundedInteger(coverageValue.totalGap, "Staffing gap total", 128);
+  const totalsUnverified = totalOperatorConfirmedCount === null && totalGap === null;
+  const totalsPartiallyMissing = (totalOperatorConfirmedCount === null) !== (totalGap === null);
+  if (totalsPartiallyMissing || (coverageState === "unverified") !== totalsUnverified) {
+    fail("Staffing aggregate coverage does not match the proposed evidence state.");
+  }
+  const coverageTotalRequired = boundedInteger(
+    coverageValue.totalRequired,
+    "Staffing coverage total",
+    128
+  );
+  if (coverageTotalRequired !== totalRequired) {
+    fail("Staffing coverage total does not match the proposed requirement total.");
+  }
+  if (!totalsUnverified && (
+    totalOperatorConfirmedCount !== summedConfirmed
+    || totalGap !== summedGap
+  )) {
+    fail("Staffing coverage totals do not match their bounded role evidence.");
+  }
+  const expectedCoverageState = totalsUnverified
+    ? "unverified"
+    : totalRequired === 0
+      ? "not_required"
+      : totalGap === 0
+        ? "coverage_confirmed"
+        : "attention";
+  if (coverageState !== expectedCoverageState) {
+    fail("Staffing coverage state does not match its aggregate role evidence.");
+  }
+  observation.inputDigest = digest(value.inputDigest, "Staffing observation input digest");
+  observation.preview = {
+    proposed: {
+      quoteRevisionId: proposedRevisionId,
+      eventWindow: normalizeStaffingWindow(value.preview.proposed.eventWindow, "Staffing proposed event window"),
+      requirementsByRole,
+      totalRequired
+    },
+    currentPlanState,
+    comparison: {
+      windowState,
+      coverage: {
+        state: coverageState,
+        byRole,
+        totalRequired: coverageTotalRequired,
+        totalOperatorConfirmedCount,
+        totalGap,
+        reasonCode: inventoryReasonCode(coverageValue.reasonCode)
+      }
+    },
+    boundary: exactText(value.preview.boundary, "Staffing preview boundary", 2_000)
+  };
+  return deepFreeze(observation);
+}
+
 export async function simulateCommercialQuoteChange(input = {}) {
   const scope = normalizeScope(input);
   const expectedActiveVersionId = exactOpaqueId(
@@ -1380,12 +1808,18 @@ export async function simulateCommercialQuoteChange(input = {}) {
     maximum: MAX_JSON_BYTES,
     code: "invalid-argument"
   });
+  const eventIngredientOutputs = input.eventIngredientOutputs === undefined
+    ? null
+    : normalizeEventIngredientOutputs(input.eventIngredientOutputs);
   const response = await callable(COMMERCIAL_CHANGE_AUTHORITY_CALLABLES.simulate)({
     organizationId: scope.organizationId,
     quoteId: scope.quoteId,
     expectedActiveVersionId,
     requestId,
-    form
+    form,
+    staffingObservationVersion: "v1",
+    ...(eventIngredientOutputs ? { eventIngredientOutputs } : {}),
+    ...(input.attendanceSubmissionReceiptId ? { attendanceSubmissionReceiptId: exactOpaqueId(input.attendanceSubmissionReceiptId, "attendanceSubmissionReceiptId") } : {})
   });
   const result = response?.data;
   exactEnvelope(result, scope, [
@@ -1397,6 +1831,8 @@ export async function simulateCommercialQuoteChange(input = {}) {
     "authorityState",
     "simulationReceipt",
     "simulation",
+    "inventoryObservation",
+    "staffingObservation",
     "persistedEffects"
   ], "Commercial change simulation response");
   const idempotent = exactBoolean(result.idempotent, "Simulation idempotency state");
@@ -1410,6 +1846,7 @@ export async function simulateCommercialQuoteChange(input = {}) {
     requestId,
     expectedActiveVersionId
   );
+  if ((input.attendanceSubmissionReceiptId || "") !== (simulationReceipt.attendanceBinding?.submissionReceiptId || "")) fail("Simulation does not bind the reviewed attendance response.");
   const simulation = normalizeSimulationProjection(result.simulation, scope, simulationReceipt);
   const persistedEffects = COMMERCIAL_CHANGE_PERSISTED_EFFECTS_ENABLED
     ? normalizeActivePersistedEffects(
@@ -1430,6 +1867,26 @@ export async function simulateCommercialQuoteChange(input = {}) {
         }
       )
     : null;
+  const proposedQuoteRevisionId = persistedEffects?.identity?.projectedRevisionId
+    || exactOpaqueId(
+      result.inventoryObservation?.proposedQuoteRevisionId,
+      "Inventory observation projected quote revision",
+      256,
+      "invalid-server-response"
+    );
+  const inventoryObservation = normalizeCommercialInventoryObservation(
+    result.inventoryObservation,
+    scope,
+    simulationReceipt,
+    proposedQuoteRevisionId,
+    eventIngredientOutputs !== null
+  );
+  const staffingObservation = normalizeCommercialStaffingObservation(
+    result.staffingObservation,
+    scope,
+    simulationReceipt,
+    proposedQuoteRevisionId
+  );
   return deepFreeze({
     ok: true,
     storage: "firebase",
@@ -1439,6 +1896,8 @@ export async function simulateCommercialQuoteChange(input = {}) {
     authorityState,
     simulationReceipt,
     simulation,
+    inventoryObservation,
+    staffingObservation,
     ...(persistedEffects ? { persistedEffects } : {})
   });
 }

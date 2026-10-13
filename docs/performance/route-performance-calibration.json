@@ -1,0 +1,2149 @@
+{
+  "schemaVersion": 1,
+  "sourceReceipt": "output/playwright/quotepilot-route-performance-sYfMr3/receipt.json",
+  "retentionNote": "Retains all stage/diagnostic samples and build/profile identity. Per-resource lists remain in the ignored source receipt. Local dirty-checkout evidence only; not hosted, production, or owner acceptance proof.",
+  "identity": {
+    "recordedAt": "2026-10-11T08:03:55.267Z",
+    "root": "/home/administrator/projects_new/quoteflow",
+    "branch": "release/v0.20.0-open-work",
+    "head": "216431a256d31c585be97be719e1fabbeec68d93",
+    "dirty": true,
+    "buildSha256": "d04543456f3d536210f71cbe286ad6d49fc28bc2753d6fa2a159186709c00166",
+    "profile": {
+      "id": "ambient-emulator-staff-v2",
+      "browser": "chromium",
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "deviceScaleFactor": 1,
+      "cpuSlowdown": 4,
+      "latencyMs": 40,
+      "downloadBytesPerSecond": 200000,
+      "uploadBytesPerSecond": 93750,
+      "cache": "disabled",
+      "fonts": "google-font-services-blocked-system-fallback",
+      "timezone": "America/Chicago",
+      "nowISO": "2026-10-10T12:00:00.000Z",
+      "fixture": "isolated-auth-firestore-readers-tenant-admin-authority-projections-v2",
+      "build": "production-ambient"
+    },
+    "toolchain": {
+      "node": "v22.22.2",
+      "firebase": "15.24.0",
+      "playwright": "1.58.2"
+    },
+    "host": {
+      "platform": "linux",
+      "release": "6.18.33.2-microsoft-standard-WSL2",
+      "cpu": "Intel(R) Xeon(R) W-2135 CPU @ 3.70GHz",
+      "logicalCpus": 6
+    },
+    "evidenceClass": "local-production-transform-auth-firestore-read-only-functions-emulator",
+    "authEvidence": "Email/password sign-in against isolated Auth emulator; tenant role via real Firestore rules/read-only bootstrap fallback. Not hosted authentication.",
+    "inventoryEvidence": "Synthetic commands processed by Inventory authority runtime into isolated Firestore projections; browser uses tenant-authorized listeners.",
+    "emulatorOrigins": [
+      "http://127.0.0.1:9498",
+      "http://127.0.0.1:8488",
+      "http://127.0.0.1:5998"
+    ],
+    "functionsEvidence": "Isolated secret-free source exposes only three real staff-authorized read handlers; browser blocks all other callable paths including write/bootstrap endpoints.",
+    "readOnlyFunctions": [
+      "getRevenueAutopilotOperations",
+      "getDecisionDebtSnapshot",
+      "getRevenueAutopilotCustomerControls"
+    ],
+    "routeBytesScope": "Encoded same-origin document and resource bodies completed by supplemental completion; excludes unfinished requests, cross-origin emulator traffic and headers."
+  },
+  "mode": "five-run-p75-plus-10-percent",
+  "testStatus": 0,
+  "status": "PASS",
+  "routes": {
+    "now": {
+      "status": "CALIBRATED",
+      "p75": {
+        "routeBytes": 642814,
+        "usableCoreMs": 638.6000000238419,
+        "supplementalCompleteMs": 933.5
+      },
+      "ceilings": {
+        "routeBytes": 707096,
+        "usableCoreMs": 703,
+        "supplementalCompleteMs": 1027
+      },
+      "runs": [
+        {
+          "routeId": "now",
+          "path": "/app",
+          "run": 0,
+          "browserVersion": "145.0.7632.6",
+          "status": "measured",
+          "navigationId": "njjpicg",
+          "coreOutcome": "ready",
+          "supplementalOutcome": "ready",
+          "usableCoreMs": 602.6999999880791,
+          "supplementalCompleteMs": 933.5,
+          "routeBytes": 642331,
+          "documentToRouteStartMs": 4491.5,
+          "observedStages": [
+            {
+              "routeId": "now",
+              "navigationId": "njjpicg",
+              "stage": "route-start",
+              "outcome": "ready",
+              "recordedAt": 1791633600000
+            },
+            {
+              "routeId": "now",
+              "navigationId": "njjpicg",
+              "stage": "usable-core",
+              "outcome": "ready",
+              "recordedAt": 1791633600000
+            },
+            {
+              "routeId": "now",
+              "navigationId": "njjpicg",
+              "stage": "supplemental-complete",
+              "outcome": "ready",
+              "recordedAt": 1791633600000
+            }
+          ],
+          "pageErrors": [],
+          "externalOrigins": [],
+          "fontPolicy": "google-font-services-blocked-system-fallback"
+        },
+        {
+          "routeId": "now",
+          "path": "/app",
+          "run": 1,
+          "browserVersion": "145.0.7632.6",
+          "status": "measured",
+          "navigationId": "ntdndhf",
+          "coreOutcome": "ready",
+          "supplementalOutcome": "ready",
+          "usableCoreMs": 404.0999999642372,
+          "supplementalCompleteMs": 404.19999998807907,
+          "routeBytes": 642331,
+          "documentToRouteStartMs": 4245.100000023842,
+          "observedStages": [
+            {
+              "routeId": "now",
+              "navigationId": "ntdndhf",
+              "stage": "route-start",
+              "outcome": "ready",
+              "recordedAt": 1791633600000
+            },
+            {
+              "routeId": "now",
+              "navigationId": "ntdndhf",
+              "stage": "usable-core",
+              "outcome": "ready",
+              "recordedAt": 1791633600000
+            },
+            {
+              "routeId": "now",
+              "navigationId": "ntdndhf",
+              "stage": "supplemental-complete",
+              "outcome": "ready",
+              "recordedAt": 1791633600000
+            }
+          ],
+          "pageErrors": [],
+          "externalOrigins": [],
+          "fontPolicy": "google-font-services-blocked-system-fallback"
+        },
+        {
+          "routeId": "now",
+          "path": "/app",
+          "run": 2,
+          "browserVersion": "145.0.7632.6",
+          "status": "measured",
+          "navigationId": "nvhksdh",
+          "coreOutcome": "ready",
+          "supplementalOutcome": "ready",
+          "usableCoreMs": 579.3000000119209,
+          "supplementalCompleteMs": 580.1000000238419,
+          "routeBytes": 642331,
+          "documentToRouteStartMs": 4397.100000023842,
+          "observedStages": [
+            {
+              "routeId": "now",
+              "navigationId": "nvhksdh",
+              "stage": "route-start",
+              "outcome": "ready",
+              "recordedAt": 1791633600000
+            },
+            {
+              "routeId": "now",
+              "navigationId": "nvhksdh",
+              "stage": "usable-core",
+              "outcome": "ready",
+              "recordedAt": 1791633600000
+            },
+            {
+              "routeId": "now",
+              "navigationId": "nvhksdh",
+              "stage": "supplemental-complete",
+              "outcome": "ready",
+              "recordedAt": 1791633600000
+            }
+          ],
+          "pageErrors": [],
+          "externalOrigins": [],
+          "fontPolicy": "google-font-services-blocked-system-fallback"
+        },
+        {
+          "routeId": "now",
+          "path": "/app",
+          "run": 3,
+          "browserVersion": "145.0.7632.6",
+          "status": "measured",
+          "navigationId": "npf3vo5",
+          "coreOutcome": "ready",
+          "supplementalOutcome": "ready",
+          "usableCoreMs": 638.6000000238419,
+          "supplementalCompleteMs": 785,
+          "routeBytes": 642814,
+          "documentToRouteStartMs": 4949.899999976158,
+          "observedStages": [
+            {
+              "routeId": "now",
+              "navigationId": "npf3vo5",
+              "stage": "route-start",
+              "outcome": "ready",
+              "recordedAt": 1791633600000
+            },
+            {
+              "routeId": "now",
+              "navigationId": "npf3vo5",
+              "stage": "usable-core",
+              "outcome": "ready",
+              "recordedAt": 1791633600000
+            },
+            {
+              "routeId": "now",
+              "navigationId": "npf3vo5",
+              "stage": "supplemental-complete",
+              "outcome": "ready",
+              "recordedAt": 1791633600000
+            }
+          ],
+          "pageErrors": [],
+          "externalOrigins": [],
+          "fontPolicy": "google-font-services-blocked-system-fallback"
+        },
+        {
+          "routeId": "now",
+          "path": "/app",
+          "run": 4,
+          "browserVersion": "145.0.7632.6",
+          "status": "measured",
+          "navigationId": "ng0tqep",
+          "coreOutcome": "ready",
+          "supplementalOutcome": "ready",
+          "usableCoreMs": 1091,
+          "supplementalCompleteMs": 1183.2000000476837,
+          "routeBytes": 642814,
+          "documentToRouteStartMs": 4297.299999952316,
+          "observedStages": [
+            {
+              "routeId": "now",
+              "navigationId": "ng0tqep",
+              "stage": "route-start",
+              "outcome": "ready",
+              "recordedAt": 1791633600000
+            },
+            {
+              "routeId": "now",
+              "navigationId": "ng0tqep",
+              "stage": "usable-core",
+              "outcome": "ready",
+              "recordedAt": 1791633600000
+            },
+            {
+              "routeId": "now",
+              "navigationId": "ng0tqep",
+              "stage": "supplemental-complete",
+              "outcome": "ready",
+              "recordedAt": 1791633600000
+            }
+          ],
+          "pageErrors": [],
+          "externalOrigins": [],
+          "fontPolicy": "google-font-services-blocked-system-fallback"
+        }
+      ]
+    },
+    "clients": {
+      "status": "CALIBRATED",
+      "p75": {
+        "routeBytes": 677376,
+        "usableCoreMs": 1141.8999999761581,
+        "supplementalCompleteMs": 1361.699999988079
+      },
+      "ceilings": {
+        "routeBytes": 745114,
+        "usableCoreMs": 1257,
+        "supplementalCompleteMs": 1498
+      },
+      "runs": [
+        {
+          "routeId": "clients",
+          "path": "/app/customers/route-perf-customer",
+          "run": 0,
+          "browserVersion": "145.0.7632.6",
+          "status": "measured",
+          "navigationId": "n16f8kh0",
+          "coreOutcome": "ready",
+          "supplementalOutcome": "ready",
+          "usableCoreMs": 1141.8999999761581,
+          "supplementalCompleteMs": 4365.5,
+          "routeBytes": 677376,
+          "documentToRouteStartMs": 4402.600000023842,
+          "observedStages": [
+            {
+              "routeId": "clients",
+              "navigationId": "n16f8kh0",
+              "stage": "route-start",
+              "outcome": "ready",
+              "recordedAt": 1791633600000
+            },
+            {
+              "routeId": "clients",
+              "navigationId": "n16f8kh0",
+              "stage": "usable-core",
+              "outcome": "ready",
+              "recordedAt": 1791633600000
+            },
+            {
+              "routeId": "clients",
+              "navigationId": "n16f8kh0",
+              "stage": "supplemental-complete",
+              "outcome": "ready",
+              "recordedAt": 1791633600000
+            }
+          ],
+          "pageErrors": [],
+          "externalOrigins": [],
+          "fontPolicy": "google-font-services-blocked-system-fallback"
+        },
+        {
+          "routeId": "clients",
+          "path": "/app/customers/route-perf-customer",
+          "run": 1,
+          "browserVersion": "145.0.7632.6",
+          "status": "measured",
+          "navigationId": "n1v5v215",
+          "coreOutcome": "ready",
+          "supplementalOutcome": "ready",
+          "usableCoreMs": 671.9000000357628,
+          "supplementalCompleteMs": 719.1000000238419,
+          "routeBytes": 654183,
+          "documentToRouteStartMs": 4224.5,
+          "observedStages": [
+            {
+              "routeId": "clients",
+              "navigationId": "n1v5v215",
+              "stage": "route-start",
+              "outcome": "ready",
+              "recordedAt": 1791633600000
+            },
+            {
+              "routeId": "clients",
+              "navigationId": "n1v5v215",
+              "stage": "usable-core",
+              "outcome": "ready",
+              "recordedAt": 1791633600000
+            },
+            {
+              "routeId": "clients",
+              "navigationId": "n1v5v215",
+              "stage": "supplemental-complete",
+              "outcome": "ready",
+              "recordedAt": 1791633600000
+            }
+          ],
+          "pageErrors": [],
+          "externalOrigins": [],
+          "fontPolicy": "google-font-services-blocked-system-fallback"
+        },
+        {
+          "routeId": "clients",
+          "path": "/app/customers/route-perf-customer",
+          "run": 2,
+          "browserVersion": "145.0.7632.6",
+          "status": "measured",
+          "navigationId": "n1rjqfgu",
+          "coreOutcome": "ready",
+          "supplementalOutcome": "ready",
+          "usableCoreMs": 951.8000000119209,
+          "supplementalCompleteMs": 1034.3999999761581,
+          "routeBytes": 654183,
+          "documentToRouteStartMs": 4242,
+          "observedStages": [
+            {
+              "routeId": "clients",
+              "navigationId": "n1rjqfgu",
+              "stage": "route-start",
+              "outcome": "ready",
+              "recordedAt": 1791633600000
+            },
+            {
+              "routeId": "clients",
+              "navigationId": "n1rjqfgu",
+              "stage": "usable-core",
+              "outcome": "ready",
+              "recordedAt": 1791633600000
+            },
+            {
+              "routeId": "clients",
+              "navigationId": "n1rjqfgu",
+              "stage": "supplemental-complete",
+              "outcome": "ready",
+              "recordedAt": 1791633600000
+            }
+          ],
+          "pageErrors": [],
+          "externalOrigins": [],
+          "fontPolicy": "google-font-services-blocked-system-fallback"
+        },
+        {
+          "routeId": "clients",
+          "path": "/app/customers/route-perf-customer",
+          "run": 3,
+          "browserVersion": "145.0.7632.6",
+          "status": "measured",
+          "navigationId": "n7wyf5b",
+          "coreOutcome": "ready",
+          "supplementalOutcome": "ready",
+          "usableCoreMs": 1236.8999999761581,
+          "supplementalCompleteMs": 1361.699999988079,
+          "routeBytes": 660605,
+          "documentToRouteStartMs": 4419.600000023842,
+          "observedStages": [
+            {
+              "routeId": "clients",
+              "navigationId": "n7wyf5b",
+              "stage": "route-start",
+              "outcome": "ready",
+              "recordedAt": 1791633600000
+            },
+            {
+              "routeId": "clients",
+              "navigationId": "n7wyf5b",
+              "stage": "usable-core",
+              "outcome": "ready",
+              "recordedAt": 1791633600000
+            },
+            {
+              "routeId": "clients",
+              "navigationId": "n7wyf5b",
+              "stage": "supplemental-complete",
+              "outcome": "ready",
+              "recordedAt": 1791633600000
+            }
+          ],
+          "pageErrors": [],
+          "externalOrigins": [],
+          "fontPolicy": "google-font-services-blocked-system-fallback"
+        },
+        {
+          "routeId": "clients",
+          "path": "/app/customers/route-perf-customer",
+          "run": 4,
+          "browserVersion": "145.0.7632.6",
+          "status": "measured",
+          "navigationId": "n1ia113u",
+          "coreOutcome": "ready",
+          "supplementalOutcome": "ready",
+          "usableCoreMs": 1053.7000000476837,
+          "supplementalCompleteMs": 1270.5,
+          "routeBytes": 677376,
+          "documentToRouteStartMs": 4622.099999964237,
+          "observedStages": [
+            {
+              "routeId": "clients",
+              "navigationId": "n1ia113u",
+              "stage": "route-start",
+              "outcome": "ready",
+              "recordedAt": 1791633600000
+            },
+            {
+              "routeId": "clients",
+              "navigationId": "n1ia113u",
+              "stage": "usable-core",
+              "outcome": "ready",
+              "recordedAt": 1791633600000
+            },
+            {
+              "routeId": "clients",
+              "navigationId": "n1ia113u",
+              "stage": "supplemental-complete",
+              "outcome": "ready",
+              "recordedAt": 1791633600000
+            }
+          ],
+          "pageErrors": [],
+          "externalOrigins": [],
+          "fontPolicy": "google-font-services-blocked-system-fallback"
+        }
+      ]
+    },
+    "inventory": {
+      "status": "CALIBRATED",
+      "p75": {
+        "routeBytes": 635318,
+        "usableCoreMs": 1958.8999999761581,
+        "supplementalCompleteMs": 1959
+      },
+      "ceilings": {
+        "routeBytes": 698850,
+        "usableCoreMs": 2155,
+        "supplementalCompleteMs": 2155
+      },
+      "runs": [
+        {
+          "routeId": "inventory",
+          "path": "/app/inventory",
+          "run": 0,
+          "browserVersion": "145.0.7632.6",
+          "status": "measured",
+          "navigationId": "nxulubm",
+          "coreOutcome": "ready",
+          "supplementalOutcome": "ready",
+          "usableCoreMs": 1958.8999999761581,
+          "supplementalCompleteMs": 1959,
+          "routeBytes": 635318,
+          "documentToRouteStartMs": 4183.699999988079,
+          "observedStages": [
+            {
+              "routeId": "inventory",
+              "navigationId": "nxulubm",
+              "stage": "route-start",
+              "outcome": "ready",
+              "recordedAt": 1791633600000
+            },
+            {
+              "routeId": "inventory",
+              "navigationId": "nxulubm",
+              "stage": "usable-core",
+              "outcome": "ready",
+              "recordedAt": 1791633600000
+            },
+            {
+              "routeId": "inventory",
+              "navigationId": "nxulubm",
+              "stage": "supplemental-complete",
+              "outcome": "ready",
+              "recordedAt": 1791633600000
+            }
+          ],
+          "pageErrors": [],
+          "externalOrigins": [],
+          "fontPolicy": "google-font-services-blocked-system-fallback"
+        },
+        {
+          "routeId": "inventory",
+          "path": "/app/inventory",
+          "run": 1,
+          "browserVersion": "145.0.7632.6",
+          "status": "measured",
+          "navigationId": "n105t6lx",
+          "coreOutcome": "ready",
+          "supplementalOutcome": "ready",
+          "usableCoreMs": 1270.8999999761581,
+          "supplementalCompleteMs": 1271.1000000238419,
+          "routeBytes": 635318,
+          "documentToRouteStartMs": 3960.600000023842,
+          "observedStages": [
+            {
+              "routeId": "inventory",
+              "navigationId": "n105t6lx",
+              "stage": "route-start",
+              "outcome": "ready",
+              "recordedAt": 1791633600000
+            },
+            {
+              "routeId": "inventory",
+              "navigationId": "n105t6lx",
+              "stage": "usable-core",
+              "outcome": "ready",
+              "recordedAt": 1791633600000
+            },
+            {
+              "routeId": "inventory",
+              "navigationId": "n105t6lx",
+              "stage": "supplemental-complete",
+              "outcome": "ready",
+              "recordedAt": 1791633600000
+            }
+          ],
+          "pageErrors": [],
+          "externalOrigins": [],
+          "fontPolicy": "google-font-services-blocked-system-fallback"
+        },
+        {
+          "routeId": "inventory",
+          "path": "/app/inventory",
+          "run": 2,
+          "browserVersion": "145.0.7632.6",
+          "status": "measured",
+          "navigationId": "n1usk2sk",
+          "coreOutcome": "ready",
+          "supplementalOutcome": "ready",
+          "usableCoreMs": 1398,
+          "supplementalCompleteMs": 1398.699999988079,
+          "routeBytes": 635318,
+          "documentToRouteStartMs": 4105.900000035763,
+          "observedStages": [
+            {
+              "routeId": "inventory",
+              "navigationId": "n1usk2sk",
+              "stage": "route-start",
+              "outcome": "ready",
+              "recordedAt": 1791633600000
+            },
+            {
+              "routeId": "inventory",
+              "navigationId": "n1usk2sk",
+              "stage": "usable-core",
+              "outcome": "ready",
+              "recordedAt": 1791633600000
+            },
+            {
+              "routeId": "inventory",
+              "navigationId": "n1usk2sk",
+              "stage": "supplemental-complete",
+              "outcome": "ready",
+              "recordedAt": 1791633600000
+            }
+          ],
+          "pageErrors": [],
+          "externalOrigins": [],
+          "fontPolicy": "google-font-services-blocked-system-fallback"
+        },
+        {
+          "routeId": "inventory",
+          "path": "/app/inventory",
+          "run": 3,
+          "browserVersion": "145.0.7632.6",
+          "status": "measured",
+          "navigationId": "nzx3ss9",
+          "coreOutcome": "ready",
+          "supplementalOutcome": "ready",
+          "usableCoreMs": 1477.300000011921,
+          "supplementalCompleteMs": 1477.3999999761581,
+          "routeBytes": 635318,
+          "documentToRouteStartMs": 4223.5,
+          "observedStages": [
+            {
+              "routeId": "inventory",
+              "navigationId": "nzx3ss9",
+              "stage": "route-start",
+              "outcome": "ready",
+              "recordedAt": 1791633600000
+            },
+            {
+              "routeId": "inventory",
+              "navigationId": "nzx3ss9",
+              "stage": "usable-core",
+              "outcome": "ready",
+              "recordedAt": 1791633600000
+            },
+            {
+              "routeId": "inventory",
+              "navigationId": "nzx3ss9",
+              "stage": "supplemental-complete",
+              "outcome": "ready",
+              "recordedAt": 1791633600000
+            }
+          ],
+          "pageErrors": [],
+          "externalOrigins": [],
+          "fontPolicy": "google-font-services-blocked-system-fallback"
+        },
+        {
+          "routeId": "inventory",
+          "path": "/app/inventory",
+          "run": 4,
+          "browserVersion": "145.0.7632.6",
+          "status": "measured",
+          "navigationId": "nr9v2w1",
+          "coreOutcome": "ready",
+          "supplementalOutcome": "ready",
+          "usableCoreMs": 2628.2000000476837,
+          "supplementalCompleteMs": 2628.400000035763,
+          "routeBytes": 635318,
+          "documentToRouteStartMs": 4602.399999976158,
+          "observedStages": [
+            {
+              "routeId": "inventory",
+              "navigationId": "nr9v2w1",
+              "stage": "route-start",
+              "outcome": "ready",
+              "recordedAt": 1791633600000
+            },
+            {
+              "routeId": "inventory",
+              "navigationId": "nr9v2w1",
+              "stage": "usable-core",
+              "outcome": "ready",
+              "recordedAt": 1791633600000
+            },
+            {
+              "routeId": "inventory",
+              "navigationId": "nr9v2w1",
+              "stage": "supplemental-complete",
+              "outcome": "ready",
+              "recordedAt": 1791633600000
+            }
+          ],
+          "pageErrors": [],
+          "externalOrigins": [],
+          "fontPolicy": "google-font-services-blocked-system-fallback"
+        }
+      ]
+    },
+    "quote-review": {
+      "status": "CALIBRATED",
+      "p75": {
+        "routeBytes": 722455,
+        "usableCoreMs": 2238.100000023842,
+        "supplementalCompleteMs": 2239.5
+      },
+      "ceilings": {
+        "routeBytes": 794701,
+        "usableCoreMs": 2462,
+        "supplementalCompleteMs": 2464
+      },
+      "runs": [
+        {
+          "routeId": "quote-review",
+          "path": "/app/quotes/route-perf-quote",
+          "run": 0,
+          "browserVersion": "145.0.7632.6",
+          "status": "measured",
+          "navigationId": "n11awu0g",
+          "coreOutcome": "ready",
+          "supplementalOutcome": "ready",
+          "usableCoreMs": 2238.100000023842,
+          "supplementalCompleteMs": 2239.5,
+          "routeBytes": 720001,
+          "documentToRouteStartMs": 4411.399999976158,
+          "observedStages": [
+            {
+              "routeId": "quote-review",
+              "navigationId": "n11awu0g",
+              "stage": "route-start",
+              "outcome": "ready",
+              "recordedAt": 1791633600000
+            },
+            {
+              "routeId": "quote-review",
+              "navigationId": "n11awu0g",
+              "stage": "usable-core",
+              "outcome": "ready",
+              "recordedAt": 1791633600000
+            },
+            {
+              "routeId": "quote-review",
+              "navigationId": "n11awu0g",
+              "stage": "supplemental-complete",
+              "outcome": "ready",
+              "recordedAt": 1791633600000
+            }
+          ],
+          "pageErrors": [],
+          "externalOrigins": [],
+          "fontPolicy": "google-font-services-blocked-system-fallback"
+        },
+        {
+          "routeId": "quote-review",
+          "path": "/app/quotes/route-perf-quote",
+          "run": 1,
+          "browserVersion": "145.0.7632.6",
+          "status": "measured",
+          "navigationId": "n2wo4ul",
+          "coreOutcome": "ready",
+          "supplementalOutcome": "ready",
+          "usableCoreMs": 2179.699999988079,
+          "supplementalCompleteMs": 2179.7999999523163,
+          "routeBytes": 720850,
+          "documentToRouteStartMs": 4026.300000011921,
+          "observedStages": [
+            {
+              "routeId": "quote-review",
+              "navigationId": "n2wo4ul",
+              "stage": "route-start",
+              "outcome": "ready",
+              "recordedAt": 1791633600000
+            },
+            {
+              "routeId": "quote-review",
+              "navigationId": "n2wo4ul",
+              "stage": "usable-core",
+              "outcome": "ready",
+              "recordedAt": 1791633600000
+            },
+            {
+              "routeId": "quote-review",
+              "navigationId": "n2wo4ul",
+              "stage": "supplemental-complete",
+              "outcome": "ready",
+              "recordedAt": 1791633600000
+            }
+          ],
+          "pageErrors": [],
+          "externalOrigins": [],
+          "fontPolicy": "google-font-services-blocked-system-fallback"
+        },
+        {
+          "routeId": "quote-review",
+          "path": "/app/quotes/route-perf-quote",
+          "run": 2,
+          "browserVersion": "145.0.7632.6",
+          "status": "measured",
+          "navigationId": "n1plny6v",
+          "coreOutcome": "ready",
+          "supplementalOutcome": "ready",
+          "usableCoreMs": 2190.300000011921,
+          "supplementalCompleteMs": 2196.300000011921,
+          "routeBytes": 722455,
+          "documentToRouteStartMs": 4179.800000011921,
+          "observedStages": [
+            {
+              "routeId": "quote-review",
+              "navigationId": "n1plny6v",
+              "stage": "route-start",
+              "outcome": "ready",
+              "recordedAt": 1791633600000
+            },
+            {
+              "routeId": "quote-review",
+              "navigationId": "n1plny6v",
+              "stage": "usable-core",
+              "outcome": "ready",
+              "recordedAt": 1791633600000
+            },
+            {
+              "routeId": "quote-review",
+              "navigationId": "n1plny6v",
+              "stage": "supplemental-complete",
+              "outcome": "ready",
+              "recordedAt": 1791633600000
+            }
+          ],
+          "pageErrors": [],
+          "externalOrigins": [],
+          "fontPolicy": "google-font-services-blocked-system-fallback"
+        },
+        {
+          "routeId": "quote-review",
+          "path": "/app/quotes/route-perf-quote",
+          "run": 3,
+          "browserVersion": "145.0.7632.6",
+          "status": "measured",
+          "navigationId": "nkhyzll",
+          "coreOutcome": "ready",
+          "supplementalOutcome": "ready",
+          "usableCoreMs": 2068.800000011921,
+          "supplementalCompleteMs": 2069.800000011921,
+          "routeBytes": 722455,
+          "documentToRouteStartMs": 4126.599999964237,
+          "observedStages": [
+            {
+              "routeId": "quote-review",
+              "navigationId": "nkhyzll",
+              "stage": "route-start",
+              "outcome": "ready",
+              "recordedAt": 1791633600000
+            },
+            {
+              "routeId": "quote-review",
+              "navigationId": "nkhyzll",
+              "stage": "usable-core",
+              "outcome": "ready",
+              "recordedAt": 1791633600000
+            },
+            {
+              "routeId": "quote-review",
+              "navigationId": "nkhyzll",
+              "stage": "supplemental-complete",
+              "outcome": "ready",
+              "recordedAt": 1791633600000
+            }
+          ],
+          "pageErrors": [],
+          "externalOrigins": [],
+          "fontPolicy": "google-font-services-blocked-system-fallback"
+        },
+        {
+          "routeId": "quote-review",
+          "path": "/app/quotes/route-perf-quote",
+          "run": 4,
+          "browserVersion": "145.0.7632.6",
+          "status": "measured",
+          "navigationId": "nuai2fi",
+          "coreOutcome": "ready",
+          "supplementalOutcome": "ready",
+          "usableCoreMs": 3579.5,
+          "supplementalCompleteMs": 3581,
+          "routeBytes": 739791,
+          "documentToRouteStartMs": 5465.600000023842,
+          "observedStages": [
+            {
+              "routeId": "quote-review",
+              "navigationId": "nuai2fi",
+              "stage": "route-start",
+              "outcome": "ready",
+              "recordedAt": 1791633600000
+            },
+            {
+              "routeId": "quote-review",
+              "navigationId": "nuai2fi",
+              "stage": "usable-core",
+              "outcome": "ready",
+              "recordedAt": 1791633600000
+            },
+            {
+              "routeId": "quote-review",
+              "navigationId": "nuai2fi",
+              "stage": "supplemental-complete",
+              "outcome": "ready",
+              "recordedAt": 1791633600000
+            }
+          ],
+          "pageErrors": [],
+          "externalOrigins": [],
+          "fontPolicy": "google-font-services-blocked-system-fallback"
+        }
+      ]
+    }
+  },
+  "threeRunVerification": {
+    "sourceReceipt": "output/playwright/quotepilot-route-performance-2oWf32/receipt.json",
+    "identity": {
+      "recordedAt": "2026-10-11T08:10:58.398Z",
+      "root": "/home/administrator/projects_new/quoteflow",
+      "branch": "release/v0.20.0-open-work",
+      "head": "216431a256d31c585be97be719e1fabbeec68d93",
+      "dirty": true,
+      "buildSha256": "d04543456f3d536210f71cbe286ad6d49fc28bc2753d6fa2a159186709c00166",
+      "profile": {
+        "id": "ambient-emulator-staff-v2",
+        "browser": "chromium",
+        "viewport": {
+          "width": 1440,
+          "height": 900
+        },
+        "deviceScaleFactor": 1,
+        "cpuSlowdown": 4,
+        "latencyMs": 40,
+        "downloadBytesPerSecond": 200000,
+        "uploadBytesPerSecond": 93750,
+        "cache": "disabled",
+        "fonts": "google-font-services-blocked-system-fallback",
+        "timezone": "America/Chicago",
+        "nowISO": "2026-10-10T12:00:00.000Z",
+        "fixture": "isolated-auth-firestore-readers-tenant-admin-authority-projections-v2",
+        "build": "production-ambient"
+      },
+      "toolchain": {
+        "node": "v22.22.2",
+        "firebase": "15.24.0",
+        "playwright": "1.58.2"
+      },
+      "host": {
+        "platform": "linux",
+        "release": "6.18.33.2-microsoft-standard-WSL2",
+        "cpu": "Intel(R) Xeon(R) W-2135 CPU @ 3.70GHz",
+        "logicalCpus": 6
+      },
+      "evidenceClass": "local-production-transform-auth-firestore-read-only-functions-emulator",
+      "authEvidence": "Email/password sign-in against isolated Auth emulator; tenant role via real Firestore rules/read-only bootstrap fallback. Not hosted authentication.",
+      "inventoryEvidence": "Synthetic commands processed by Inventory authority runtime into isolated Firestore projections; browser uses tenant-authorized listeners.",
+      "emulatorOrigins": [
+        "http://127.0.0.1:9498",
+        "http://127.0.0.1:8488",
+        "http://127.0.0.1:5998"
+      ],
+      "functionsEvidence": "Isolated secret-free source exposes only three real staff-authorized read handlers; browser blocks all other callable paths including write/bootstrap endpoints.",
+      "readOnlyFunctions": [
+        "getRevenueAutopilotOperations",
+        "getDecisionDebtSnapshot",
+        "getRevenueAutopilotCustomerControls"
+      ],
+      "routeBytesScope": "Encoded same-origin document and resource bodies completed by supplemental completion; excludes unfinished requests, cross-origin emulator traffic and headers."
+    },
+    "mode": "three-run-median",
+    "testStatus": 0,
+    "status": "FAIL",
+    "routes": {
+      "now": {
+        "status": "PASS",
+        "median": {
+          "routeBytes": 642331,
+          "usableCoreMs": 583.3000000119209,
+          "supplementalCompleteMs": 782.8000000119209
+        },
+        "ceilings": {
+          "routeBytes": 707096,
+          "usableCoreMs": 703,
+          "supplementalCompleteMs": 1027
+        },
+        "failures": [],
+        "runs": [
+          {
+            "routeId": "now",
+            "path": "/app",
+            "run": 0,
+            "browserVersion": "145.0.7632.6",
+            "status": "measured",
+            "navigationId": "n12zhs9l",
+            "coreOutcome": "ready",
+            "supplementalOutcome": "ready",
+            "usableCoreMs": 659.5,
+            "supplementalCompleteMs": 924.9000000357628,
+            "routeBytes": 642814,
+            "documentToRouteStartMs": 4497.5,
+            "observedStages": [
+              {
+                "routeId": "now",
+                "navigationId": "n12zhs9l",
+                "stage": "route-start",
+                "outcome": "ready",
+                "recordedAt": 1791633600000
+              },
+              {
+                "routeId": "now",
+                "navigationId": "n12zhs9l",
+                "stage": "usable-core",
+                "outcome": "ready",
+                "recordedAt": 1791633600000
+              },
+              {
+                "routeId": "now",
+                "navigationId": "n12zhs9l",
+                "stage": "supplemental-complete",
+                "outcome": "ready",
+                "recordedAt": 1791633600000
+              }
+            ],
+            "pageErrors": [],
+            "externalOrigins": [],
+            "fontPolicy": "google-font-services-blocked-system-fallback"
+          },
+          {
+            "routeId": "now",
+            "path": "/app",
+            "run": 1,
+            "browserVersion": "145.0.7632.6",
+            "status": "measured",
+            "navigationId": "n170mrjm",
+            "coreOutcome": "ready",
+            "supplementalOutcome": "ready",
+            "usableCoreMs": 583.3000000119209,
+            "supplementalCompleteMs": 782.8000000119209,
+            "routeBytes": 642331,
+            "documentToRouteStartMs": 4506.800000011921,
+            "observedStages": [
+              {
+                "routeId": "now",
+                "navigationId": "n170mrjm",
+                "stage": "route-start",
+                "outcome": "ready",
+                "recordedAt": 1791633600000
+              },
+              {
+                "routeId": "now",
+                "navigationId": "n170mrjm",
+                "stage": "usable-core",
+                "outcome": "ready",
+                "recordedAt": 1791633600000
+              },
+              {
+                "routeId": "now",
+                "navigationId": "n170mrjm",
+                "stage": "supplemental-complete",
+                "outcome": "ready",
+                "recordedAt": 1791633600000
+              }
+            ],
+            "pageErrors": [],
+            "externalOrigins": [],
+            "fontPolicy": "google-font-services-blocked-system-fallback"
+          },
+          {
+            "routeId": "now",
+            "path": "/app",
+            "run": 2,
+            "browserVersion": "145.0.7632.6",
+            "status": "measured",
+            "navigationId": "nku75vq",
+            "coreOutcome": "ready",
+            "supplementalOutcome": "ready",
+            "usableCoreMs": 500.19999998807907,
+            "supplementalCompleteMs": 500.30000001192093,
+            "routeBytes": 642331,
+            "documentToRouteStartMs": 4013.400000035763,
+            "observedStages": [
+              {
+                "routeId": "now",
+                "navigationId": "nku75vq",
+                "stage": "route-start",
+                "outcome": "ready",
+                "recordedAt": 1791633600000
+              },
+              {
+                "routeId": "now",
+                "navigationId": "nku75vq",
+                "stage": "usable-core",
+                "outcome": "ready",
+                "recordedAt": 1791633600000
+              },
+              {
+                "routeId": "now",
+                "navigationId": "nku75vq",
+                "stage": "supplemental-complete",
+                "outcome": "ready",
+                "recordedAt": 1791633600000
+              }
+            ],
+            "pageErrors": [],
+            "externalOrigins": [],
+            "fontPolicy": "google-font-services-blocked-system-fallback"
+          }
+        ]
+      },
+      "clients": {
+        "status": "PASS",
+        "median": {
+          "routeBytes": 677376,
+          "usableCoreMs": 1092.2000000476837,
+          "supplementalCompleteMs": 1270.9000000357628
+        },
+        "ceilings": {
+          "routeBytes": 745114,
+          "usableCoreMs": 1257,
+          "supplementalCompleteMs": 1498
+        },
+        "failures": [],
+        "runs": [
+          {
+            "routeId": "clients",
+            "path": "/app/customers/route-perf-customer",
+            "run": 0,
+            "browserVersion": "145.0.7632.6",
+            "status": "measured",
+            "navigationId": "n1sp1zfi",
+            "coreOutcome": "ready",
+            "supplementalOutcome": "ready",
+            "usableCoreMs": 1498.4000000357628,
+            "supplementalCompleteMs": 5962.900000035763,
+            "routeBytes": 677376,
+            "documentToRouteStartMs": 4241.299999952316,
+            "observedStages": [
+              {
+                "routeId": "clients",
+                "navigationId": "n1sp1zfi",
+                "stage": "route-start",
+                "outcome": "ready",
+                "recordedAt": 1791633600000
+              },
+              {
+                "routeId": "clients",
+                "navigationId": "n1sp1zfi",
+                "stage": "usable-core",
+                "outcome": "ready",
+                "recordedAt": 1791633600000
+              },
+              {
+                "routeId": "clients",
+                "navigationId": "n1sp1zfi",
+                "stage": "supplemental-complete",
+                "outcome": "ready",
+                "recordedAt": 1791633600000
+              }
+            ],
+            "pageErrors": [],
+            "externalOrigins": [],
+            "fontPolicy": "google-font-services-blocked-system-fallback"
+          },
+          {
+            "routeId": "clients",
+            "path": "/app/customers/route-perf-customer",
+            "run": 1,
+            "browserVersion": "145.0.7632.6",
+            "status": "measured",
+            "navigationId": "n5k7jy",
+            "coreOutcome": "ready",
+            "supplementalOutcome": "ready",
+            "usableCoreMs": 1092.2000000476837,
+            "supplementalCompleteMs": 1270.9000000357628,
+            "routeBytes": 677376,
+            "documentToRouteStartMs": 4334.199999988079,
+            "observedStages": [
+              {
+                "routeId": "clients",
+                "navigationId": "n5k7jy",
+                "stage": "route-start",
+                "outcome": "ready",
+                "recordedAt": 1791633600000
+              },
+              {
+                "routeId": "clients",
+                "navigationId": "n5k7jy",
+                "stage": "usable-core",
+                "outcome": "ready",
+                "recordedAt": 1791633600000
+              },
+              {
+                "routeId": "clients",
+                "navigationId": "n5k7jy",
+                "stage": "supplemental-complete",
+                "outcome": "ready",
+                "recordedAt": 1791633600000
+              }
+            ],
+            "pageErrors": [],
+            "externalOrigins": [],
+            "fontPolicy": "google-font-services-blocked-system-fallback"
+          },
+          {
+            "routeId": "clients",
+            "path": "/app/customers/route-perf-customer",
+            "run": 2,
+            "browserVersion": "145.0.7632.6",
+            "status": "measured",
+            "navigationId": "n1bca4qw",
+            "coreOutcome": "ready",
+            "supplementalOutcome": "ready",
+            "usableCoreMs": 1066.1000000238419,
+            "supplementalCompleteMs": 1242.7000000476837,
+            "routeBytes": 677376,
+            "documentToRouteStartMs": 3927.699999988079,
+            "observedStages": [
+              {
+                "routeId": "clients",
+                "navigationId": "n1bca4qw",
+                "stage": "route-start",
+                "outcome": "ready",
+                "recordedAt": 1791633600000
+              },
+              {
+                "routeId": "clients",
+                "navigationId": "n1bca4qw",
+                "stage": "usable-core",
+                "outcome": "ready",
+                "recordedAt": 1791633600000
+              },
+              {
+                "routeId": "clients",
+                "navigationId": "n1bca4qw",
+                "stage": "supplemental-complete",
+                "outcome": "ready",
+                "recordedAt": 1791633600000
+              }
+            ],
+            "pageErrors": [],
+            "externalOrigins": [],
+            "fontPolicy": "google-font-services-blocked-system-fallback"
+          }
+        ]
+      },
+      "inventory": {
+        "status": "FAIL",
+        "median": {
+          "routeBytes": 635318,
+          "usableCoreMs": 2994.800000011921,
+          "supplementalCompleteMs": 2994.899999976158
+        },
+        "ceilings": {
+          "routeBytes": 698850,
+          "usableCoreMs": 2155,
+          "supplementalCompleteMs": 2155
+        },
+        "failures": [
+          "usableCoreMs",
+          "supplementalCompleteMs"
+        ],
+        "runs": [
+          {
+            "routeId": "inventory",
+            "path": "/app/inventory",
+            "run": 0,
+            "browserVersion": "145.0.7632.6",
+            "status": "measured",
+            "navigationId": "njqiwd0",
+            "coreOutcome": "ready",
+            "supplementalOutcome": "ready",
+            "usableCoreMs": 2112.199999988079,
+            "supplementalCompleteMs": 2112.300000011921,
+            "routeBytes": 635318,
+            "documentToRouteStartMs": 4257.199999988079,
+            "observedStages": [
+              {
+                "routeId": "inventory",
+                "navigationId": "njqiwd0",
+                "stage": "route-start",
+                "outcome": "ready",
+                "recordedAt": 1791633600000
+              },
+              {
+                "routeId": "inventory",
+                "navigationId": "njqiwd0",
+                "stage": "usable-core",
+                "outcome": "ready",
+                "recordedAt": 1791633600000
+              },
+              {
+                "routeId": "inventory",
+                "navigationId": "njqiwd0",
+                "stage": "supplemental-complete",
+                "outcome": "ready",
+                "recordedAt": 1791633600000
+              }
+            ],
+            "pageErrors": [],
+            "externalOrigins": [],
+            "fontPolicy": "google-font-services-blocked-system-fallback"
+          },
+          {
+            "routeId": "inventory",
+            "path": "/app/inventory",
+            "run": 1,
+            "browserVersion": "145.0.7632.6",
+            "status": "measured",
+            "navigationId": "npp6qai",
+            "coreOutcome": "ready",
+            "supplementalOutcome": "ready",
+            "usableCoreMs": 4325.799999952316,
+            "supplementalCompleteMs": 4325.899999976158,
+            "routeBytes": 635318,
+            "documentToRouteStartMs": 5049.600000023842,
+            "observedStages": [
+              {
+                "routeId": "inventory",
+                "navigationId": "npp6qai",
+                "stage": "route-start",
+                "outcome": "ready",
+                "recordedAt": 1791633600000
+              },
+              {
+                "routeId": "inventory",
+                "navigationId": "npp6qai",
+                "stage": "usable-core",
+                "outcome": "ready",
+                "recordedAt": 1791633600000
+              },
+              {
+                "routeId": "inventory",
+                "navigationId": "npp6qai",
+                "stage": "supplemental-complete",
+                "outcome": "ready",
+                "recordedAt": 1791633600000
+              }
+            ],
+            "pageErrors": [],
+            "externalOrigins": [],
+            "fontPolicy": "google-font-services-blocked-system-fallback"
+          },
+          {
+            "routeId": "inventory",
+            "path": "/app/inventory",
+            "run": 2,
+            "browserVersion": "145.0.7632.6",
+            "status": "measured",
+            "navigationId": "n14h0ewf",
+            "coreOutcome": "ready",
+            "supplementalOutcome": "ready",
+            "usableCoreMs": 2994.800000011921,
+            "supplementalCompleteMs": 2994.899999976158,
+            "routeBytes": 635318,
+            "documentToRouteStartMs": 4358,
+            "observedStages": [
+              {
+                "routeId": "inventory",
+                "navigationId": "n14h0ewf",
+                "stage": "route-start",
+                "outcome": "ready",
+                "recordedAt": 1791633600000
+              },
+              {
+                "routeId": "inventory",
+                "navigationId": "n14h0ewf",
+                "stage": "usable-core",
+                "outcome": "ready",
+                "recordedAt": 1791633600000
+              },
+              {
+                "routeId": "inventory",
+                "navigationId": "n14h0ewf",
+                "stage": "supplemental-complete",
+                "outcome": "ready",
+                "recordedAt": 1791633600000
+              }
+            ],
+            "pageErrors": [],
+            "externalOrigins": [],
+            "fontPolicy": "google-font-services-blocked-system-fallback"
+          }
+        ]
+      },
+      "quote-review": {
+        "status": "FAIL",
+        "median": {
+          "routeBytes": 727710,
+          "usableCoreMs": 2488.5,
+          "supplementalCompleteMs": 2489.300000011921
+        },
+        "ceilings": {
+          "routeBytes": 794701,
+          "usableCoreMs": 2462,
+          "supplementalCompleteMs": 2464
+        },
+        "failures": [
+          "usableCoreMs",
+          "supplementalCompleteMs"
+        ],
+        "runs": [
+          {
+            "routeId": "quote-review",
+            "path": "/app/quotes/route-perf-quote",
+            "run": 0,
+            "browserVersion": "145.0.7632.6",
+            "status": "measured",
+            "navigationId": "n10mn32l",
+            "coreOutcome": "ready",
+            "supplementalOutcome": "ready",
+            "usableCoreMs": 2488.5,
+            "supplementalCompleteMs": 2489.300000011921,
+            "routeBytes": 727710,
+            "documentToRouteStartMs": 4081.400000035763,
+            "observedStages": [
+              {
+                "routeId": "quote-review",
+                "navigationId": "n10mn32l",
+                "stage": "route-start",
+                "outcome": "ready",
+                "recordedAt": 1791633600000
+              },
+              {
+                "routeId": "quote-review",
+                "navigationId": "n10mn32l",
+                "stage": "usable-core",
+                "outcome": "ready",
+                "recordedAt": 1791633600000
+              },
+              {
+                "routeId": "quote-review",
+                "navigationId": "n10mn32l",
+                "stage": "supplemental-complete",
+                "outcome": "ready",
+                "recordedAt": 1791633600000
+              }
+            ],
+            "pageErrors": [],
+            "externalOrigins": [],
+            "fontPolicy": "google-font-services-blocked-system-fallback"
+          },
+          {
+            "routeId": "quote-review",
+            "path": "/app/quotes/route-perf-quote",
+            "run": 1,
+            "browserVersion": "145.0.7632.6",
+            "status": "measured",
+            "navigationId": "nefeetk",
+            "coreOutcome": "ready",
+            "supplementalOutcome": "ready",
+            "usableCoreMs": 1939.6000000238419,
+            "supplementalCompleteMs": 1940.699999988079,
+            "routeBytes": 720001,
+            "documentToRouteStartMs": 4030.300000011921,
+            "observedStages": [
+              {
+                "routeId": "quote-review",
+                "navigationId": "nefeetk",
+                "stage": "route-start",
+                "outcome": "ready",
+                "recordedAt": 1791633600000
+              },
+              {
+                "routeId": "quote-review",
+                "navigationId": "nefeetk",
+                "stage": "usable-core",
+                "outcome": "ready",
+                "recordedAt": 1791633600000
+              },
+              {
+                "routeId": "quote-review",
+                "navigationId": "nefeetk",
+                "stage": "supplemental-complete",
+                "outcome": "ready",
+                "recordedAt": 1791633600000
+              }
+            ],
+            "pageErrors": [],
+            "externalOrigins": [],
+            "fontPolicy": "google-font-services-blocked-system-fallback"
+          },
+          {
+            "routeId": "quote-review",
+            "path": "/app/quotes/route-perf-quote",
+            "run": 2,
+            "browserVersion": "145.0.7632.6",
+            "status": "measured",
+            "navigationId": "n12aezl",
+            "coreOutcome": "ready",
+            "supplementalOutcome": "ready",
+            "usableCoreMs": 3431.099999964237,
+            "supplementalCompleteMs": 3432.300000011921,
+            "routeBytes": 727710,
+            "documentToRouteStartMs": 4937,
+            "observedStages": [
+              {
+                "routeId": "quote-review",
+                "navigationId": "n12aezl",
+                "stage": "route-start",
+                "outcome": "ready",
+                "recordedAt": 1791633600000
+              },
+              {
+                "routeId": "quote-review",
+                "navigationId": "n12aezl",
+                "stage": "usable-core",
+                "outcome": "ready",
+                "recordedAt": 1791633600000
+              },
+              {
+                "routeId": "quote-review",
+                "navigationId": "n12aezl",
+                "stage": "supplemental-complete",
+                "outcome": "ready",
+                "recordedAt": 1791633600000
+              }
+            ],
+            "pageErrors": [],
+            "externalOrigins": [],
+            "fontPolicy": "google-font-services-blocked-system-fallback"
+          }
+        ]
+      }
+    }
+  },
+  "candidateVerifications": [
+    {
+      "attemptId": "XiQcPO",
+      "changeSummary": "Focus-repaired candidate after green full browser regression; one predeclared final three-run batch, unchanged five-run ceilings.",
+      "sourceReceipt": "output/playwright/quotepilot-route-performance-XiQcPO/receipt.json",
+      "sourceReceiptSha256": "1b6d7a9867d03756ab80a32c472d7116fcb1187fe4e63166482af4f481fd217d",
+      "comparisonBudget": {
+        "path": "docs/performance/route-performance-budget.json",
+        "sha256": "8796586087699e7170c5b3e8b7fb2cec6b44af405bc2bd33e26df158cf009c16"
+      },
+      "identity": {
+        "recordedAt": "2026-10-11T09:09:34.359Z",
+        "root": "/home/administrator/projects_new/quoteflow",
+        "branch": "release/v0.20.0-open-work",
+        "head": "216431a256d31c585be97be719e1fabbeec68d93",
+        "dirty": true,
+        "buildSha256": "027c8e5ab9c0159e8f52b3a5d0e5dcac938836db32667045d1952584255521e6",
+        "profile": {
+          "id": "ambient-emulator-staff-v2",
+          "browser": "chromium",
+          "viewport": {
+            "width": 1440,
+            "height": 900
+          },
+          "deviceScaleFactor": 1,
+          "cpuSlowdown": 4,
+          "latencyMs": 40,
+          "downloadBytesPerSecond": 200000,
+          "uploadBytesPerSecond": 93750,
+          "cache": "disabled",
+          "fonts": "google-font-services-blocked-system-fallback",
+          "timezone": "America/Chicago",
+          "nowISO": "2026-10-10T12:00:00.000Z",
+          "fixture": "isolated-auth-firestore-readers-tenant-admin-authority-projections-v2",
+          "build": "production-ambient"
+        },
+        "toolchain": {
+          "node": "v22.22.2",
+          "firebase": "15.24.0",
+          "playwright": "1.58.2"
+        },
+        "host": {
+          "platform": "linux",
+          "release": "6.18.33.2-microsoft-standard-WSL2",
+          "cpu": "Intel(R) Xeon(R) W-2135 CPU @ 3.70GHz",
+          "logicalCpus": 6
+        },
+        "evidenceClass": "local-production-transform-auth-firestore-read-only-functions-emulator",
+        "authEvidence": "Email/password sign-in against isolated Auth emulator; tenant role via real Firestore rules/read-only bootstrap fallback. Not hosted authentication.",
+        "inventoryEvidence": "Synthetic commands processed by Inventory authority runtime into isolated Firestore projections; browser uses tenant-authorized listeners.",
+        "emulatorOrigins": [
+          "http://127.0.0.1:9498",
+          "http://127.0.0.1:8488",
+          "http://127.0.0.1:5998"
+        ],
+        "functionsEvidence": "Isolated secret-free source exposes only three real staff-authorized read handlers; browser blocks all other callable paths including write/bootstrap endpoints.",
+        "readOnlyFunctions": [
+          "getRevenueAutopilotOperations",
+          "getDecisionDebtSnapshot",
+          "getRevenueAutopilotCustomerControls"
+        ],
+        "routeBytesScope": "Encoded same-origin document and resource bodies completed by supplemental completion; excludes unfinished requests, cross-origin emulator traffic and headers."
+      },
+      "mode": "three-run-median",
+      "testStatus": 0,
+      "status": "PASS",
+      "routes": {
+        "now": {
+          "status": "PASS",
+          "median": {
+            "routeBytes": 642482,
+            "usableCoreMs": 498.2000000476837,
+            "supplementalCompleteMs": 638
+          },
+          "ceilings": {
+            "routeBytes": 707096,
+            "usableCoreMs": 703,
+            "supplementalCompleteMs": 1027
+          },
+          "failures": [],
+          "runs": [
+            {
+              "routeId": "now",
+              "path": "/app",
+              "run": 0,
+              "browserVersion": "145.0.7632.6",
+              "status": "measured",
+              "navigationId": "n1xg9n7i",
+              "coreOutcome": "ready",
+              "supplementalOutcome": "ready",
+              "usableCoreMs": 453.80000001192093,
+              "supplementalCompleteMs": 638,
+              "routeBytes": 642965,
+              "documentToRouteStartMs": 4140.599999964237,
+              "observedStages": [
+                {
+                  "routeId": "now",
+                  "navigationId": "n1xg9n7i",
+                  "stage": "route-start",
+                  "outcome": "ready",
+                  "recordedAt": 1791633600000
+                },
+                {
+                  "routeId": "now",
+                  "navigationId": "n1xg9n7i",
+                  "stage": "usable-core",
+                  "outcome": "ready",
+                  "recordedAt": 1791633600000
+                },
+                {
+                  "routeId": "now",
+                  "navigationId": "n1xg9n7i",
+                  "stage": "supplemental-complete",
+                  "outcome": "ready",
+                  "recordedAt": 1791633600000
+                }
+              ],
+              "pageErrors": [],
+              "externalOrigins": [],
+              "fontPolicy": "google-font-services-blocked-system-fallback"
+            },
+            {
+              "routeId": "now",
+              "path": "/app",
+              "run": 1,
+              "browserVersion": "145.0.7632.6",
+              "status": "measured",
+              "navigationId": "n1mo0kdd",
+              "coreOutcome": "ready",
+              "supplementalOutcome": "ready",
+              "usableCoreMs": 498.2000000476837,
+              "supplementalCompleteMs": 498.80000001192093,
+              "routeBytes": 642482,
+              "documentToRouteStartMs": 3998.399999976158,
+              "observedStages": [
+                {
+                  "routeId": "now",
+                  "navigationId": "n1mo0kdd",
+                  "stage": "route-start",
+                  "outcome": "ready",
+                  "recordedAt": 1791633600000
+                },
+                {
+                  "routeId": "now",
+                  "navigationId": "n1mo0kdd",
+                  "stage": "usable-core",
+                  "outcome": "ready",
+                  "recordedAt": 1791633600000
+                },
+                {
+                  "routeId": "now",
+                  "navigationId": "n1mo0kdd",
+                  "stage": "supplemental-complete",
+                  "outcome": "ready",
+                  "recordedAt": 1791633600000
+                }
+              ],
+              "pageErrors": [],
+              "externalOrigins": [],
+              "fontPolicy": "google-font-services-blocked-system-fallback"
+            },
+            {
+              "routeId": "now",
+              "path": "/app",
+              "run": 2,
+              "browserVersion": "145.0.7632.6",
+              "status": "measured",
+              "navigationId": "n1yj1hvp",
+              "coreOutcome": "ready",
+              "supplementalOutcome": "ready",
+              "usableCoreMs": 540.2999999523163,
+              "supplementalCompleteMs": 845.2999999523163,
+              "routeBytes": 642482,
+              "documentToRouteStartMs": 3944.900000035763,
+              "observedStages": [
+                {
+                  "routeId": "now",
+                  "navigationId": "n1yj1hvp",
+                  "stage": "route-start",
+                  "outcome": "ready",
+                  "recordedAt": 1791633600000
+                },
+                {
+                  "routeId": "now",
+                  "navigationId": "n1yj1hvp",
+                  "stage": "usable-core",
+                  "outcome": "ready",
+                  "recordedAt": 1791633600000
+                },
+                {
+                  "routeId": "now",
+                  "navigationId": "n1yj1hvp",
+                  "stage": "supplemental-complete",
+                  "outcome": "ready",
+                  "recordedAt": 1791633600000
+                }
+              ],
+              "pageErrors": [],
+              "externalOrigins": [],
+              "fontPolicy": "google-font-services-blocked-system-fallback"
+            }
+          ]
+        },
+        "clients": {
+          "status": "PASS",
+          "median": {
+            "routeBytes": 654333,
+            "usableCoreMs": 662.5,
+            "supplementalCompleteMs": 740.3999999761581
+          },
+          "ceilings": {
+            "routeBytes": 745114,
+            "usableCoreMs": 1257,
+            "supplementalCompleteMs": 1498
+          },
+          "failures": [],
+          "runs": [
+            {
+              "routeId": "clients",
+              "path": "/app/customers/route-perf-customer",
+              "run": 0,
+              "browserVersion": "145.0.7632.6",
+              "status": "measured",
+              "navigationId": "n1bm0rri",
+              "coreOutcome": "ready",
+              "supplementalOutcome": "ready",
+              "usableCoreMs": 661.0999999642372,
+              "supplementalCompleteMs": 2125.2999999523163,
+              "routeBytes": 677526,
+              "documentToRouteStartMs": 4037.7000000476837,
+              "observedStages": [
+                {
+                  "routeId": "clients",
+                  "navigationId": "n1bm0rri",
+                  "stage": "route-start",
+                  "outcome": "ready",
+                  "recordedAt": 1791633600000
+                },
+                {
+                  "routeId": "clients",
+                  "navigationId": "n1bm0rri",
+                  "stage": "usable-core",
+                  "outcome": "ready",
+                  "recordedAt": 1791633600000
+                },
+                {
+                  "routeId": "clients",
+                  "navigationId": "n1bm0rri",
+                  "stage": "supplemental-complete",
+                  "outcome": "ready",
+                  "recordedAt": 1791633600000
+                }
+              ],
+              "pageErrors": [],
+              "externalOrigins": [],
+              "fontPolicy": "google-font-services-blocked-system-fallback"
+            },
+            {
+              "routeId": "clients",
+              "path": "/app/customers/route-perf-customer",
+              "run": 1,
+              "browserVersion": "145.0.7632.6",
+              "status": "measured",
+              "navigationId": "n21d78o",
+              "coreOutcome": "ready",
+              "supplementalOutcome": "ready",
+              "usableCoreMs": 662.5,
+              "supplementalCompleteMs": 740.3999999761581,
+              "routeBytes": 654333,
+              "documentToRouteStartMs": 3879.300000011921,
+              "observedStages": [
+                {
+                  "routeId": "clients",
+                  "navigationId": "n21d78o",
+                  "stage": "route-start",
+                  "outcome": "ready",
+                  "recordedAt": 1791633600000
+                },
+                {
+                  "routeId": "clients",
+                  "navigationId": "n21d78o",
+                  "stage": "usable-core",
+                  "outcome": "ready",
+                  "recordedAt": 1791633600000
+                },
+                {
+                  "routeId": "clients",
+                  "navigationId": "n21d78o",
+                  "stage": "supplemental-complete",
+                  "outcome": "ready",
+                  "recordedAt": 1791633600000
+                }
+              ],
+              "pageErrors": [],
+              "externalOrigins": [],
+              "fontPolicy": "google-font-services-blocked-system-fallback"
+            },
+            {
+              "routeId": "clients",
+              "path": "/app/customers/route-perf-customer",
+              "run": 2,
+              "browserVersion": "145.0.7632.6",
+              "status": "measured",
+              "navigationId": "n1ssata3",
+              "coreOutcome": "ready",
+              "supplementalOutcome": "ready",
+              "usableCoreMs": 675.6999999880791,
+              "supplementalCompleteMs": 733.6999999880791,
+              "routeBytes": 654333,
+              "documentToRouteStartMs": 3844.199999988079,
+              "observedStages": [
+                {
+                  "routeId": "clients",
+                  "navigationId": "n1ssata3",
+                  "stage": "route-start",
+                  "outcome": "ready",
+                  "recordedAt": 1791633600000
+                },
+                {
+                  "routeId": "clients",
+                  "navigationId": "n1ssata3",
+                  "stage": "usable-core",
+                  "outcome": "ready",
+                  "recordedAt": 1791633600000
+                },
+                {
+                  "routeId": "clients",
+                  "navigationId": "n1ssata3",
+                  "stage": "supplemental-complete",
+                  "outcome": "ready",
+                  "recordedAt": 1791633600000
+                }
+              ],
+              "pageErrors": [],
+              "externalOrigins": [],
+              "fontPolicy": "google-font-services-blocked-system-fallback"
+            }
+          ]
+        },
+        "inventory": {
+          "status": "PASS",
+          "median": {
+            "routeBytes": 635470,
+            "usableCoreMs": 1083.199999988079,
+            "supplementalCompleteMs": 1085.3999999761581
+          },
+          "ceilings": {
+            "routeBytes": 698850,
+            "usableCoreMs": 2155,
+            "supplementalCompleteMs": 2155
+          },
+          "failures": [],
+          "runs": [
+            {
+              "routeId": "inventory",
+              "path": "/app/inventory",
+              "run": 0,
+              "browserVersion": "145.0.7632.6",
+              "status": "measured",
+              "navigationId": "n1rjlili",
+              "coreOutcome": "ready",
+              "supplementalOutcome": "ready",
+              "usableCoreMs": 1083.199999988079,
+              "supplementalCompleteMs": 1085.3999999761581,
+              "routeBytes": 635470,
+              "documentToRouteStartMs": 3915,
+              "observedStages": [
+                {
+                  "routeId": "inventory",
+                  "navigationId": "n1rjlili",
+                  "stage": "route-start",
+                  "outcome": "ready",
+                  "recordedAt": 1791633600000
+                },
+                {
+                  "routeId": "inventory",
+                  "navigationId": "n1rjlili",
+                  "stage": "usable-core",
+                  "outcome": "ready",
+                  "recordedAt": 1791633600000
+                },
+                {
+                  "routeId": "inventory",
+                  "navigationId": "n1rjlili",
+                  "stage": "supplemental-complete",
+                  "outcome": "ready",
+                  "recordedAt": 1791633600000
+                }
+              ],
+              "pageErrors": [],
+              "externalOrigins": [],
+              "fontPolicy": "google-font-services-blocked-system-fallback"
+            },
+            {
+              "routeId": "inventory",
+              "path": "/app/inventory",
+              "run": 1,
+              "browserVersion": "145.0.7632.6",
+              "status": "measured",
+              "navigationId": "n10k7l90",
+              "coreOutcome": "ready",
+              "supplementalOutcome": "ready",
+              "usableCoreMs": 1059.699999988079,
+              "supplementalCompleteMs": 1060.5,
+              "routeBytes": 635470,
+              "documentToRouteStartMs": 3809.199999988079,
+              "observedStages": [
+                {
+                  "routeId": "inventory",
+                  "navigationId": "n10k7l90",
+                  "stage": "route-start",
+                  "outcome": "ready",
+                  "recordedAt": 1791633600000
+                },
+                {
+                  "routeId": "inventory",
+                  "navigationId": "n10k7l90",
+                  "stage": "usable-core",
+                  "outcome": "ready",
+                  "recordedAt": 1791633600000
+                },
+                {
+                  "routeId": "inventory",
+                  "navigationId": "n10k7l90",
+                  "stage": "supplemental-complete",
+                  "outcome": "ready",
+                  "recordedAt": 1791633600000
+                }
+              ],
+              "pageErrors": [],
+              "externalOrigins": [],
+              "fontPolicy": "google-font-services-blocked-system-fallback"
+            },
+            {
+              "routeId": "inventory",
+              "path": "/app/inventory",
+              "run": 2,
+              "browserVersion": "145.0.7632.6",
+              "status": "measured",
+              "navigationId": "njvgonp",
+              "coreOutcome": "ready",
+              "supplementalOutcome": "ready",
+              "usableCoreMs": 1567.5999999642372,
+              "supplementalCompleteMs": 1568.699999988079,
+              "routeBytes": 635470,
+              "documentToRouteStartMs": 4118.400000035763,
+              "observedStages": [
+                {
+                  "routeId": "inventory",
+                  "navigationId": "njvgonp",
+                  "stage": "route-start",
+                  "outcome": "ready",
+                  "recordedAt": 1791633600000
+                },
+                {
+                  "routeId": "inventory",
+                  "navigationId": "njvgonp",
+                  "stage": "usable-core",
+                  "outcome": "ready",
+                  "recordedAt": 1791633600000
+                },
+                {
+                  "routeId": "inventory",
+                  "navigationId": "njvgonp",
+                  "stage": "supplemental-complete",
+                  "outcome": "ready",
+                  "recordedAt": 1791633600000
+                }
+              ],
+              "pageErrors": [],
+              "externalOrigins": [],
+              "fontPolicy": "google-font-services-blocked-system-fallback"
+            }
+          ]
+        },
+        "quote-review": {
+          "status": "PASS",
+          "median": {
+            "routeBytes": 720150,
+            "usableCoreMs": 1689,
+            "supplementalCompleteMs": 1690
+          },
+          "ceilings": {
+            "routeBytes": 794701,
+            "usableCoreMs": 2462,
+            "supplementalCompleteMs": 2464
+          },
+          "failures": [],
+          "runs": [
+            {
+              "routeId": "quote-review",
+              "path": "/app/quotes/route-perf-quote",
+              "run": 0,
+              "browserVersion": "145.0.7632.6",
+              "status": "measured",
+              "navigationId": "n5nuo38",
+              "coreOutcome": "ready",
+              "supplementalOutcome": "ready",
+              "usableCoreMs": 1550.3999999761581,
+              "supplementalCompleteMs": 1551.300000011921,
+              "routeBytes": 720150,
+              "documentToRouteStartMs": 3860.100000023842,
+              "observedStages": [
+                {
+                  "routeId": "quote-review",
+                  "navigationId": "n5nuo38",
+                  "stage": "route-start",
+                  "outcome": "ready",
+                  "recordedAt": 1791633600000
+                },
+                {
+                  "routeId": "quote-review",
+                  "navigationId": "n5nuo38",
+                  "stage": "usable-core",
+                  "outcome": "ready",
+                  "recordedAt": 1791633600000
+                },
+                {
+                  "routeId": "quote-review",
+                  "navigationId": "n5nuo38",
+                  "stage": "supplemental-complete",
+                  "outcome": "ready",
+                  "recordedAt": 1791633600000
+                }
+              ],
+              "pageErrors": [],
+              "externalOrigins": [],
+              "fontPolicy": "google-font-services-blocked-system-fallback"
+            },
+            {
+              "routeId": "quote-review",
+              "path": "/app/quotes/route-perf-quote",
+              "run": 1,
+              "browserVersion": "145.0.7632.6",
+              "status": "measured",
+              "navigationId": "no2ecpg",
+              "coreOutcome": "ready",
+              "supplementalOutcome": "ready",
+              "usableCoreMs": 1689,
+              "supplementalCompleteMs": 1690,
+              "routeBytes": 720150,
+              "documentToRouteStartMs": 4083.399999976158,
+              "observedStages": [
+                {
+                  "routeId": "quote-review",
+                  "navigationId": "no2ecpg",
+                  "stage": "route-start",
+                  "outcome": "ready",
+                  "recordedAt": 1791633600000
+                },
+                {
+                  "routeId": "quote-review",
+                  "navigationId": "no2ecpg",
+                  "stage": "usable-core",
+                  "outcome": "ready",
+                  "recordedAt": 1791633600000
+                },
+                {
+                  "routeId": "quote-review",
+                  "navigationId": "no2ecpg",
+                  "stage": "supplemental-complete",
+                  "outcome": "ready",
+                  "recordedAt": 1791633600000
+                }
+              ],
+              "pageErrors": [],
+              "externalOrigins": [],
+              "fontPolicy": "google-font-services-blocked-system-fallback"
+            },
+            {
+              "routeId": "quote-review",
+              "path": "/app/quotes/route-perf-quote",
+              "run": 2,
+              "browserVersion": "145.0.7632.6",
+              "status": "measured",
+              "navigationId": "nyafmgc",
+              "coreOutcome": "ready",
+              "supplementalOutcome": "ready",
+              "usableCoreMs": 1704.1000000238419,
+              "supplementalCompleteMs": 1705.6000000238419,
+              "routeBytes": 720999,
+              "documentToRouteStartMs": 3965.899999976158,
+              "observedStages": [
+                {
+                  "routeId": "quote-review",
+                  "navigationId": "nyafmgc",
+                  "stage": "route-start",
+                  "outcome": "ready",
+                  "recordedAt": 1791633600000
+                },
+                {
+                  "routeId": "quote-review",
+                  "navigationId": "nyafmgc",
+                  "stage": "usable-core",
+                  "outcome": "ready",
+                  "recordedAt": 1791633600000
+                },
+                {
+                  "routeId": "quote-review",
+                  "navigationId": "nyafmgc",
+                  "stage": "supplemental-complete",
+                  "outcome": "ready",
+                  "recordedAt": 1791633600000
+                }
+              ],
+              "pageErrors": [],
+              "externalOrigins": [],
+              "fontPolicy": "google-font-services-blocked-system-fallback"
+            }
+          ]
+        }
+      },
+      "retentionNote": "All twelve stage/diagnostic samples, medians, ceilings, failures and full build/profile identity retained. Per-resource lists remain in the ignored source receipt. Earlier failed threeRunVerification is unchanged. Local emulator evidence only; not hosted, production, outcome, or owner acceptance proof."
+    }
+  ]
+}

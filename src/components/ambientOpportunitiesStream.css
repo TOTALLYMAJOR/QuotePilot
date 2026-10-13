@@ -90,7 +90,7 @@
   border-radius: 0;
   background: transparent;
   text-align: left;
-  white-space: nowrap;
+  white-space: normal;
 }
 
 .ambient-opportunities__refresh:hover,
@@ -196,7 +196,7 @@
 
 .ambient-opportunity > article {
   display: grid;
-  grid-template-columns: 2.6rem minmax(16rem, 1.3fr) minmax(22rem, 1fr);
+  grid-template-columns: 2.6rem minmax(14rem, 1.1fr) minmax(13rem, 0.8fr) minmax(18rem, 1fr);
   column-gap: clamp(1.15rem, 2.7vw, 2.4rem);
   row-gap: 0.55rem;
   align-items: center;
@@ -256,6 +256,59 @@
   margin: 0;
   color: var(--tone-ink-3, #706b63);
   font-size: 0.86rem;
+}
+
+.ambient-opportunity__commercial-position {
+  grid-column: 3;
+  grid-row: 1 / span 2;
+  display: grid;
+  gap: 0.45rem;
+  align-self: stretch;
+  align-content: center;
+  min-width: 0;
+  padding-inline: clamp(0.8rem, 1.5vw, 1.25rem);
+  border-inline: 1px solid color-mix(in srgb, var(--tone-ink-1, #262421) 11%, transparent);
+}
+
+.ambient-opportunity__saved-value {
+  display: grid;
+  gap: 0.08rem;
+}
+
+.ambient-opportunity__saved-value span {
+  color: var(--tone-ink-3, #706b63);
+  font-size: 0.7rem;
+  font-weight: 760;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.ambient-opportunity__saved-value strong {
+  color: var(--tone-ink-1, #262421);
+  font-family: var(--font-editorial);
+  font-size: clamp(1.15rem, 1.65vw, 1.5rem);
+  font-weight: 520;
+}
+
+.ambient-opportunity__saved-value[data-value-available="false"] strong {
+  color: var(--tone-ink-3, #706b63);
+  font-family: var(--font-sans, sans-serif);
+  font-size: 0.84rem;
+  font-weight: 650;
+}
+
+.ambient-opportunity__compact-status {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin: 0;
+}
+
+.ambient-opportunity__obligations {
+  margin: 0;
+  color: var(--tone-ink-3, #706b63);
+  font-size: 0.72rem;
+  line-height: 1.4;
 }
 
 .ambient-opportunity__momentum {
@@ -392,15 +445,47 @@
 }
 
 .ambient-opportunity__next {
-  grid-column: 3;
+  grid-column: 4;
   grid-row: 1 / span 2;
   display: grid;
-  grid-template-columns: minmax(9rem, 1fr) auto;
-  gap: clamp(1rem, 2.2vw, 2rem);
-  align-items: center;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.35rem;
+  align-items: start;
   padding-top: 0.2rem;
 }
 
+.ambient-opportunity__actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  justify-content: flex-start;
+}
+
+.ambient-opportunity__actions,
+.ambient-opportunity__primary-action {
+  justify-self: start;
+}
+
+.ambient-opportunity__inspect-action {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  color: var(--tone-ink-3, #706b63);
+  background: transparent;
+  font: inherit;
+  font-weight: 740;
+  cursor: pointer;
+}
+
+.ambient-opportunity__inspect-action:hover,
+.ambient-opportunity__inspect-action:focus-visible {
+  color: color-mix(in srgb, var(--tone-gold-3, #9b661d) 84%, #111);
+  text-decoration: underline;
+  text-underline-offset: 0.25rem;
+}
 .ambient-opportunity__next-reason,
 .ambient-opportunity__disabled-reason {
   max-width: 19rem;
@@ -410,8 +495,29 @@
   line-height: 1.45;
 }
 
+.ambient-opportunity__next-reason {
+  display: grid;
+  gap: 0.18rem;
+}
+
+.ambient-opportunity__next-reason strong,
+.ambient-opportunity__next-reason span,
+.ambient-opportunity__next-reason small {
+  display: block;
+}
+
+.ambient-opportunity__next-reason strong {
+  color: var(--tone-ink-1, #262421);
+}
+
+.ambient-opportunity__next-reason small {
+  color: var(--tone-ink-3, #706b63);
+  font-size: 0.72rem;
+  line-height: 1.4;
+}
+
 .ambient-opportunity__disabled-reason {
-  grid-column: 3;
+  grid-column: 4;
   color: var(--tone-danger, #a63535);
 }
 
@@ -517,6 +623,14 @@
     grid-column: 2;
   }
 
+  .ambient-opportunity__commercial-position {
+    grid-column: 2;
+    grid-row: auto;
+    padding: 0.55rem 0 0;
+    border-inline: 0;
+    border-top: 1px solid color-mix(in srgb, var(--tone-ink-1, #262421) 10%, transparent);
+  }
+
   .ambient-opportunity__next,
   .ambient-opportunity__disabled-reason,
   .ambient-opportunity__details {
@@ -610,6 +724,20 @@
     grid-template-columns: minmax(0, 1fr);
     gap: 0.2rem;
     margin-left: 2.75rem;
+  }
+
+  .ambient-opportunity__commercial-position {
+    gap: 0.35rem;
+  }
+
+  .ambient-opportunity__saved-value {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: baseline;
+  }
+
+  .ambient-opportunity__saved-value strong {
+    font-size: 1.15rem;
+    text-align: right;
   }
 
   .ambient-opportunity__momentum-fact + .ambient-opportunity__momentum-fact {

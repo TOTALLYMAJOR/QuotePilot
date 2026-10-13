@@ -1,0 +1,64 @@
+// @vitest-environment jsdom
+import React from "react";
+import { act } from "react-dom/test-utils";
+import { createRoot } from "react-dom/client";
+import { afterEach, beforeEach, expect, test, vi } from "vitest";
+import TenantWorkflowConfigurationStudio from "../TenantWorkflowConfigurationStudio";
+const api = vi.hoisted(() => ({ applyWorkflowDefinitionCommand: vi.fn(), createWorkflowRequestId: vi.fn(), getWorkflowConfiguration: vi.fn(), isDefinitiveWorkflowError: vi.fn(), previewWorkflowDefinition: vi.fn(), readPendingWorkflowCommand: vi.fn(), resetDefinitiveWorkflowCommand: vi.fn() }));
+vi.mock("../../lib/tenantWorkflowClient", async () => ({ ...await vi.importActual("../../lib/tenantWorkflowClient"), ...api }));
+globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+const config = { schemaVersion: 1, workflowKind: "event_execution", name: "Seed coordination", allowedRoles: ["admin", "sales"], actualsReviewThresholdCents: null, comparisonPolicy: null, duePolicy: { offsetMinutes: 0 }, escalationPolicy: { afterMinutes: 60, role: "admin" }, taskTemplates: [{ taskKey: "review_context", label: "Review context", instruction: "Review source", ownerRole: "admin", dueOffsetMinutes: 0, communicationTemplateRef: null }] };
+const snapshot = (overrides = {}) => ({ organizationId: "org-a", availability: "available", state: "seed", revision: 0, draftRevision: 0, draft: null, lifetimeVersionCount: 0, activeVersion: { versionId: "event_execution_v0", seed: true, config }, ...overrides });
+const props = { organizationId: "org-a", principalId: "admin-a", role: "admin", enabled: true, source: "firebase", onClose: vi.fn(), onDismissGuardChange: vi.fn(), onInteractionStateChange: vi.fn() };
+let host, root;
+const deferred = () => { let resolve, reject; const promise = new Promise((yes, no) => { resolve = yes; reject = no; }); return { promise, resolve, reject }; };
+async function render(overrides = {}) { await act(async () => root.render(<TenantWorkflowConfigurationStudio {...props} {...overrides} />)); }
+async function click(text) { const node = [...host.querySelectorAll("button")].find((node) => node.textContent === text); expect(node).toBeTruthy(); await act(async () => node.click()); }
+async function fill(selector, value) { const node = host.querySelector(selector); expect(node).toBeTruthy(); await act(async () => { Object.getOwnPropertyDescriptor(node instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype, "value").set.call(node, value); node.dispatchEvent(new Event("input", { bubbles: true })); }); }
+beforeEach(() => { vi.clearAllMocks(); api.getWorkflowConfiguration.mockReset().mockResolvedValue({ snapshot: snapshot() }); api.readPendingWorkflowCommand.mockReturnValue(null); api.createWorkflowRequestId.mockReturnValue("workflow_request_00000001"); api.isDefinitiveWorkflowError.mockReturnValue(false); host = document.createElement("div"); document.body.append(host); root = createRoot(host); });
+afterEach(async () => { await act(async () => root.unmount()); host.remove(); vi.restoreAllMocks(); });
+test("workflow Studio renders all canonical read states", async () => {
+  const pending = deferred(); api.getWorkflowConfiguration.mockReturnValueOnce(pending.promise); await render(); expect(host.innerHTML).toContain('data-capability-state="loading"');
+  await act(async () => pending.resolve({ snapshot: snapshot() })); expect(host.innerHTML).toContain('data-capability-state="empty"'); expect(host.innerHTML).toContain('data-capability-state="ready"'); expect(host.innerHTML).toContain('data-capability-state="partial"');
+  api.getWorkflowConfiguration.mockResolvedValueOnce({ snapshot: snapshot({ state: "published", revision: 2, lifetimeVersionCount: 1 }) }); await click("Refresh configuration"); expect(host.innerHTML).toContain('data-capability-state="success"');
+  api.getWorkflowConfiguration.mockRejectedValueOnce(new Error("Read unavailable")); await click("Refresh configuration"); expect(host.innerHTML).toContain('data-capability-state="stale"');
+  api.getWorkflowConfiguration.mockRejectedValueOnce(new Error("Read unavailable")); await render({ organizationId: "org-b" }); expect(host.innerHTML).toContain('data-capability-state="error"');
+  await render({ role: "sales" }); expect(host.innerHTML).toContain('data-capability-state="recovery"');
+});
+test("workflow Studio renders all canonical mutation states", async () => {
+  await render(); await fill('input[maxlength="80"]', "Tenant coordination"); const save = deferred(); api.applyWorkflowDefinitionCommand.mockReturnValueOnce(save.promise); await click("Save workflow draft"); expect(host.innerHTML).toContain('data-capability-state="submitting"');
+  await act(async () => save.reject(new Error("Unknown"))); expect(host.innerHTML).toContain('data-capability-state="uncertain"'); const guard = props.onDismissGuardChange.mock.calls.at(-1)[0]; expect(guard.requestDismiss("back", props.onClose).status).toBe("blocked");
+  const replay = deferred(); api.applyWorkflowDefinitionCommand.mockReturnValueOnce(replay.promise); await click("Check original configuration request"); expect(host.innerHTML).toContain('data-capability-state="reconciliation"'); expect(api.applyWorkflowDefinitionCommand.mock.calls[0][0]).toEqual(api.applyWorkflowDefinitionCommand.mock.calls[1][0]);
+  await act(async () => replay.resolve({ receipt: { command: "save_draft", receiptId: "receipt-a" }, idempotent: true })); expect(host.innerHTML).toContain('data-capability-state="receipt"'); expect(document.activeElement).toBe(host.querySelector('[aria-label="Configuration request outcome"]')); expect(api.getWorkflowConfiguration).toHaveBeenCalledTimes(2);
+});
+test("Studio dirty dismissal preserves edits and publication requires exact preview confirmation", async () => {
+  await render(); await fill('input[maxlength="80"]', "Published coordination"); const confirm = vi.spyOn(window, "confirm").mockReturnValue(false); let guard = props.onDismissGuardChange.mock.calls.at(-1)[0]; expect(guard.dirty).toBe(true); expect(guard.requestDismiss("back", props.onClose).status).toBe("guarded"); expect(props.onClose).not.toHaveBeenCalled(); confirm.mockReturnValue(true); expect(guard.requestDismiss("close", props.onClose).status).toBe("dismissed");
+  const draft = { ...config, name: "Published coordination" }; api.applyWorkflowDefinitionCommand.mockResolvedValueOnce({ receipt: { command: "save_draft", receiptId: "draft-receipt" } }); api.getWorkflowConfiguration.mockResolvedValueOnce({ snapshot: snapshot({ revision: 1, draftRevision: 1, draft }) }); await click("Save workflow draft");
+  const preview = { actor: { uid: "admin-a" }, config: draft, candidateVersionId: "event_execution_v1", previewDigest: "a".repeat(64), confirmationText: "PUBLISH event_execution_v1 aaaaaaaaaaaa" }; api.previewWorkflowDefinition.mockResolvedValueOnce({ preview }); await click("Validate and preview publication"); expect(host.textContent).toContain("Review every publication change"); const publish = [...host.querySelectorAll("button")].find((node) => node.textContent === "Publish workflow version"); expect(publish.disabled).toBe(true);
+  await fill('[aria-label="Workflow publication preview"] input', preview.confirmationText); api.applyWorkflowDefinitionCommand.mockResolvedValueOnce({ receipt: { command: "publish", receiptId: "publish-receipt" } }); await click("Publish workflow version"); expect(api.applyWorkflowDefinitionCommand.mock.calls[1][0]).toMatchObject({ command: "publish", expectedRevision: 1, previewDigest: preview.previewDigest, confirmationText: preview.confirmationText });
+});
+test("Studio explicit zero threshold and retirement preserve bounded intent", async () => {
+  api.getWorkflowConfiguration.mockResolvedValueOnce({ snapshot: snapshot({ state: "published", revision: 2, lifetimeVersionCount: 1, activeVersion: { config, versionId: "event_execution_v1" } }) }); await render();
+  const checkbox = [...host.querySelectorAll('input[type="checkbox"]')][1]; await act(async () => checkbox.click()); const save = [...host.querySelectorAll("button")].find((node) => node.textContent === "Save workflow draft"); await click("Save workflow draft"); expect(host.querySelector('input[inputmode="decimal"]').checkValidity()).toBe(false); expect(api.applyWorkflowDefinitionCommand).not.toHaveBeenCalled(); await fill('input[inputmode="decimal"]', "0"); api.applyWorkflowDefinitionCommand.mockResolvedValueOnce({ receipt: { command: "save_draft", receiptId: "zero" } }); api.getWorkflowConfiguration.mockResolvedValueOnce({ snapshot: snapshot({ state: "published", revision: 3, lifetimeVersionCount: 1, activeVersion: { config, versionId: "event_execution_v1" } }) }); await click("Save workflow draft"); expect(api.applyWorkflowDefinitionCommand.mock.calls[0][0].config.actualsReviewThresholdCents).toBe(0);
+  await fill('input[maxlength="240"]', "Replaced policy"); api.applyWorkflowDefinitionCommand.mockResolvedValueOnce({ receipt: { command: "retire", receiptId: "retire" } }); api.getWorkflowConfiguration.mockResolvedValueOnce({ snapshot: snapshot({ state: "retired", revision: 4, activeVersion: null, lifetimeVersionCount: 1 }) }); await click("Retire active workflow version"); expect(host.textContent).toContain("Paused for new work"); expect(api.applyWorkflowDefinitionCommand.mock.calls[1][0]).toMatchObject({ command: "retire", versionId: "event_execution_v1", reason: "Replaced policy" });
+});
+test("Studio removal of sales permission keeps invalid task ownership visible until reviewed", async () => {
+  const sales = { ...config, taskTemplates: [{ ...config.taskTemplates[0], ownerRole: "sales" }] };
+  api.getWorkflowConfiguration.mockResolvedValueOnce({ snapshot: snapshot({ draft: sales }) }); await render();
+  await act(async () => host.querySelector('input[type="checkbox"]').click());
+  const select = host.querySelector('[aria-label="Task 1 owner"]'); expect(select.value).toBe("sales"); expect(select.selectedOptions[0].textContent).toContain("permission removed"); expect(host.textContent).toContain("Choose an allowed owner");
+  await click("Save workflow draft"); expect(api.applyWorkflowDefinitionCommand).not.toHaveBeenCalled();
+  await act(async () => { select.value = "admin"; select.dispatchEvent(new Event("change", { bubbles: true })); });
+  api.applyWorkflowDefinitionCommand.mockResolvedValueOnce({ receipt: { command: "save_draft", receiptId: "ownership" } }); await click("Save workflow draft"); expect(api.applyWorkflowDefinitionCommand.mock.calls[0][0].config.taskTemplates[0].ownerRole).toBe("admin");
+});
+
+test("Studio selects each unpublished pack with bounded native editors and guards dirty switching", async () => {
+  const confirm = vi.spyOn(window, "confirm").mockReturnValue(true); await render();
+  const choose = async kind => { api.getWorkflowConfiguration.mockResolvedValueOnce({ snapshot: snapshot({ state: "unpublished", activeVersion: null, workflowKind: kind }) }); const button = host.querySelector(`[data-workflow-kind="${kind}"]`); expect(button).toBeTruthy(); await act(async () => button.click()); };
+  await choose("quote_review"); expect(host.textContent).toContain("Not yet published"); expect(host.textContent).toContain("absolute total change"); expect(host.textContent).not.toContain("Actuals review threshold (USD)");
+  const checkbox = [...host.querySelectorAll('input[type="checkbox"]')].find(input => input.parentElement.textContent.includes("Require approval at a declared")); await act(async () => checkbox.click());
+  const approval = [...host.querySelectorAll("label")].find(label => label.textContent.startsWith("Approval threshold (USD)")).querySelector("input"); await act(async () => { Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set.call(approval, "0.00"); approval.dispatchEvent(new Event("input", { bubbles: true })); });
+  api.applyWorkflowDefinitionCommand.mockResolvedValueOnce({ receipt: { command: "save_draft", receiptId: "draft-a" } }); await click("Save workflow draft"); expect(api.applyWorkflowDefinitionCommand.mock.calls.at(-1)[0]).toMatchObject({ workflowKind: "quote_review", config: { schemaVersion: 2, packPolicy: { approval: { thresholdCents: 0 } } } });
+  await choose("final_guest_count"); expect(host.textContent).toContain("Sales may take responsibility for this work"); await choose("closeout_follow_up"); expect(host.textContent).toContain("Follow-up delay (calendar days)");
+  await fill('input[maxlength="80"]', "Edited closeout workflow"); confirm.mockReturnValue(false); await act(async () => host.querySelector('[data-workflow-kind="event_execution"]').click()); expect(host.querySelector('[data-workflow-kind="closeout_follow_up"]').getAttribute("aria-pressed")).toBe("true");
+});

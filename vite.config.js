@@ -5,12 +5,21 @@ import { fileURLToPath } from "node:url";
 const COMMERCIAL_DEPENDENCY_GRAPH_CORE = fileURLToPath(
   new URL("./src/lib/commercialDependencyGraphCore.cjs", import.meta.url)
 );
+const COMMERCIAL_PLATFORM_CORE = fileURLToPath(
+  new URL("./src/lib/commercialPlatformCore.cjs", import.meta.url)
+);
+const PRICING_V2_CORE = fileURLToPath(
+  new URL("./src/lib/pricingV2Core.cjs", import.meta.url)
+);
 
 function environmentFlagEnabled(value) {
   return ["1", "true", "yes", "on"].includes(String(value || "").trim().toLowerCase());
 }
 
-export default defineConfig(({ mode }) => {
+export default defineConfig(({ command, mode }) => {
+  // React 18's classic transform emits less JSX boilerplate in this graph.
+  // Keep automatic JSX in development/tests for its existing diagnostics.
+  const compactProductionJsx = command === "build" && mode !== "test";
   const buildEnvironment = {
     ...loadEnv(mode, process.cwd(), ""),
     ...process.env
@@ -80,11 +89,20 @@ export default defineConfig(({ mode }) => {
     : fileURLToPath(new URL("./src/lib/commercialChangePersistedEffectsDisabled.js", import.meta.url));
   return ({
   envDir: ".",
+  // Concurrent Ambient and compatibility servers resolve different module graphs.
+  cacheDir: ambientGraphEnabled ? "node_modules/.vite-ambient" : "node_modules/.vite",
   publicDir: "public",
-  plugins: [react()],
+  plugins: [react({ jsxRuntime: compactProductionJsx ? "classic" : "automatic" })],
+  esbuild: compactProductionJsx ? {
+    jsxFactory: "__qpCreateElement",
+    jsxFragment: "__qpFragment",
+    jsxInject: "import * as __qpReact from 'react'; const __qpCreateElement = __qpReact.createElement; const __qpFragment = __qpReact.Fragment;"
+  } : undefined,
   resolve: {
     alias: {
       "commercial-dependency-graph-core": COMMERCIAL_DEPENDENCY_GRAPH_CORE,
+      "commercial-platform-core": COMMERCIAL_PLATFORM_CORE,
+      "pricing-v2-core": PRICING_V2_CORE,
       "quotepilot-active-firebase-app-check": activeFirebaseAppCheck,
       "quotepilot-active-app": activeApp,
       "quotepilot-active-workspace-shell": activeWorkspaceShell,
@@ -107,7 +125,7 @@ export default defineConfig(({ mode }) => {
     }
   },
   optimizeDeps: {
-    include: ["commercial-dependency-graph-core"]
+    include: ["commercial-dependency-graph-core", "commercial-platform-core", "pricing-v2-core"]
   },
   build: {
     minify: "terser",
@@ -125,6 +143,14 @@ export default defineConfig(({ mode }) => {
       }
     },
     rollupOptions: {
+      // Our proposal, BEO and briefing exporters draw text, shapes and images.
+      // They do not use jsPDF's optional HTML/SVG rasterizers. jsPDF documents
+      // externalizing these optional imports to avoid emitting unused chunks.
+      // Scope this to jsPDF: a direct application import must still be bundled.
+      external(id, importer = "") {
+        return ["canvg", "html2canvas", "dompurify"].includes(id)
+          && importer.replace(/\\/g, "/").includes("/jspdf/");
+      },
       output: {
         manualChunks(id) {
           const normalizedId = id.replace(/\\/g, "/");
@@ -138,6 +164,21 @@ export default defineConfig(({ mode }) => {
           ) {
             return "vendor-react";
           }
+          // Public entrypoints share these helpers with tools. Pin the helpers
+          // separately so optional UI cannot absorb them through manual chunks.
+          if ([
+            "/src/components/RecoverableErrorBoundary.jsx",
+            "/src/hooks/useModalDialog.js",
+            "/src/lib/sessionDiagnostics.js",
+            "/src/lib/productIdentity.js",
+            "/src/lib/buyerAccessConfig.js"
+          ].some((path) => normalizedId.endsWith(path))) return "public-runtime";
+          if (normalizedId.endsWith("/src/components/LegacyCustomerPortalView.jsx")) {
+            return "legacy-customer-portal";
+          }
+          if (normalizedId.endsWith("/src/lib/workspaceActionFeedback.js")) {
+            return "workspace-action-feedback-model";
+          }
           if (normalizedId.endsWith("/src/lib/quoteStore.js")) {
             return "workspace-quote-store";
           }
@@ -145,12 +186,22 @@ export default defineConfig(({ mode }) => {
             return "ambient-opportunity-model";
           }
           if (
-            normalizedId.endsWith("/src/components/WizardSteps.jsx")
-            || normalizedId.endsWith("/src/lib/wizardUi.js")
-            || normalizedId.endsWith("/src/components/ProposalComposer.jsx")
-            || normalizedId.endsWith("/src/components/proposalComposerPresentation.js")
+            normalizedId.endsWith("/src/components/LivingCommercialTwin.jsx")
+            || normalizedId.endsWith("/src/components/CommercialScenarioWorkbench.jsx")
+            || normalizedId.endsWith("/src/components/EventIngredientProjectionPanel.jsx")
+            || normalizedId.endsWith("/src/components/FulfillmentIntelligence.jsx")
+            || normalizedId.endsWith("/src/hooks/useCommercialScenarioWorkbench.js")
+            || normalizedId.endsWith("/src/hooks/useEventIngredientProjection.js")
+            || normalizedId.endsWith("/src/hooks/useFulfillmentStaffingSnapshot.js")
+            || normalizedId.endsWith("/src/hooks/useInventoryRecipeExtension.js")
+            || normalizedId.endsWith("/src/lib/commercialInventoryConsequences.js")
+            || normalizedId.endsWith("/src/lib/commercialScenarioWorkbench.js")
+            || normalizedId.endsWith("/src/lib/fulfillmentProjection.js")
+            || normalizedId.endsWith("/src/lib/inventoryAuthorityClient.js")
+            || normalizedId.endsWith("/src/lib/livingCommercialTwinProjection.js")
+            || normalizedId.endsWith("/src/lib/staffMaturity.js")
           ) {
-            return "quote-builder-ui";
+            return "commercial-scenario-intelligence";
           }
           return undefined;
         }

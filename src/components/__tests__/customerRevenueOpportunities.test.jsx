@@ -216,7 +216,7 @@ describe("Customer revenue opportunities presentation", () => {
     expect(markup).toContain("Follow-ups worth revisiting");
     expect(markup).toContain("Device-local calendar date");
     expect(markup).toContain("America/Chicago");
-    expect(markup).toContain("Leadership dinner reached its one-week closeout window");
+    expect(markup).toContain("Leadership dinner · Follow-up review");
     expect(markup).toContain("Review the internal event closeout");
     expect(markup).toContain("No thank-you or review request was sent");
     expect(markup).toContain("Henderson corporate picnic was scheduled for this week last year");

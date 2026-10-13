@@ -1,10 +1,13 @@
 import fs from "node:fs";
+import crypto from "node:crypto";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const DEFAULT_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const BUDGET_RELATIVE_PATH = "docs/performance/bundle-budget.json";
 const EXCEPTION_RELATIVE_PATH = "docs/performance/bundle-exception.json";
+const OPTIONAL_TOOL_BUDGET_RELATIVE_PATH = "docs/performance/optional-tool-budget.json";
+const OPTIONAL_RUNTIME_EXTENSIONS = new Set([".js", ".mjs", ".wasm"]);
 
 export const BUNDLE_PROFILES = Object.freeze({
   compatibility: Object.freeze({
@@ -88,6 +91,131 @@ function collectJsMetrics(root) {
   return { files, metrics: { totalJsBytes, largestJsChunkBytes } };
 }
 
+function listFilesRecursively(directory, prefix = "") {
+  if (!fs.existsSync(directory)) return [];
+  return fs.readdirSync(directory, { withFileTypes: true })
+    .flatMap((entry) => {
+      const relativePath = path.posix.join(prefix, entry.name);
+      return entry.isDirectory()
+        ? listFilesRecursively(path.join(directory, entry.name), relativePath)
+        : [relativePath];
+    })
+    .sort();
+}
+
+function sha256(filePath) {
+  return crypto.createHash("sha256").update(fs.readFileSync(filePath)).digest("hex");
+}
+
+function collectOptionalToolMetrics(root) {
+  const vendorDirectory = path.join(root, "dist", "vendor");
+  const budgetPath = path.join(root, OPTIONAL_TOOL_BUDGET_RELATIVE_PATH);
+  const emittedRuntimeFiles = listFilesRecursively(vendorDirectory)
+    .filter((relativePath) => OPTIONAL_RUNTIME_EXTENSIONS.has(path.extname(relativePath)));
+
+  if (!fs.existsSync(budgetPath)) {
+    if (emittedRuntimeFiles.length) {
+      throw new Error(
+        `Optional runtime assets were emitted without ${OPTIONAL_TOOL_BUDGET_RELATIVE_PATH}:\n${emittedRuntimeFiles
+          .map((relativePath) => `- vendor/${relativePath}`)
+          .join("\n")}`
+      );
+    }
+    return Object.freeze({ tools: [], totalRuntimeBytes: 0, largestRuntimeAssetBytes: 0 });
+  }
+
+  const budget = readJson(budgetPath);
+  if (budget.schemaVersion !== "optional-tool-budget-v1" || !Array.isArray(budget.tools)) {
+    throw new Error(`${OPTIONAL_TOOL_BUDGET_RELATIVE_PATH} must use optional-tool-budget-v1 with a tools array.`);
+  }
+
+  const declaredRuntimeFiles = new Set();
+  const tools = budget.tools.map((tool, toolIndex) => {
+    const pathLabel = `${OPTIONAL_TOOL_BUDGET_RELATIVE_PATH} tools[${toolIndex}]`;
+    const id = String(tool?.id || "").trim();
+    const distributionDirectory = String(tool?.distributionDirectory || "").trim();
+    if (!id || !distributionDirectory || path.isAbsolute(distributionDirectory) || distributionDirectory.includes("..")) {
+      throw new Error(`${pathLabel} must declare a safe id and relative distributionDirectory.`);
+    }
+    if (!Array.isArray(tool.requiredFiles) || !tool.requiredFiles.length) {
+      throw new Error(`${pathLabel} must declare requiredFiles.`);
+    }
+    for (const metric of ["maxRuntimeBytes", "maxSingleRuntimeAssetBytes"]) {
+      if (!Number.isSafeInteger(Number(tool[metric])) || Number(tool[metric]) <= 0) {
+        throw new Error(`${pathLabel} must declare a positive integer ${metric}.`);
+      }
+    }
+
+    const toolDirectory = path.join(root, "dist", distributionDirectory);
+    const actualFiles = listFilesRecursively(toolDirectory);
+    const expectedFiles = tool.requiredFiles.map((file) => String(file?.path || "").trim()).sort();
+    if (actualFiles.join("\n") !== expectedFiles.join("\n")) {
+      throw new Error(
+        `Optional tool ${id} emitted files do not match its pinned manifest. Expected ${expectedFiles.join(", ")}; found ${actualFiles.join(", ") || "none"}.`
+      );
+    }
+
+    let runtimeBytes = 0;
+    let largestRuntimeAssetBytes = 0;
+    tool.requiredFiles.forEach((file, fileIndex) => {
+      const relativePath = String(file?.path || "").trim();
+      const expectedBytes = Number(file?.bytes);
+      const expectedSha256 = String(file?.sha256 || "").trim().toLowerCase();
+      if (
+        !relativePath
+        || path.isAbsolute(relativePath)
+        || relativePath.includes("..")
+        || !Number.isSafeInteger(expectedBytes)
+        || expectedBytes <= 0
+        || !/^[a-f0-9]{64}$/.test(expectedSha256)
+      ) {
+        throw new Error(`${pathLabel} requiredFiles[${fileIndex}] must pin a safe path, byte count, and SHA-256.`);
+      }
+      const absolutePath = path.join(toolDirectory, relativePath);
+      const actualBytes = fs.statSync(absolutePath).size;
+      if (actualBytes !== expectedBytes) {
+        throw new Error(`Optional tool ${id} asset ${relativePath} is ${actualBytes} bytes; expected ${expectedBytes}.`);
+      }
+      const actualSha256 = sha256(absolutePath);
+      if (actualSha256 !== expectedSha256) {
+        throw new Error(`Optional tool ${id} asset ${relativePath} failed its pinned SHA-256 check.`);
+      }
+      if (OPTIONAL_RUNTIME_EXTENSIONS.has(path.extname(relativePath))) {
+        const emittedPath = path.posix.join(distributionDirectory.replace(/^vendor\//, ""), relativePath);
+        declaredRuntimeFiles.add(emittedPath);
+        runtimeBytes += actualBytes;
+        largestRuntimeAssetBytes = Math.max(largestRuntimeAssetBytes, actualBytes);
+      }
+    });
+
+    if (runtimeBytes > Number(tool.maxRuntimeBytes)) {
+      throw new Error(`Optional tool ${id} runtime bytes ${runtimeBytes} exceed allowed ${tool.maxRuntimeBytes}.`);
+    }
+    if (largestRuntimeAssetBytes > Number(tool.maxSingleRuntimeAssetBytes)) {
+      throw new Error(`Optional tool ${id} largest runtime asset ${largestRuntimeAssetBytes} exceeds allowed ${tool.maxSingleRuntimeAssetBytes}.`);
+    }
+    return Object.freeze({ id, runtimeBytes, largestRuntimeAssetBytes });
+  });
+
+  const unbudgetedRuntimeFiles = emittedRuntimeFiles.filter((relativePath) => !declaredRuntimeFiles.has(relativePath));
+  if (unbudgetedRuntimeFiles.length) {
+    throw new Error(
+      `Unbudgeted optional runtime assets were emitted:\n${unbudgetedRuntimeFiles
+        .map((relativePath) => `- vendor/${relativePath}`)
+        .join("\n")}`
+    );
+  }
+
+  return Object.freeze({
+    tools,
+    totalRuntimeBytes: tools.reduce((total, tool) => total + tool.runtimeBytes, 0),
+    largestRuntimeAssetBytes: tools.reduce(
+      (largest, tool) => Math.max(largest, tool.largestRuntimeAssetBytes),
+      0
+    )
+  });
+}
+
 function assertNoProductionFixtureArtifacts(root, files) {
   const assetsDirectory = path.join(root, "dist", "assets");
   const violations = [];
@@ -154,6 +282,7 @@ export function checkBundleBudget({
 } = {}) {
   const { files, metrics: current } = collectJsMetrics(root);
   assertNoProductionFixtureArtifacts(root, files);
+  const optionalTools = collectOptionalToolMetrics(root);
   const detectedProfile = detectBundleProfile(files);
   const normalizedRequestedProfile = String(requestedProfile || "").trim();
   if (normalizedRequestedProfile && normalizedRequestedProfile !== detectedProfile) {
@@ -222,6 +351,9 @@ export function checkBundleBudget({
   log.log("Bundle profile:", detectedProfile);
   log.log("Bundle budget baseline:", baseline.metrics);
   log.log("Current bundle metrics:", current);
+  if (optionalTools.tools.length) {
+    log.log("Pinned optional tool metrics:", optionalTools);
+  }
   log.log("Normal allowance percent:", baseline.allowancePercent);
   log.log("Normal maximum metrics:", standardMaximums);
   if (activeException) {
@@ -235,6 +367,7 @@ export function checkBundleBudget({
   return Object.freeze({
     profile: detectedProfile,
     current,
+    optionalTools,
     baseline,
     effectiveMaximums,
     exceptionId: activeException?.id || null,

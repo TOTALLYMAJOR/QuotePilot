@@ -9,6 +9,9 @@ import {
   readPendingOperationalStaffingAttempt,
   resetDefinitiveOperationalStaffingAttempt
 } from "../lib/operationalStaffingClient";
+import { deriveStaffMaturity } from "../lib/staffMaturity";
+import AdaptiveChoiceField from "./AdaptiveChoiceField";
+import FieldStateIndicator from "./FieldStateIndicator";
 import "./operationalStaffingPanel.css";
 
 export const OPERATIONAL_STAFFING_CAPABILITY_ID = "authoritative-operational-staffing";
@@ -135,20 +138,14 @@ function recordedWindowCoverage(profile, eventWindow) {
   return "not_recorded_clear";
 }
 
-function initialProfileDraft(eventWindow) {
+function initialProfileDraft() {
   return {
     staffId: "",
     expectedRevision: 0,
     displayName: "",
     active: true,
     capabilities: ["server"],
-    availabilityWindows: eventWindow?.startAtISO && eventWindow?.endAtISO ? [{
-      availabilityId: randomOpaqueId("availability"),
-      source: "operator_recorded",
-      state: "available",
-      startAtISO: eventWindow.startAtISO,
-      endAtISO: eventWindow.endAtISO
-    }] : []
+    availabilityWindows: []
   };
 }
 
@@ -223,6 +220,117 @@ function profileWindowsValid(windows) {
   }
   normalized.sort((left, right) => left.start - right.start || left.end - right.end);
   return normalized.every((window, index) => index === 0 || window.start >= normalized[index - 1].end);
+}
+
+function StaffingAssignmentChoice({
+  slot,
+  profiles,
+  selectedStaffIds,
+  eventWindow,
+  disabled,
+  onSelect,
+  onRecover
+}) {
+  const label = `${slot.required ? "Required" : "Optional"} ${roleLabel(slot.role)} assignment`;
+  const currentProfile = profiles.find((profile) => profile.staffId === slot.staffId) || null;
+  const eligibleProfiles = profiles.filter((profile) => (
+    profile.active
+    && profile.capabilities.includes(slot.role)
+    && recordedWindowCoverage(profile, eventWindow) === "recorded_cover"
+    && (!selectedStaffIds.has(profile.staffId) || profile.staffId === slot.staffId)
+  ));
+  const currentIsEligible = Boolean(
+    currentProfile && eligibleProfiles.some((profile) => profile.staffId === currentProfile.staffId)
+  );
+  const options = [
+    ...(!currentIsEligible && slot.staffId ? [{
+      value: slot.staffId,
+      label: `${currentProfile?.displayName || slot.staffId} · saved assignment no longer eligible`,
+      disabled: true
+    }] : []),
+    ...eligibleProfiles.map((profile) => ({
+      value: profile.staffId,
+      label: `${profile.displayName} · available for this event`
+    }))
+  ];
+
+  if (!eligibleProfiles.length && !slot.staffId) {
+    return (
+      <AdaptiveChoiceField
+        className="operational-staffing-slot"
+        label={label}
+        options={[]}
+        emptyState="blocked"
+        emptyReason={`No active ${roleLabel(slot.role)} candidates have recorded availability for the full event.`}
+        recoveryAction={{ label: "Refresh staffing plan", onClick: onRecover }}
+      />
+    );
+  }
+
+  if (!eligibleProfiles.length && slot.staffId) {
+    return (
+      <div className="operational-staffing-slot" data-adaptive-choice-mode="stale">
+        <span className="adaptive-choice-field__label">{label}</span>
+        <strong className="adaptive-choice-field__single-value">{currentProfile?.displayName || slot.staffId}</strong>
+        <FieldStateIndicator
+          state={disabled ? { editability: "protected" } : { evidence: "stale" }}
+          label={`${label} state`}
+          reason={disabled ? "Staffing changes are temporarily locked." : "This saved assignment is not an eligible candidate for the current event window."}
+          supportingDetail="The saved staff value remains visible until an operator resolves it."
+          recoveryAction={disabled ? undefined : { label: "Clear unavailable assignment", onClick: () => onSelect("") }}
+        />
+      </div>
+    );
+  }
+
+  if (eligibleProfiles.length === 1 && !slot.staffId) {
+    const [onlyProfile] = eligibleProfiles;
+    return (
+      <div className="operational-staffing-slot" data-adaptive-choice-mode="suggested">
+        <span className="adaptive-choice-field__label">{label}</span>
+        <strong className="adaptive-choice-field__single-value">{onlyProfile.displayName}</strong>
+        <FieldStateIndicator
+          state={disabled ? { editability: "protected" } : { origin: "suggested" }}
+          label={`${label} state`}
+          provenance={disabled ? "" : "The only active, role-matched teammate with recorded availability for this event"}
+          supportingDetail={disabled
+            ? "Staffing changes are temporarily locked."
+            : "This is a candidate only. Confirm the assignment before it becomes part of the staffing draft."}
+          recoveryAction={disabled ? undefined : {
+            label: `Assign ${onlyProfile.displayName}`,
+            onClick: () => onSelect(onlyProfile.staffId)
+          }}
+        />
+      </div>
+    );
+  }
+
+  const stale = Boolean(slot.staffId && !currentIsEligible);
+  return (
+    <div>
+      <AdaptiveChoiceField
+        className="operational-staffing-slot"
+        label={label}
+        options={options}
+        value={slot.staffId}
+        onChange={(event) => onSelect(event.target.value)}
+        disabled={disabled}
+        placeholder="Choose a team member"
+        singleChoiceDetail="This is the only eligible teammate and the current saved assignment."
+        fieldState={stale ? (disabled ? { editability: "protected" } : { evidence: "stale" }) : undefined}
+        fieldStateDetails={stale ? {
+          reason: disabled
+            ? "Staffing changes are temporarily locked."
+            : "The saved assignment is no longer eligible for this event window.",
+          supportingDetail: "The saved staff value remains visible until an operator resolves it.",
+          recoveryAction: disabled ? undefined : { label: "Clear unavailable assignment", onClick: () => onSelect("") }
+        } : {}}
+      />
+      {slot.staffId && currentIsEligible && !disabled ? (
+        <button type="button" className="operational-staffing-secondary" onClick={() => onSelect("")}>Clear assignment</button>
+      ) : null}
+    </div>
+  );
 }
 
 function localRequirements(quote) {
@@ -478,7 +586,7 @@ export default function OperationalStaffingPanel({
 
   const openNewProfile = () => {
     if (!canConfigureProfiles || busy || frozenByUncertainty) return;
-    setProfileDraft(initialProfileDraft(envelope?.canonicalEventWindow));
+    setProfileDraft(initialProfileDraft());
   };
 
   const editProfile = (profile) => {
@@ -705,31 +813,17 @@ export default function OperationalStaffingPanel({
             </div>
             {slots.length ? (
               <div className="operational-staffing-slots">
-                {slots.map((slot, index) => (
-                  <label key={slot.slotId} className="operational-staffing-slot">
-                    <span>{slot.required ? `${roleLabel(slot.role)} ${slot.roleSlotNumber}` : "Optional event lead"}</span>
-                    <select
-                      aria-label={`${slot.required ? "Required" : "Optional"} ${roleLabel(slot.role)} assignment`}
-                      value={slot.staffId}
-                      disabled={!readIsCurrentAndComplete || busy || frozenByUncertainty}
-                      onChange={(event) => updateSlot(slot.slotId, event.target.value)}
-                    >
-                      <option value="">{slot.required ? "Choose a team member" : "No lead assigned"}</option>
-                      {profiles.filter((profile) => profile.active && profile.capabilities.includes(slot.role)).map((profile) => {
-                        const coverage = recordedWindowCoverage(profile, envelope.canonicalEventWindow);
-                        const chosenElsewhere = selectedStaffIds.has(profile.staffId) && profile.staffId !== slot.staffId;
-                        return (
-                          <option
-                            key={profile.staffId}
-                            value={profile.staffId}
-                            disabled={chosenElsewhere || coverage !== "recorded_cover"}
-                          >
-                            {profile.displayName} · {coverage === "recorded_cover" ? "available for this event" : "not available for the full event"}
-                          </option>
-                        );
-                      })}
-                    </select>
-                  </label>
+                {slots.map((slot) => (
+                  <StaffingAssignmentChoice
+                    key={slot.slotId}
+                    slot={slot}
+                    profiles={profiles}
+                    selectedStaffIds={selectedStaffIds}
+                    eventWindow={envelope.canonicalEventWindow}
+                    disabled={!readIsCurrentAndComplete || busy || frozenByUncertainty}
+                    onSelect={(staffId) => updateSlot(slot.slotId, staffId)}
+                    onRecover={() => void load({ recovery: true })}
+                  />
                 ))}
               </div>
             ) : (
@@ -764,15 +858,19 @@ export default function OperationalStaffingPanel({
               <ul className="operational-staffing-profiles">
                 {profiles.map((profile) => {
                   const coverage = recordedWindowCoverage(profile, envelope.canonicalEventWindow);
+                  const maturity = deriveStaffMaturity({ profile });
                   return (
                     <li key={profile.staffId}>
                       <div>
                         <strong>{profile.displayName}</strong>
                         <span>{profile.active ? profile.capabilities.map((item) => roleLabel(item)).join(" · ") : "Inactive"}</span>
                         <small>
+                          {maturity.stages.rostered.label}.{" "}
                           {coverage === "recorded_cover"
-                            ? "Recorded availability covers this event."
-                            : "Recorded availability does not cover this entire event."}
+                            ? "Schedulable for this event."
+                            : profile.availabilityWindows.length
+                              ? "Availability does not cover this full event."
+                              : "Availability not recorded for this event."}
                           {" "}This does not mean the team member acknowledged the assignment.
                         </small>
                       </div>
@@ -801,6 +899,11 @@ export default function OperationalStaffingPanel({
                 </div>
                 <button type="button" className="operational-staffing-tertiary" onClick={() => setProfileDraft(null)}>Cancel</button>
               </div>
+              {!profileDraft.staffId ? (
+                <p className="operational-staffing-profile-intro">
+                  A name and one role create an active roster member. Availability can be recorded later when scheduling needs it.
+                </p>
+              ) : null}
               <label>
                 <span>Display name</span>
                 <input
@@ -832,80 +935,94 @@ export default function OperationalStaffingPanel({
                   ))}
                 </div>
               </fieldset>
-              <fieldset>
-                <legend>Recorded availability</legend>
-                <p className="operational-staffing-boundary-note">An authorized QuotePilot user entered these windows; they do not mean the team member acknowledged the assignment.</p>
-                <div className="operational-staffing-windows">
-                  {profileDraft.availabilityWindows.map((window, index) => (
-                    <div key={window.availabilityId} className="operational-staffing-window">
-                      <label>
-                        <span>State</span>
-                        <select value={window.state} onChange={(event) => updateProfileWindow(index, { state: event.target.value })}>
-                          <option value="available">Available</option>
-                          <option value="unavailable">Unavailable</option>
-                        </select>
-                      </label>
-                      <label>
-                        <span>Starts</span>
-                        <input
-                          type="datetime-local"
-                          required
-                          value={localDateTimeValue(window.startAtISO)}
-                          onChange={(event) => updateProfileWindow(index, { startAtISO: exactISOFromLocal(event.target.value) })}
-                        />
-                      </label>
-                      <label>
-                        <span>Ends</span>
-                        <input
-                          type="datetime-local"
-                          required
-                          value={localDateTimeValue(window.endAtISO)}
-                          onChange={(event) => updateProfileWindow(index, { endAtISO: exactISOFromLocal(event.target.value) })}
-                        />
-                      </label>
-                      <button
-                        type="button"
-                        className="operational-staffing-tertiary"
-                        onClick={() => setProfileDraft((current) => ({
-                          ...current,
-                          availabilityWindows: current.availabilityWindows.filter((_, windowIndex) => windowIndex !== index)
-                        }))}
-                      >
-                        Remove window
-                      </button>
-                    </div>
-                  ))}
-                </div>
-                <button
-                  type="button"
-                  className="operational-staffing-secondary"
-                  onClick={() => setProfileDraft((current) => ({
-                    ...current,
-                    availabilityWindows: [...current.availabilityWindows, {
-                      availabilityId: randomOpaqueId("availability"),
-                      source: "operator_recorded",
-                      state: "available",
-                      startAtISO: "",
-                      endAtISO: ""
-                    }]
-                  }))}
-                >
-                  Add availability window
-                </button>
-                {!profileWindowsValid(profileDraft.availabilityWindows) ? (
-                  <p className="operational-staffing-warning">
-                    Every availability window needs a valid start and end, and windows may not overlap.
-                  </p>
-                ) : null}
-              </fieldset>
-              <label className="operational-staffing-active-toggle">
-                <input
-                  type="checkbox"
-                  checked={profileDraft.active}
-                  onChange={(event) => setProfileDraft((current) => ({ ...current, active: event.target.checked }))}
-                />
-                <span>Profile is active for assignment</span>
-              </label>
+              <details className="operational-staffing-availability-disclosure">
+                <summary>
+                  <span>Availability</span>
+                  <small>
+                    {profileDraft.availabilityWindows.length
+                      ? `${profileDraft.availabilityWindows.length} window${profileDraft.availabilityWindows.length === 1 ? "" : "s"} recorded`
+                      : "Optional · add when scheduling"}
+                  </small>
+                </summary>
+                <fieldset>
+                  <legend className="sr-only">Recorded availability</legend>
+                  <p className="operational-staffing-boundary-note">An authorized QuotePilot user entered these windows; they do not mean the team member acknowledged the assignment.</p>
+                  <div className="operational-staffing-windows">
+                    {profileDraft.availabilityWindows.map((window, index) => (
+                      <div key={window.availabilityId} className="operational-staffing-window">
+                        <label>
+                          <span>State</span>
+                          <select value={window.state} onChange={(event) => updateProfileWindow(index, { state: event.target.value })}>
+                            <option value="available">Available</option>
+                            <option value="unavailable">Unavailable</option>
+                          </select>
+                        </label>
+                        <label>
+                          <span>Starts</span>
+                          <input
+                            type="datetime-local"
+                            required
+                            value={localDateTimeValue(window.startAtISO)}
+                            onChange={(event) => updateProfileWindow(index, { startAtISO: exactISOFromLocal(event.target.value) })}
+                          />
+                        </label>
+                        <label>
+                          <span>Ends</span>
+                          <input
+                            type="datetime-local"
+                            required
+                            value={localDateTimeValue(window.endAtISO)}
+                            onChange={(event) => updateProfileWindow(index, { endAtISO: exactISOFromLocal(event.target.value) })}
+                          />
+                        </label>
+                        <button
+                          type="button"
+                          className="operational-staffing-tertiary"
+                          onClick={() => setProfileDraft((current) => ({
+                            ...current,
+                            availabilityWindows: current.availabilityWindows.filter((_, windowIndex) => windowIndex !== index)
+                          }))}
+                        >
+                          Remove window
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                  <button
+                    type="button"
+                    className="operational-staffing-secondary"
+                    onClick={() => setProfileDraft((current) => ({
+                      ...current,
+                      availabilityWindows: [...current.availabilityWindows, {
+                        availabilityId: randomOpaqueId("availability"),
+                        source: "operator_recorded",
+                        state: "available",
+                        startAtISO: "",
+                        endAtISO: ""
+                      }]
+                    }))}
+                  >
+                    Add availability window
+                  </button>
+                  {!profileWindowsValid(profileDraft.availabilityWindows) ? (
+                    <p className="operational-staffing-warning">
+                      Every availability window needs a valid start and end, and windows may not overlap.
+                    </p>
+                  ) : null}
+                </fieldset>
+              </details>
+              {profileDraft.staffId ? (
+                <label className="operational-staffing-active-toggle">
+                  <input
+                    type="checkbox"
+                    checked={profileDraft.active}
+                    onChange={(event) => setProfileDraft((current) => ({ ...current, active: event.target.checked }))}
+                  />
+                  <span>Profile is active for assignment</span>
+                </label>
+              ) : (
+                <p className="operational-staffing-roster-boundary">Creates an active roster member. This does not assign them to an event.</p>
+              )}
               <button
                 type="submit"
                 className="operational-staffing-primary"
@@ -915,7 +1032,7 @@ export default function OperationalStaffingPanel({
                   || !profileDraft.capabilities.length
                   || !profileWindowsValid(profileDraft.availabilityWindows)}
               >
-                Save team member
+                {profileDraft.staffId ? "Save team member" : "Add person"}
               </button>
             </form>
           ) : null}
@@ -924,20 +1041,24 @@ export default function OperationalStaffingPanel({
             <div ref={statusRef} tabIndex={-1} className="operational-staffing-mutation" aria-live="polite">
               <strong>{({
                 ready: "Staffing assignments are ready to review",
-                submitting: "Saving staffing changes",
+                submitting: mutation.kind === "profile" ? "Saving roster profile" : "Saving staffing changes",
                 uncertain: "We could not confirm whether the save finished",
-                reconciliation: "Checking the previous save",
-                receipt: "Staffing changes saved",
+                reconciliation: mutation.kind === "profile" ? "Checking the previous roster save" : "Checking the previous save",
+                receipt: mutation.kind === "profile" ? "Team member rostered" : "Staffing changes saved",
                 error: "Staffing changes were not saved",
                 recovery: "Ready to review and try again"
               })[mutation.state]}</strong>
               <span>
                 {mutation.error || ({
                   ready: "Your selections are not saved yet. Choose Save staffing assignments when you are ready.",
-                  submitting: "Controls stay locked while QuotePilot confirms this exact save.",
+                  submitting: mutation.kind === "profile"
+                    ? "Controls stay locked while QuotePilot confirms this exact roster save."
+                    : "Controls stay locked while QuotePilot confirms this exact save.",
                   uncertain: "Check the previous save before making another change, so QuotePilot does not create a duplicate.",
                   reconciliation: "QuotePilot is checking the same save, not starting another one.",
-                  receipt: "Save confirmed. This records the changes but does not mean team members acknowledged or will attend.",
+                  receipt: mutation.kind === "profile"
+                    ? `${mutation.command?.profile?.displayName || "This team member"} is Active and Rostered. Contact and availability remain optional; this receipt does not record an event assignment.`
+                    : "Save confirmed. This records the changes but does not mean team members acknowledged or will attend.",
                   error: "Nothing successful is assumed. Review the message before clearing this failed save.",
                   recovery: "Refresh the staffing plan or make a deliberate change before saving again."
                 })[mutation.state]}

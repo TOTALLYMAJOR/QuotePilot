@@ -1,9 +1,13 @@
 import { describe, expect, test } from "vitest";
 import {
   NOW_CARD_LIMIT,
+  NOW_HORIZON_DAYS,
   NOW_PRESENTATION_MODEL,
   buildNowCard,
   buildNowCards,
+  buildNowDecisionSummary,
+  buildNowHorizon,
+  formatNowReceiptAge,
   describeNowEmptyState
 } from "../nowPresentation";
 
@@ -11,7 +15,10 @@ const quoteFixture = {
   id: "q-1",
   quoteNumber: "Q-260810-0900-00001",
   customerId: "cust-1",
-  customer: { name: "Elena Rivera", email: "elena@example.test" }
+  customer: { name: "Elena Rivera", email: "elena@example.test" },
+  status: "sent",
+  event: { date: "2026-09-18", venue: "Garden Terrace" },
+  totals: { total: 4825 }
 };
 
 describe("buildNowCard", () => {
@@ -30,12 +37,20 @@ describe("buildNowCard", () => {
     expect(card.title).toBe("Elena Rivera");
     expect(card.meta).toBe("Q-260810-0900-00001");
     expect(card.sentence).toContain("Please swap salmon for chicken.");
+    expect(card.typeLabel).toBe("Customer request");
+    expect(card.consequence).toBe("No resolution is recorded for this customer request.");
+    expect(card.urgent).toBe(false);
     expect(card.action.label).toBe("Review request");
     expect(card.action.target).toEqual({
       surface: "workflow",
       quoteId: "q-1",
       attentionType: "change_request",
       requestId: "req-9"
+    });
+    expect(card.commercialPriority).toMatchObject({
+      value: { label: "Saved quote total", available: true, amount: 4825, display: "$4,825.00" },
+      position: { lifecycle: { value: "Sent" } },
+      event: { date: "Sep 18, 2026", venue: "Garden Terrace" }
     });
   });
 
@@ -50,6 +65,9 @@ describe("buildNowCard", () => {
       [quoteFixture]
     );
     expect(overdue.sentence).toBe("This proposal has waited 3 days past its follow-up date.");
+    expect(overdue.typeLabel).toBe("Overdue follow-up");
+    expect(overdue.urgent).toBe(true);
+    expect(overdue.consequence).toBe("No follow-up outcome is recorded yet.");
     const single = buildNowCard(
       { id: "a-4", type: "follow_up", quoteId: "q-1", daysOverdue: 1 },
       [quoteFixture]
@@ -167,6 +185,54 @@ describe("buildNowCard", () => {
     );
     expect(card.title).toBe("Elena Rivera");
     expect(card.meta).toBe("Q-260810-0900-00001");
+  });
+});
+
+describe("Now decision presentation", () => {
+  test("separates true urgency from general waiting in the headline", () => {
+    const result = buildNowDecisionSummary({
+      cards: [
+        { urgent: true, typeLabel: "Overdue follow-up" },
+        { urgent: false, typeLabel: "Customer request" },
+        { urgent: false, typeLabel: "Admin decision" }
+      ]
+    });
+    expect(result).toMatchObject({
+      headline: "One overdue follow-up needs you today.",
+      urgentCount: 1,
+      waitingCount: 2
+    });
+    expect(result.supporting).toBe("Two other items are waiting for review.");
+    expect(buildNowDecisionSummary({
+      cards: [{ urgent: true, typeLabel: "Follow-up due today" }]
+    }).headline).toBe("One follow-up needs you today.");
+  });
+
+  test("projects seven days from the supplied tenant-local date without a second calendar model", () => {
+    const result = buildNowHorizon({
+      nowISO: "2026-08-12T03:00:00.000Z",
+      timeZone: "America/Chicago",
+      urgentCount: 1,
+      upcomingEvents: [{
+        quoteNumber: "QP-1",
+        event: { name: "Rivera Dinner", date: "2026-08-13", time: "17:00" }
+      }]
+    });
+    expect(result).toHaveLength(NOW_HORIZON_DAYS);
+    expect(result[0]).toMatchObject({ dateISO: "2026-08-11", urgentCount: 1, state: "urgent" });
+    expect(result[2]).toMatchObject({ dateISO: "2026-08-13", eventCount: 1, state: "event" });
+    expect(result[2].eventLabel).toBe("Rivera Dinner · 17:00");
+  });
+
+  test("formats only the elapsed age supported by the completion receipt", () => {
+    expect(formatNowReceiptAge(
+      { completedAtISO: "2026-08-12T14:20:00.000Z" },
+      "2026-08-12T15:00:00.000Z"
+    )).toBe("40m ago");
+    expect(formatNowReceiptAge(
+      { completedAtISO: "2026-08-11T14:00:00.000Z" },
+      "2026-08-12T15:00:00.000Z"
+    )).toBe("Yesterday");
   });
 });
 

@@ -19,7 +19,7 @@ async function fillRequiredQuoteFields(page, {
   venue = "Birmingham Civic Hall",
   date = futureDateISO()
 } = {}) {
-  const eventType = page.getByLabel(/Event type/i);
+  const eventType = page.getByRole("combobox", { name: /^Event type\b/ });
   await expect(eventType).toBeVisible();
   const optionCount = await eventType.locator("option").count();
   if (optionCount > 1) {
@@ -39,9 +39,12 @@ async function fillRequiredQuoteFields(page, {
 }
 
 async function advanceToSaveButton(page, saveButtonLabel) {
+  const currentStepLabel = page.locator('.stepper-item[aria-current="step"] .step-copy em');
   for (let step = 0; step < 6; step += 1) {
+    await expect(currentStepLabel).toBeVisible();
+    const previousStepLabel = await currentStepLabel.innerText();
     const firstMenuChoice = page.locator(
-      ".wizard-panel .menu-library input[type='checkbox']:not(:checked)"
+      ".wizard-panel .menu-library input[type='checkbox']"
     ).first();
     if (await firstMenuChoice.count()) {
       await firstMenuChoice.check();
@@ -71,6 +74,9 @@ async function advanceToSaveButton(page, saveButtonLabel) {
       break;
     }
     await nextButton.click();
+    // A click can resolve before React commits the next step. Do not inspect
+    // outgoing controls while their replacement is still being rendered.
+    await expect(currentStepLabel).not.toHaveText(previousStepLabel);
   }
   throw new Error(`Unable to reach save button: ${saveButtonLabel}`);
 }
@@ -108,20 +114,47 @@ async function createQuoteToHistory(page, { guests = 72, eventName, venue, date 
 }
 
 function quoteRows(page) {
-  return page.locator(".history-table-wrap tbody tr").filter({
-    has: page.getByRole("button", { name: "Copy Email" })
-  });
+  return page.locator(".history-table-wrap tbody tr[data-quote-id]");
+}
+
+function quoteLifecycleSelect(row) {
+  return row.getByRole("combobox", { name: "Change quote / proposal lifecycle" });
+}
+
+async function expectQuoteStatus(row, status) {
+  const labels = {
+    accepted: "Accepted",
+    booked: "Booked",
+    sent: "Sent"
+  };
+  await expect(row.locator("td").nth(7).locator(".status-chip")).toContainText(labels[status] || status);
 }
 
 async function setQuoteStatus(row, status) {
-  const statusSelect = row.locator("select").first();
+  const statusSelect = quoteLifecycleSelect(row);
   await statusSelect.selectOption(status);
-  await expect(statusSelect).toHaveValue(status);
+  await expectQuoteStatus(row, status);
 }
 
 async function openOperationsItem(page, name) {
   await page.getByRole("button", { name: "Operations" }).click();
   await page.getByRole("menuitem", { name }).click();
+}
+
+async function enterLocalWorkspace(page) {
+  const eventType = page.getByRole("combobox", { name: /^Event type\b/ });
+  await expect(eventType).toBeVisible({ timeout: 45_000 });
+  await expect.poll(() => eventType.locator("option").count()).toBeGreaterThan(1);
+}
+
+async function navigateLocalWorkspace(page, action, target) {
+  await action();
+  // The legacy quote builder is available before catalog setup. Other staff
+  // destinations ask the operator to explicitly continue exploring first.
+  const setup = page.getByRole("button", { name: "Explore the workspace" });
+  await expect(target.or(setup)).toBeVisible();
+  if (await setup.isVisible()) await setup.click();
+  await expect(target).toBeVisible();
 }
 
 test.beforeEach(async ({ page }) => {
@@ -131,14 +164,15 @@ test.beforeEach(async ({ page }) => {
   });
   page.on("dialog", (dialog) => dialog.accept());
   await page.goto("/app");
-  await expect(page.getByRole("button", { name: /New quote/i })).toBeVisible();
+  await enterLocalWorkspace(page);
 });
 
 test("empty Workflow leads directly into the first quote", async ({ page }) => {
-  await page.getByRole("button", { name: /Workflow/i }).click();
-  await expect(page.getByRole("heading", {
+  const emptyHeading = page.getByRole("heading", {
     name: "Create the first quote to begin follow-up"
-  })).toBeVisible();
+  });
+  await navigateLocalWorkspace(page,
+    () => page.getByRole("button", { name: /Workflow/i }).click(), emptyHeading);
   await expect(page.getByText(/QuotePilot will carry the saved quote, proposal readiness, decisions, and follow-ups/i)).toBeVisible();
 
   await page.getByRole("button", { name: "Start a quote" }).click();
@@ -158,7 +192,9 @@ test("operator workspaces load only when first opened and stay mounted after clo
 
   expect(await modalResourceNames()).toEqual([]);
 
-  await page.getByRole("button", { name: "Workflow" }).click();
+  await navigateLocalWorkspace(page,
+    () => page.getByRole("button", { name: "Workflow" }).click(),
+    page.getByRole("heading", { name: "Workflow" }));
   await expect(page.getByRole("heading", { name: "Workflow" })).toBeVisible();
   await expect.poll(modalResourceNames).toEqual([
     expect.stringMatching(/SalesWorkflowModal(?:-[^/?]+\.js|\.jsx)/)
@@ -269,8 +305,9 @@ test("Quotes loads once, then searches and counts the tenant result locally", as
     ]));
   });
 
-  await page.getByRole("button", { name: "Quotes", exact: true }).click();
   const dialog = page.getByRole("dialog", { name: "Quotes" });
+  await navigateLocalWorkspace(page,
+    () => page.getByRole("button", { name: "Quotes", exact: true }).click(), dialog);
   await expect(dialog.locator(".history-skeleton-row")).toHaveCount(3);
   await expect(dialog.getByText("Showing 2 of 2 quotes")).toBeVisible();
   await expect(dialog.getByText("Jan 5, 2027")).toBeVisible();
@@ -373,9 +410,10 @@ test("menu loading and empty states lead admins to the selected Catalog Admin me
     };
   });
   await page.reload();
+  await enterLocalWorkspace(page);
   await fillRequiredQuoteFields(page, { guests: 54, eventName: "Menu State Test", venue: "Menu Hall" });
-  const selectedEventTypeId = await page.getByLabel(/Event type/i).inputValue();
-  const selectedEventType = await page.getByLabel(/Event type/i).locator("option:checked").textContent();
+  const selectedEventTypeId = await page.getByRole("combobox", { name: /^Event type\b/ }).inputValue();
+  const selectedEventType = await page.getByRole("combobox", { name: /^Event type\b/ }).locator("option:checked").textContent();
   await page.getByRole("button", { name: /^Next:/ }).click();
   await expect(page.locator(".menu-skeleton-row")).toHaveCount(3);
   await expect(page.locator(".menu-state")).toHaveAttribute("aria-busy", "true");
@@ -385,8 +423,8 @@ test("menu loading and empty states lead admins to the selected Catalog Admin me
   });
   await expect(page.getByText(`No menu items are configured for ${selectedEventType} yet.`)).toBeVisible();
   await page.getByRole("button", { name: "Add menu items" }).click();
-  const catalogAdmin = page.getByRole("dialog").filter({ has: page.getByRole("heading", { name: "Catalog Admin" }) });
-  await expect(catalogAdmin.getByRole("heading", { name: "Catalog Admin" })).toBeVisible();
+  const catalogAdmin = page.getByRole("dialog", { name: "Library settings" });
+  await expect(catalogAdmin.getByRole("heading", { name: "Library settings" })).toBeVisible();
   await expect(page.locator(".admin-tab.active")).toHaveText("Menu");
   await expect(catalogAdmin.getByRole("combobox", { name: "Event type", exact: true }))
     .toHaveValue(selectedEventTypeId);
@@ -430,19 +468,18 @@ test("a menu item stages immediately without activating the current quote", asyn
     };
   });
   await page.reload();
+  await enterLocalWorkspace(page);
   await fillRequiredQuoteFields(page, {
     guests: 55,
     eventName: "Staged Menu Change",
     venue: "Refresh Hall"
   });
-  const selectedEventTypeId = await page.getByLabel(/Event type/i).inputValue();
+  const selectedEventTypeId = await page.getByRole("combobox", { name: /^Event type\b/ }).inputValue();
   await page.getByRole("button", { name: /^Next:/ }).click();
 
   await page.getByRole("button", { name: "Operations" }).click();
   await page.getByRole("menuitem", { name: "Catalog Admin" }).click();
-  const catalogAdmin = page.getByRole("dialog").filter({
-    has: page.getByRole("heading", { name: "Catalog Admin" })
-  });
+  const catalogAdmin = page.getByRole("dialog", { name: "Library settings" });
   await catalogAdmin.getByRole("tab", { name: "Menu" }).click();
   await catalogAdmin.getByRole("combobox", { name: "Event type", exact: true })
     .selectOption(selectedEventTypeId);
@@ -458,8 +495,10 @@ test("a menu item stages immediately without activating the current quote", asyn
   await catalogAdmin.getByRole("button", { name: "Add Item" }).click();
   await expect(catalogAdmin.getByLabel("Edit Immediate Recovery Entree").getByLabel("Name", { exact: true }))
     .toHaveValue("Immediate Recovery Entree");
-  await expect(catalogAdmin.getByText("Ready to review", { exact: true })).toBeVisible();
-  await expect(catalogAdmin.getByText("1 changed record; active pricing is unchanged.")).toBeVisible();
+  await expect(catalogAdmin.getByText("Library changes are in this workspace only", { exact: true })).toBeVisible();
+  await expect(catalogAdmin.getByText(
+    "1 change is available here. Publishing is unavailable from this source. No shared catalog or pricing changed."
+  )).toBeVisible();
   await expect.poll(() => page.evaluate(() => window.__catalogDraftSaveCalls.length)).toBe(1);
 
   await catalogAdmin.getByRole("button", { name: "Close" }).click();
@@ -482,6 +521,7 @@ test("menu retry repeats the selected event request without clearing selections"
     };
   });
   await page.reload();
+  await enterLocalWorkspace(page);
   await fillRequiredQuoteFields(page, { guests: 56, eventName: "Menu Retry Test", venue: "Retry Hall" });
   await page.getByRole("button", { name: /^Next:/ }).click();
   const chicken = page.getByRole("checkbox", { name: /Herb Chicken/i });
@@ -490,7 +530,7 @@ test("menu retry repeats the selected event request without clearing selections"
 
   await page.getByRole("button", { name: "Back" }).click();
   await page.evaluate(() => { window.__menuShouldFail = true; });
-  const eventType = page.getByLabel(/Event type/i);
+  const eventType = page.getByRole("combobox", { name: /^Event type\b/ });
   const optionCount = await eventType.locator("option").count();
   await eventType.selectOption({ index: Math.min(2, optionCount - 1) });
   await page.getByRole("button", { name: /^Next:/ }).click();
@@ -1242,7 +1282,10 @@ test("portal refreshes webhook-backed payment state after a Stripe success retur
 test("valid and expired portal links use tenant branding without exposing token entry", async ({ page }) => {
   const activeKey = "portal-branded-active-12345678901234567890";
   const expiredKey = "portal-branded-expired-1234567890123456";
-  const createdAtISO = "2026-08-06T12:00:00.000Z";
+  // Keep the active fixture inside the authoritative 30-day portal window.
+  // A fixed issue date turns this into a wall-clock failure while the
+  // explicitly expired sibling below already covers the terminal path.
+  const createdAtISO = new Date().toISOString();
   await page.addInitScript(({ activePortalKey, expiredPortalKey, createdAt }) => {
     const nativeClear = Storage.prototype.clear;
     Storage.prototype.clear = function preservePortalFixture() {
@@ -1424,9 +1467,7 @@ test("accepted event production checklist persists completion", async ({ page })
 test("create then edit keeps one quote row and reflects updated fields", async ({ page }) => {
   await createQuoteToHistory(page, { guests: 70 });
 
-  const quoteRows = page.locator(".history-table-wrap tbody tr").filter({
-    has: page.getByRole("button", { name: "Copy Email" })
-  });
+  const quoteRows = page.locator(".history-table-wrap tbody tr[data-quote-id]");
   await expect(quoteRows).toHaveCount(1);
   await expect(quoteRows.first()).toContainText("70");
   const originalQuoteId = await quoteRows.first().getAttribute("data-quote-id");
@@ -1447,7 +1488,7 @@ test("create then edit keeps one quote row and reflects updated fields", async (
   await expect(quoteRows.first()).toContainText("95");
 
   await setQuoteStatus(quoteRows.first(), "sent");
-  await expect(quoteRows.first().locator("select").first()).toHaveValue("sent");
+  await expectQuoteStatus(quoteRows.first(), "sent");
 });
 
 test("Catalog Admin menu browsing never mutates the clean quote being edited", async ({ page }) => {
@@ -1455,7 +1496,8 @@ test("Catalog Admin menu browsing never mutates the clean quote being edited", a
 
   const row = quoteRows(page).first();
   await row.getByRole("button", { name: "Edit" }).click();
-  const quoteEventType = page.getByLabel(/Event type/i);
+  await expect(page.getByText(/Editing quote/i)).toBeVisible();
+  const quoteEventType = page.getByRole("combobox", { name: /^Event type\b/ });
   const originalEventType = await quoteEventType.inputValue();
   expect(originalEventType).toBeTruthy();
 
@@ -1467,9 +1509,7 @@ test("Catalog Admin menu browsing never mutates the clean quote being edited", a
 
   await page.getByRole("button", { name: "Operations" }).click();
   await page.getByRole("menuitem", { name: "Catalog Admin" }).click();
-  const catalogAdmin = page.getByRole("dialog").filter({
-    has: page.getByRole("heading", { name: "Catalog Admin" })
-  });
+  const catalogAdmin = page.getByRole("dialog", { name: "Library settings" });
   await catalogAdmin.getByRole("tab", { name: "Menu" }).click();
   const adminEventType = catalogAdmin.getByRole("combobox", { name: "Event type", exact: true });
   await expect.poll(() => adminEventType.locator("option").count()).toBeGreaterThan(2);
@@ -1513,7 +1553,7 @@ test("accepted quote can be converted and confirmation lifecycle is trackable", 
 
   await row.getByRole("button", { name: "Convert" }).click();
   await expect(historyDialogMessage(page, /Converted .* to contract/i)).toBeVisible();
-  await expect(row.locator("select").first()).toHaveValue("booked");
+  await expectQuoteStatus(row, "booked");
 
   const confirmationSelect = row.locator("td").nth(10).locator("select");
   await expect(confirmationSelect).toHaveValue("pending");
@@ -1542,7 +1582,7 @@ test("conversion is blocked when another quote is already booked for same venue/
   await setQuoteStatus(baselineRow, "accepted");
   await baselineRow.getByRole("button", { name: "Convert" }).click();
   await expect(historyDialogMessage(page, /Converted .* to contract/i)).toBeVisible();
-  await expect(baselineRow.locator("select").first()).toHaveValue("booked");
+  await expectQuoteStatus(baselineRow, "booked");
 
   await page.getByRole("dialog").getByRole("button", { name: "Close" }).click();
   await page.getByRole("button", { name: "New Quote" }).click();
@@ -1563,5 +1603,5 @@ test("conversion is blocked when another quote is already booked for same venue/
 
   const conflictRows = quoteRows(page);
   await expect(conflictRows).toHaveCount(1);
-  await expect(conflictRows.first().locator("select").first()).toHaveValue("booked");
+  await expectQuoteStatus(conflictRows.first(), "booked");
 });

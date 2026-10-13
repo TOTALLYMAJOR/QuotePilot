@@ -496,6 +496,38 @@
   line-height: 1.45;
 }
 
+.qp-landing-film-recovery {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.85rem;
+  padding: 0.75rem 0.9rem;
+  border: 1px solid color-mix(in srgb, var(--landing-accent) 58%, var(--landing-line));
+  border-radius: 0.75rem;
+  background: color-mix(in srgb, var(--landing-accent) 10%, rgba(9, 9, 8, 0.92));
+  color: var(--landing-ink);
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+
+.qp-landing-film-recovery button {
+  flex: 0 0 auto;
+  min-height: 2.35rem;
+  padding: 0.48rem 0.72rem;
+  border: 1px solid color-mix(in srgb, var(--landing-accent) 66%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--landing-accent) 16%, transparent);
+  color: var(--landing-ink);
+  cursor: pointer;
+  transition: background 160ms ease, transform 160ms ease;
+}
+
+.qp-landing-film-recovery button:hover,
+.qp-landing-film-recovery button:focus-visible {
+  background: color-mix(in srgb, var(--landing-accent) 28%, transparent);
+  transform: translateY(-1px);
+}
+
 .qp-landing-section-heading {
   max-width: 55rem;
   display: grid;
@@ -988,9 +1020,21 @@
     font-size: 0.98rem;
   }
 
-  .qp-landing-brand-lockup small,
-  .qp-landing-header-login {
+  .qp-landing-brand-lockup small {
     display: none;
+  }
+
+  .qp-landing-header-actions {
+    gap: 0.55rem;
+  }
+
+  .qp-landing-header-login {
+    display: inline-flex;
+    min-height: 2.75rem;
+    align-items: center;
+    padding: 0.45rem 0.2rem;
+    font-size: 0.72rem;
+    white-space: nowrap;
   }
 
   .qp-landing-header .qp-landing-button {
@@ -1331,6 +1375,17 @@ html.qp-landing-motion {
 .qp-landing-film-status > div {
   display: flex;
   gap: 0.5rem;
+}
+
+.qp-landing-film-status [data-media-preference="restricted"] {
+  max-width: 34ch;
+  color: rgba(255, 253, 247, 0.78);
+  font-size: 0.72rem;
+  font-weight: 600;
+  line-height: 1.4;
+  letter-spacing: 0;
+  text-align: right;
+  text-transform: none;
 }
 
 .qp-landing-film-status button {
@@ -1809,6 +1864,10 @@ html.qp-landing-motion {
     justify-items: start;
   }
 
+  .qp-landing-film-status [data-media-preference="restricted"] {
+    text-align: left;
+  }
+
   .qp-landing-scroll-cue {
     bottom: 1rem;
     white-space: nowrap;
@@ -1871,7 +1930,7 @@ html.qp-landing-motion {
     scroll-behavior: auto;
   }
 
-  .qp-landing-film-layer video {
+  .qp-landing:not([data-motion-override="true"]) .qp-landing-film-layer video {
     display: none;
   }
 

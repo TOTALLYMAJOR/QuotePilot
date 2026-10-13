@@ -27,6 +27,7 @@ const DEPLOY_DOCS = [
 ];
 
 const TASK_ORCHESTRATION_IMPLEMENTATION = [
+  "scripts/check-product-intelligence.mjs",
   "scripts/task-orchestration-plan.mjs",
   "docs/task-orchestration-contracts.json"
 ];
@@ -81,7 +82,7 @@ function resolveDiffRange() {
 
 function changedFilesFromRange(range) {
   if (!range) return [];
-  const output = run(`git diff --name-only --diff-filter=ACMR ${range}`);
+  const output = run(`git diff --name-only --diff-filter=ACMRD ${range}`);
   if (!output) return [];
   return output
     .split(/\r?\n/)
@@ -222,9 +223,13 @@ function checkVersionClaims(errors) {
 }
 
 function checkSecretPatterns(errors) {
-  const trackedMarkdown = run("git ls-files '*.md'")
-    .split(/\r?\n/)
+  const deleted = new Set(run("git ls-files --deleted -z").split("\0").filter(Boolean));
+  const trackedMarkdown = run("git ls-files -z '*.md'")
+    .split("\0")
     .filter(Boolean)
+    // Content scanning skips only Git-confirmed worktree deletions. They stay
+    // in changedFiles so deletion still triggers documentation obligations.
+    .filter((file) => !deleted.has(file))
     .filter((file) => !file.startsWith("node_modules/"));
 
   const patterns = [
@@ -259,8 +264,8 @@ function checkTaskOrchestrationContract(errors) {
     return;
   }
 
-  if (contract.schemaVersion !== 1) {
-    errors.push("Task orchestration contract schemaVersion must be 1.");
+  if (contract.schemaVersion !== 2) {
+    errors.push("Task orchestration contract schemaVersion must be 2.");
   }
   if (contract.switchAuthority !== "external_runner") {
     errors.push("Task orchestration model switching must remain external-runner authoritative.");
@@ -291,10 +296,62 @@ function checkTaskOrchestrationContract(errors) {
     errors.push("The UI task profile must require design-language and both canonical design documents.");
   }
 
+  const domainRouting = contract.domainRouting;
+  const requiredDomainContexts = [
+    "commercial",
+    "pricing",
+    "proposal_revision",
+    "payments",
+    "customer_experience",
+    "catalog_menu",
+    "event_operations",
+    "staffing",
+    "beo_document_truth",
+    "readiness",
+    "reporting"
+  ];
+  if (domainRouting?.skill !== "catering-domain-intelligence"
+    || domainRouting?.noneContext !== "none"
+    || JSON.stringify(domainRouting?.contextOrder) !== JSON.stringify(requiredDomainContexts)) {
+    errors.push("Task orchestration domain routing must retain the governed catering context order.");
+  }
+  for (const contextName of requiredDomainContexts) {
+    const context = domainRouting?.contexts?.[contextName];
+    if (!Array.isArray(context?.taskKeywords)
+      || !Array.isArray(context?.pathFragments)
+      || !Array.isArray(context?.authorityReads)
+      || !Array.isArray(context?.referenceSlices)) {
+      errors.push(`Task orchestration domain context ${contextName} is incomplete.`);
+    }
+  }
+
+  const routedFiles = new Set([
+    ".codex/skills/catering-domain-intelligence/SKILL.md",
+    ...(domainRouting?.baseReferenceSlices || []),
+    ...(domainRouting?.failureReferenceRule?.referenceSlices || []),
+    ...requiredDomainContexts.flatMap((contextName) => {
+      const context = domainRouting?.contexts?.[contextName];
+      return [...(context?.authorityReads || []), ...(context?.referenceSlices || [])];
+    })
+  ]);
+  for (const file of routedFiles) {
+    if (!fs.existsSync(path.join(ROOT, file))) {
+      errors.push(`Task orchestration domain routing references a missing file: ${file}`);
+    }
+  }
+
   const governedText = TASK_ORCHESTRATION_GOVERNANCE_DOCS
     .map((file) => fs.readFileSync(path.join(ROOT, file), "utf8"))
     .join("\n");
-  for (const marker of ["npm run plan:task", "external runner", "task-orchestration-contracts.json", "design-language"]) {
+  for (const marker of [
+    "npm run plan:task",
+    "external runner",
+    "task-orchestration-contracts.json",
+    "design-language",
+    "domainClassification",
+    "catering-domain-intelligence",
+    "check:product-intelligence"
+  ]) {
     if (!governedText.toLowerCase().includes(marker.toLowerCase())) {
       errors.push(`Task orchestration governance docs are missing required marker: ${marker}`);
     }
@@ -302,7 +359,6 @@ function checkTaskOrchestrationContract(errors) {
 }
 
 function baselineRef() {
-  if (!(process.env.CI === "true" || process.env.GITHUB_ACTIONS === "true")) return "HEAD";
   const range = resolveDiffRange();
   return String(range).split(/\.\.\.?/)[0] || "HEAD";
 }
@@ -319,7 +375,41 @@ function readBaselineFile(ref, file) {
   }
 }
 
+function listMarkdownFiles(directory) {
+  const files = [];
+  for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+    const absolute = path.join(directory, entry.name);
+    if (entry.isDirectory()) {
+      files.push(...listMarkdownFiles(absolute));
+    } else if (entry.isFile() && entry.name.toLowerCase().endsWith(".md")) {
+      files.push(normalizePath(path.relative(ROOT, absolute)));
+    }
+  }
+  return files;
+}
+
+function governedMarkdownFiles() {
+  return [...new Set([
+    "AGENTS.md",
+    ...CANONICAL_DOCS,
+    ...listMarkdownFiles(path.join(ROOT, "docs"))
+  ])].sort();
+}
+
 function checkDocumentationTimestamps(changedFiles, errors) {
+  for (const file of governedMarkdownFiles()) {
+    const filePath = path.join(ROOT, file);
+    if (!fs.existsSync(filePath)) {
+      errors.push(`${file}: required documentation is missing.`);
+      continue;
+    }
+
+    const current = fs.readFileSync(filePath, "utf8");
+    if (!DOCUMENT_TIMESTAMP_PATTERN.test(current)) {
+      errors.push(`${file} must include Last updated: YYYY-MM-DD HH:MM:SS TZ.`);
+    }
+  }
+
   const ref = baselineRef();
   for (const file of changedFiles) {
     const requiresTimestamp = file === "AGENTS.md"
@@ -330,10 +420,7 @@ function checkDocumentationTimestamps(changedFiles, errors) {
 
     const current = fs.readFileSync(filePath, "utf8");
     const currentTimestamp = current.match(DOCUMENT_TIMESTAMP_PATTERN)?.[0] || "";
-    if (!currentTimestamp) {
-      errors.push(`${file} must include Last updated: YYYY-MM-DD HH:MM:SS TZ.`);
-      continue;
-    }
+    if (!currentTimestamp) continue;
 
     const baseline = readBaselineFile(ref, file);
     const baselineTimestamp = baseline.match(/^Last updated:.*$/m)?.[0] || "";

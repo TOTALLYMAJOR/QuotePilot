@@ -621,6 +621,7 @@ export function buildCustomerWorkspaceDto({
     quotePageInfo: resolvedQuotePageInfo,
     versionPageInfo: {
       perQuoteLimit: VERSION_LIMIT_PER_QUOTE,
+      unloadedQuoteIds: normalizedQuotes.filter((quote) => !Object.hasOwn(versionsByQuote, quote.id)).map((quote) => quote.id),
       truncatedQuoteIds: [...new Set(versionTruncatedQuoteIds.map(text).filter(Boolean))]
     }
   };
@@ -643,7 +644,70 @@ async function loadQuoteVersions(orgId, quoteId) {
   };
 }
 
-export async function getCustomerWorkspace({ organizationId = "", customerId = "" } = {}) {
+function emitCoreWorkspace(onCoreWorkspace, workspace) {
+  if (typeof onCoreWorkspace !== "function" || !workspace) return;
+  try {
+    onCoreWorkspace(workspace);
+  } catch {
+    // A presentation progress callback may not break the authoritative read.
+  }
+}
+
+// One loader belongs to one exact customer read generation. Disposal suppresses
+// late results and queued work; in-flight read-only requests may still finish.
+export function createCustomerHistoryLoader({ quoteIds = [], read, onResult }) {
+  const allowed = new Set(quoteIds);
+  const states = new Map();
+  const queue = [];
+  let active = 0;
+  let disposed = false;
+  const publish = (id, result) => {
+    if (disposed) return;
+    states.set(id, result.status);
+    onResult(id, result);
+  };
+  const drain = () => {
+    while (!disposed && active < 4 && queue.length) {
+      const id = queue.shift();
+      active += 1;
+      Promise.resolve().then(() => read(id)).then(
+        (result) => publish(id, { ...result, status: "success", error: "" }),
+        () => publish(id, { status: "error", items: [], error: "Proposal history could not be loaded." })
+      ).finally(() => { active -= 1; drain(); });
+    }
+  };
+  return {
+    load(id) {
+      if (disposed || !allowed.has(id) || ["loading", "success"].includes(states.get(id))) return;
+      publish(id, { status: "loading", items: [], error: "" });
+      queue.push(id);
+      drain();
+    },
+    dispose() { disposed = true; queue.length = 0; }
+  };
+}
+
+export async function getCustomerQuoteVersions({ organizationId, quoteId }) {
+  const orgId = text(organizationId);
+  const id = text(quoteId);
+  if (!orgId || !id || orgId.includes("/") || id.includes("/")) throw new Error("Exact quote scope is required.");
+  if (firebaseReady && db) return loadQuoteVersions(orgId, id);
+  const result = await getQuoteVersionHistory(id, { organizationId: orgId });
+  const versions = result.versions.filter((version) => text(version.organizationId) === orgId);
+  return {
+    items: versions.slice(0, VERSION_LIMIT_PER_QUOTE).map((version) => ({
+      ...version, createdAtISO: toIso(version.createdAtISO || version.createdAt || version.timestamp)
+    })),
+    truncated: versions.length > VERSION_LIMIT_PER_QUOTE
+  };
+}
+
+export async function getCustomerWorkspace({
+  organizationId = "",
+  customerId = "",
+  onCoreWorkspace,
+  includeVersions = true
+} = {}) {
   const orgId = text(organizationId);
   const id = text(customerId);
   if (!orgId || !id) throw new Error("organizationId and customerId are required for Customer 360.");
@@ -687,7 +751,22 @@ export async function getCustomerWorkspace({ organizationId = "", customerId = "
     const quotes = matchingQuotes.slice(0, CUSTOMER_WORKSPACE_QUOTE_LIMIT);
     const customer = localCustomersFromQuotes(quotes).find((entry) => entry.id === id);
     if (!customer) return null;
-    const versionResults = await Promise.all(quotes.map(async (quote) => {
+    const quotePageInfo = {
+      limit: CUSTOMER_WORKSPACE_QUOTE_LIMIT,
+      truncated: matchingQuotes.length > CUSTOMER_WORKSPACE_QUOTE_LIMIT
+    };
+    emitCoreWorkspace(onCoreWorkspace, {
+      source: "local",
+      ...buildCustomerWorkspaceDto({
+        customer,
+        quotes,
+        versionsByQuote: {},
+        revenueAutopilotEmailControls: null,
+        revenueAutopilotEmailControlsError: "",
+        quotePageInfo
+      })
+    });
+    const versionResults = await Promise.all((includeVersions ? quotes : []).map(async (quote) => {
       const result = await getQuoteVersionHistory(quote.id, { organizationId: orgId });
       const scopedVersions = result.versions.filter((version) => (
         text(version?.organizationId) === orgId
@@ -715,59 +794,69 @@ export async function getCustomerWorkspace({ organizationId = "", customerId = "
         versionTruncatedQuoteIds,
         revenueAutopilotEmailControls: null,
         revenueAutopilotEmailControlsError: "Customer email controls require a connected workspace.",
-        quotePageInfo: {
-          limit: CUSTOMER_WORKSPACE_QUOTE_LIMIT,
-          truncated: matchingQuotes.length > CUSTOMER_WORKSPACE_QUOTE_LIMIT
-        }
+        quotePageInfo
       })
     };
   }
 
-  const customerSnapshot = await getDoc(doc(db, "organizations", orgId, "customers", id));
+  const [customerSnapshot, quoteSnapshot] = await Promise.all([
+    getDoc(doc(db, "organizations", orgId, "customers", id)),
+    getDocs(query(
+      collection(db, "organizations", orgId, "quotes"),
+      where("customerId", "==", id),
+      orderBy("createdAt", "desc"),
+      limit(CUSTOMER_WORKSPACE_QUOTE_LIMIT + 1)
+    ))
+  ]);
   if (!customerSnapshot.exists()) return null;
-  const quoteSnapshot = await getDocs(query(
-    collection(db, "organizations", orgId, "quotes"),
-    where("customerId", "==", id),
-    orderBy("createdAt", "desc"),
-    limit(CUSTOMER_WORKSPACE_QUOTE_LIMIT + 1)
-  ));
   const quoteDocuments = quoteSnapshot.docs.slice(0, CUSTOMER_WORKSPACE_QUOTE_LIMIT);
   const quotes = quoteDocuments.map((entry) => normalizeQuoteRecord(entry.id, entry.data()));
-  const versionResults = await Promise.all(quotes.map(async (quote) => (
-    [quote.id, await loadQuoteVersions(orgId, quote.id)]
-  )));
+  const quotePageInfo = {
+    limit: CUSTOMER_WORKSPACE_QUOTE_LIMIT,
+    truncated: quoteSnapshot.size > CUSTOMER_WORKSPACE_QUOTE_LIMIT
+  };
+  const customer = { id: customerSnapshot.id, ...customerSnapshot.data() };
+  emitCoreWorkspace(onCoreWorkspace, {
+    source: "firebase",
+    ...buildCustomerWorkspaceDto({
+      customer,
+      quotes,
+      versionsByQuote: {},
+      revenueAutopilotEmailControls: null,
+      revenueAutopilotEmailControlsError: "",
+      quotePageInfo
+    })
+  });
+
+  const revenueAutopilotRead = getRevenueAutopilotCustomerControls({
+    organizationId: orgId,
+    customerId: id
+  }).then((controls) => ({ controls, error: "" })).catch(() => ({
+    controls: null,
+    error: "Current customer email controls could not be loaded."
+  }));
+  const [versionResults, revenueAutopilotResult] = await Promise.all([
+    Promise.all((includeVersions ? quotes : []).map(async (quote) => (
+      [quote.id, await loadQuoteVersions(orgId, quote.id)]
+    ))),
+    revenueAutopilotRead
+  ]);
   const versionsByQuote = Object.fromEntries(versionResults.map(([quoteId, result]) => (
     [quoteId, result.items]
   )));
   const versionTruncatedQuoteIds = versionResults
     .filter(([, result]) => result.truncated)
     .map(([quoteId]) => quoteId);
-  let revenueAutopilotEmailControls = null;
-  let revenueAutopilotEmailControlsError = "";
-  try {
-    revenueAutopilotEmailControls = await getRevenueAutopilotCustomerControls({
-      organizationId: orgId,
-      customerId: id
-    });
-  } catch {
-    // Customer 360 remains available, but the independently private controls
-    // surface must fail closed and expose no inferred current state.
-    revenueAutopilotEmailControls = null;
-    revenueAutopilotEmailControlsError = "Current customer email controls could not be loaded.";
-  }
   return {
     source: "firebase",
     ...buildCustomerWorkspaceDto({
-      customer: { id: customerSnapshot.id, ...customerSnapshot.data() },
+      customer,
       quotes,
       versionsByQuote,
       versionTruncatedQuoteIds,
-      revenueAutopilotEmailControls,
-      revenueAutopilotEmailControlsError,
-      quotePageInfo: {
-        limit: CUSTOMER_WORKSPACE_QUOTE_LIMIT,
-        truncated: quoteSnapshot.size > CUSTOMER_WORKSPACE_QUOTE_LIMIT
-      }
+      revenueAutopilotEmailControls: revenueAutopilotResult.controls,
+      revenueAutopilotEmailControlsError: revenueAutopilotResult.error,
+      quotePageInfo
     })
   };
 }

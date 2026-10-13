@@ -80,6 +80,24 @@ function libraryInput(overrides = {}) {
   };
 }
 
+function importedMenuItemInput(overrides = {}) {
+  return {
+    destination: "library",
+    object: { id: "menu-imported", type: "menu-item" },
+    focus: {
+      sectionId: "menu",
+      recordId: "menu-imported",
+      eventTypeId: "event-42",
+      categoryId: "category-7",
+      importBatchId: "batch-9",
+      sourceRowNumber: 3,
+      requestId: "catalog-import:batch-9:menu-imported:3"
+    },
+    intentId: "review_imported_menu_item",
+    ...overrides
+  };
+}
+
 describe("workspace exact-arrival handoff", () => {
   test("builds and parses a canonical exact Client handoff", () => {
     const handoff = createWorkspaceArrivalHandoff(clientInput());
@@ -232,6 +250,61 @@ describe("workspace exact-arrival handoff", () => {
     }))).toMatchObject({ ok: false, recovery: { code: "query_mismatch" } });
   });
 
+  test("round-trips only the exact imported menu-item review identifiers", () => {
+    const handoff = createWorkspaceArrivalHandoff(importedMenuItemInput());
+
+    expect(handoff).toMatchObject({
+      ok: true,
+      contract: {
+        destination: "library",
+        object: { id: "menu-imported", type: "menu-item", label: "Menu item" },
+        intentId: "review_imported_menu_item",
+        focus: {
+          sectionId: "menu",
+          recordId: "menu-imported",
+          eventTypeId: "event-42",
+          categoryId: "category-7",
+          importBatchId: "batch-9",
+          sourceRowNumber: 3,
+          requestId: "catalog-import:batch-9:menu-imported:3"
+        }
+      },
+      navigation: { path: "/app/catalog", primaryActionReady: true }
+    });
+    expect(parseWorkspaceArrivalHandoff(locationFor(handoff))).toEqual(handoff);
+    expect(Object.keys(handoff.contract.focus)).toEqual([
+      "sectionId",
+      "recordId",
+      "eventTypeId",
+      "categoryId",
+      "importBatchId",
+      "sourceRowNumber",
+      "requestId"
+    ]);
+  });
+
+  test("rejects nonminimal, mismatched, sensitive, and oversized imported menu-item context", () => {
+    const invalid = [
+      importedMenuItemInput({ focus: { ...importedMenuItemInput().focus, mutationReceipt: {} } }),
+      importedMenuItemInput({ focus: { ...importedMenuItemInput().focus, changes: [] } }),
+      importedMenuItemInput({ focus: { ...importedMenuItemInput().focus, sourceFileName: "menu.csv" } }),
+      importedMenuItemInput({ focus: { ...importedMenuItemInput().focus, price: 12 } }),
+      importedMenuItemInput({ focus: { ...importedMenuItemInput().focus, cost: 4 } }),
+      importedMenuItemInput({ focus: { ...importedMenuItemInput().focus, notes: "Customer favorite" } }),
+      importedMenuItemInput({ focus: { ...importedMenuItemInput().focus, customerName: "Private Customer" } }),
+      importedMenuItemInput({ focus: { ...importedMenuItemInput().focus, sectionId: "templates" } }),
+      importedMenuItemInput({ object: { id: "menu-other", type: "menu-item" } }),
+      importedMenuItemInput({ focus: { ...importedMenuItemInput().focus, sourceRowNumber: 0 } }),
+      importedMenuItemInput({ focus: { ...importedMenuItemInput().focus, sourceRowNumber: 3.5 } }),
+      importedMenuItemInput({ focus: { ...importedMenuItemInput().focus, requestId: "customer@example.test" } }),
+      importedMenuItemInput({ focus: { ...importedMenuItemInput().focus, importBatchId: "x".repeat(161) } })
+    ];
+
+    for (const input of invalid) {
+      expect(createWorkspaceArrivalHandoff(input)).toMatchObject({ ok: false, contract: null });
+    }
+  });
+
   test("builds and parses a canonical exact Living Opportunity handoff", () => {
     const handoff = createWorkspaceArrivalHandoff(opportunityInput());
 
@@ -293,6 +366,48 @@ describe("workspace exact-arrival handoff", () => {
     });
     expect(parseWorkspaceArrivalHandoff(locationFor(payment))).toEqual(payment);
     expect(parseWorkspaceArrivalHandoff(locationFor(proposal))).toEqual(proposal);
+  });
+
+  test("preserves exact accepted revision and receipt pins through a Proposal administration arrival", () => {
+    const proposal = createWorkspaceArrivalHandoff(administrationInput({
+      object: { id: "quote-42", type: "customer-decision-artifact" },
+      focus: {
+        quoteId: "quote-42",
+        acceptedRevisionId: "v0017",
+        acceptanceReceiptId: "acceptance-17"
+      },
+      intentId: "review_proposal_controls"
+    }));
+
+    expect(proposal).toMatchObject({
+      ok: true,
+      contract: {
+        focus: {
+          quoteId: "quote-42",
+          acceptedRevisionId: "v0017",
+          acceptanceReceiptId: "acceptance-17"
+        }
+      }
+    });
+    expect(parseWorkspaceArrivalHandoff(locationFor(proposal))).toEqual(proposal);
+  });
+
+  test("rejects a partial or non-Proposal accepted revision arrival", () => {
+    const partial = createWorkspaceArrivalHandoff(administrationInput({
+      object: { id: "quote-42", type: "customer-decision-artifact" },
+      focus: { quoteId: "quote-42", acceptedRevisionId: "v0017" },
+      intentId: "review_proposal_controls"
+    }));
+    const generic = createWorkspaceArrivalHandoff(administrationInput({
+      focus: {
+        quoteId: "quote-42",
+        acceptedRevisionId: "v0017",
+        acceptanceReceiptId: "acceptance-17"
+      }
+    }));
+
+    expect(partial).toMatchObject({ ok: false });
+    expect(generic).toMatchObject({ ok: false });
   });
 
   test("rejects substituted administration records, objects, and routes", () => {
@@ -587,7 +702,7 @@ describe("workspace exact-arrival handoff", () => {
 
     expect(schedule).toMatchObject({
       ok: true,
-      navigation: { path: "/app/schedule", primaryActionReady: true },
+      navigation: { path: "/app/operations", primaryActionReady: true },
       contract: {
         focusTransport: "state_only",
         focusConsumerState: "supported",

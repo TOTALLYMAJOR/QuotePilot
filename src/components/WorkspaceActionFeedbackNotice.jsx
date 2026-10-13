@@ -35,6 +35,8 @@ const EVIDENCE_PRESENTATIONS = Object.freeze({
 const FOLLOW_UP_ACTION_ID = "complete-follow-up";
 const FOLLOW_UP_OBJECT_KIND = "workflow-item";
 const FOLLOW_UP_OBJECT_PREFIX = "follow-up:";
+const APPROVAL_ACTION_ID = "resolve-approval";
+const APPROVAL_OBJECT_KIND = "approval";
 const CANONICAL_INSTANT_SUFFIX = /^(?<taskId>.+):(?<startedAtISO>\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z)$/u;
 
 function boundedText(value, maximumLength = 180) {
@@ -199,6 +201,56 @@ export function resolveWorkspaceActionFeedbackFollowUpAction({
     identity,
     navigation: handoff.navigation
   });
+}
+
+/** Exact active-task fence for one approval mutation attempt. */
+export function workspaceActionFeedbackMatchesApprovalTaskJourney(feedback, journey) {
+  if (!feedback || !journey || typeof journey !== "object") return false;
+  const requestId = boundedText(feedback.object?.id, 160);
+  const generation = boundedText(feedback.generation, 320);
+  const match = generation.match(CANONICAL_INSTANT_SUFFIX);
+  return Boolean(
+    requestId
+    && feedback.actionId === APPROVAL_ACTION_ID
+    && feedback.object?.kind === APPROVAL_OBJECT_KIND
+    && match?.groups?.taskId === journey.taskId
+    && match?.groups?.startedAtISO === journey.startedAtISO
+    && generation === `${journey.taskId}:${journey.startedAtISO}`
+    && journey.taskId === `review-workflow:${requestId}`
+    && journey.destination === "approval"
+    && journey.intentId === "review_approval"
+    && journey.object?.type === APPROVAL_OBJECT_KIND
+    && journey.object?.id === requestId
+    && journey.focus?.requestId === requestId
+    && boundedText(journey.focus?.quoteId, 160)
+  );
+}
+
+/**
+ * Approval uncertainty may only continue the exact active task. It deliberately
+ * has no independent generic navigation fallback because quote identity is not
+ * encoded in the feedback object and must never be guessed.
+ */
+export function resolveWorkspaceActionFeedbackApprovalAction({
+  feedback,
+  nextActionId = "",
+  activeTaskJourney = null
+} = {}) {
+  const selectedNextActionId = String(
+    nextActionId || feedback?.nextAction?.id || ""
+  ).trim();
+  if (
+    !["inspect", "reconcile"].includes(selectedNextActionId)
+    || feedback?.nextAction?.id !== selectedNextActionId
+    || !workspaceActionFeedbackMatchesApprovalTaskJourney(feedback, activeTaskJourney)
+  ) {
+    return Object.freeze({
+      ok: false,
+      status: "recovery",
+      reason: "unsafe_feedback_destination"
+    });
+  }
+  return Object.freeze({ ok: true, strategy: "continue" });
 }
 
 /**

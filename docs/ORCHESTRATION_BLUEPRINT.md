@@ -1,7 +1,6 @@
 # Cloud + Local Orchestration Blueprint
 
-Last updated: 2026-08-28 17:25:14 CDT
-
+Last updated: 2026-10-10 19:54:09 CDT
 ## Goal
 Accelerate delivery while preserving production safety by using:
 - Fast local preflight and scoped validation loops.
@@ -20,9 +19,9 @@ Accelerate delivery while preserving production safety by using:
 3. Cloud Runner Handoff
 - Hosted agents and external runners start from a machine-readable
   `plan:task --json` packet, consume the selected model/reasoning effort,
-  read-first files, required skills, documentation obligations, validations,
-  and task graph before implementation, then close with a `--phase complete`
-  packet.
+  execution and domain classifications, read-first files, required skills,
+  documentation obligations, validations, and task graph before
+  implementation, then close with a `--phase complete` packet.
 - The runner may use injected environment values, ignored local `.env.local`,
   and cached `.cache` artifacts for speed, but it must never write provider
   secrets into tracked files or treat missing credentials as permission to
@@ -63,7 +62,12 @@ Each PR declares:
 - `tenant_impact`: `none` / `read` / `write` / `rules`
 - `required_lanes`: `auto` or manual override
 - `doc_impact`: canonical docs touched and rationale
-
+- `product_intelligence`: required catering actor/job/improvement, governed
+  outcome or metric IDs, guardrails, evidence need, and ledger entry; or an
+  explicit `not_applicable` rationale for mechanical work
+- for each named enhancement, `routes`, `authorities`, and `tests` from
+  `docs/enhancement-impact-manifest.json`; presentation-only work uses the
+  literal empty authority list and cannot include a registered authority path
 Before implementation, `npm run plan:task` may derive the same decision inputs
 from a bounded task description and explicit path set. Its canonical policy is
 `docs/task-orchestration-contracts.json`; the result adds a model tier,
@@ -72,17 +76,51 @@ graph. The external runner—not repository code—owns the actual model switch.
 Every plan also carries an exact UTC lifecycle timestamp. The `complete` phase
 is the authoritative time included in the final task report.
 
+The planner extracts exact enhancement/item IDs from bounded task text or
+accepts `--enhancement <id>`. Missing declarations fail before a packet is
+emitted. Registered pricing, commercial-quote, Inventory, and orchestration
+paths also fail when the declaration omits their authority identifier. The
+manifest checker proves declaration shape and explicit path mapping only; it
+does not prove that the authority map is semantically exhaustive.
+
+Schema-v2 packets preserve the execution profile and add an orthogonal
+`domainClassification`. When applicable, the packet names the smallest
+relevant catering contexts, current QuotePilot authority reads, and advisory
+reference slices. References remain separate from `readFirst` so the runner can
+form a provisional action from current authority and code before domain
+reconsideration. Existing packet fields remain available to runners.
+
+The packet also carries a `productIntelligence` contract independently of the
+execution profile. Applicable work is fail-closed on the catering-value fields,
+the Product Intelligence index, the release/experiment ledger, and
+`npm run check:product-intelligence`. Mechanical work may be marked
+`not_applicable` only with a rationale; it may not invent a catering benefit.
+
+The layered evaluation manifest composes existing unit, browser, analytics,
+Truth Loop, and Steward checks without creating another test framework.
+`npm run eval:layered` records each authority, AI, journey, recovery, telemetry,
+operator, and accessibility dimension separately in an ignored immutable local
+receipt. A failed blocking dimension cannot be averaged away; manual and higher
+evidence classes stay `not_run` until their own proof is recorded.
 ## Token-Efficient Task Planning
 - Pass explicit paths in a dirty worktree so unrelated changes do not raise the
   risk/model tier or widen dependency reads.
 - Read the emitted `dependencies.readFirst` set before task-owned source.
 - Load every emitted `dependencies.requiredSkills` entry before acting; UI work
   requires `design-language` plus both canonical QuotePilot design documents.
-- Implement in `taskGraph` order: discover, implement, governance, verify.
+- When domain classification applies, load `catering-domain-intelligence`, form
+  the provisional action before opening its emitted reference slices, and use
+  the resulting `RETAIN`, `REFINE`, `REPLACE`, `EXPAND`, `BOUND`, or
+  `NO_MATERIAL_EFFECT` decision to govern implementation and validation.
+- Implement in `taskGraph` order: discover, form provisional action, domain
+  reconsideration, implement, governance, verify, then expertise evaluation
+  when agent behavior changed.
 - Run focused checks before full build/release lanes; do not omit required
   global gates from the emitted validation list.
 - Treat `frontier` selection as a safety escalation for authorization,
   payments, providers, migrations, security, and production work.
+- Keep deterministic routing proof, fresh-agent expertise evaluation, and human
+  acceptance as separate evidence classes.
 
 ## Lane Taxonomy
 - `lane:quick`
@@ -92,6 +130,8 @@ is the authoritative time included in the final task report.
   - `npm run check:workflows`
 - `lane:core`
   - `npm run check:capability-surfaces`
+  - `npm run check:field-states`
+  - `npm run check:product-intelligence`
   - `npm run test:unit`
   - `npm run build`
   - `npm run check:docs:governance`

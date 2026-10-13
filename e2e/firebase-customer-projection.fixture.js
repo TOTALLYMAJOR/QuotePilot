@@ -15,22 +15,43 @@ export async function exerciseCustomerProjectionTransactions() {
   const unique = globalThis.crypto.randomUUID().replace(/-/g, "").slice(0, 16);
   const normalizedEmail = `projection-${unique}@example.com`;
   const importedBatchId = `batch-${unique}`;
+  const customerImportRecords = [{
+    rowNumber: 2,
+    record: {
+      name: "Imported Projection Customer",
+      email: normalizedEmail,
+      phone: "205-555-0142",
+      company: "Imported Customer Company",
+      notes: "Preserve this imported customer note."
+    }
+  }];
+  const preflightCustomerImport = httpsCallable(cloudFunctions, "preflightCustomerImportBatch");
   const createCustomerImport = httpsCallable(cloudFunctions, "createCustomerImportBatch");
+  const customerImportPreflight = (await preflightCustomerImport({
+    organizationId,
+    fileName: "customer-projection.csv",
+    records: customerImportRecords
+  })).data;
+  if (
+    customerImportPreflight?.ok !== true
+    || customerImportPreflight?.status !== "ready"
+    || customerImportPreflight?.authority !== "server_preflight"
+    || !/^customer_preflight_[a-f0-9]{32}$/.test(String(customerImportPreflight?.preflightId || ""))
+    || !customerImportPreflight?.planHash
+  ) {
+    throw new Error("The authoritative customer import preflight did not return an accepted plan.");
+  }
   const imported = (await createCustomerImport({
     organizationId,
     organizationName: "Authoritative Pricing E2E",
     fileName: "customer-projection.csv",
     importBatchId: importedBatchId,
-    records: [{
-      rowNumber: 2,
-      record: {
-        name: "Imported Projection Customer",
-        email: normalizedEmail,
-        phone: "205-555-0142",
-        company: "Imported Customer Company",
-        notes: "Preserve this imported customer note."
-      }
-    }]
+    records: customerImportRecords,
+    preflightId: customerImportPreflight.preflightId,
+    preflightPlanHash: customerImportPreflight.planHash,
+    preflightRecords: customerImportRecords,
+    preflightChunkIndex: 0,
+    preflightSessionId: importedBatchId
   })).data;
   const importedCustomerId = String(imported?.createdRecords?.[0]?.id || "");
   if (imported?.ok !== true || imported?.createdCount !== 1 || !importedCustomerId) {

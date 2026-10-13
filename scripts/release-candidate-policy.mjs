@@ -32,10 +32,12 @@ export const RELEASE_CANDIDATE_UAT_PROFILE = "staging-safe-off";
 export const RELEASE_CANDIDATE_STAFFING_UAT_PROFILE = "staging-staffing-authority";
 export const RELEASE_CANDIDATE_PROVIDER_UAT_PROFILE =
   RELEASE_ACCEPTANCE_CANDIDATE_PROFILE;
+export const RELEASE_CANDIDATE_EVENT_SPINE_UAT_PROFILE = "staging-event-operating-spine";
 export const RELEASE_CANDIDATE_UAT_PROFILES = Object.freeze([
   RELEASE_CANDIDATE_UAT_PROFILE,
   RELEASE_CANDIDATE_STAFFING_UAT_PROFILE,
-  RELEASE_CANDIDATE_PROVIDER_UAT_PROFILE
+  RELEASE_CANDIDATE_PROVIDER_UAT_PROFILE,
+  RELEASE_CANDIDATE_EVENT_SPINE_UAT_PROFILE
 ]);
 
 const CANDIDATE_FUNCTIONS_RUNTIME_BASE = Object.freeze({
@@ -44,7 +46,7 @@ const CANDIDATE_FUNCTIONS_RUNTIME_BASE = Object.freeze({
   AUTH_PLATFORM_ADMIN_EMAILS: "flightcontrol@quietpilot.us",
   NOTIFICATIONS_EMAIL_PROVIDER: "none",
   EMAIL_FROM_NAME: "QuotePilot by MBMApps",
-  EMAIL_FROM_EMAIL: "quotepilot@leaguepilot.us",
+  EMAIL_FROM_EMAIL: "quotepilot@quietpilot.us",
   NOTIFICATIONS_SMS_PROVIDER: "none",
   STRIPE_MODE: "test",
   COMMERCIAL_CHANGE_AUTHORITY_ENABLED: "false",
@@ -52,7 +54,8 @@ const CANDIDATE_FUNCTIONS_RUNTIME_BASE = Object.freeze({
   REVENUE_AUTOPILOT_SENDS_ENABLED: "false",
   BUYER_ACCESS_ENABLED: "false",
   BUYER_ACCESS_STRIPE_MODE: "test",
-  BUYER_ACCESS_APP_BASE_URL: `${RELEASE_CANDIDATE_POLICY.firebase.hostingUrl}/app`
+  BUYER_ACCESS_APP_BASE_URL: `${RELEASE_CANDIDATE_POLICY.firebase.hostingUrl}/app`,
+  INQUIRY_SHOWCASE_ENABLED: "false"
 });
 
 export function requireCandidateUatProfile(value) {
@@ -79,8 +82,30 @@ export function candidateFunctionsRuntimeExpected(
     OPERATIONAL_STAFFING_AUTHORITY_ENABLED:
       [
         RELEASE_CANDIDATE_STAFFING_UAT_PROFILE,
-        RELEASE_CANDIDATE_PROVIDER_UAT_PROFILE
-      ].includes(profile) ? "true" : "false"
+        RELEASE_CANDIDATE_PROVIDER_UAT_PROFILE,
+        RELEASE_CANDIDATE_EVENT_SPINE_UAT_PROFILE
+      ].includes(profile) ? "true" : "false",
+    ...(profile === RELEASE_CANDIDATE_EVENT_SPINE_UAT_PROFILE ? {
+      EVENT_OPERATING_SPINE_ENABLED: "true",
+      COMMERCIAL_CHANGE_AUTHORITY_ENABLED: "true",
+      INVENTORY_AUTHORITY_ENABLED: "true",
+      TENANT_WORKFLOW_ORGANIZATION_ID: "mm05366-sandbox"
+    } : {})
+  });
+}
+
+export function candidateEventSpineRequirements(profileValue) {
+  const profile = requireCandidateUatProfile(profileValue);
+  if (profile !== RELEASE_CANDIDATE_EVENT_SPINE_UAT_PROFILE) return null;
+  return Object.freeze({
+    serverFlag: Object.freeze({ name: "EVENT_OPERATING_SPINE_ENABLED", value: true }),
+    commercialServerFlag: Object.freeze({ name: "COMMERCIAL_CHANGE_AUTHORITY_ENABLED", value: true }),
+    commercialTenantGate: Object.freeze({ documentPath: "organizations/{organizationId}/settings/config", field: "commercialChangeAuthorityEnabled", requiredValue: true, availability: "not_yet_available", reasonCode: "tenant_activation_not_performed", observedValue: null }),
+    browserFlags: Object.freeze({ VITE_AMBIENT_UI_ENABLED: true, VITE_EVENT_OPERATING_SPINE_ENABLED: true }),
+    tenantGate: Object.freeze({ documentPath: "organizations/{organizationId}/settings/config", field: "eventOperatingSpineEnabled", requiredValue: true, availability: "not_yet_available", reasonCode: "tenant_activation_not_performed", observedValue: null }),
+    tenantActivationIncluded: false,
+    tenantSelectionRequired: true,
+    operatorAcceptanceEstablished: false
   });
 }
 
@@ -98,7 +123,14 @@ export const CANDIDATE_FUNCTIONS_FORBIDDEN_PLAINTEXT = Object.freeze([
   "BUYER_ACCESS_STRIPE_SECRET_KEY",
   "BUYER_ACCESS_STRIPE_WEBHOOK_SECRET",
   "BUYER_ACCESS_TURNSTILE_SECRET",
-  "BUYER_ACCESS_RATE_LIMIT_SECRET"
+  "BUYER_ACCESS_RATE_LIMIT_SECRET",
+  "INQUIRY_TURNSTILE_SECRET",
+  "INQUIRY_RATE_LIMIT_SECRET",
+  "GOOGLE_CALENDAR_OAUTH_CLIENT_ID",
+  "GOOGLE_CALENDAR_OAUTH_CLIENT_SECRET",
+  "GOOGLE_CALENDAR_OAUTH_STATE_SECRET",
+  "GOOGLE_CALENDAR_TOKEN_ENCRYPTION_KEY",
+  "INTENT_PARSER_OPENAI_KEY"
 ]);
 
 export const CANDIDATE_REQUIRED_SECRET_METADATA = Object.freeze([
@@ -106,6 +138,13 @@ export const CANDIDATE_REQUIRED_SECRET_METADATA = Object.freeze([
   "BUYER_ACCESS_STRIPE_SECRET_KEY",
   "BUYER_ACCESS_STRIPE_WEBHOOK_SECRET",
   "BUYER_ACCESS_TURNSTILE_SECRET",
+  "GOOGLE_CALENDAR_OAUTH_CLIENT_ID",
+  "GOOGLE_CALENDAR_OAUTH_CLIENT_SECRET",
+  "GOOGLE_CALENDAR_OAUTH_STATE_SECRET",
+  "GOOGLE_CALENDAR_TOKEN_ENCRYPTION_KEY",
+  "INQUIRY_RATE_LIMIT_SECRET",
+  "INQUIRY_TURNSTILE_SECRET",
+  "INTENT_PARSER_OPENAI_KEY",
   "PINGRAM_API_KEY",
   "PINGRAM_WEBHOOK_SECRET",
   "RESEND_API_KEY",
@@ -122,11 +161,14 @@ const CANDIDATE_FUNCTIONS_DISABLED_RESIDUE = Object.freeze([
   "TWILIO_ACCOUNT_SID",
   "TWILIO_MESSAGING_SERVICE_SID",
   "NOTIFICATIONS_OWNER_PHONE",
-  "BUYER_ACCESS_ALLOWED_EMAILS"
+  "BUYER_ACCESS_ALLOWED_EMAILS",
+  "INQUIRY_TURNSTILE_HOSTNAMES"
 ]);
 
 const CANDIDATE_FUNCTIONS_ALLOWED_KEYS = new Set([
-  ...RELEASE_CANDIDATE_UAT_PROFILES.flatMap((profile) => (
+  ...RELEASE_CANDIDATE_UAT_PROFILES.filter((profile) => (
+    profile !== RELEASE_CANDIDATE_EVENT_SPINE_UAT_PROFILE
+  )).flatMap((profile) => (
     Object.keys(candidateFunctionsRuntimeExpected(profile))
   ))
 ]);
@@ -292,6 +334,14 @@ export function validateCandidateBrowserEnvironment(
       "VITE_BUYER_ACCESS_TURNSTILE_SITE_KEY must be a reviewed non-test staging site key for provider acceptance."
     );
   }
+  if (["1", "true", "yes", "on"].includes(
+    String(environment.VITE_INQUIRY_SHOWCASE_ENABLED || "").trim().toLowerCase()
+  )) {
+    reject("VITE_INQUIRY_SHOWCASE_ENABLED must remain false in every existing candidate profile.");
+  }
+  if (String(environment.VITE_INQUIRY_TURNSTILE_SITE_KEY || "").trim()) {
+    reject("VITE_INQUIRY_TURNSTILE_SITE_KEY must remain empty while Inquiry Showcase is disabled.");
+  }
   return Object.freeze({
     ...exact,
     VITE_AMBIENT_UI_ENABLED: "true",
@@ -300,7 +350,10 @@ export function validateCandidateBrowserEnvironment(
     VITE_BUYER_ACCESS_PUBLIC_CTA_ENABLED: providerAcceptance ? "true" : "false",
     VITE_BUYER_ACCESS_TURNSTILE_SITE_KEY: providerAcceptance
       ? turnstileSiteKey
-      : ""
+      : "",
+    VITE_INQUIRY_SHOWCASE_ENABLED: "false",
+    VITE_INQUIRY_TURNSTILE_SITE_KEY: "",
+    ...(profile === RELEASE_CANDIDATE_EVENT_SPINE_UAT_PROFILE ? { VITE_EVENT_OPERATING_SPINE_ENABLED: "true" } : {})
   });
 }
 
@@ -349,7 +402,7 @@ export function validateCandidateFunctionsEnvironment(
   }
   const unknownKeys = Object.keys(environment)
     .filter((name) => String(environment[name] || "").trim())
-    .filter((name) => !CANDIDATE_FUNCTIONS_ALLOWED_KEYS.has(name));
+    .filter((name) => !CANDIDATE_FUNCTIONS_ALLOWED_KEYS.has(name) && !Object.hasOwn(expectedRuntime, name));
   if (unknownKeys.length) {
     reject(`Functions environment contains unreviewed variables: ${unknownKeys.sort().join(", ")}.`);
   }
@@ -583,6 +636,7 @@ const CANDIDATE_RECEIPT_IMMUTABLE_FIELDS = Object.freeze([
   "reservationId",
   "target",
   "uatProfile",
+  "rolloutRequirements",
   "sourceSha",
   "ci",
   "createdAt"
@@ -728,6 +782,7 @@ export function reserveCandidateReceipt({
     status: "reserved",
     target: normalizedTarget,
     uatProfile: normalizedUatProfile,
+    ...(candidateEventSpineRequirements(normalizedUatProfile) ? { rolloutRequirements: candidateEventSpineRequirements(normalizedUatProfile) } : {}),
     sourceSha: sha,
     ci,
     provider,

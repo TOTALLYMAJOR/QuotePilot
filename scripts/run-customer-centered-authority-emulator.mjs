@@ -113,7 +113,7 @@ const env = {
   RESEND_WEBHOOK_SECRET: webhookSecret,
   NOTIFICATIONS_EMAIL_PROVIDER: "none",
   EMAIL_FROM_NAME: "QuotePilot by MBMApps",
-  EMAIL_FROM_EMAIL: "quotepilot@leaguepilot.us",
+  EMAIL_FROM_EMAIL: "quotepilot@quietpilot.us",
   APP_BASE_URL: "http://127.0.0.1:4174/app",
   FUNCTIONS_DISCOVERY_TIMEOUT: process.env.FUNCTIONS_DISCOVERY_TIMEOUT || "45000",
   TMPDIR: "/tmp",

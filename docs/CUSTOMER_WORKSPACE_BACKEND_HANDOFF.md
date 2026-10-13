@@ -1,13 +1,13 @@
 # Customer Workspace Backend Handoff
 
+Last updated: 2026-09-10 15:09:08 CDT
+
 Status: approved backend contract for stable customer identity and Customer 360.
 Current qualification belongs in `PROJECT_STATUS.md`; remaining rollout work
 belongs in `DEV_TASKS.md`. This handoff does not authorize production
 normalization/backfill, deployment, flag promotion, Stripe Connect work,
 structured change requests, persistent customer accounts, Revenue Autopilot
 provider activation, or Commercial Change enforcement-gate promotion.
-
-Last updated: August 9, 2026
 
 North star: [Customer-Centered Workspace Plan](CUSTOMER_CENTERED_WORKSPACE_PLAN.md)
 

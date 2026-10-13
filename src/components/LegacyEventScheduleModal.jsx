@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import AdaptiveChoiceField from "./AdaptiveChoiceField";
 import EventRunOfShowPanel from "./EventRunOfShowPanel";
+import FieldStateIndicator from "./FieldStateIndicator";
 import StatusChip from "./StatusChip";
 import {
   buildKitchenCheckpoints,
@@ -9,7 +11,7 @@ import {
   parseTimeToMinutes
 } from "../lib/quoteWorkflow";
 import {
-  getQuoteHistory,
+  getEventScheduleQuotes,
   updateQuoteBookingAssignment,
   updateQuoteKitchenCheckpoints,
   updateQuoteProductionChecklist
@@ -29,11 +31,10 @@ import {
 import { buildEventRunOfShowReadModel } from "../lib/eventRunOfShow";
 import "./scheduleMotion.css";
 
-export const EVENT_SCHEDULE_QUOTE_LIMIT = 500;
+export const EVENT_SCHEDULE_QUOTE_LIMIT = 100;
 
 const STATUS_SET = new Set(["accepted", "booked"]);
 const WEEKDAY_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-const DEFAULT_STAFF_LEADS = ["Event Lead", "Kitchen Lead", "Shift Lead"];
 const EMPTY_DAY_CONFLICT = { total: 0, overlap: 0, unknown: 0, capacity: 0 };
 
 function toIsoDate(value) {
@@ -77,6 +78,18 @@ function startOfWeek(date) {
 
 function endOfWeek(date) {
   return addDays(startOfWeek(date), 6);
+}
+
+export function getScheduleVisibleInterval({ anchorIso, viewMode = "month" } = {}) {
+  const anchorDate = parseIsoDate(anchorIso);
+  if (!anchorDate) return null;
+  const start = viewMode === "week"
+    ? startOfWeek(anchorDate)
+    : startOfWeek(startOfMonth(anchorDate));
+  const end = viewMode === "week"
+    ? endOfWeek(anchorDate)
+    : endOfWeek(endOfMonth(anchorDate));
+  return { startDate: toIsoDate(start), endDate: toIsoDate(end) };
 }
 
 function sameMonth(a, b) {
@@ -155,7 +168,81 @@ function normalizeStaffLeads(input) {
       seen.add(item);
       return item;
     });
-  return leads.length ? leads : DEFAULT_STAFF_LEADS;
+  return leads;
+}
+
+export function StaffLeadChoiceField({ staffLeads, value, disabled, onChange, onRecover }) {
+  const current = String(value || "").trim();
+  const currentIsAvailable = staffLeads.includes(current);
+  const options = [
+    ...(!currentIsAvailable && current ? [{ value: current, label: `${current} · saved lead no longer available`, disabled: true }] : []),
+    ...staffLeads.map((lead) => ({ value: lead, label: lead }))
+  ];
+
+  if (!staffLeads.length && !current) {
+    return (
+      <AdaptiveChoiceField
+        className="schedule-assignment-field"
+        label="Staff lead"
+        options={[]}
+        emptyState="unavailable"
+        emptyReason="No current staff leads are available for assignment."
+        recoveryAction={{ label: "Refresh schedule", onClick: onRecover }}
+      />
+    );
+  }
+  if (!staffLeads.length) {
+    return (
+      <div className="schedule-assignment-field" data-adaptive-choice-mode="stale">
+        <span className="adaptive-choice-field__label">Staff lead</span>
+        <strong className="adaptive-choice-field__single-value">{current}</strong>
+        <FieldStateIndicator
+          state={disabled ? { editability: "protected" } : { evidence: "stale" }}
+          label="Staff lead state"
+          reason={disabled ? "Staff assignment is temporarily locked." : "This saved lead is no longer in the current team choices."}
+          supportingDetail="The saved lead remains visible until an operator resolves it."
+          recoveryAction={disabled ? undefined : { label: "Clear unavailable lead", onClick: () => onChange("") }}
+        />
+      </div>
+    );
+  }
+  if (staffLeads.length === 1 && !current) {
+    return (
+      <div className="schedule-assignment-field" data-adaptive-choice-mode="suggested">
+        <span className="adaptive-choice-field__label">Staff lead</span>
+        <strong className="adaptive-choice-field__single-value">{staffLeads[0]}</strong>
+        <FieldStateIndicator
+          state={disabled ? { editability: "protected" } : { origin: "suggested" }}
+          label="Staff lead state"
+          provenance={disabled ? "" : "The only current staff lead choice"}
+          supportingDetail={disabled ? "Staff assignment is temporarily locked." : "Confirm this lead before changing the saved assignment."}
+          recoveryAction={disabled ? undefined : { label: `Assign ${staffLeads[0]}`, onClick: () => onChange(staffLeads[0]) }}
+        />
+      </div>
+    );
+  }
+  const stale = Boolean(current && !currentIsAvailable);
+  return (
+    <div className="schedule-assignment-choice">
+      <AdaptiveChoiceField
+        className="schedule-assignment-field"
+        label="Staff lead"
+        options={options}
+        value={current}
+        onChange={(event) => onChange(event.target.value)}
+        disabled={disabled}
+        placeholder="Choose a staff lead"
+        singleChoiceDetail="This is the only current lead and the saved assignment."
+        fieldState={stale ? (disabled ? { editability: "protected" } : { evidence: "stale" }) : undefined}
+        fieldStateDetails={stale ? {
+          reason: disabled ? "Staff assignment is temporarily locked." : "This saved lead is no longer in the current team choices.",
+          supportingDetail: "The saved lead remains visible until an operator resolves it.",
+          recoveryAction: disabled ? undefined : { label: "Clear unavailable lead", onClick: () => onChange("") }
+        } : {}}
+      />
+      {current && currentIsAvailable && !disabled ? <button type="button" className="ghost compact" onClick={() => onChange("")}>Clear lead</button> : null}
+    </div>
+  );
 }
 
 function addReason(reasonMap, quoteId, reason) {
@@ -386,6 +473,7 @@ export function EventScheduleView({
   staffLeads = [],
   capacityLimit = 400,
   currentUserEmail = "",
+  principalId = "",
   returnFocusRef = null
 }) {
   const embedded = presentation === "embedded";
@@ -428,9 +516,13 @@ export function EventScheduleView({
         }
     ));
     try {
-      const result = await getQuoteHistory({
+      const interval = getScheduleVisibleInterval({ anchorIso, viewMode });
+      if (!interval) throw new Error("The visible schedule interval is invalid.");
+      const result = await getEventScheduleQuotes({
         organizationId: readOrganizationId,
-        limitCount: EVENT_SCHEDULE_QUOTE_LIMIT
+        principalId,
+        ...interval,
+        pageSize: EVENT_SCHEDULE_QUOTE_LIMIT
       });
       if (loadGenerationRef.current !== generation) return;
       setState({
@@ -438,7 +530,10 @@ export function EventScheduleView({
         error: "",
         source: result.source,
         quotes: result.quotes,
-        truncated: result.truncated === true,
+        truncated: result.complete !== true,
+        complete: result.complete === true,
+        interval: result.interval,
+        pageCount: result.pageCount,
         organizationId: readOrganizationId
       });
     } catch (err) {
@@ -460,7 +555,7 @@ export function EventScheduleView({
     return () => {
       loadGenerationRef.current += 1;
     };
-  }, [open, organizationId]);
+  }, [anchorIso, open, organizationId, principalId, viewMode]);
 
   // Backstop clear so the one-shot drop-settle / lane-glow classes always
   // come off and a repeat drop can re-fire them.
@@ -515,8 +610,9 @@ export function EventScheduleView({
     [selectedIso, state.quotes, state.source, state.truncated]
   );
 
+  const availableStaffLeads = useMemo(() => normalizeStaffLeads(staffLeads), [staffLeads]);
   const resolvedStaffLeads = useMemo(() => {
-    const base = normalizeStaffLeads(staffLeads);
+    const base = availableStaffLeads;
     const seen = new Set(base);
     const next = [...base];
     scheduledEvents.forEach((event) => {
@@ -527,14 +623,14 @@ export function EventScheduleView({
       }
     });
     return next;
-  }, [staffLeads, scheduledEvents]);
+  }, [availableStaffLeads, scheduledEvents]);
 
   const laneDefinitions = useMemo(
     () => [
-      { id: "", label: "Unassigned" },
-      ...resolvedStaffLeads.map((lead) => ({ id: lead, label: lead }))
+      { id: "", label: "Unassigned", available: true },
+      ...resolvedStaffLeads.map((lead) => ({ id: lead, label: lead, available: availableStaffLeads.includes(lead) }))
     ],
-    [resolvedStaffLeads]
+    [availableStaffLeads, resolvedStaffLeads]
   );
 
   const laneEvents = useMemo(() => {
@@ -1111,19 +1207,13 @@ export function EventScheduleView({
                       >
                         {confirmationLabel(item)}
                       </p>
-                      <label className="schedule-assignment-field">
-                        <span>Staff lead</span>
-                        <select
-                          value={item.staffLead}
-                          onChange={(event) => handleAssignStaff(item.id, event.target.value)}
-                          disabled={Boolean(assigningId)}
-                        >
-                          <option value="">Unassigned</option>
-                          {resolvedStaffLeads.map((lead) => (
-                            <option key={lead} value={lead}>{lead}</option>
-                          ))}
-                        </select>
-                      </label>
+                      <StaffLeadChoiceField
+                        staffLeads={availableStaffLeads}
+                        value={item.staffLead}
+                        disabled={Boolean(assigningId)}
+                        onChange={(lead) => handleAssignStaff(item.id, lead)}
+                        onRecover={() => void load()}
+                      />
                       {item.conflictReasons.length > 0 && (
                         <p className="schedule-conflict-note">
                           {item.conflictReasons.map((reason) => reasonLabel(reason)).join(" • ")}
@@ -1232,6 +1322,7 @@ export function EventScheduleView({
                       const laneClass = [
                         "schedule-staff-lane",
                         lane.id ? "assigned" : "unassigned",
+                        lane.available ? "" : "is-stale",
                         dropLaneKey === laneKey ? "drop-target" : "",
                         laneGlow ? "lane-glow" : ""
                       ]
@@ -1242,6 +1333,7 @@ export function EventScheduleView({
                           key={laneGlow ? `${laneKey}-glow-${laneGlow.runId}` : laneKey}
                           className={laneClass}
                           data-tone={laneGlow ? laneGlow.tone : undefined}
+                          data-lead-availability={lane.available ? "available" : "stale"}
                           onAnimationEnd={laneGlow
                             ? (event) => {
                               if (event.animationName !== "schedule-lane-glow") return;
@@ -1251,6 +1343,7 @@ export function EventScheduleView({
                             }
                             : undefined}
                           onDragOver={(event) => {
+                            if (!lane.available) return;
                             event.preventDefault();
                             if (!assigningId) {
                               setDropLaneKey(laneKey);
@@ -1258,14 +1351,14 @@ export function EventScheduleView({
                             }
                           }}
                           onDragLeave={() => setDropLaneKey((prev) => (prev === laneKey ? "" : prev))}
-                          onDrop={(event) => handleDropOnLane(event, lane.id)}
+                          onDrop={lane.available ? (event) => handleDropOnLane(event, lane.id) : undefined}
                         >
                           <header>
                             <strong>{lane.label}</strong>
                             <span>{laneItems.length}</span>
                           </header>
                           <div className="schedule-staff-items">
-                            {laneItems.length === 0 && <p className="muted">Drop events here</p>}
+                            {laneItems.length === 0 && <p className="muted">{lane.available ? "Drop events here" : "Saved lead unavailable"}</p>}
                             {laneItems.map((item) => {
                               const settle = dropFeedback && dropFeedback.quoteId === item.id
                                 ? dropFeedback

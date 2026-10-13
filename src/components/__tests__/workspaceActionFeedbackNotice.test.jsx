@@ -7,8 +7,10 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import WorkspaceActionFeedbackNotice, {
   buildWorkspaceActionFeedbackFollowUpIdentity,
   buildWorkspaceActionFeedbackPresentation,
+  resolveWorkspaceActionFeedbackApprovalAction,
   resolveWorkspaceActionFeedbackFollowUpAction,
   WorkspaceActionFeedbackAnnouncer,
+  workspaceActionFeedbackMatchesApprovalTaskJourney,
   workspaceActionFeedbackMatchesTaskJourney
 } from "../WorkspaceActionFeedbackNotice";
 import {
@@ -58,6 +60,30 @@ const FOLLOW_UP_TASK = Object.freeze({
     requestId: "follow-up:quote-42"
   }),
   intentId: "review_follow_up"
+});
+
+const APPROVAL_TASK = Object.freeze({
+  taskId: "review-workflow:approval-42",
+  startedAtISO: "2026-09-03T05:42:00.000Z",
+  destination: "approval",
+  object: Object.freeze({ type: "approval", id: "approval-42" }),
+  focus: Object.freeze({ quoteId: "quote-42", requestId: "approval-42" }),
+  intentId: "review_approval"
+});
+
+const APPROVAL_FEEDBACK = Object.freeze({
+  ...BASE_FEEDBACK,
+  phase: "uncertain",
+  actionId: "resolve-approval",
+  actionLabel: "Approve request",
+  attemptId: "attempt-approval-42",
+  generation: `${APPROVAL_TASK.taskId}:${APPROVAL_TASK.startedAtISO}`,
+  object: Object.freeze({
+    kind: "approval",
+    id: "approval-42",
+    label: "QP-42 approval"
+  }),
+  nextAction: Object.freeze({ id: "reconcile", label: "Check current approval state" })
 });
 
 let container;
@@ -224,6 +250,36 @@ describe("follow-up feedback destination identity", () => {
       "/app/workflow?quoteId=quote-42&attentionType=follow_up&requestId=follow-up%3Aquote-42"
     );
     expect(JSON.stringify(newerTask)).toBe(before);
+  });
+});
+
+describe("approval feedback destination identity", () => {
+  test("continues only the exact active approval task", () => {
+    expect(workspaceActionFeedbackMatchesApprovalTaskJourney(
+      APPROVAL_FEEDBACK,
+      APPROVAL_TASK
+    )).toBe(true);
+    expect(resolveWorkspaceActionFeedbackApprovalAction({
+      feedback: APPROVAL_FEEDBACK,
+      nextActionId: "reconcile",
+      activeTaskJourney: APPROVAL_TASK
+    })).toEqual({ ok: true, strategy: "continue" });
+  });
+
+  test.each([
+    { journey: { ...APPROVAL_TASK, focus: { ...APPROVAL_TASK.focus, quoteId: "" } }, label: "missing quote" },
+    { journey: { ...APPROVAL_TASK, object: { ...APPROVAL_TASK.object, id: "approval-nearby" } }, label: "nearby request" },
+    { journey: { ...APPROVAL_TASK, taskId: "review-workflow:approval-nearby" }, label: "different task" }
+  ])("rejects $label instead of guessing a generic approval destination", ({ journey }) => {
+    expect(workspaceActionFeedbackMatchesApprovalTaskJourney(
+      APPROVAL_FEEDBACK,
+      journey
+    )).toBe(false);
+    expect(resolveWorkspaceActionFeedbackApprovalAction({
+      feedback: APPROVAL_FEEDBACK,
+      nextActionId: "reconcile",
+      activeTaskJourney: journey
+    })).toMatchObject({ ok: false, reason: "unsafe_feedback_destination" });
   });
 });
 

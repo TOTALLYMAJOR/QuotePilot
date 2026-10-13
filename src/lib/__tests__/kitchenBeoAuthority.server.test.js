@@ -12,6 +12,8 @@ const graphCore = require("../commercialDependencyGraphCore.cjs");
 const {
   KITCHEN_BEO_DECLARED_INPUT_NODE_IDS,
   KITCHEN_BEO_FRESHNESS_STATES,
+  KITCHEN_BEO_INPUT_SCHEMA_VERSION,
+  KITCHEN_BEO_INPUT_SCHEMA_VERSION_WITH_OPERATIONAL_NOTES,
   KITCHEN_BEO_MAX_ARTIFACT_BYTES,
   KitchenBeoAuthorityError,
   createKitchenBeoAuthority
@@ -55,6 +57,20 @@ function generationClaim(quote = canonicalQuote(), request = { requestId: "reque
     request,
     trustedContext: trustedContext()
   });
+}
+
+function operationalNotes(overrides = {}) {
+  return {
+    schemaVersion: "event-operational-notes-beo-v1",
+    sourceRevisionId: "v0014",
+    journalRevision: 1,
+    notes: [{
+      noteId: "event_note_0123456789abcdef0123456789abcdef",
+      type: "venue",
+      text: "Use the east loading entrance."
+    }],
+    ...overrides
+  };
 }
 
 function generationReceipt({
@@ -225,6 +241,65 @@ describe("server Kitchen BEO authority foundation", () => {
 });
 
 describe("server-derived Kitchen BEO freshness", () => {
+  test("versions visible operational notes without changing the immutable commercial graph", () => {
+    const quote = canonicalQuote();
+    const legacyClaim = generationClaim(quote, { requestId: "request-no-notes" });
+    const noteClaim = authority.buildGenerationClaim({
+      canonicalQuote: quote,
+      operationalNotes: operationalNotes(),
+      request: { requestId: "request-with-notes" },
+      trustedContext: trustedContext()
+    });
+
+    expect(legacyClaim.fingerprintSchemaVersion).toBe(KITCHEN_BEO_INPUT_SCHEMA_VERSION);
+    expect(noteClaim.fingerprintSchemaVersion)
+      .toBe(KITCHEN_BEO_INPUT_SCHEMA_VERSION_WITH_OPERATIONAL_NOTES);
+    expect(noteClaim.graphVersion).toBe(legacyClaim.graphVersion);
+    expect(noteClaim.declaredNodeIds).toEqual(legacyClaim.declaredNodeIds);
+    expect(noteClaim.dependencyFingerprint).not.toBe(legacyClaim.dependencyFingerprint);
+    expect(noteClaim.payload.operationalNotes.notes).toEqual([{
+      noteId: "event_note_0123456789abcdef0123456789abcdef",
+      type: "venue",
+      text: "Use the east loading entrance."
+    }]);
+
+    const legacyReceipt = generationReceipt({
+      quote,
+      request: { requestId: "request-no-notes" }
+    });
+    expect(authority.deriveArtifactStatus(statusInput({
+      trustedReceipt: legacyReceipt,
+      operationalNotes: operationalNotes()
+    }))).toMatchObject({
+      state: KITCHEN_BEO_FRESHNESS_STATES.REVIEW,
+      reasonCodes: ["receipt_contract_requires_review"]
+    });
+
+    const noteReceipt = authority.buildGenerationReceipt({
+      claim: noteClaim,
+      artifact: {
+        bytes: Buffer.from("%PDF-1.4\ntrusted-noted-kitchen-beo\n", "utf8"),
+        filename: "Q-2026-0042-noted-kitchen-beo.pdf",
+        mimeType: "application/pdf"
+      },
+      trustedCompletion: { generatedAtISO: "2026-08-09T15:00:01.000Z" }
+    });
+    expect(authority.deriveArtifactStatus(statusInput({
+      trustedReceipt: noteReceipt,
+      operationalNotes: operationalNotes({
+        journalRevision: 2,
+        notes: [{
+          noteId: "event_note_0123456789abcdef0123456789abcdef",
+          type: "venue",
+          text: "Use the east loading entrance after 3 PM."
+        }]
+      })
+    }))).toMatchObject({
+      state: KITCHEN_BEO_FRESHNESS_STATES.STALE,
+      reasonCodes: ["declared_inputs_changed"]
+    });
+  });
+
   test("covers CURRENT, STALE, REVIEW, NOT_GENERATED, and UNKNOWN without browser authority", () => {
     const current = authority.deriveArtifactStatus(statusInput());
     expect(current).toMatchObject({

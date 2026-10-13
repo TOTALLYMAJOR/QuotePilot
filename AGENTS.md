@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Last updated: 2026-08-20 16:39:56 CDT
+Last updated: 2026-09-16 18:04:49 CDT
 
 ## Mission
 Maintain QuotePilot as a reliable production system.
@@ -25,6 +25,12 @@ Ship safe changes with validation evidence and canonical documentation sync.
    claiming an in-process model switch. Load every emitted `requiredSkills`
    entry completely before acting. UI work must load `design-language` and use
    `docs/DESIGN_SYSTEM.md` plus `docs/DESIGN_PRINCIPLES.md` as its local truth.
+   When `domainClassification.applicable` is true, load
+   `catering-domain-intelligence`, form a provisional action from current
+   repository authority and implementation, then read only the emitted domain
+   reference slices and reconsider that action before implementation. Domain
+   commentary is optional; a changed decision or validation is the evidence
+   that the expertise affected the work.
 3. Use the smallest safe implementation scope.
 4. Run required checks:
    - `npm run check:env`
@@ -87,3 +93,17 @@ Ship safe changes with validation evidence and canonical documentation sync.
 ## Local Skill Pack
 Canonical skill assets are tracked in `.codex/skills/`.
 Governance policy is defined in `docs/AGENT_GOVERNANCE.md`.
+
+## Agent skills
+
+### Issue tracker
+
+Issues and specs are tracked in GitHub Issues for `TOTALLYMAJOR/quoteflow`. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Use the default `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, and `wontfix` labels. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Use the single-context domain layout: an optional root `CONTEXT.md` glossary and system-wide decisions under `docs/adr/`. See `docs/agents/domain.md`.

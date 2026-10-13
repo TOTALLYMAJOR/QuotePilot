@@ -62,6 +62,7 @@ emulatorDescribe("authoritative customer imports", () => {
   let app;
   let clientAuth;
   let clientDb;
+  let preflightCustomerImport;
   let createCustomerImport;
   let rollbackCustomerImport;
   let user;
@@ -108,6 +109,7 @@ emulatorDescribe("authoritative customer imports", () => {
     });
     connectFirestoreEmulator(clientDb, firestoreAddress.host, firestoreAddress.port);
     connectFunctionsEmulator(clientFunctions, functionsAddress.host, functionsAddress.port);
+    preflightCustomerImport = httpsCallable(clientFunctions, "preflightCustomerImportBatch");
     createCustomerImport = httpsCallable(clientFunctions, "createCustomerImportBatch");
     rollbackCustomerImport = httpsCallable(clientFunctions, "rollbackCustomerImportBatch");
     await signInWithEmailAndPassword(clientAuth, email, password);
@@ -170,11 +172,50 @@ emulatorDescribe("authoritative customer imports", () => {
         { rowNumber: 4, record: { name: "Duplicate", email: "rowan@example.com" } }
       ]
     };
-    const result = (await createCustomerImport(request)).data;
+    const preflight = (await preflightCustomerImport(request)).data;
+    expect(preflight).toMatchObject({
+      ok: true,
+      status: "ready",
+      authority: "server_preflight",
+      sourceCount: 3,
+      projectedCreateCount: 2,
+      projectedSkipCount: 1
+    });
+    expect(preflight.preflightId).toMatch(/^customer_preflight_[a-f0-9]{32}$/);
+    expect(preflight.planHash).toMatch(/^[a-f0-9]{64}$/);
+    expect(Date.parse(preflight.expiresAtISO)).toBeGreaterThan(Date.now());
+    expect(preflight.chunks).toEqual([
+      expect.objectContaining({ recordCount: 3, maximumWrites: 6, sourceIndexes: [0, 1, 2] })
+    ]);
+    await expect(setDoc(
+      doc(clientDb, "organizations", organizationId, "customerImportPreflights", preflight.preflightId),
+      { expiresAtISO: "2099-01-01T00:00:00.000Z" },
+      { merge: true }
+    )).rejects.toBeTruthy();
+    await expectCallableCode(() => createCustomerImport(request), "invalid-argument");
+    await expectCallableCode(() => createCustomerImport({
+      ...request,
+      importBatchId: "customer_emulator_unissued_0001",
+      preflightId: `customer_preflight_${"f".repeat(32)}`,
+      preflightPlanHash: preflight.planHash,
+      preflightRecords: request.records,
+      preflightChunkIndex: 0,
+      preflightSessionId: "customer_emulator_unissued_0001"
+    }), "failed-precondition");
+    const result = (await createCustomerImport({
+      ...request,
+      preflightId: preflight.preflightId,
+      preflightPlanHash: preflight.planHash,
+      preflightRecords: request.records,
+      preflightChunkIndex: 0,
+      preflightSessionId: request.importBatchId
+    })).data;
     expect(result).toMatchObject({
       createdCount: 2,
       skippedCount: 1,
       status: "completed",
+      preflightPlanHash: preflight.planHash,
+      preflightChunkIndex: 0,
       idempotentReplay: false
     });
 
@@ -182,7 +223,7 @@ emulatorDescribe("authoritative customer imports", () => {
     const nameCustomerId = customerIdForName("Name Only Customer");
     expect(new Set(result.createdRecords.map((record) => record.id)))
       .toEqual(new Set([emailCustomerId, nameCustomerId]));
-    const [emailCustomer, nameCustomer, emailClaim, receipt] = await Promise.all([
+    const [emailCustomer, nameCustomer, emailClaim, receipt, preflightReceipt] = await Promise.all([
       adminDb.collection("organizations").doc(organizationId)
         .collection("customers").doc(emailCustomerId).get(),
       adminDb.collection("organizations").doc(organizationId)
@@ -190,7 +231,9 @@ emulatorDescribe("authoritative customer imports", () => {
       adminDb.collection("organizations").doc(organizationId)
         .collection("customerEmailClaims").doc(customerIdForEmail("rowan@example.com")).get(),
       adminDb.collection("organizations").doc(organizationId)
-        .collection("importBatches").doc(request.importBatchId).get()
+        .collection("importBatches").doc(request.importBatchId).get(),
+      adminDb.collection("organizations").doc(organizationId)
+        .collection("customerImportPreflights").doc(preflight.preflightId).get()
     ]);
     expect(emailCustomer.data()).toMatchObject({
       customerId: emailCustomerId,
@@ -220,6 +263,10 @@ emulatorDescribe("authoritative customer imports", () => {
     });
     expect(receipt.data()?.actor).toEqual({ uid: user.uid, email });
     expect(receipt.data()?.requestHash).toMatch(/^[a-f0-9]{64}$/);
+    expect(receipt.data()?.preflightPlanHash).toBe(preflight.planHash);
+    expect(receipt.data()?.preflightId).toBe(preflight.preflightId);
+    expect(receipt.data()?.preflightChunkIndex).toBe(0);
+    expect(receipt.data()?.preflightSessionId).toBe(request.importBatchId);
     expect(receipt.data()?.schemaVersion).toBe(3);
     expect(receipt.data()?.createdRecords).toEqual(expect.arrayContaining([
       expect.objectContaining({
@@ -228,18 +275,63 @@ emulatorDescribe("authoritative customer imports", () => {
         emailKey: "rowan@example.com"
       })
     ]));
+    expect(preflightReceipt.data()).toMatchObject({
+      schemaVersion: 1,
+      kind: "customer_import_preflight",
+      preflightId: preflight.preflightId,
+      organizationId,
+      planHash: preflight.planHash,
+      sourceCount: 3,
+      chunkCount: 1,
+      status: "completed",
+      sessionImportBatchId: request.importBatchId,
+      actor: { uid: user.uid, email }
+    });
+    expect(preflightReceipt.data()?.completedChunks?.["0"]).toMatchObject({
+      importBatchId: request.importBatchId,
+      requestHash: receipt.data()?.requestHash
+    });
 
-    const replay = (await createCustomerImport(request)).data;
+    const boundRequest = {
+      ...request,
+      preflightId: preflight.preflightId,
+      preflightPlanHash: preflight.planHash,
+      preflightRecords: request.records,
+      preflightChunkIndex: 0,
+      preflightSessionId: request.importBatchId
+    };
+    const replay = (await createCustomerImport(boundRequest)).data;
     expect(replay).toMatchObject({ idempotentReplay: true, createdCount: 2, skippedCount: 1 });
-    await expectCallableCode(() => createCustomerImport({
+    const differentRequest = {
       ...request,
       fileName: "different.csv"
+    };
+    const differentPreflight = (await preflightCustomerImport(differentRequest)).data;
+    await expectCallableCode(() => createCustomerImport({
+      ...differentRequest,
+      preflightId: differentPreflight.preflightId,
+      preflightPlanHash: differentPreflight.planHash,
+      preflightRecords: differentRequest.records,
+      preflightChunkIndex: 0,
+      preflightSessionId: differentRequest.importBatchId
     }), "already-exists");
     await expectCallableCode(() => createCustomerImport({
       ...request,
       organizationId: otherOrganizationId,
       importBatchId: "customer_emulator_cross_org_0001"
     }), "permission-denied");
+    await expectCallableCode(() => createCustomerImport({
+      ...request,
+      importBatchId: "customer_emulator_tampered_0001",
+      records: request.records.map((row, index) => index === 0
+        ? { ...row, record: { ...row.record, name: "Changed after preflight" } }
+        : row),
+      preflightId: preflight.preflightId,
+      preflightPlanHash: preflight.planHash,
+      preflightRecords: request.records,
+      preflightChunkIndex: 0,
+      preflightSessionId: "customer_emulator_tampered_0001"
+    }), "failed-precondition");
 
     await adminDb.collection("organizations").doc(organizationId)
       .collection("customers").doc(nameCustomerId).set({ notes: "Edited after import" }, { merge: true });
@@ -266,6 +358,162 @@ emulatorDescribe("authoritative customer imports", () => {
     expect(rollbackReplay).toMatchObject({ idempotentReplay: true, deletedCount: 1, protectedCount: 1 });
   }, 120_000);
 
+  test("preflight divides unique-email rows before Firestore's transaction write ceiling", async () => {
+    const records = Array.from({ length: 250 }, (_, index) => ({
+      rowNumber: index + 2,
+      record: { name: `Preflight ${index + 1}`, email: `preflight-${index + 1}@example.com` }
+    }));
+    const result = (await preflightCustomerImport({
+      organizationId,
+      fileName: "large-customers.csv",
+      records
+    })).data;
+    expect(result.chunks).toHaveLength(2);
+    expect(result.chunks.map((chunk) => chunk.recordCount)).toEqual([249, 1]);
+    expect(result.chunks.every((chunk) => chunk.maximumWrites <= 500)).toBe(true);
+  }, 120_000);
+
+  test("an activated multi-chunk session resumes after preflight expiry and replays idempotently", async () => {
+    const records = Array.from({ length: 250 }, (_, index) => ({
+      rowNumber: index + 2,
+      record: {
+        name: `Resume ${index + 1}`,
+        email: `resume-${index + 1}@example.com`
+      }
+    }));
+    const fileName = "resume-customers.csv";
+    const sessionId = "customer_resume_session_0001";
+    const preflight = (await preflightCustomerImport({
+      organizationId,
+      fileName,
+      records
+    })).data;
+    expect(preflight.chunks.map((chunk) => chunk.recordCount)).toEqual([249, 1]);
+
+    const createChunk = (index) => createCustomerImport({
+      organizationId,
+      fileName,
+      importBatchId: `${sessionId}_part_${String(index + 1).padStart(3, "0")}`,
+      records: preflight.chunks[index].sourceIndexes.map((sourceIndex) => records[sourceIndex]),
+      preflightId: preflight.preflightId,
+      preflightPlanHash: preflight.planHash,
+      preflightRecords: records,
+      preflightChunkIndex: index,
+      preflightSessionId: sessionId
+    });
+
+    const first = (await createChunk(0)).data;
+    expect(first).toMatchObject({
+      ok: true,
+      createdCount: 249,
+      preflightChunkIndex: 0,
+      idempotentReplay: false
+    });
+
+    const simulatedNow = Date.now();
+    const issuedAt = new Date(simulatedNow - (20 * 60 * 1000));
+    const expiresAt = new Date(simulatedNow - (5 * 60 * 1000));
+    const activatedAt = new Date(simulatedNow - (10 * 60 * 1000));
+    const sessionExpiresAt = new Date(activatedAt.getTime() + (24 * 60 * 60 * 1000));
+    const preflightRef = adminDb.collection("organizations").doc(organizationId)
+      .collection("customerImportPreflights").doc(preflight.preflightId);
+    await preflightRef.set({
+      issuedAtISO: issuedAt.toISOString(),
+      expiresAtISO: expiresAt.toISOString(),
+      expiresAt,
+      sessionActivatedAtISO: activatedAt.toISOString(),
+      sessionExpiresAtISO: sessionExpiresAt.toISOString(),
+      sessionExpiresAt
+    }, { merge: true });
+
+    const second = (await createChunk(1)).data;
+    expect(second).toMatchObject({
+      ok: true,
+      createdCount: 1,
+      preflightChunkIndex: 1,
+      idempotentReplay: false
+    });
+    const replay = (await createChunk(0)).data;
+    expect(replay).toMatchObject({
+      ok: true,
+      createdCount: 249,
+      preflightChunkIndex: 0,
+      idempotentReplay: true
+    });
+    expect((await preflightRef.get()).data()).toMatchObject({
+      status: "completed",
+      sessionImportBatchId: sessionId,
+      completedChunks: {
+        0: { importBatchId: `${sessionId}_part_001` },
+        1: { importBatchId: `${sessionId}_part_002` }
+      }
+    });
+
+    await rollbackCustomerImport({
+      organizationId,
+      importBatchId: `${sessionId}_part_002`
+    });
+    await rollbackCustomerImport({
+      organizationId,
+      importBatchId: `${sessionId}_part_001`
+    });
+  }, 180_000);
+
+  test("preflight rejects oversize customer text instead of silently truncating it", async () => {
+    const oversizeNotes = "n".repeat(2_001);
+    await expectCallableCode(() => preflightCustomerImport({
+      organizationId,
+      fileName: "oversize-customers.csv",
+      records: [{
+        rowNumber: 27,
+        record: { name: "Oversize Customer", notes: oversizeNotes }
+      }]
+    }), "invalid-argument");
+
+    const oversizeCustomerId = customerIdForName("Oversize Customer");
+    expect((await adminDb.collection("organizations").doc(organizationId)
+      .collection("customers").doc(oversizeCustomerId).get()).exists).toBe(false);
+  }, 120_000);
+
+  test("create rejects expired or differently actor-bound issued preflight receipts", async () => {
+    const records = [{
+      rowNumber: 12,
+      record: { name: "Authority Bound Customer", email: "authority-bound@example.com" }
+    }];
+    const baseRequest = {
+      organizationId,
+      fileName: "authority-bound.csv",
+      records
+    };
+    const expiredPreflight = (await preflightCustomerImport(baseRequest)).data;
+    await adminDb.collection("organizations").doc(organizationId)
+      .collection("customerImportPreflights").doc(expiredPreflight.preflightId)
+      .set({ expiresAtISO: "2000-01-01T00:00:00.000Z" }, { merge: true });
+    await expectCallableCode(() => createCustomerImport({
+      ...baseRequest,
+      importBatchId: "customer_expired_preflight_0001",
+      preflightId: expiredPreflight.preflightId,
+      preflightPlanHash: expiredPreflight.planHash,
+      preflightRecords: records,
+      preflightChunkIndex: 0,
+      preflightSessionId: "customer_expired_preflight_0001"
+    }), "failed-precondition");
+
+    const actorPreflight = (await preflightCustomerImport(baseRequest)).data;
+    await adminDb.collection("organizations").doc(organizationId)
+      .collection("customerImportPreflights").doc(actorPreflight.preflightId)
+      .set({ actor: { uid: "different-admin", email } }, { merge: true });
+    await expectCallableCode(() => createCustomerImport({
+      ...baseRequest,
+      importBatchId: "customer_actor_preflight_0001",
+      preflightId: actorPreflight.preflightId,
+      preflightPlanHash: actorPreflight.planHash,
+      preflightRecords: records,
+      preflightChunkIndex: 0,
+      preflightSessionId: "customer_actor_preflight_0001"
+    }), "failed-precondition");
+  }, 120_000);
+
   test("duplicate identity collisions fail closed and legacy receipts remain safely reversible", async () => {
     const customersRef = adminDb.collection("organizations").doc(organizationId).collection("customers");
     await Promise.all([
@@ -282,10 +530,9 @@ emulatorDescribe("authoritative customer imports", () => {
         importSource: "import_studio"
       })
     ]);
-    await expectCallableCode(() => createCustomerImport({
+    await expectCallableCode(() => preflightCustomerImport({
       organizationId,
       fileName: "collision.csv",
-      importBatchId: "customer_emulator_collision_0001",
       records: [{ rowNumber: 2, record: { name: "New", email: "new@example.com" } }]
     }), "failed-precondition");
     await Promise.all([
@@ -305,10 +552,9 @@ emulatorDescribe("authoritative customer imports", () => {
       recordSource: "trusted_customer_email_claim",
       createdBySource: "legacy_repair"
     });
-    await expectCallableCode(() => createCustomerImport({
+    await expectCallableCode(() => preflightCustomerImport({
       organizationId,
       fileName: "orphan-claim.csv",
-      importBatchId: "customer_emulator_orphan_claim_0001",
       records: [{ rowNumber: 2, record: { name: "Orphan", email: orphanClaimEmail } }]
     }), "failed-precondition");
     await orphanClaimRef.delete();

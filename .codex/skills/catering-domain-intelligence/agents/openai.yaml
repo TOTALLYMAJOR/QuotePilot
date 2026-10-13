@@ -1,0 +1,4 @@
+interface:
+  display_name: "Catering Domain Intelligence"
+  short_description: "Reconsider QuotePilot work with catering expertise."
+  default_prompt: "Use $catering-domain-intelligence to reconsider this QuotePilot task before implementation."

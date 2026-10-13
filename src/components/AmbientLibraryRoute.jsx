@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { createAmbientActionResult } from "../lib/ambientContracts";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createAmbientAction, createAmbientActionResult } from "../lib/ambientContracts";
 import {
   AMBIENT_LIBRARY_SECTION_ORDER,
   buildAmbientLibrary
@@ -11,11 +11,29 @@ import {
   useWorkspaceReturnContextAdapter
 } from "../context/WorkspaceNavigationContext";
 import { restoreWorkspaceReturnViewport } from "../lib/workspaceReturnContext";
+import { useInventoryRecipeExtension } from "../hooks/useInventoryRecipeExtension";
 import { AdminCatalogView } from "./AdminCatalogModal";
 import BusinessSetupCenter from "./BusinessSetupCenter";
+import { InventoryMenuCostSummary } from "./InventoryRecipeEditor";
+import { WORKSPACE_PATHS } from "../lib/workspaceRoutes";
 import "./ambientLibraryRoute.css";
 
-const CATALOG_SECTION_IDS = new Set(["starter", ...AMBIENT_LIBRARY_SECTION_ORDER]);
+const TenantWorkflowConfigurationStudio = import.meta.env.VITE_EVENT_OPERATING_SPINE_ENABLED === "true"
+  ? lazy(() => import("./TenantWorkflowConfigurationStudio")) : null;
+const InquiryShowcaseAdmin = lazy(() => import("./InquiryShowcaseAdmin"));
+const CATALOG_SECTION_IDS = new Set(["starter", "workflow", ...AMBIENT_LIBRARY_SECTION_ORDER]);
+const EDITOR_SECTION_LABELS = Object.freeze({
+  starter: "Library setup",
+  workflow: "Business workflows",
+  packages: "Offers",
+  addons: "Services",
+  rentals: "Rentals",
+  menu: "Menus",
+  templates: "Event templates",
+  rules: "Rules",
+  pricing: "Pricing"
+});
+const LIBRARY_OVERVIEW_RECORD_LIMIT = 8;
 
 function text(value) {
   return String(value ?? "").trim();
@@ -60,7 +78,7 @@ function actionResult(action, kind, overrides = {}) {
     consequence: overrides.consequence || action.arrivalContract.consequence,
     nextResolutions: [{
       actionId: overrides.nextActionId || action.arrivalContract.nextResolutionIds[0],
-      label: overrides.nextResolution || "Review the focused Library item and choose the next available step."
+      label: overrides.nextResolution || "Use the focused Library item and choose the next available step."
     }]
   });
 }
@@ -124,38 +142,129 @@ function summaryForSection(section) {
   const summary = section.summary || {};
   if (section.id === "pricing") {
     if (summary.state === "confirmed") return summary.confirmedAt
-      ? `Reviewed ${formatReviewDate(summary.confirmedAt)}`
-      : "Pricing reviewed";
-    if (summary.state === "local_only") return "Reviewed in this browser";
-    if (summary.state === "recorded_confirmation_stale") return "Recorded review needs a current catalog check";
+      ? `Current · confirmed ${formatReviewDate(summary.confirmedAt)}`
+      : "Current pricing confirmed";
+    if (summary.state === "local_only") return "Publishing unavailable";
+    if (summary.state === "recorded_confirmation_stale") return "Current check required";
     return "Pricing needs review";
   }
   if (section.id === "menu" && summary.availability === "unavailable") {
-    return "Review current menus";
+    return "Menu details need a current check";
   }
   if (section.id === "templates") {
     const count = Number(summary.totalCount || 0);
     const attention = Number(summary.attentionCount || 0);
     return `${count} ${count === 1 ? "starting point" : "starting points"}${attention ? ` · ${attention} to review` : ""}`;
   }
+  if (section.id === "rules") {
+    const count = Number(summary.activeCount || 0);
+    return `${count} active ${count === 1 ? "rule" : "rules"}`;
+  }
   const active = Number(summary.activeCount || 0);
-  if (section.id === "rentals") return `${active} ${active === 1 ? "collection" : "collections"}`;
+  if (section.id === "rentals") return `${active} active ${active === 1 ? "rental" : "rentals"}`;
   return `${active} active`;
 }
 
 function displayLabelForSection(section) {
+  if (section.id === "packages") return "Offers";
   if (section.id === "menu") return "Menus";
   if (section.id === "addons") return "Services";
   if (section.id === "templates") return "Event templates";
+  if (section.id === "rules") return "Rules";
   return section.label;
 }
 
+function editorDisplayLabel(target) {
+  if (!target) return "Library";
+  if (target.sectionId === "packages") return "Offers";
+  return text(target.action?.arrivalContract?.object?.label) || "Library";
+}
+
 function displayActionForSection(section) {
-  if (section.id === "menu") return "Review menus";
-  if (section.id === "addons") return "Review services";
-  if (section.id === "templates") return "Review templates";
-  if (section.id === "pricing") return "Review pricing";
+  if (section.id === "packages") return section.health === "attention" ? "Set up offers" : "Manage offers";
+  if (section.id === "menu") return "Open menus";
+  if (section.id === "addons") return "Manage services";
+  if (section.id === "rentals") return "Manage rentals";
+  if (section.id === "templates") return "Manage templates";
+  if (section.id === "pricing") return "Open pricing";
+  if (section.id === "rules") return "Manage rules";
   return section.primaryAction.outcomeLabel;
+}
+
+function overviewRecordsForSection(section) {
+  if (section.id !== "pricing") return Array.isArray(section.records) ? section.records : [];
+  const revision = Number.isSafeInteger(section.summary?.catalogRevision)
+    ? `Catalog version ${section.summary.catalogRevision}`
+    : "Catalog version unavailable";
+  const pricingState = section.summary?.state === "confirmed"
+    ? "Confirmed for current catalog"
+    : section.summary?.state === "local_only"
+      ? "Browser-only confirmation"
+      : section.summary?.state === "recorded_confirmation_stale"
+        ? "Confirmation needs a current check"
+        : "Pricing needs review";
+  return [
+    { id: "catalog-revision", name: revision, stateLabel: section.summary?.authority === "server_recorded" ? "Organization record" : "Current view" },
+    {
+      id: "pricing-confirmation",
+      name: pricingState,
+      stateLabel: section.summary?.confirmedAt
+        ? `Recorded ${formatReviewDate(section.summary.confirmedAt)}`
+        : "No current confirmation date"
+    }
+  ];
+}
+
+function overviewStateForRecord(section, record) {
+  if (record.stateLabel) return record.stateLabel;
+  if (section.id === "templates") {
+    const readiness = record.dependencyState === "resolved"
+      ? "Linked items available"
+      : "Linked items need review";
+    return [record.style, readiness].filter(Boolean).join(" · ");
+  }
+  const state = record.active ? (section.id === "rules" ? "Enabled" : "Active") : (section.id === "rules" ? "Disabled" : "Inactive");
+  return [record.sectionName, state].filter(Boolean).join(" · ");
+}
+
+function emptyOverviewLabel(section) {
+  if (section.id === "menu" && section.summary?.availability === "unavailable") {
+    return section.summary.reason;
+  }
+  return `No recorded ${displayLabelForSection(section).toLowerCase()} are available in this completed view.`;
+}
+
+function LibrarySectionOverview({ section }) {
+  const records = overviewRecordsForSection(section);
+  const visibleRecords = records.slice(0, LIBRARY_OVERVIEW_RECORD_LIMIT);
+  const remainingCount = Math.max(0, records.length - visibleRecords.length);
+  return (
+    <div
+      className="ambient-library__overview"
+      data-library-overview-section={section.id}
+      data-library-overview-count={records.length}
+    >
+      {visibleRecords.length > 0 ? (
+        <ul aria-label={`${displayLabelForSection(section)} in this Library view`}>
+          {visibleRecords.map((record) => (
+            <li key={record.id} data-library-overview-record={record.id}>
+              <strong>{record.name}</strong>
+              <span>{overviewStateForRecord(section, record)}</span>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p data-library-overview-state={section.summary?.availability === "unavailable" ? "unavailable" : "empty"}>
+          {emptyOverviewLabel(section)}
+        </p>
+      )}
+      {remainingCount > 0 ? (
+        <p className="ambient-library__overview-remainder">
+          {remainingCount} more {remainingCount === 1 ? "record is" : "records are"} available in the full {displayLabelForSection(section)} editor.
+        </p>
+      ) : null}
+    </div>
+  );
 }
 
 function LibrarySectionIcon({ sectionId }) {
@@ -184,11 +293,12 @@ function LibrarySectionIcon({ sectionId }) {
   return <svg viewBox="0 0 24 24" aria-hidden="true" {...common}><circle cx="12" cy="12" r="9" /><path d="M14.5 8.5c-.7-.8-1.6-1.1-2.6-1.1-1.4 0-2.5.8-2.5 2 0 3 5.2 1.6 5.2 4.8 0 1.4-1.2 2.4-2.8 2.4-1.2 0-2.3-.5-3-1.4M12 5.5v13" /></svg>;
 }
 
-function LibrarySectionRow({ section, onAction, isNext = false }) {
+function LibrarySectionRow({ section, onAction, isNext = false, featured = false }) {
+  const actionEnabled = section.primaryAction.enabled;
   return (
     <li>
       <article
-        className={`ambient-library__row${isNext ? " ambient-library__next" : ""}`}
+        className={`ambient-library__row${isNext ? " ambient-library__next" : ""}${featured ? " ambient-library__row--featured" : ""}${actionEnabled ? "" : " is-readonly"}`}
         data-library-record-kind="catalog-section"
         data-library-record-id={section.id}
         data-library-health={section.health}
@@ -196,20 +306,29 @@ function LibrarySectionRow({ section, onAction, isNext = false }) {
         <span className="ambient-library__row-icon"><LibrarySectionIcon sectionId={section.id} /></span>
         <h3>{displayLabelForSection(section)}</h3>
         <p>{summaryForSection(section)}</p>
-        <button
-          type="button"
-          className="ambient-library__row-action"
-          data-library-action-id={section.primaryAction.id}
-          disabled={!section.primaryAction.enabled}
-          title={section.primaryAction.disabledReason || undefined}
-          onClick={(event) => onAction(section.primaryAction, event.currentTarget)}
-        >
-          <span className="ambient-library__row-action-label">{displayActionForSection(section)}</span>
-          <span aria-hidden="true">→</span>
-        </button>
+        {actionEnabled ? (
+          <button
+            type="button"
+            className="ambient-library__row-action"
+            data-library-action-id={section.primaryAction.id}
+            onClick={(event) => onAction(section.primaryAction, event.currentTarget)}
+          >
+            <span className="ambient-library__row-action-label">{displayActionForSection(section)}</span>
+            <span aria-hidden="true">→</span>
+          </button>
+        ) : null}
+        <LibrarySectionOverview section={section} />
       </article>
     </li>
   );
+}
+
+function templateStartingPoint(template, catalog) {
+  const sourceTemplate = (catalog?.settings?.eventTemplates || []).find((item) => item?.id === template.id);
+  const packageId = text(sourceTemplate?.pkg || sourceTemplate?.offerRef);
+  if (!packageId) return "No default offer";
+  const offer = (catalog?.packages || []).find((item) => item?.id === packageId);
+  return offer?.name ? `Starts with ${offer.name}` : "Default offer needs review";
 }
 
 function dependencySummary(template) {
@@ -272,11 +391,16 @@ export default function AmbientLibraryRoute({
   catalog,
   organizationId = "",
   currentUserRole = "admin",
+  principalId = "",
+  workflowStudioEnabled = false,
+  workflowSource = "",
   onClose,
   onSave,
   onApplyStarterPack,
   onCatalogMutation,
   onReload,
+  quoteCreationReady,
+  onStartQuote,
   saving,
   selectedEventType = "",
   onEventTypeChange,
@@ -285,20 +409,59 @@ export default function AmbientLibraryRoute({
   arrivalAttempted = false,
   onArrivalResolution,
   onInteractionStateChange,
-  contextualOrigin = null
+  contextualOrigin = null,
+  inventoryRecipeExtension = null,
+  inventoryRecipeAccess = null,
+  inquiryShowcaseEnabled = false,
+  catalogFocusRequest = null,
+  onCatalogFocusResolution
 }) {
   const navigation = useOptionalWorkspaceNavigation();
   const headingRef = useWorkspaceRouteHeadingFocus(open);
   const acknowledgementRef = useRef(null);
   const returnFocusRef = useRef(null);
   const arrivalHandledRef = useRef(null);
+  const catalogFocusHandledRef = useRef("");
+  const catalogFocusScopeRef = useRef("");
+  const catalogFocusRequestIdRef = useRef("");
+  const catalogOpenRef = useRef(false);
   const editorOpenFrameRef = useRef(null);
   const editorOpenTimerRef = useRef(null);
   const returnRestoreCancelRef = useRef(null);
   const editorOpenedFromHistoryRef = useRef(false);
   const [acknowledgement, setAcknowledgement] = useState(null);
   const [editorTarget, setEditorTarget] = useState(null);
+  const [editorPresentationSectionId, setEditorPresentationSectionId] = useState("");
   const isAdmin = text(currentUserRole).toLowerCase() === "admin";
+  catalogFocusRequestIdRef.current = text(catalogFocusRequest?.requestId);
+  catalogOpenRef.current = Boolean(open);
+  useEffect(() => {
+    const scope = `${text(organizationId)}:${text(principalId)}`;
+    if (catalogFocusScopeRef.current && catalogFocusScopeRef.current !== scope) {
+      catalogFocusHandledRef.current = "";
+      if (typeof window !== "undefined" && editorOpenFrameRef.current !== null) {
+        window.cancelAnimationFrame(editorOpenFrameRef.current);
+        editorOpenFrameRef.current = null;
+      }
+      if (typeof window !== "undefined" && editorOpenTimerRef.current !== null) {
+        window.clearTimeout(editorOpenTimerRef.current);
+        editorOpenTimerRef.current = null;
+      }
+      if (editorTarget?.requestId) {
+        setEditorTarget(null);
+        setEditorPresentationSectionId("");
+      }
+    }
+    catalogFocusScopeRef.current = scope;
+  }, [editorTarget?.importBatchId, organizationId, principalId]);
+  const resolvedInventoryRecipeExtension = useInventoryRecipeExtension({
+    active: open,
+    injected: inventoryRecipeExtension,
+    organizationId,
+    role: currentUserRole,
+    browserEnabled: inventoryRecipeAccess?.browserEnabled === true,
+    tenantEnabled: inventoryRecipeAccess?.tenantEnabled === true
+  });
   const setupDraft = useCatalogSetupDraft({
     enabled: open && isAdmin && Boolean(organizationId),
     organizationId,
@@ -360,6 +523,10 @@ export default function AmbientLibraryRoute({
       refresh: typeof onReload === "function"
     }
   }), [catalog, currentUserRole, isAdmin, onReload, organizationId]);
+
+  const workflowAllowed = workflowStudioEnabled === true && currentUserRole === "admin" && workflowSource === "firebase" && Boolean(organizationId && principalId);
+  const workflowAction = useMemo(() => createAmbientAction({ id: "open-workflow-studio", outcomeLabel: "Open Configuration Studio", purpose: "reveal_context", roles: ["admin"], authorityLevel: "presentation", previewPolicy: "none", executionTarget: { kind: "context", targetId: "workflow", surfaceId: "workflow-configuration-studio" }, receiptType: "none", reversibility: { kind: "none" }, arrivalContract: { object: { id: "workflow", type: "workflow-definition", label: "Workflow Configuration Studio" }, reason: "Review quote approval, final guest count, event execution, and closeout follow-up workflows.", consequence: "Draft changes take effect for new workflow instances only after explicit publication.", nextResolutionIds: ["open-workflow-studio"] }, primary: false, enabled: workflowAllowed, ...(!workflowAllowed ? { disabledReason: "An enabled connected admin workspace is required." } : {}) }), [workflowAllowed]);
+  const librarySections = useMemo(() => workflowAllowed ? [...model.sections, { id: "workflow", primaryAction: workflowAction }] : model.sections, [model.sections, workflowAllowed, workflowAction]);
 
   const captureLibraryReturnView = useCallback((hint = {}) => {
     const root = headingRef.current?.closest(".ambient-library");
@@ -474,9 +641,11 @@ export default function AmbientLibraryRoute({
     scheduleFrame(() => acknowledgementRef.current?.focus({ preventScroll: true }));
   };
 
-  const mountEditorAfterAcknowledgement = (target) => {
+  const mountEditorAfterAcknowledgement = (target, { onMounted, shouldMount } = {}) => {
     if (typeof window === "undefined" || typeof window.requestAnimationFrame !== "function") {
+      if (shouldMount && !shouldMount()) return;
       setEditorTarget(target);
+      onMounted?.();
       return;
     }
     if (editorOpenFrameRef.current !== null) {
@@ -489,7 +658,9 @@ export default function AmbientLibraryRoute({
       editorOpenFrameRef.current = null;
       editorOpenTimerRef.current = window.setTimeout(() => {
         editorOpenTimerRef.current = null;
+        if (shouldMount && !shouldMount()) return;
         setEditorTarget(target);
+        onMounted?.();
       }, 0);
     });
   };
@@ -505,14 +676,16 @@ export default function AmbientLibraryRoute({
       }), "That Library section is not available. Nothing changed.");
       return;
     }
+    const targetLabel = editorDisplayLabel(target);
+    setEditorPresentationSectionId(target.sectionId);
     returnFocusRef.current = trigger || returnFocusRef.current;
     announce(actionResult(action, "pending", {
       nextResolution: target.recordId
-        ? "Review this template and save only when ready."
-        : "Review this section and save only when ready."
+        ? "Use this starting point and save only when ready."
+        : "Make the intended change and save only when ready."
     }), target.recordId
       ? "Opening this event template with its linked details."
-      : `Opening ${action.arrivalContract.object.label}.`);
+      : `Opening ${targetLabel}.`);
     if (historyEntry && typeof navigation?.navigate === "function") {
       editorOpenedFromHistoryRef.current = true;
       navigation.navigate(
@@ -545,7 +718,7 @@ export default function AmbientLibraryRoute({
   const refreshLibrary = (action) => {
     if (!action?.enabled || typeof onReload !== "function") return;
     announce(actionResult(action, "pending", {
-      nextResolution: "Review Library when the organization catalog check finishes."
+      nextResolution: "Return to Library when the organization catalog check finishes."
     }), "Checking the organization catalog. The last completed view stays available.");
     try {
       onReload({ background: Boolean(model.readBoundary.observedAt) });
@@ -563,12 +736,12 @@ export default function AmbientLibraryRoute({
     else openAction(action, trigger);
   };
 
-  const openSetupSection = (sectionId) => {
+  const openSetupSection = (sectionId, trigger = null) => {
     const normalized = sectionId === "eventTemplates" ? "templates"
       : sectionId === "costs" ? "pricing" : sectionId;
     const section = model.sections.find((item) => item.id === normalized);
     if (section?.primaryAction?.enabled) {
-      openAction(section.primaryAction);
+      openAction(section.primaryAction, trigger);
       return;
     }
     announce({ kind: "context", nextResolutions: [] },
@@ -577,7 +750,28 @@ export default function AmbientLibraryRoute({
         : "Ask an organization administrator to make this change.");
   };
 
+  const openImportStudio = () => {
+    if (!isAdmin || typeof navigation?.navigate !== "function") return;
+    navigation.navigate(`${WORKSPACE_PATHS.imports}?source=library-first-quote&importType=menuItems`, {
+      preserveSearch: false,
+      preserveHash: false,
+      preserveReturnContext: true,
+      returnContextSurfaceId: "ambient-library",
+      returnContextHint: {
+        focus: { kind: "library-action", actionId: "import-menu" }
+      },
+      returnContextDestination: {
+        kind: "import-studio",
+        source: "library-first-quote",
+        importType: "menuItems"
+      }
+    });
+  };
+
   const handleEditorFocusResolution = (resolution) => {
+    if (resolution?.requestId && resolution.requestId === catalogFocusRequest?.requestId) {
+      onCatalogFocusResolution?.(resolution);
+    }
     const recovered = resolution?.status === "recovery" || resolution?.result === "recovery";
     if (recovered) {
       const action = editorTarget?.action;
@@ -600,8 +794,8 @@ export default function AmbientLibraryRoute({
       onArrivalResolution?.({ status: "resolved" });
       if (editorTarget?.action) {
         announce(actionResult(editorTarget.action, "context", {
-          nextResolution: resolution.nextResolutions?.[0] || "Review this Library item."
-        }), editorTarget.recordId ? "The requested template is ready to review." : "The requested Library section is ready to review.");
+          nextResolution: resolution.nextResolutions?.[0] || "Use this Library item."
+        }), editorTarget.recordId ? "The requested template is ready to use." : "The requested Library section is ready to use.");
       }
     }
   };
@@ -616,6 +810,7 @@ export default function AmbientLibraryRoute({
       editorOpenedFromHistoryRef.current = false;
     }
     setEditorTarget(null);
+    setEditorPresentationSectionId("");
     setAcknowledgement(null);
     scheduleFrame(() => {
       const priorTrigger = returnFocusRef.current;
@@ -624,22 +819,88 @@ export default function AmbientLibraryRoute({
     });
   };
 
+  const handleEditorSectionChange = useCallback((sectionId) => {
+    const normalized = text(sectionId);
+    if (!CATALOG_SECTION_IDS.has(normalized)) return;
+    setEditorPresentationSectionId(normalized);
+  }, []);
+
+  useEffect(() => {
+    if (!open || !catalogFocusRequest?.requestId) return undefined;
+    if (catalogFocusHandledRef.current === catalogFocusRequest.requestId) return undefined;
+    if (catalog?.loading || model.state === "loading") return undefined;
+    if (!isAdmin) {
+      catalogFocusHandledRef.current = catalogFocusRequest.requestId;
+      onCatalogFocusResolution?.({
+        requestId: catalogFocusRequest.requestId,
+        status: "recovery",
+        reason: "Only an organization administrator can open an imported menu item for editing.",
+        consequence: "No catalog record was opened or changed.",
+        nextResolutions: ["Ask an organization administrator to review the imported item"]
+      });
+      return undefined;
+    }
+    const section = model.sections.find((item) => item.id === "menu");
+    const action = section?.primaryAction;
+    const target = normalizeEditorTarget(action);
+    if (!target) {
+      catalogFocusHandledRef.current = catalogFocusRequest.requestId;
+      onCatalogFocusResolution?.({
+        requestId: catalogFocusRequest.requestId,
+        status: "recovery",
+        reason: "The Menu editor is unavailable in the current Library.",
+        consequence: "No catalog record was opened or changed.",
+        nextResolutions: ["Return to Library and review the available sections"]
+      });
+      return undefined;
+    }
+    const requestId = catalogFocusRequest.requestId;
+    const requestScope = `${text(organizationId)}:${text(principalId)}`;
+    setEditorPresentationSectionId("menu");
+    mountEditorAfterAcknowledgement({
+      ...target,
+      ...catalogFocusRequest,
+      sectionId: "menu",
+      action
+    }, {
+      shouldMount: () => (
+        catalogOpenRef.current
+        && catalogFocusRequestIdRef.current === requestId
+        && catalogFocusScopeRef.current === requestScope
+      ),
+      onMounted: () => {
+        catalogFocusHandledRef.current = requestId;
+      }
+    });
+    return undefined;
+  }, [
+    catalog?.loading,
+    catalogFocusRequest,
+    isAdmin,
+    model.sections,
+    model.state,
+    onCatalogFocusResolution,
+    open
+  ]);
+
   useEffect(() => {
     if (!open) return;
     const destination = navigation?.returnContextDestination;
     if (destination?.kind === "library-editor") {
-      const section = model.sections.find((item) => item.id === destination.sectionId);
+      const section = librarySections.find((item) => item.id === destination.sectionId);
       const template = model.templates.find((item) => item.id === destination.recordId);
       const action = destination.recordId ? template?.primaryAction : section?.primaryAction;
       if (action?.id === destination.actionId) {
         const target = normalizeEditorTarget(action);
         if (target) {
           editorOpenedFromHistoryRef.current = true;
+          setEditorPresentationSectionId(target.sectionId);
           setEditorTarget((current) => current?.action?.id === action.id ? current : target);
           return;
         }
       }
       editorOpenedFromHistoryRef.current = false;
+      setEditorPresentationSectionId("");
       setEditorTarget(null);
       const recovery = {
         reason: "That exact Library item is no longer available.",
@@ -661,12 +922,13 @@ export default function AmbientLibraryRoute({
     }
     if (editorOpenedFromHistoryRef.current) {
       editorOpenedFromHistoryRef.current = false;
+      setEditorPresentationSectionId("");
       setEditorTarget(null);
       setAcknowledgement(null);
     }
   }, [
     headingRef,
-    model.sections,
+    librarySections,
     model.templates,
     navigation?.returnContextDestination,
     open
@@ -729,6 +991,10 @@ export default function AmbientLibraryRoute({
   }, []);
 
   if (editorTarget) {
+    const editorSectionId = editorPresentationSectionId || editorTarget.sectionId;
+    const editorLabel = editorTarget.recordId && editorSectionId === "templates"
+      ? editorDisplayLabel(editorTarget)
+      : EDITOR_SECTION_LABELS[editorSectionId] || editorDisplayLabel(editorTarget);
     return (
       <main
         className="container workspace-route-main ambient-library ambient-library--editing ambient-purpose-surface"
@@ -736,29 +1002,27 @@ export default function AmbientLibraryRoute({
         data-surface-purpose={model.surfaceContract.purposes.join(" ")}
         data-surface-density="editorial"
         data-ambient-library-state="editing"
+        data-catalog-focus-request={editorTarget.requestId || undefined}
+        data-library-editor-section={editorSectionId}
         data-library-context={contextualReturn ? "opportunity" : "standalone"}
         data-library-draft-preserved={open ? undefined : "route-hidden"}
         hidden={!open}
       >
-        <h1 className="sr-only">Library: {editorTarget.action.arrivalContract.object.label}</h1>
+        <h1 className="sr-only">Library: {editorLabel}</h1>
         <div className="ambient-library__orientation">
-          <p className="ambient-library__breadcrumb" aria-label={`Library, reviewing ${editorTarget.action.arrivalContract.object.label}`}>
+          <p className="ambient-library__breadcrumb" aria-label={`Library, ${editorLabel}`}>
             <span>Library</span><span aria-hidden="true">/</span>
-            <strong>{editorTarget.action.arrivalContract.object.label}</strong>
+            <strong>{editorLabel}</strong>
           </p>
-          <div>
-            <p className="ambient-library__label">You’re reviewing</p>
-            <strong>{editorTarget.action.arrivalContract.object.label}</strong>
-          </div>
         </div>
         {contextualBanner}
         <LibraryAcknowledgement
           acknowledgement={acknowledgement}
           acknowledgementRef={acknowledgementRef}
-          settledLabel="Ready"
+          settledLabel="Open"
         />
-        <section className="ambient-library__editor" aria-label={`${editorTarget.action.arrivalContract.object.label} editor`}>
-          <AdminCatalogView
+        <section className="ambient-library__editor" aria-label={`${editorLabel} editor`}>
+          {editorTarget.sectionId === "workflow" && workflowAllowed && TenantWorkflowConfigurationStudio ? <Suspense fallback={<p role="status">Loading Configuration Studio...</p>}><TenantWorkflowConfigurationStudio organizationId={organizationId} principalId={principalId} role={currentUserRole} enabled={workflowStudioEnabled} source={workflowSource} open={open} onClose={closeEditor} onDismissGuardChange={handleEditorDismissGuardChange} onInteractionStateChange={onInteractionStateChange} /></Suspense> : editorTarget.sectionId === "workflow" ? <p>Workflow Configuration Studio is unavailable for this workspace.</p> : <AdminCatalogView
             open={open}
             presentation="embedded"
             catalog={catalog}
@@ -769,20 +1033,22 @@ export default function AmbientLibraryRoute({
             onCatalogMutation={onCatalogMutation}
             onReload={onReload}
             saving={saving}
-            surfaceTitle={editorTarget.recordId
-              ? `${editorTarget.action.arrivalContract.object.label} template`
-              : `${editorTarget.action.arrivalContract.object.label} settings`}
+            surfaceTitle={editorTarget.recordId && editorSectionId === "templates"
+              ? `${editorLabel} template`
+              : editorLabel}
             embeddedCloseLabel="Back to Library"
             initialTab={editorTarget.sectionId}
             focusRequest={editorTarget}
             onFocusResolution={handleEditorFocusResolution}
+            onActiveTabChange={handleEditorSectionChange}
             onInteractionStateChange={onInteractionStateChange}
             onDismissGuardChange={handleEditorDismissGuardChange}
             selectedEventType={selectedEventType}
             onEventTypeChange={onEventTypeChange}
             onToast={onToast}
             catalogSetupDraftController={setupDraft}
-          />
+            inventoryRecipeExtension={resolvedInventoryRecipeExtension}
+          />}
         </section>
       </main>
     );
@@ -795,6 +1061,7 @@ export default function AmbientLibraryRoute({
       className="container workspace-route-main ambient-library ambient-purpose-surface"
       data-ambient-library-state={model.state}
       data-library-context={contextualReturn ? "opportunity" : "standalone"}
+      data-catalog-focus-request={catalogFocusRequest?.requestId || undefined}
       data-surface-contract-id={model.surfaceContract.id}
       data-surface-purpose={model.surfaceContract.purposes.join(" ")}
       data-surface-density="editorial"
@@ -806,7 +1073,7 @@ export default function AmbientLibraryRoute({
         </nav>
         <p className="ambient-library__label">Organization Library</p>
         <h1 id="ambient-library-title" ref={headingRef} tabIndex={-1}>The choices behind every quote.</h1>
-        <p>Packages, menus, services, rentals, templates, and pricing—kept ready for the next opportunity.</p>
+        <p>Define what you sell, what it is made from, where you start, and how it is governed.</p>
       </header>
 
       <LibraryAcknowledgement
@@ -816,137 +1083,200 @@ export default function AmbientLibraryRoute({
 
       {contextualBanner}
 
-      <BusinessSetupCenter
-        catalog={catalog}
-        draftState={setupDraft}
-        currentUserRole={currentUserRole}
-        providerConnected={catalog?.providerConnectionReady === true}
-        onOpenSection={openSetupSection}
-      />
+      {isAdmin && inquiryShowcaseEnabled && <Suspense fallback={<p role="status">Loading Inquiry page settings…</p>}>
+        <InquiryShowcaseAdmin
+          organizationId={organizationId}
+          currentUserRole={currentUserRole}
+          enabled
+        />
+      </Suspense>}
 
-      {model.sections.length === 0 ? (
-        <LibraryState model={model} onRefresh={refreshLibrary} />
-      ) : (
-        <>
-          <section className="ambient-library__group" data-library-section="catalog" aria-labelledby="ambient-library-catalog-title">
-            <div className="ambient-library__group-title">
-              <p>Catalog choices</p><span aria-hidden="true" />
-              <h2 id="ambient-library-catalog-title" className="sr-only">Choices for new quotes</h2>
-            </div>
-            <ol className="ambient-library__row-list">
-              {model.sections
-                .filter((section) => ["packages", "menu", "addons", "rentals"].includes(section.id))
-                .map((section) => (
-                  <LibrarySectionRow
-                    key={section.id}
-                    section={section}
-                    isNext={model.nextAction?.id === section.primaryAction.id}
-                    onAction={handleAction}
-                  />
-                ))}
-            </ol>
-          </section>
-
-          <section className="ambient-library__group" data-library-section="templates" aria-labelledby="ambient-library-templates-title">
-            <div className="ambient-library__group-title">
-              <p>Starting points &amp; pricing</p><span aria-hidden="true" />
-              <h2 id="ambient-library-templates-title" className="sr-only">Event starting points and pricing</h2>
-            </div>
-            <ol className="ambient-library__row-list">
-              {["templates", "pricing"].map((sectionId) => model.sections.find((section) => section.id === sectionId))
-                .filter(Boolean)
-                .map((section) => (
-                  <LibrarySectionRow
-                    key={section.id}
-                    section={section}
-                    isNext={model.nextAction?.id === section.primaryAction.id}
-                    onAction={handleAction}
-                  />
-                ))}
-            </ol>
-
-            {model.templates.length > 0 && (
-              <details
-                className="ambient-library__template-disclosure"
-                open={templateDisclosureOpen}
-                onToggle={(event) => setTemplateDisclosureOpen(event.currentTarget.open)}
-              >
-                <summary>
-                  Browse saved templates
-                  <span>{model.templates.length}</span>
-                </summary>
-                <ol className="ambient-library__template-list" aria-label="Saved event templates">
-                  {model.templates.map((template, index) => (
-                    <li key={template.id}>
-                      <article
-                        className="ambient-library__template"
-                        data-library-record-kind="event-template"
-                        data-library-record-id={template.id}
-                        data-library-health={template.dependencyState === "resolved" ? "healthy" : "attention"}
-                      >
-                        <div className="ambient-library__template-identity">
-                          <span aria-hidden="true">{String(index + 1).padStart(2, "0")}</span>
-                          <div>
-                            <h3>{template.name}</h3>
-                            <p>{[template.style, `${template.resolvedReferenceCount} of ${template.referenceCount} linked details available`].filter(Boolean).join(" · ")}</p>
-                          </div>
-                        </div>
-                        <p className="ambient-library__template-dependencies">{dependencySummary(template)}</p>
-                        <button
-                          type="button"
-                          data-library-action-id={template.primaryAction.id}
-                          disabled={!template.primaryAction.enabled}
-                          title={template.primaryAction.disabledReason || undefined}
-                          onClick={(event) => handleAction(template.primaryAction, event.currentTarget)}
-                        >
-                          Review<span className="visually-hidden"> {template.name}</span><span aria-hidden="true">→</span>
-                        </button>
-                      </article>
-                    </li>
-                  ))}
-                </ol>
-              </details>
-            )}
-          </section>
-
-          <aside className="ambient-library__usage">
-            <span aria-hidden="true">ⓘ</span>
-            <div>
-              <strong>{contextualReturn ? "Used contextually" : "Available from opportunities"}</strong>
-              <p>Quick Updates handles the common change. Open the full Library when comparison, structure, or broader catalog work needs more room.</p>
-            </div>
-          </aside>
-        </>
+      {resolvedInventoryRecipeExtension?.enabled === true && (
+        <InventoryMenuCostSummary
+          projections={resolvedInventoryRecipeExtension.menuCostProjections
+            || Object.values(resolvedInventoryRecipeExtension.menuCostProjectionsByMenuItemId || {})}
+          sourceState={resolvedInventoryRecipeExtension.menuCostProjectionSourceState}
+        />
       )}
 
-      <details
-        className="ambient-library__boundary"
-        aria-labelledby="ambient-library-boundary-title"
-        open={boundaryOpen}
-        onToggle={(event) => setBoundaryOpen(event.currentTarget.open)}
-      >
-        <summary>About this view</summary>
-        <div>
-          <h2 id="ambient-library-boundary-title">{model.readBoundary.label}</h2>
-          <p>Checked {formatCheckedAt(model.readBoundary.observedAt)}</p>
-          <p>{model.readBoundary.sourceBoundary}</p>
-          {model.omittedEvidence.length > 0 && (
-            <details>
-              <summary>{model.omittedEvidence.length} record details need review</summary>
-              <ul>{model.omittedEvidence.map((issue, index) => <li key={`${issue}-${index}`}>{issue}</li>)}</ul>
-            </details>
+      {workflowAllowed && <section className="ambient-library__group" data-library-section="workflow" aria-label="Workflow configuration"><div className="ambient-library__group-title"><p>Workflow configuration</p><span aria-hidden="true" /></div><ol className="ambient-library__row-list"><li><article className="ambient-library__row" data-library-record-id="workflow"><span className="ambient-library__row-icon" aria-hidden="true">◎</span><h3>Business workflows</h3><p>Set tasks, timing, and review rules for quote approval, final guest count, event execution, and closeout follow-up.</p><button type="button" className="ambient-library__row-action" data-library-action-id="open-workflow-studio" data-workflow-studio-entry="library" onClick={(event) => openAction(workflowAction, event.currentTarget)}><span className="ambient-library__row-action-label">Open Configuration Studio</span><span aria-hidden="true">→</span></button></article></li></ol></section>}
+      <div className="ambient-library__workspace" data-library-workspace="commercial">
+        <aside className="ambient-library__readiness-rail" aria-label="Library readiness" data-library-readiness-rail>
+          <BusinessSetupCenter
+            catalog={catalog}
+            draftState={setupDraft}
+            currentUserRole={currentUserRole}
+            providerConnected={catalog?.providerConnectionReady === true}
+            quoteCreationReady={quoteCreationReady}
+            onOpenSection={openSetupSection}
+            onOpenImport={openImportStudio}
+            onRefresh={() => refreshLibrary(model.actions["refresh-library"])}
+            onStartQuote={onStartQuote}
+          />
+        </aside>
+
+        <div className="ambient-library__catalog-column">
+          {model.sections.length === 0 ? (
+            <LibraryState model={model} onRefresh={refreshLibrary} />
+          ) : (
+            <>
+              <section className="ambient-library__group ambient-library__group--featured" data-library-section="catalog" aria-labelledby="ambient-library-offers-title">
+                <div className="ambient-library__group-title">
+                  <p>Offers</p><span aria-hidden="true" />
+                  <h2 id="ambient-library-offers-title" className="sr-only">Sellable offers</h2>
+                </div>
+                <p className="ambient-library__group-intro">Customer-facing packages that bring price and included components together.</p>
+                <ol className="ambient-library__row-list">
+                  {model.sections.filter((section) => section.id === "packages").map((section) => (
+                    <LibrarySectionRow
+                      key={section.id}
+                      section={section}
+                      featured
+                      isNext={model.nextAction?.id === section.primaryAction.id}
+                      onAction={handleAction}
+                    />
+                  ))}
+                </ol>
+              </section>
+
+              <section className="ambient-library__group" data-library-section="components" aria-labelledby="ambient-library-components-title">
+                <div className="ambient-library__group-title">
+                  <p>Components</p><span aria-hidden="true" />
+                  <h2 id="ambient-library-components-title" className="sr-only">Components used in offers and quotes</h2>
+                </div>
+                <ol className="ambient-library__row-list">
+                  {model.sections.filter((section) => ["menu", "addons", "rentals"].includes(section.id)).map((section) => (
+                    <LibrarySectionRow
+                      key={section.id}
+                      section={section}
+                      isNext={model.nextAction?.id === section.primaryAction.id}
+                      onAction={handleAction}
+                    />
+                  ))}
+                </ol>
+              </section>
+
+              <section className="ambient-library__group ambient-library__group--featured" data-library-section="templates" aria-labelledby="ambient-library-templates-title">
+                <div className="ambient-library__group-title">
+                  <p>Templates</p><span aria-hidden="true" />
+                  <h2 id="ambient-library-templates-title" className="sr-only">Reusable commercial starting points</h2>
+                </div>
+                <p className="ambient-library__group-intro">The usual starting point for a familiar kind of event—ready to adapt inside one quote draft.</p>
+                <ol className="ambient-library__row-list">
+                  {model.sections.filter((section) => section.id === "templates").map((section) => (
+                    <LibrarySectionRow
+                      key={section.id}
+                      section={section}
+                      featured
+                      isNext={model.nextAction?.id === section.primaryAction.id}
+                      onAction={handleAction}
+                    />
+                  ))}
+                </ol>
+
+                {model.templates.length > 0 && (
+                  <details
+                    className="ambient-library__template-disclosure"
+                    open={templateDisclosureOpen}
+                    onToggle={(event) => setTemplateDisclosureOpen(event.currentTarget.open)}
+                  >
+                    <summary>
+                      Browse saved templates
+                      <span>{model.templates.length}</span>
+                    </summary>
+                    <ol className="ambient-library__template-list" aria-label="Saved event templates">
+                      {model.templates.map((template, index) => (
+                        <li key={template.id}>
+                          <article
+                            className="ambient-library__template"
+                            data-library-record-kind="event-template"
+                            data-library-record-id={template.id}
+                            data-library-health={template.dependencyState === "resolved" ? "healthy" : "attention"}
+                          >
+                            <div className="ambient-library__template-identity">
+                              <span aria-hidden="true">{String(index + 1).padStart(2, "0")}</span>
+                              <div>
+                                <h3>{template.name}</h3>
+                                <p>{[templateStartingPoint(template, catalog), template.style].filter(Boolean).join(" · ")}</p>
+                              </div>
+                            </div>
+                            <p className="ambient-library__template-dependencies">{dependencySummary(template)}</p>
+                            {template.primaryAction.enabled ? (
+                              <button
+                                type="button"
+                                data-library-action-id={template.primaryAction.id}
+                                onClick={(event) => handleAction(template.primaryAction, event.currentTarget)}
+                              >
+                                {template.dependencyState === "resolved" ? "Manage" : "Review"}<span className="visually-hidden"> {template.name}</span><span aria-hidden="true">→</span>
+                              </button>
+                            ) : null}
+                          </article>
+                        </li>
+                      ))}
+                    </ol>
+                  </details>
+                )}
+              </section>
+
+              <section className="ambient-library__group" data-library-section="policy" aria-labelledby="ambient-library-policy-title">
+                <div className="ambient-library__group-title">
+                  <p>Pricing &amp; rules</p><span aria-hidden="true" />
+                  <h2 id="ambient-library-policy-title" className="sr-only">Commercial selling policy</h2>
+                </div>
+                <ol className="ambient-library__row-list">
+                  {["pricing", "rules"].map((sectionId) => model.sections.find((section) => section.id === sectionId))
+                    .filter(Boolean)
+                    .map((section) => (
+                      <LibrarySectionRow
+                        key={section.id}
+                        section={section}
+                        isNext={model.nextAction?.id === section.primaryAction.id}
+                        onAction={handleAction}
+                      />
+                    ))}
+                </ol>
+              </section>
+
+              <aside className="ambient-library__usage">
+                <div>
+                  <strong>{contextualReturn ? "Used contextually" : "Available from opportunities"}</strong>
+                  <p>Quick Updates handles the common change. Use Library when an offer, component, template, or selling policy needs more room.</p>
+                </div>
+              </aside>
+            </>
           )}
-          <button
-            type="button"
-            className="ambient-library__refresh"
-            data-library-action-id="refresh-library"
-            disabled={!model.actions["refresh-library"]?.enabled || model.readBoundary.loading}
-            onClick={() => refreshLibrary(model.actions["refresh-library"])}
+
+          <details
+            className="ambient-library__boundary"
+            aria-labelledby="ambient-library-boundary-title"
+            open={boundaryOpen}
+            onToggle={(event) => setBoundaryOpen(event.currentTarget.open)}
           >
-            {model.readBoundary.loading ? "Checking…" : "Check again"}
-          </button>
+            <summary>About this view</summary>
+            <div>
+              <h2 id="ambient-library-boundary-title">{model.readBoundary.label}</h2>
+              <p>Checked {formatCheckedAt(model.readBoundary.observedAt)}</p>
+              <p>{model.readBoundary.sourceBoundary}</p>
+              {model.omittedEvidence.length > 0 && (
+                <details>
+                  <summary>{model.omittedEvidence.length} record details need review</summary>
+                  <ul>{model.omittedEvidence.map((issue, index) => <li key={`${issue}-${index}`}>{issue}</li>)}</ul>
+                </details>
+              )}
+              <button
+                type="button"
+                className="ambient-library__refresh"
+                data-library-action-id="refresh-library"
+                disabled={!model.actions["refresh-library"]?.enabled || model.readBoundary.loading}
+                onClick={() => refreshLibrary(model.actions["refresh-library"])}
+              >
+                {model.readBoundary.loading ? "Checking…" : "Check again"}
+              </button>
+            </div>
+          </details>
         </div>
-      </details>
+
+      </div>
     </main>
   );
 }

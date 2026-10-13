@@ -30,7 +30,88 @@
 .staff-invitation-facts strong { overflow-wrap: anywhere; text-transform: capitalize; }
 .staff-invitation-location { display: flex; align-items: flex-start; gap: 0.5rem; color: #625b50; }
 .staff-invitation-actions, .staff-invitation-decline > div { display: flex; flex-wrap: wrap; gap: 0.7rem; margin-top: 1.5rem; }
-.staff-invitation-actions button { min-height: 48px; display: inline-flex; align-items: center; gap: 0.5rem; }
+.staff-invitation-actions button,
+.staff-invitation-decline button {
+  min-height: 48px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.65rem 1rem;
+  border-radius: 10px;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  transition:
+    transform var(--motion-fast, 140ms) var(--ease-out-soft, ease-out),
+    box-shadow var(--motion-fast, 140ms) var(--ease-out-soft, ease-out),
+    color var(--motion-fast, 140ms) ease,
+    background-color var(--motion-fast, 140ms) ease,
+    border-color var(--motion-fast, 140ms) ease;
+}
+
+.staff-invitation-page .cta {
+  color: #fff;
+  background: #8d611a;
+  border: 1px solid #8d611a;
+}
+
+.staff-invitation-page .ghost {
+  color: #3b3d42;
+  background: #fff;
+  border: 1px solid #d8d8d3;
+}
+
+.staff-invitation-page .danger {
+  color: #8e3023;
+  background: #fff;
+  border: 1px solid rgba(151, 58, 41, 0.56);
+}
+
+.staff-invitation-page .cta:hover:not(:disabled),
+.staff-invitation-page .ghost:hover:not(:disabled),
+.staff-invitation-page .danger:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 5px 14px rgba(53, 42, 24, 0.12);
+}
+
+.staff-invitation-page .cta:hover:not(:disabled) {
+  background: #75500f;
+  border-color: #75500f;
+}
+
+.staff-invitation-page .ghost:hover:not(:disabled) {
+  background: #f4f4f1;
+  border-color: #c9c9c3;
+}
+
+.staff-invitation-page .danger:hover:not(:disabled) {
+  color: #7f2f20;
+  background: #fff1ed;
+  border-color: #914334;
+}
+
+.staff-invitation-page :is(.cta, .ghost, .danger):focus-visible,
+.staff-invitation-decline textarea:focus-visible {
+  outline: 2px solid rgba(141, 97, 26, 0.65);
+  outline-offset: 2px;
+  box-shadow: none;
+}
+
+.staff-invitation-page :is(.cta, .ghost, .danger):active:not(:disabled) {
+  transform: translateY(0);
+  box-shadow: none;
+}
+
+.staff-invitation-page :is(.cta, .ghost, .danger):disabled {
+  color: #70685d;
+  background: #f4f0e7;
+  border-color: rgba(97, 73, 34, 0.22);
+  cursor: not-allowed;
+  opacity: 1;
+  transform: none;
+  box-shadow: none;
+}
 .staff-invitation-decline { margin-top: 1.1rem; padding: 1rem; border-radius: 15px; background: #fff7f4; }
 .staff-invitation-decline label { display: grid; gap: 0.55rem; }
 .staff-invitation-decline textarea { min-height: 96px; resize: vertical; }
@@ -40,4 +121,36 @@
   .staff-invitation-facts { grid-template-columns: 1fr; }
   .staff-invitation-actions { display: grid; }
   .staff-invitation-actions button { width: 100%; justify-content: center; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .staff-invitation-actions button,
+  .staff-invitation-decline button {
+    transition: none;
+    transform: none !important;
+  }
+}
+
+@media (forced-colors: active) {
+  .staff-invitation-page :is(.cta, .ghost, .danger),
+  .staff-invitation-decline textarea {
+    color: ButtonText;
+    background: ButtonFace;
+    border: 1px solid ButtonText;
+  }
+
+  .staff-invitation-page :is(.cta, .ghost, .danger):hover:not(:disabled) {
+    color: Highlight;
+    border-color: Highlight;
+  }
+
+  .staff-invitation-page :is(.cta, .ghost, .danger):focus-visible,
+  .staff-invitation-decline textarea:focus-visible {
+    outline: 2px solid Highlight;
+  }
+
+  .staff-invitation-page :is(.cta, .ghost, .danger):disabled {
+    color: GrayText;
+    border-color: GrayText;
+  }
 }

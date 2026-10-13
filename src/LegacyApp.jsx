@@ -12,19 +12,44 @@ import AttentionBadge from "./components/AttentionBadge";
 import AuthGate from "./components/AuthGate";
 import CustomerPortalView from "quotepilot-active-customer-portal";
 import { RebookQuoteReviewBanner } from "./components/CustomerRebookDraftAction";
-import LiveBreakdown from "./components/LiveBreakdown";
-import ProposalComposer, { buildDraftSaveBlockers } from "./components/ProposalComposer";
-import CatalogReadNotice from "./components/CatalogReadNotice";
+import { buildMarginPresentation } from "./components/marginPresentation";
+import { buildRecordedCostMarginComparison } from "./lib/decisionPacketMarginComparison";
+import { buildDraftSaveBlockers } from "./components/proposalSaveReadiness";
 import ProductBrandLockup from "./components/ProductBrandLockup";
+import CommercialApplyRecoveryNotice from "./components/CommercialApplyRecoveryNotice";
+import { useCommercialApplyRecovery } from "./lib/commercialApplyRecovery";
 import {
   createRecoverableLazy,
-  LazySurfaceLoading,
+  UNSAVED_QUOTE_RELOAD_PROMPT,
   RecoverableErrorBoundary
 } from "./components/RecoverableErrorBoundary";
-import { StepEvent, StepMenu, StepReview, StepServices } from "./components/WizardSteps";
+import {
+  useStickyMount,
+  WorkspaceLazyRoute,
+  WorkspaceLazyTool
+} from "./components/WorkspaceSurfaceBoundary";
+const loadQuoteWorkflowModule = () => import("./components/QuoteWorkflowModule");
+const quoteWorkflowComponent = (name) => (module) => ({ default: module[name] });
+const ProposalComposer = createRecoverableLazy(loadQuoteWorkflowModule, "ProposalComposer", quoteWorkflowComponent("ProposalComposer"));
+const StepEvent = createRecoverableLazy(loadQuoteWorkflowModule, "StepEvent", quoteWorkflowComponent("StepEvent"));
+const StepMenu = createRecoverableLazy(loadQuoteWorkflowModule, "StepMenu", quoteWorkflowComponent("StepMenu"));
+const StepServices = createRecoverableLazy(loadQuoteWorkflowModule, "StepServices", quoteWorkflowComponent("StepServices"));
+const StepReview = createRecoverableLazy(loadQuoteWorkflowModule, "StepReview", quoteWorkflowComponent("StepReview"));
+const LiveBreakdown = createRecoverableLazy(loadQuoteWorkflowModule, "LiveBreakdown", quoteWorkflowComponent("LiveBreakdown"));
+const ChangeRequestPanel = createRecoverableLazy(loadQuoteWorkflowModule, "ChangeRequestPanel", quoteWorkflowComponent("ChangeRequestPanel"));
+const CatalogReadNotice = createRecoverableLazy(loadQuoteWorkflowModule, "CatalogReadNotice", quoteWorkflowComponent("CatalogReadNotice"));
+const QuoteEditorModeSurface = createRecoverableLazy(loadQuoteWorkflowModule, "QuoteEditorModeSurface", quoteWorkflowComponent("QuoteEditorModeSurface"));
+function retryQuoteBuilder() {
+  [ProposalComposer, QuoteEditorModeSurface, StepEvent, StepMenu, StepServices, StepReview].forEach((component) => component.retry());
+}
 import CreateIntake from "./components/CreateIntake";
 import { parseIntentDraftWithModel } from "./lib/intentParseClient";
-import ChangeRequestPanel from "./components/ChangeRequestPanel";
+import { resolveQuoteCompletionCommandPathGate } from "./lib/quoteCompletionGate";
+import { resolveDecisionPacketGate } from "./lib/decisionPacketGate";
+import {
+  resolveQuoteWizardCompletionDestination,
+  scheduleQuoteCompletionDestinationFocus
+} from "./lib/quoteCompletionDestination";
 import PilotCommandBar from "./components/LegacyPilotCommandBar";
 import { applyProposalToForm, proposalTouchedFields } from "./components/changeRequestParse";
 import {
@@ -42,10 +67,30 @@ import {
 } from "./lib/changeRequestRecordClient";
 import { useEventType } from "./context/EventTypeContext";
 import { useOrganization } from "./context/OrganizationContext";
-import { useWorkspaceNavigation } from "./context/WorkspaceNavigationContext";
+import {
+  useWorkspaceNavigation,
+  useWorkspaceReturnContextAdapter
+} from "./context/WorkspaceNavigationContext";
 import { DEFAULT_FEATURE_FLAGS, STAFF_RULES } from "./data/mockCatalog";
 import { useCatalogData } from "./hooks/useCatalogData";
 import { useCommercialWorkspaceSnapshot } from "./hooks/useCommercialWorkspaceSnapshot";
+import { useInventoryRecipeExtension } from "./hooks/useInventoryRecipeExtension";
+import {
+  buildEventIngredientSelectionInputs,
+  useEventIngredientProjection
+} from "./hooks/useEventIngredientProjection";
+import { useFulfillmentStaffingSnapshot } from "./hooks/useFulfillmentStaffingSnapshot";
+import EventIngredientProjectionPanel from "./components/EventIngredientProjectionPanel";
+import { buildCommercialInventoryConsequences } from "./lib/commercialInventoryConsequences";
+import { buildCommercialScenarioProjectionRequest } from "./lib/commercialScenarioWorkbench";
+import {
+  buildLivingCommercialTwinInventoryFingerprint,
+  buildLivingCommercialTwinProjection,
+  buildLivingCommercialTwinScenarioContextFingerprint,
+  getSavedInventoryComparisonRead,
+  hasCommercialFormChanges,
+  isGuestCountOnlyProposal
+} from "./lib/livingCommercialTwinProjection";
 import {
   calculateQuotePricing,
   notifyOwnerNewQuote
@@ -56,6 +101,7 @@ import {
 } from "./lib/commercialSearchShell";
 import { areWorkspaceSoundsEnabled, setWorkspaceSoundsEnabled } from "./components/soundKit";
 import { setActiveOrganizationId } from "./lib/organizationService";
+import { firebaseReady } from "./lib/firebase";
 import { isCatalogPricingConfirmationCurrent } from "./lib/catalogPricingConfirmation";
 import { calculateQuote, currency } from "./lib/quoteCalculator";
 import { buildUpsellRecommendations } from "./lib/recommendations";
@@ -64,6 +110,7 @@ import {
   reconcileCatalogSelections
 } from "./lib/catalogSelectionReconciliation";
 import { buildProposalReadiness } from "./lib/quoteWorkflow";
+import { buildRoleSafeQuoteActionController } from "./lib/quoteHistoryController";
 import { recommendationWouldChangeForm } from "./lib/recommendationState";
 import { PRODUCT_NAME } from "./lib/productIdentity";
 import {
@@ -97,6 +144,13 @@ import {
   WORKSPACE_PATHS,
   WORKSPACE_ROUTE_IDS
 } from "./lib/workspaceRoutes";
+import { beginRouteMeasurement, routePerformanceId } from "./lib/routePerformance";
+import { createWorkspaceArrivalHandoff, parseWorkspaceArrivalHandoff } from "./lib/workspaceArrivalContract";
+import {
+  createCommercialConsequenceHandoff,
+  isCommercialConsequenceArrival
+} from "./lib/commercialConsequenceNavigation";
+import { restoreWorkspaceReturnViewport } from "./lib/workspaceReturnContext";
 import { recordDiagnosticError, setDiagnosticsUserContext } from "./lib/sessionDiagnostics";
 import { createRebookQuoteDraft } from "./lib/rebookQuoteClient";
 import { clearTenantContextCache } from "./lib/tenantDomainService";
@@ -121,6 +175,11 @@ const CommercialChangeImpactPanel = createRecoverableLazy(
   () => import("./components/CommercialChangeImpactPanel"),
   "CommercialChangeImpactPanel"
 );
+const CommercialAmendmentWorkspace = createRecoverableLazy(
+  () => import("./components/CommercialAmendmentWorkspace"),
+  "CommercialAmendmentWorkspace"
+);
+const loadCommercialAmendmentContext = () => import("./lib/commercialAmendmentContext");
 const CustomerDirectoryView = createRecoverableLazy(
   () => import("quotepilot-active-customer-directory"),
   "CustomerDirectoryView"
@@ -132,6 +191,14 @@ const CustomerWorkspaceView = createRecoverableLazy(
 const StaffWorkspace = createRecoverableLazy(
   () => import("./components/StaffWorkspace"),
   "StaffWorkspace"
+);
+const InventoryWorkspace = createRecoverableLazy(
+  () => import("./components/InventoryWorkspace"),
+  "InventoryWorkspace"
+);
+const InventoryMenuCostSummary = createRecoverableLazy(
+  () => import("./components/InventoryRecipeEditor").then((module) => ({ default: module.InventoryMenuCostSummary })),
+  "InventoryMenuCostSummary"
 );
 const MessagingStation = createRecoverableLazy(
   () => import("./components/LegacyMessagingStation"),
@@ -211,6 +278,17 @@ const PROPOSAL_COMPOSER_ENABLED = !["0", "false", "no", "off"].includes(
 const OPERATIONAL_STAFFING_UI_ENABLED = ["1", "true", "yes", "on"].includes(
   String(import.meta.env.VITE_OPERATIONAL_STAFFING_ENABLED || "").trim().toLowerCase()
 );
+const INVENTORY_AUTHORITY_UI_ENABLED = import.meta.env.VITE_INVENTORY_AUTHORITY_ENABLED === "true";
+const QUOTE_COMPLETION_BUILD_ENABLED = import.meta.env.MODE === "test"
+  || import.meta.env.VITE_QUOTE_COMPLETION_COMMAND_PATH_ENABLED === "true";
+const DECISION_PACKET_BUILD_ENABLED = import.meta.env.MODE === "test"
+  || import.meta.env.VITE_DECISION_PACKET_ENABLED === "true";
+const QUOTE_CONFIDENCE_BUILD_ENABLED = QUOTE_COMPLETION_BUILD_ENABLED
+  || DECISION_PACKET_BUILD_ENABLED
+  || import.meta.env.VITE_POST_EVENT_LEARNING_ENABLED === "true"
+  || import.meta.env.VITE_INVENTORY_EXCEPTION_WORKSPACE_ENABLED === "true"
+  || import.meta.env.VITE_EVENT_SUPPLY_ACTION_PLAN_ENABLED === "true"
+  || import.meta.env.VITE_INVENTORY_MOBILE_CAPTURE_ENABLED === "true";
 // The NOW surface is an additional default-off presentation gate. Absent or
 // unrecognized values keep it off; it never widens data access or authority.
 const PILOT_NOW_ENABLED = CUSTOMER_CENTERED_WORKSPACE_ENABLED
@@ -223,6 +301,9 @@ const PILOT_NOW_ENABLED = CUSTOMER_CENTERED_WORKSPACE_ENABLED
 const PILOT_CREATE_ENABLED = ["1", "true", "yes", "on"].includes(
   String(import.meta.env.VITE_PILOT_CREATE_ENABLED || "").trim().toLowerCase()
 );
+// Model assistance is a separate browser capability. CREATE's deterministic
+// intake remains available whenever its own gate is enabled.
+const PILOT_MODEL_ENABLED = import.meta.env.VITE_PILOT_MODEL_ENABLED === "true";
 const ActiveLegacyHome = createRecoverableLazy(
   () => import("quotepilot-active-legacy-home"),
   "ActiveLegacyHome"
@@ -286,7 +367,8 @@ const EMPTY_EDITING_QUOTE = Object.freeze({
   activeVersionId: "",
   customerId: "",
   organizationId: "",
-  rebooking: null
+  rebooking: null,
+  commercialAmendment: null
 });
 
 const EMPTY_CHANGE_IMPACT_PREVIEW = Object.freeze({
@@ -307,8 +389,43 @@ const EMPTY_CHANGE_IMPACT_PREVIEW = Object.freeze({
   mutationKind: "",
   mutationMessage: "",
   applyResult: null,
-  applyOutcome: null
+  applyOutcome: null,
+  catalogRevision: null,
+  appliedQuote: null,
+  workbenchRequest: null,
+  inventoryObservation: null,
+  inventoryScenarioFingerprint: "",
+  staffingObservation: null
 });
+const EMPTY_EVENT_INGREDIENT_PREVIEW_INPUT = Object.freeze({ valid: false, selections: [] });
+
+function normalizeLivingTwinGuestCount(value) {
+  const candidate = typeof value === "number" ? value : Number(value);
+  return Number.isSafeInteger(candidate) && candidate >= 1 && candidate <= 400
+    ? candidate
+    : null;
+}
+
+function normalizeLivingTwinProjectionRequest(value, scopeKey) {
+  try {
+    return buildCommercialScenarioProjectionRequest({ ...value, scopeKey });
+  } catch {
+    return null;
+  }
+}
+
+function focusLivingTwinCommitmentReview() {
+  if (typeof document === "undefined") return false;
+  const target = document.getElementById("commercial-change-impact-title")
+    || document.querySelector('[data-capability-id="cwf-15b-commercial-change-impact-preview"]');
+  if (!target) return false;
+  if (!target.matches("button, a, input, select, textarea, [tabindex]")) {
+    target.setAttribute("tabindex", "-1");
+  }
+  target.scrollIntoView?.({ behavior: "smooth", block: "start" });
+  target.focus?.({ preventScroll: true });
+  return true;
+}
 
 function readPortalKeyFromUrl() {
   if (typeof window === "undefined") return "";
@@ -375,72 +492,6 @@ function toOptionalNumber(value) {
   return Number.isFinite(n) ? n : "";
 }
 
-function useStickyMount(active) {
-  const [hasMounted, setHasMounted] = useState(Boolean(active));
-
-  useEffect(() => {
-    if (active) setHasMounted(true);
-  }, [active]);
-
-  return Boolean(active) || hasMounted;
-}
-
-function WorkspaceLazyTool({
-  open,
-  surfaceName,
-  component: LazyComponent,
-  onClose,
-  returnFocusRef,
-  hasUnsavedWorkspaceChanges = false,
-  children
-}) {
-  return (
-    <RecoverableErrorBoundary
-      active={open}
-      surfaceName={surfaceName}
-      surfaceKind="tool"
-      onRetry={LazyComponent.retry}
-      onClose={onClose}
-      returnFocusRef={returnFocusRef}
-      hasUnsavedWorkspaceChanges={hasUnsavedWorkspaceChanges}
-    >
-      <Suspense
-        fallback={open ? (
-          <LazySurfaceLoading
-            surfaceName={surfaceName}
-            onClose={onClose}
-            returnFocusRef={returnFocusRef}
-          />
-        ) : null}
-      >
-        {children}
-      </Suspense>
-    </RecoverableErrorBoundary>
-  );
-}
-
-function WorkspaceLazyRoute({
-  active = true,
-  surfaceName,
-  component: LazyComponent,
-  onClose = () => window.location.assign(WORKSPACE_PATHS.home),
-  children
-}) {
-  return (
-    <RecoverableErrorBoundary
-      active={active}
-      surfaceName={surfaceName}
-      surfaceKind="route"
-      onRetry={LazyComponent.retry}
-      onClose={onClose}
-    >
-      <Suspense fallback={active ? <div className="qp-route-loading" role="status">Loading {surfaceName}...</div> : null}>
-        {children}
-      </Suspense>
-    </RecoverableErrorBoundary>
-  );
-}
-
 function WorkspaceStatusCard({ children }) {
   return (
     <section className="panel auth-card">
@@ -493,7 +544,15 @@ function normalizeFeatureFlags(input) {
     crmSync: source.crmSync !== false,
     guidedSelling: source.guidedSelling !== false,
     aiAssist,
-    aiAutopilot: aiAssist && source.aiAutopilot === true
+    aiAutopilot: aiAssist && source.aiAutopilot === true,
+    ...(QUOTE_CONFIDENCE_BUILD_ENABLED ? {
+      quoteCompletionCommandPath: source.quoteCompletionCommandPath === true,
+      decisionPacket: source.decisionPacket === true,
+      postEventLearning: source.postEventLearning === true,
+      inventoryExceptionWorkspace: source.inventoryExceptionWorkspace === true,
+      eventSupplyActionPlan: source.eventSupplyActionPlan === true,
+      inventoryMobileCapture: source.inventoryMobileCapture === true
+    } : {})
   };
 }
 
@@ -681,13 +740,36 @@ function LegacyAppCore({
   portalTransitionAllowed = true,
   onPendingWorkChange
 }) {
-  const { route: browserRoute, navigate, replace } = useWorkspaceNavigation();
+  const {
+    route: browserRoute,
+    location: browserLocation,
+    navigate,
+    replace,
+    setReturnContextScope,
+    returnToOrigin,
+    returnContextStatus
+  } = useWorkspaceNavigation();
   const navigateWorkspace = useCallback((destination, options = {}) => navigate(destination, {
     ...options,
     preserveSearch: false
   }), [navigate]);
+  const returnToWorkspaceOrigin = useCallback((fallback, options = {}) => (
+    typeof returnToOrigin === "function"
+      ? returnToOrigin({ fallback, ...options })
+      : navigateWorkspace(fallback)
+  ), [navigateWorkspace, returnToOrigin]);
+  const commercialArrivalHandoff = useMemo(() => {
+    if (!browserLocation.state?.ambientArrival) return null;
+    const parsed = parseWorkspaceArrivalHandoff(browserLocation);
+    return parsed.ok && isCommercialConsequenceArrival(parsed.contract) ? parsed : null;
+  }, [browserLocation]);
+  const commercialArrivalContext = commercialArrivalHandoff?.contract || null;
+  const [commercialArrivalResolution, setCommercialArrivalResolution] = useState(null);
   const wizardRef = useRef(null);
+  const quoteEditFocusFrameRef = useRef(0);
+  const [quoteEditFocusRequest, setQuoteEditFocusRequest] = useState(null);
   const stepperRef = useRef(null);
+  const stepperCenterFrameRef = useRef(0);
   const mobilePricingToggleRef = useRef(null);
   const historyTriggerRef = useRef(null);
   const workflowTriggerRef = useRef(null);
@@ -703,12 +785,15 @@ function LegacyAppCore({
   const autopilotAppliedRef = useRef(new Set());
   const directEditLoadRef = useRef({ key: "", generation: 0 });
   const changeImpactPreviewGenerationRef = useRef(0);
+  const livingTwinScenarioScopeRef = useRef({ key: "", generation: 0 });
   const catalogReconciliationNoticeRef = useRef("");
   const { eventTypeId: globalEventTypeId, setEventTypeId: setGlobalEventTypeId } = useEventType();
   const { organization, setOrganizationId } = useOrganization();
   const [portalKey, setPortalKey] = useState(() => readPortalKeyFromUrl());
   const [portalMode, setPortalMode] = useState(Boolean(portalKey));
   const [paymentReturn] = useState(() => readPaymentReturnFromUrl());
+  const [adminOpen, setAdminOpen] = useState(false);
+  const [importStudioOpen, setImportStudioOpen] = useState(false);
 
   useEffect(() => {
     if (!portalTransitionAllowed) return;
@@ -727,13 +812,26 @@ function LegacyAppCore({
     && authSession.platformAdmin
     && !String(authSession.organizationId || "").trim()
   );
-  const catalogEnabled = authSession.isStaff
+  const catalogReadRequired = authSession.isStaff
+    || adminOpen
+    || importStudioOpen
+    || [
+      WORKSPACE_ROUTE_IDS.QUOTE_NEW,
+      WORKSPACE_ROUTE_IDS.QUOTE_EDIT,
+      WORKSPACE_ROUTE_IDS.QUOTE_DETAIL,
+      WORKSPACE_ROUTE_IDS.CATALOG,
+      WORKSPACE_ROUTE_IDS.IMPORTS
+    ].includes(browserRoute.routeId)
+    || (!CUSTOMER_CENTERED_WORKSPACE_ENABLED && browserRoute.routeId === WORKSPACE_ROUTE_IDS.HOME);
+  const catalogEnabled = catalogReadRequired
+    && authSession.isStaff
     && tenantContext.ready
     && !isUnscopedPlatformOperator
     && (!tenantContext.requiresTenant || authSession.organizationId === tenantContext.organizationId);
   const catalog = useCatalogData({
     enabled: catalogEnabled,
-    organizationId: authSession.organizationId
+    organizationId: authSession.organizationId,
+    principalId: authSession.user?.uid || ""
   });
   const hasConfiguredPackage = catalog.packages.some((item) => {
     const name = String(item?.name || "").trim();
@@ -778,38 +876,44 @@ function LegacyAppCore({
     setDynamicMenuRetryToken((token) => token + 1);
   }, [catalog.acceptCatalogMutation]);
 
+  const centerCurrentStep = useCallback(() => {
+    if (typeof window === "undefined" || typeof window.matchMedia !== "function") return;
+    if (!window.matchMedia("(max-width: 640px)").matches) return;
+    window.cancelAnimationFrame(stepperCenterFrameRef.current);
+    stepperCenterFrameRef.current = window.requestAnimationFrame(() => {
+      const stepper = stepperRef.current;
+      const currentStep = stepper?.querySelector('[aria-current="step"]');
+      if (!stepper || !currentStep) return;
+      const railRect = stepper.getBoundingClientRect();
+      const stepRect = currentStep.getBoundingClientRect();
+      stepper.scrollTo({
+        left: Math.max(
+          0,
+          stepper.scrollLeft
+            + (stepRect.left - railRect.left)
+            - ((railRect.width - stepRect.width) / 2)
+        ),
+        behavior: "auto"
+      });
+    });
+  }, []);
+
+  const attachStepperRef = useCallback((element) => {
+    stepperRef.current = element;
+    // A newly loaded step can reveal this rail after the parent effect ran.
+    if (element) centerCurrentStep();
+  }, [centerCurrentStep]);
+
   useEffect(() => {
     setMobilePricingOpen(false);
     if (typeof window === "undefined" || typeof window.matchMedia !== "function") return undefined;
-    let frame = 0;
-    const centerCurrentStep = () => {
-      if (!window.matchMedia("(max-width: 640px)").matches) return;
-      window.cancelAnimationFrame(frame);
-      frame = window.requestAnimationFrame(() => {
-        const stepper = stepperRef.current;
-        const currentStep = stepper?.querySelector('[aria-current="step"]');
-        if (!stepper || !currentStep) return;
-        const railRect = stepper.getBoundingClientRect();
-        const stepRect = currentStep.getBoundingClientRect();
-        stepper.scrollTo({
-          left: Math.max(
-            0,
-            stepper.scrollLeft
-              + (stepRect.left - railRect.left)
-              - ((railRect.width - stepRect.width) / 2)
-          ),
-          behavior: "auto"
-        });
-      });
-    };
-
     centerCurrentStep();
     window.addEventListener("resize", centerCurrentStep);
     return () => {
-      window.cancelAnimationFrame(frame);
+      window.cancelAnimationFrame(stepperCenterFrameRef.current);
       window.removeEventListener("resize", centerCurrentStep);
     };
-  }, [step]);
+  }, [step, centerCurrentStep]);
 
   useEffect(() => {
     if (!mobilePricingOpen || typeof window === "undefined") return undefined;
@@ -878,12 +982,11 @@ function LegacyAppCore({
     };
   }, [mobilePricingOpen]);
 
-  const [adminOpen, setAdminOpen] = useState(false);
   const [adminInitialTab, setAdminInitialTab] = useState("");
   const [scheduleOpen, setScheduleOpen] = useState(false);
   const [integrationsOpen, setIntegrationsOpen] = useState(false);
-  const [importStudioOpen, setImportStudioOpen] = useState(false);
   const [skipCatalogSetup, setSkipCatalogSetup] = useState(false);
+  const [skipCatalogSetupKey, setSkipCatalogSetupKey] = useState("");
   const [diagnosticsOpen, setDiagnosticsOpen] = useState(false);
   const [historyTarget, setHistoryTarget] = useState({ quoteId: "", reason: "" });
   const [dashboardOpen, setDashboardOpen] = useState(false);
@@ -908,12 +1011,25 @@ function LegacyAppCore({
     !CUSTOMER_CENTERED_WORKSPACE_ENABLED
     && browserRoute.routeId === WORKSPACE_ROUTE_IDS.HOME
   ) ? WORKSPACE_ROUTE_IDS.QUOTE_NEW : browserRoute.routeId;
+  useEffect(() => {
+    if (!routePerformanceId(resolvedWorkspaceRouteId)) return;
+    beginRouteMeasurement(resolvedWorkspaceRouteId);
+  }, [resolvedWorkspaceRouteId]);
   const historyOpen = [WORKSPACE_ROUTE_IDS.QUOTE_LIST, WORKSPACE_ROUTE_IDS.QUOTE_DETAIL].includes(resolvedWorkspaceRouteId);
+  const commercialHistoryFocusAction = commercialArrivalContext?.surfaceId === "quote-administration"
+    ? "administration"
+    : commercialArrivalContext?.intentId === "review_staffing_consequence"
+      ? "staffing"
+      : "";
+  const historyFocusQuoteId = browserRoute.params?.quoteId
+    || commercialArrivalContext?.focus?.quoteId
+    || historyTarget.quoteId;
   const messagingOpen = CUSTOMER_CENTERED_WORKSPACE_ENABLED
     && resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.MESSAGING;
   const salesWorkflowOpen = resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.WORKFLOW;
   const scheduleRouteOpen = CUSTOMER_CENTERED_WORKSPACE_ENABLED
-    && resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.SCHEDULE;
+    && [WORKSPACE_ROUTE_IDS.SCHEDULE, WORKSPACE_ROUTE_IDS.OPERATIONS]
+      .includes(resolvedWorkspaceRouteId);
   const reportingRouteOpen = CUSTOMER_CENTERED_WORKSPACE_ENABLED
     && resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.REPORTING;
   const integrationsRouteOpen = CUSTOMER_CENTERED_WORKSPACE_ENABLED
@@ -975,6 +1091,7 @@ function LegacyAppCore({
     setOpen(false);
     if (resolvedWorkspaceRouteId === routeId) navigateWorkspace(WORKSPACE_PATHS.home);
   };
+  const returnWorkspaceHome = () => navigateWorkspace(WORKSPACE_PATHS.home);
   const openWorkspaceTool = (setOpen, {
     menuTriggerRef = null,
     fallbackRef = null,
@@ -1049,6 +1166,10 @@ function LegacyAppCore({
   // change-request version linking").
   const [pendingResolutionLink, setPendingResolutionLink] = useState(null);
   const [changeImpactPreview, setChangeImpactPreview] = useState(EMPTY_CHANGE_IMPACT_PREVIEW);
+  const [eventIngredientPreviewInput, setEventIngredientPreviewInput] = useState(
+    EMPTY_EVENT_INGREDIENT_PREVIEW_INPUT
+  );
+  const [pendingLivingTwinConsequenceRequest, setPendingLivingTwinConsequenceRequest] = useState(null);
   const [quoteEditLoadState, setQuoteEditLoadState] = useState({
     quoteId: "",
     loading: false,
@@ -1337,11 +1458,64 @@ function LegacyAppCore({
     };
   }, [catalog.settings, effectiveMenuSections, organization?.name]);
   const featureFlags = effectiveSettings.featureFlags || DEFAULT_FEATURE_FLAGS;
+  const quoteCompletionCommandPathEnabled = QUOTE_COMPLETION_BUILD_ENABLED && resolveQuoteCompletionCommandPathGate({
+    buildValue: import.meta.env.VITE_QUOTE_COMPLETION_COMMAND_PATH_ENABLED,
+    tenantValue: featureFlags.quoteCompletionCommandPath
+  });
+  const decisionPacketEnabled = DECISION_PACKET_BUILD_ENABLED && resolveDecisionPacketGate({
+    buildValue: import.meta.env.VITE_DECISION_PACKET_ENABLED,
+    tenantValue: featureFlags.decisionPacket
+  });
+  const proposalComposerQuoteActionController = useMemo(() => (
+    QUOTE_COMPLETION_BUILD_ENABLED && editingQuote?.id
+      ? buildRoleSafeQuoteActionController({
+          quote: editingQuote,
+          currentUserRole: authSession.role,
+          source: ["firebase", "firebase-org"].includes(catalog.source) ? "firebase" : catalog.source
+        })
+      : null
+  ), [authSession.role, catalog.source, editingQuote]);
+  const navigateProposalQuoteCompletion = useMemo(() => QUOTE_COMPLETION_BUILD_ENABLED ? (action) => {
+    const quoteId = String(action?.objectContext?.quoteId || editingQuote?.id || "").trim();
+    if (!quoteId) return { status: "recovery", reason: "The exact quote could not be identified." };
+    const livingOpportunity = action?.destination?.surfaceId === "living-opportunity";
+    const destinationAction = String(action?.destination?.actionId || "").trim();
+    setHistoryTarget({
+      quoteId,
+      action: "administration",
+      destinationAction,
+      reason: action?.reason || "Review the exact quote completion destination."
+    });
+    const handoff = createWorkspaceArrivalHandoff(livingOpportunity
+      ? {
+          destination: "opportunity",
+          object: { id: quoteId, type: "opportunity" },
+          focus: { quoteId },
+          intentId: "review_proposal_gap"
+        }
+      : {
+          destination: "administration",
+          object: { id: quoteId, type: "customer-decision-artifact" },
+          focus: { quoteId },
+          intentId: "review_proposal_controls"
+        });
+    if (!handoff.ok) return { status: "recovery", ...handoff.recovery };
+    const result = navigateWorkspace(handoff.navigation.path, { state: handoff.navigation.state });
+    return ["blocked", "guarded"].includes(result?.status)
+      ? { status: "recovery", reason: "The exact quote destination is currently guarded." }
+      : { status: "pending", contract: handoff.contract };
+  } : undefined, [editingQuote?.id, navigateWorkspace]);
   const customerPortalEnabled = featureFlags.customerPortal !== false;
   const eventScheduleEnabled = featureFlags.eventSchedule !== false;
   const integrationsEnabled = featureFlags.integrationsOps !== false;
   const diagnosticsEnabled = featureFlags.diagnostics !== false;
   const dashboardEnabled = featureFlags.reportingDashboard !== false;
+  const inventoryTenantEnabled = effectiveSettings.inventoryAuthorityEnabled === true;
+  const inventoryWorkspaceEnabled = CUSTOMER_CENTERED_WORKSPACE_ENABLED
+    && INVENTORY_AUTHORITY_UI_ENABLED
+    && inventoryTenantEnabled
+    && firebaseReady
+    && authSession.isAdmin;
   const quoteCompareEnabled = featureFlags.quoteCompare !== false;
   const aiAssistEnabled = featureFlags.aiAssist !== false;
   const aiAutopilotEnabled = aiAssistEnabled && featureFlags.aiAutopilot === true;
@@ -1349,6 +1523,8 @@ function LegacyAppCore({
     (resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.STAFF
       && authSession.isAdmin
       && OPERATIONAL_STAFFING_UI_ENABLED)
+    || (resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.INVENTORY && inventoryWorkspaceEnabled)
+    || (resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.OPERATIONS && eventScheduleEnabled)
     || (resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.SCHEDULE && eventScheduleEnabled)
     || (resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.REPORTING && dashboardEnabled)
     || (resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.INTEGRATIONS && integrationsEnabled)
@@ -1379,6 +1555,19 @@ function LegacyAppCore({
     setActiveOrganizationId(authSession.organizationId);
     setQuoteStoreOrganizationId(authSession.organizationId);
   }, [authSession.organizationId, setOrganizationId]);
+  useEffect(() => {
+    setReturnContextScope?.({
+      organizationId: authSession.organizationId,
+      principalId: authSession.user?.uid,
+      role: authSession.role
+    });
+    return () => setReturnContextScope?.(null);
+  }, [
+    authSession.organizationId,
+    authSession.role,
+    authSession.user?.uid,
+    setReturnContextScope
+  ]);
 
   useEffect(() => {
     const organizationId = String(authSession.organizationId || "").trim();
@@ -1416,16 +1605,463 @@ function LegacyAppCore({
     : "";
   const quoteEditReady = Boolean(quoteEditRouteId && editingQuote.id === quoteEditRouteId);
   const isEditingQuote = quoteEditReady;
+  const proposedMargin = useMemo(() => DECISION_PACKET_BUILD_ENABLED && decisionPacketEnabled
+    ? buildMarginPresentation({ form, totals, catalog, settings: effectiveSettings })
+    : null, [catalog, decisionPacketEnabled, effectiveSettings, form, totals]);
+  const livingTwinMarginComparison = useMemo(() => DECISION_PACKET_BUILD_ENABLED && decisionPacketEnabled
+    ? buildRecordedCostMarginComparison({ isEditingQuote, editingQuote, catalog, effectiveSettings, proposedMargin })
+    : null, [
+    catalog,
+    decisionPacketEnabled,
+    editingQuote.baseForm,
+    editingQuote.pricingCatalogAuthority?.catalogRevision,
+    effectiveSettings,
+    isEditingQuote,
+    proposedMargin
+  ]);
+  useEffect(() => {
+    setQuoteEditFocusRequest((request) => (
+      request && request.quoteId !== quoteEditRouteId ? null : request
+    ));
+  }, [quoteEditRouteId]);
+  const attachWizardRef = useCallback((element) => {
+    window.cancelAnimationFrame(quoteEditFocusFrameRef.current);
+    quoteEditFocusFrameRef.current = 0;
+    wizardRef.current = element;
+    if (
+      !element
+      || !quoteBuilderActive
+      || !quoteEditReady
+      || quoteEditFocusRequest?.quoteId !== quoteEditRouteId
+    ) return;
+    // A lazy step can reveal after the edit route commits. Focus that reveal,
+    // not the hidden editor left behind while the quote is being hydrated.
+    quoteEditFocusFrameRef.current = window.requestAnimationFrame(() => {
+      quoteEditFocusFrameRef.current = 0;
+      if (
+        wizardRef.current !== element
+        || !element.isConnected
+        || element.hidden
+        || element.closest("[inert]")
+        || !element.getClientRects().length
+      ) return;
+      element.scrollIntoView({ behavior: "smooth", block: "start" });
+      element.focus({ preventScroll: true });
+      if (document.activeElement === element) {
+        setQuoteEditFocusRequest((request) => (
+          request === quoteEditFocusRequest ? null : request
+        ));
+      }
+    });
+  }, [quoteBuilderActive, quoteEditFocusRequest, quoteEditReady, quoteEditRouteId]);
+  const commercialReturnCancelRef = useRef(null);
+  const captureCommercialConsequenceOrigin = useCallback((hint = {}) => ({
+    routeId: WORKSPACE_ROUTE_IDS.QUOTE_EDIT,
+    structured: {},
+    transient: {},
+    disclosureIds: [],
+    scrollY: typeof window === "undefined" ? 0 : window.scrollY,
+    focus: hint.focus || null
+  }), []);
+  const restoreCommercialConsequenceOrigin = useCallback((view) => {
+    commercialReturnCancelRef.current?.();
+    return new Promise((resolve) => {
+      let active = true;
+      let frame = 0;
+      let attempt = 0;
+      let cancelViewport = null;
+      const finish = (status) => {
+        if (!active) return;
+        active = false;
+        resolve({ status });
+      };
+      const cancel = () => {
+        if (frame) window.cancelAnimationFrame(frame);
+        cancelViewport?.();
+        finish("cancelled");
+      };
+      commercialReturnCancelRef.current = cancel;
+      const restore = () => {
+        const focus = view?.focus || {};
+        const exactControl = focus.kind === "commercial-consequence"
+          && focus.objectId === String(editingQuote.id || "").trim()
+          && String(focus.controlId || "").trim()
+          ? document.getElementById(focus.controlId)
+          : null;
+        if (!exactControl && attempt < 60) {
+          attempt += 1;
+          frame = window.requestAnimationFrame(restore);
+          return;
+        }
+        cancelViewport = restoreWorkspaceReturnViewport({
+          focusTarget: exactControl || wizardRef.current,
+          scrollY: exactControl ? view?.scrollY : 0
+        });
+        finish(exactControl ? "restored" : "recovery");
+      };
+      frame = window.requestAnimationFrame(restore);
+    });
+  }, [editingQuote.id]);
+  useWorkspaceReturnContextAdapter({
+    routeId: WORKSPACE_ROUTE_IDS.QUOTE_EDIT,
+    active: isEditingQuote,
+    capture: captureCommercialConsequenceOrigin,
+    restore: restoreCommercialConsequenceOrigin
+  });
+  useEffect(() => () => commercialReturnCancelRef.current?.(), []);
+
+  const openCommercialConsequence = useCallback((target = {}) => {
+    if (!isEditingQuote) return { status: "recovery" };
+    if (target.kind === "inventory_ingredient" && !inventoryWorkspaceEnabled) {
+      pushToast("Inventory is unavailable to this tenant or role. The ingredient consequence remains unresolved.", "warning");
+      return { status: "recovery" };
+    }
+    if (target.kind === "production_plan" && !eventScheduleEnabled) {
+      pushToast("Event Schedule is unavailable. The Production consequence remains unresolved.", "warning");
+      return { status: "recovery" };
+    }
+    if (target.kind === "staffing_requirement" && !OPERATIONAL_STAFFING_UI_ENABLED) {
+      pushToast("Operational Staffing is unavailable. The Staffing consequence remains unresolved.", "warning");
+      return { status: "recovery" };
+    }
+    const handoff = createCommercialConsequenceHandoff(target, {
+      expectedQuoteId: editingQuote.id
+    });
+    if (!handoff.ok) {
+      pushToast(handoff.recovery?.reason || "The exact affected artifact could not be opened.", "warning");
+      return { status: "recovery", ...handoff.recovery };
+    }
+    const navigationResult = navigateWorkspace(handoff.navigation.path, {
+      state: handoff.navigation.state,
+      preserveReturnContext: true,
+      returnContextSurfaceId: "commercial-consequence",
+      returnContextHint: { focus: handoff.returnFocus }
+    });
+    return ["blocked", "guarded"].includes(navigationResult?.status)
+      ? navigationResult
+      : { status: "pending", contract: handoff.contract };
+  }, [
+    editingQuote.id,
+    eventScheduleEnabled,
+    inventoryWorkspaceEnabled,
+    isEditingQuote,
+    navigateWorkspace,
+    pushToast
+  ]);
+  const commercialApplyRecovery = useCommercialApplyRecovery({
+    organizationId: authSession.organizationId || "",
+    principalId: authSession.user?.uid || "",
+    quoteId: isEditingQuote ? editingQuote.id : "",
+    ready: !authSession.loading && tenantContext.ready
+  });
+  useEffect(() => {
+    if (!commercialApplyRecovery.restored || !commercialApplyRecovery.pending) return undefined;
+    const identity = commercialApplyRecovery.pending;
+    if (isEditingQuote) setChangeImpactPreview((current) => ({
+      ...current, requested: true, simulationReceiptId: identity.simulationReceiptId,
+      authorizationReceiptId: identity.authorizationReceiptId, applyRequestId: identity.applyRequestId,
+      mutationState: "uncertain", mutationKind: "apply",
+      mutationMessage: "The previous apply request was restored. Its exact server outcome must be checked before another edit."
+    }));
+    const reconcile = () => { void handleReconcileCommercialChangeApplyOutcome(); };
+    if (typeof navigator === "undefined" || navigator.onLine !== false) reconcile();
+  }, [commercialApplyRecovery.pending?.applyRequestId, commercialApplyRecovery.restored, authSession.organizationId, authSession.user?.uid, editingQuote.id]);
+  useEffect(() => {
+    if (!commercialApplyRecovery.pending) return undefined;
+    const reconcile = () => {
+      if (commercialApplyRecovery.restored
+        || (changeImpactPreview.mutationState === "uncertain" && changeImpactPreview.mutationKind === "apply")) {
+        void handleReconcileCommercialChangeApplyOutcome();
+      }
+    };
+    window.addEventListener("online", reconcile);
+    return () => window.removeEventListener("online", reconcile);
+  }, [commercialApplyRecovery.pending?.applyRequestId, commercialApplyRecovery.restored, changeImpactPreview.mutationState, changeImpactPreview.mutationKind, authSession.organizationId, authSession.user?.uid, editingQuote.id]);
+  const inventoryRecipeExtension = useInventoryRecipeExtension({
+    active: catalogRouteOpen || catalogModalOpen || step === 2 || isEditingQuote,
+    organizationId: authSession.organizationId,
+    role: authSession.role,
+    browserEnabled: INVENTORY_AUTHORITY_UI_ENABLED,
+    tenantEnabled: inventoryTenantEnabled
+  });
+  const eventIngredientSelections = useMemo(() => buildEventIngredientSelectionInputs({
+    quote: editingQuote,
+    recipeProjectionsByMenuItemId: inventoryRecipeExtension.menuCostProjectionsByMenuItemId
+  }), [editingQuote, inventoryRecipeExtension.menuCostProjectionsByMenuItemId]);
   const currentChangeImpactFormKey = JSON.stringify(form);
+  const livingTwinNonGuestContextKey = useMemo(
+    () => buildLivingCommercialTwinScenarioContextFingerprint({
+      form,
+      selections: eventIngredientPreviewInput.selections
+    }),
+    [eventIngredientPreviewInput.selections, form]
+  );
+  const livingTwinScenarioScopeIdentity = JSON.stringify([
+    String(authSession.organizationId || "").trim(),
+    String(editingQuote.id || "").trim(),
+    String(editingQuote.activeVersionId || editingQuote.versionMeta?.versionId || "").trim(),
+    livingTwinNonGuestContextKey
+  ]);
+  if (livingTwinScenarioScopeRef.current.key !== livingTwinScenarioScopeIdentity) {
+    livingTwinScenarioScopeRef.current = {
+      key: livingTwinScenarioScopeIdentity,
+      generation: livingTwinScenarioScopeRef.current.generation + 1
+    };
+  }
+  const currentInventoryScenarioFingerprint = useMemo(
+    () => buildLivingCommercialTwinInventoryFingerprint({
+      commercialFormFingerprint: currentChangeImpactFormKey,
+      selections: eventIngredientPreviewInput.selections
+    }),
+    [currentChangeImpactFormKey, eventIngredientPreviewInput.selections]
+  );
+  const inventoryGuestScenarioEligible = useMemo(() => isGuestCountOnlyProposal({
+    currentForm: editingQuote.baseForm,
+    proposedForm: form
+  }), [editingQuote.baseForm, form]);
+  const eventIngredientProjection = useEventIngredientProjection({
+    active: isEditingQuote && firebaseReady,
+    organizationId: authSession.organizationId,
+    role: authSession.role,
+    browserEnabled: INVENTORY_AUTHORITY_UI_ENABLED,
+    tenantEnabled: inventoryTenantEnabled,
+    quoteId: editingQuote.id,
+    quoteStatus: editingQuote.status,
+    savedQuoteRevisionId: String(
+      editingQuote.activeVersionId || editingQuote.versionMeta?.versionId || ""
+    ).trim(),
+    selections: eventIngredientSelections,
+    scenarioFingerprint: currentInventoryScenarioFingerprint,
+    draftDirty: quoteDirty
+  });
+  const fulfillmentStaffingActive = isEditingQuote
+    && firebaseReady
+    && authSession.isStaff
+    && OPERATIONAL_STAFFING_UI_ENABLED
+    && effectiveSettings.operationalStaffingAuthorityEnabled === true;
+  const fulfillmentStaffing = useFulfillmentStaffingSnapshot({
+    active: fulfillmentStaffingActive,
+    organizationId: authSession.organizationId,
+    quoteId: editingQuote.id,
+    savedQuoteRevisionId: String(
+      editingQuote.activeVersionId || editingQuote.versionMeta?.versionId || ""
+    ).trim()
+  });
+  const proposedStaffingRequirements = useMemo(() => {
+    const roleCounts = [Number(form.servers), Number(form.chefs), Number(form.bartenders)];
+    if (roleCounts.some((value) => !Number.isSafeInteger(value) || value < 0)) return null;
+    return {
+      lead: 0,
+      server: roleCounts[0],
+      chef: roleCounts[1],
+      bartender: roleCounts[2]
+    };
+  }, [
+    form.bartenders,
+    form.chefs,
+    form.servers
+  ]);
+  const proposedStaffingEventWindowState = useMemo(() => (
+    ["date", "time", "hours"].every((field) => (
+      String(editingQuote.baseForm?.[field] ?? "") === String(form[field] ?? "")
+    )) ? "current" : "changed_unchecked"
+  ), [editingQuote.baseForm, form.date, form.hours, form.time]);
+  const authoritativeStaffingObservation = changeImpactPreview.formKey === currentChangeImpactFormKey
+    && changeImpactPreview.staffingObservation?.state === "available"
+    ? changeImpactPreview.staffingObservation
+    : null;
+  const effectiveProposedStaffingRequirements = authoritativeStaffingObservation
+    ?.preview?.proposed?.requirementsByRole || proposedStaffingRequirements;
+  const effectiveProposedStaffingEventWindowState = authoritativeStaffingObservation
+    ? authoritativeStaffingObservation.preview?.comparison?.windowState === "changed"
+      ? "changed_unchecked"
+      : "current"
+    : proposedStaffingEventWindowState;
+  const commercialInventoryScenarioPreview = useMemo(() => {
+    const observation = changeImpactPreview.inventoryObservation;
+    if (observation?.state === "available" && observation.preview?.projection) {
+      return {
+        state: "current",
+        projection: observation.preview.projection,
+        scenarioFingerprint: changeImpactPreview.inventoryScenarioFingerprint
+      };
+    }
+    if (observation?.state === "unavailable") {
+      return {
+        state: "unavailable",
+        projection: null,
+        scenarioFingerprint: changeImpactPreview.inventoryScenarioFingerprint
+      };
+    }
+    return {
+      state: "not_evaluated",
+      projection: null,
+      scenarioFingerprint: changeImpactPreview.inventoryScenarioFingerprint
+    };
+  }, [
+    changeImpactPreview.inventoryObservation,
+    changeImpactPreview.inventoryScenarioFingerprint
+  ]);
+  const commercialInventoryConsequences = useMemo(() => buildCommercialInventoryConsequences({
+    savedRead: getSavedInventoryComparisonRead(eventIngredientProjection.read),
+    scenarioPreview: commercialInventoryScenarioPreview,
+    organizationId: authSession.organizationId,
+    quoteId: editingQuote.id,
+    savedQuoteRevisionId: String(
+      editingQuote.activeVersionId || editingQuote.versionMeta?.versionId || ""
+    ).trim(),
+    proposedQuoteRevisionId: String(
+      changeImpactPreview.inventoryObservation?.proposedQuoteRevisionId || ""
+    ).trim(),
+    scenarioFingerprint: currentInventoryScenarioFingerprint
+  }), [
+    authSession.organizationId,
+    changeImpactPreview.inventoryObservation?.proposedQuoteRevisionId,
+    commercialInventoryScenarioPreview,
+    currentInventoryScenarioFingerprint,
+    editingQuote.activeVersionId,
+    editingQuote.id,
+    editingQuote.versionMeta?.versionId,
+    eventIngredientProjection.read
+  ]);
   const changeImpactPresentationError = changeImpactPreview.error || (
     changeImpactPreview.model
-    && changeImpactPreview.formKey
-    && changeImpactPreview.formKey !== currentChangeImpactFormKey
-      ? "Quote inputs changed after this preview. The retained result is stale; refresh it before relying on the comparison."
+      ? changeImpactPreview.formKey
+        && changeImpactPreview.formKey !== currentChangeImpactFormKey
+        ? "Quote inputs changed after this preview. The retained result is stale; refresh it before relying on the comparison."
+        : Number(changeImpactPreview.catalogRevision) !== Number(catalog.settings?.catalogRevision)
+          ? "The catalog revision changed after this preview. Refresh it before choosing a consequence outcome."
+          : ""
       : ""
   );
   const changeImpactPreviewAvailable = isEditingQuote
     && String(catalog.source || "").trim().toLowerCase().startsWith("firebase");
+  const livingTwinBaseQuoteRevisionId = String(
+    editingQuote.activeVersionId || editingQuote.versionMeta?.versionId || ""
+  ).trim();
+  const livingTwinScopeKey = JSON.stringify([
+    String(authSession.organizationId || "").trim(),
+    String(editingQuote.id || "").trim(),
+    `draft-context-${livingTwinScenarioScopeRef.current.generation}`
+  ]);
+  const livingCommercialTwinProjection = useMemo(() => buildLivingCommercialTwinProjection({
+    organizationId: authSession.organizationId,
+    quoteId: editingQuote.id,
+    quoteRevisionId: livingTwinBaseQuoteRevisionId,
+    scenarioId: currentInventoryScenarioFingerprint,
+    commitment: editingQuote.commercialAmendment,
+    proposedGuestCount: form.guests,
+    draftDirty: quoteDirty,
+    selectedMenuItemNames: eventIngredientSelections.map((selection) => selection.menuItemName),
+    selectedMenuItems: eventIngredientSelections.map((selection) => ({
+      menuItemId: selection.menuItemId,
+      label: selection.menuItemName
+    })),
+    previewAvailable: changeImpactPreviewAvailable,
+    previewRequested: changeImpactPreview.requested,
+    previewLoading: changeImpactPreview.loading,
+    previewError: changeImpactPresentationError,
+    previewScopeCurrent: !changeImpactPresentationError,
+    commercialModel: changeImpactPreview.model,
+    marginComparison: livingTwinMarginComparison,
+    authorityState: changeImpactPreview.authorityState,
+    authorizationRequired: changeImpactPreview.authorizationRequired,
+    authorizationReceiptId: changeImpactPreview.authorizationReceiptId,
+    inventoryEnabled: eventIngredientProjection.access.readEnabled,
+    inventoryScenarioEligible: inventoryGuestScenarioEligible,
+    inventoryPreviewAvailable: eventIngredientProjection.canPreview,
+    inventoryInputReady: eventIngredientPreviewInput.valid,
+    inventoryConsequences: commercialInventoryConsequences,
+    inventoryPreview: commercialInventoryScenarioPreview,
+    staffingRead: fulfillmentStaffing.read,
+    proposedStaffingRequirements: effectiveProposedStaffingRequirements,
+    proposedStaffingRequirementsSource: authoritativeStaffingObservation
+      ? "server_authoritative_commercial_preview"
+      : "proposed_commercial_and_canonical_counts",
+    proposedStaffingEventWindowState: effectiveProposedStaffingEventWindowState,
+    appliedQuote: changeImpactPreview.appliedQuote,
+    workbenchRequest: changeImpactPreview.workbenchRequest
+  }), [
+    authSession.organizationId,
+    changeImpactPresentationError,
+    changeImpactPreview.appliedQuote,
+    changeImpactPreview.authorityState,
+    changeImpactPreview.authorizationReceiptId,
+    changeImpactPreview.authorizationRequired,
+    changeImpactPreview.loading,
+    changeImpactPreview.model,
+    changeImpactPreview.requested,
+    changeImpactPreview.workbenchRequest,
+    changeImpactPreviewAvailable,
+    commercialInventoryConsequences,
+    currentInventoryScenarioFingerprint,
+    editingQuote.commercialAmendment,
+    editingQuote.activeVersionId,
+    editingQuote.id,
+    editingQuote.versionMeta?.versionId,
+    eventIngredientPreviewInput.valid,
+    eventIngredientProjection.access.readEnabled,
+    eventIngredientProjection.canPreview,
+    commercialInventoryScenarioPreview,
+    eventIngredientSelections,
+    form.guests,
+    inventoryGuestScenarioEligible,
+    livingTwinBaseQuoteRevisionId,
+    livingTwinMarginComparison,
+    authoritativeStaffingObservation,
+    effectiveProposedStaffingEventWindowState,
+    effectiveProposedStaffingRequirements,
+    proposedStaffingRequirements,
+    proposedStaffingEventWindowState,
+    fulfillmentStaffing.read,
+    quoteDirty
+  ]);
+  const handleLivingTwinGuestCountChange = (value) => {
+    const guestCount = normalizeLivingTwinGuestCount(value);
+    if (guestCount === null || guestCount === Number(form.guests)) return false;
+    const nextForm = { ...form, guests: guestCount };
+    setPendingLivingTwinConsequenceRequest(null);
+    resetChangeImpactPreview();
+    setForm(nextForm);
+    setQuoteDirty(hasCommercialFormChanges({
+      currentForm: editingQuote.baseForm,
+      proposedForm: nextForm
+    }));
+    return true;
+  };
+  const handleRevertLivingTwinGuestCount = () => {
+    const savedGuestCount = livingCommercialTwinProjection.scenario.currentGuestCount;
+    return savedGuestCount === null
+      ? false
+      : handleLivingTwinGuestCountChange(savedGuestCount);
+  };
+  const handleLivingTwinConsequenceRequest = (request = {}) => {
+    const projectionRequest = normalizeLivingTwinProjectionRequest(request, livingTwinScopeKey);
+    if (
+      !projectionRequest
+      || !livingTwinBaseQuoteRevisionId
+      || projectionRequest.baseQuoteRevisionId !== livingTwinBaseQuoteRevisionId
+    ) return false;
+    const {
+      scenarioId,
+      generation,
+      inputDigest,
+      baseQuoteRevisionId,
+      guestCount
+    } = projectionRequest;
+    const candidateForm = { ...form, guests: guestCount };
+    setPendingLivingTwinConsequenceRequest({
+      scenarioId,
+      generation,
+      inputDigest,
+      baseQuoteRevisionId,
+      guestCount,
+      scopeKey: livingTwinScopeKey,
+      candidateForm,
+      formKey: JSON.stringify(candidateForm)
+    });
+    return true;
+  };
   const organizationName = String(organization?.name || "").trim();
   const tenantBrandName = String(catalog.settings?.brandName || "").trim();
   const tenantBrandTagline = String(catalog.settings?.brandTagline || "").trim();
@@ -1949,12 +2585,53 @@ function LegacyAppCore({
     }
   });
 
-  const handlePreviewChangeImpact = async ({ recovery = false } = {}) => {
+  const handlePreviewChangeImpact = async ({
+    recovery = false,
+    candidateForm = form,
+    workbenchRequest = null
+  } = {}) => {
     if (!isEditingQuote || !editingQuote.id) return;
+    if (commercialApplyRecovery.blocked) {
+      if (commercialApplyRecovery.pending) await handleReconcileCommercialChangeApplyOutcome();
+      return;
+    }
+    const formKey = JSON.stringify(candidateForm);
+    const suppliedWorkbenchRequest = normalizeLivingTwinProjectionRequest(
+      workbenchRequest,
+      livingTwinScopeKey
+    );
+    if (workbenchRequest !== null && !suppliedWorkbenchRequest) return false;
+    const recoveredWorkbenchRequest = recovery && !suppliedWorkbenchRequest
+        ? normalizeLivingTwinProjectionRequest(
+          changeImpactPreview.workbenchRequest,
+          livingTwinScopeKey
+        )
+        : null;
+    if (
+      recovery
+      && !suppliedWorkbenchRequest
+      && changeImpactPreview.workbenchRequest
+      && !recoveredWorkbenchRequest
+    ) return false;
+    const exactWorkbenchRequest = suppliedWorkbenchRequest || recoveredWorkbenchRequest;
     const generation = changeImpactPreviewGenerationRef.current + 1;
     changeImpactPreviewGenerationRef.current = generation;
-    const formKey = JSON.stringify(form);
-    const priorRequestId = recovery ? changeImpactPreview.simulationRequestId : "";
+    const inventoryScenarioEligibleForRequest = isGuestCountOnlyProposal({
+      currentForm: editingQuote.baseForm,
+      proposedForm: candidateForm
+    });
+    const inventoryObservationRequested = formKey === currentChangeImpactFormKey
+      && inventoryScenarioEligibleForRequest
+      && eventIngredientProjection.access.readEnabled
+      && eventIngredientProjection.canPreview
+      && eventIngredientPreviewInput.valid;
+    const inventoryScenarioFingerprintForRequest = buildLivingCommercialTwinInventoryFingerprint({
+      commercialFormFingerprint: formKey,
+      selections: eventIngredientPreviewInput.selections
+    });
+    const priorRequestId = recovery && changeImpactPreview.mutationState === "uncertain"
+      ? changeImpactPreview.simulationRequestId
+      : "";
     setChangeImpactPreview((current) => ({
       ...current,
       requested: true,
@@ -1965,6 +2642,7 @@ function LegacyAppCore({
         ? priorRequestId ? "reconciliation" : "recovery"
         : "submitting",
       mutationKind: "simulation",
+      workbenchRequest: exactWorkbenchRequest,
       mutationMessage: recovery
         ? priorRequestId
           ? "Reconciling the exact commercial change simulation request."
@@ -1983,7 +2661,13 @@ function LegacyAppCore({
         quoteId: editingQuote.id,
         expectedActiveVersionId: editingQuote.activeVersionId,
         requestId: simulationRequestId,
-        form
+        form: candidateForm,
+        ...(inventoryObservationRequested ? {
+          eventIngredientOutputs: eventIngredientPreviewInput.selections.map((selection) => ({
+            menuItemId: selection.menuItemId,
+            requiredOutputQuantity: selection.requiredOutputQuantity
+          }))
+        } : {})
       });
       if (changeImpactPreviewGenerationRef.current !== generation) return;
       setChangeImpactPreview({
@@ -2006,7 +2690,13 @@ function LegacyAppCore({
           ? "The exact simulation receipt is ready for governed authorization."
           : "The exact simulation receipt is ready; enforcement remains dormant for this workspace.",
         applyResult: null,
-        applyOutcome: null
+        applyOutcome: null,
+        catalogRevision: Number(catalog.settings?.catalogRevision),
+        appliedQuote: null,
+        workbenchRequest: exactWorkbenchRequest,
+        inventoryObservation: result.inventoryObservation,
+        inventoryScenarioFingerprint: inventoryScenarioFingerprintForRequest,
+        staffingObservation: result.staffingObservation
       });
     } catch (error) {
       if (changeImpactPreviewGenerationRef.current !== generation) return;
@@ -2037,6 +2727,35 @@ function LegacyAppCore({
       }));
     }
   };
+
+  useEffect(() => {
+    const pending = pendingLivingTwinConsequenceRequest;
+    if (!pending) return;
+    if (
+      !livingTwinBaseQuoteRevisionId
+      || pending.baseQuoteRevisionId !== livingTwinBaseQuoteRevisionId
+    ) {
+      setPendingLivingTwinConsequenceRequest(null);
+      return;
+    }
+    if (
+      pending.scopeKey !== livingTwinScopeKey
+      || pending.formKey !== currentChangeImpactFormKey
+    ) {
+      setPendingLivingTwinConsequenceRequest(null);
+      return;
+    }
+    setPendingLivingTwinConsequenceRequest(null);
+    void handlePreviewChangeImpact({
+      candidateForm: pending.candidateForm,
+      workbenchRequest: pending
+    });
+  }, [
+    currentChangeImpactFormKey,
+    livingTwinBaseQuoteRevisionId,
+    livingTwinScopeKey,
+    pendingLivingTwinConsequenceRequest
+  ]);
 
   const changeImpactScopeIsCurrent = () => Boolean(
     changeImpactPreview.model
@@ -2189,11 +2908,17 @@ function LegacyAppCore({
   };
 
   const handleReconcileCommercialChangeApplyOutcome = async () => {
-    if (
-      !editingQuote.id
-      || !changeImpactPreview.applyRequestId
-      || !changeImpactPreview.simulationReceiptId
-    ) return;
+    if (commercialApplyRecovery.busy) return;
+    if (!isEditingQuote) {
+      try {
+        const { reconcileCommercialQuoteChangeApplyOutcome } = await import("./lib/commercialChangeAuthorityClient");
+        if (commercialApplyRecovery.isCurrent()) await commercialApplyRecovery.reconcile(reconcileCommercialQuoteChangeApplyOutcome);
+      } catch (error) {
+        if (commercialApplyRecovery.isCurrent()) recordDiagnosticError(error, { surface: "commercial-apply-recovery", action: "reconcile-retained-request" });
+      }
+      return;
+    }
+    if (!editingQuote.id) return;
     setChangeImpactPreview((current) => ({
       ...current,
       error: "",
@@ -2205,15 +2930,8 @@ function LegacyAppCore({
       const { reconcileCommercialQuoteChangeApplyOutcome } = await import(
         "./lib/commercialChangeAuthorityClient"
       );
-      const result = await reconcileCommercialQuoteChangeApplyOutcome({
-        organizationId: authSession.organizationId || "",
-        quoteId: editingQuote.id,
-        simulationReceiptId: changeImpactPreview.simulationReceiptId,
-        authorizationReceiptId: changeImpactPreview.authorizationReceiptId,
-        applyRequestId: changeImpactPreview.applyRequestId,
-        expectedBaseRevisionId:
-          changeImpactPreview.model?.identity?.beforeRevisionId || editingQuote.activeVersionId
-      });
+      const result = await commercialApplyRecovery.reconcile(reconcileCommercialQuoteChangeApplyOutcome);
+      if (!result || !commercialApplyRecovery.isCurrent()) return;
       if (result.outcomeReceipt.state === "committed") {
         setQuoteDirty(false);
         setSubmitState({
@@ -2225,6 +2943,15 @@ function LegacyAppCore({
           error: "",
           applyOutcome: result.outcomeReceipt,
           applyResult: result.commercialChange,
+          appliedQuote: {
+            quoteId: editingQuote.id,
+            quoteNumber: editingQuote.quoteNumber || editingQuote.id,
+            previousRevisionId: result.outcomeReceipt.baseRevisionId,
+            activeVersionId: result.outcomeReceipt.newRevisionId || "",
+            latestVersionNumber: current.appliedQuote?.activeVersionId === result.outcomeReceipt.newRevisionId
+              ? current.appliedQuote.latestVersionNumber : undefined,
+            status: "draft"
+          },
           mutationState: "receipt",
           mutationKind: "apply",
           mutationMessage: result.outcomeReceipt.appliedRevisionIsActive
@@ -2234,7 +2961,6 @@ function LegacyAppCore({
         pushToast("Authorized quote change reconciled as committed.", "success");
         requestWorkflowAttentionRefresh({ force: true });
         setHistoryTarget({ quoteId: editingQuote.id, reason: "updated" });
-        navigateWorkspace(buildQuotePath(editingQuote.id));
         return;
       }
       setChangeImpactPreview((current) => ({
@@ -2242,6 +2968,7 @@ function LegacyAppCore({
         error: "",
         applyOutcome: result.outcomeReceipt,
         applyResult: null,
+        appliedQuote: null,
         mutationState: "recovery",
         mutationKind: "apply",
         mutationMessage: result.outcomeReceipt.sourceChanged
@@ -2249,9 +2976,11 @@ function LegacyAppCore({
           : "The server proved this request did not commit and permanently fenced it. Start a fresh simulation before applying again."
       }));
     } catch (error) {
+      if (!commercialApplyRecovery.isCurrent()) return;
       const { isDefinitiveCommercialChangeError } = await import(
         "./lib/commercialChangeAuthorityClient"
       );
+      if (!commercialApplyRecovery.isCurrent()) return;
       const definitive = isDefinitiveCommercialChangeError(error);
       recordDiagnosticError(error, {
         surface: "quote-builder",
@@ -2261,16 +2990,17 @@ function LegacyAppCore({
       setChangeImpactPreview((current) => ({
         ...current,
         error: error?.message || "The exact commercial change apply outcome could not be reconciled.",
-        mutationState: definitive ? "error" : "uncertain",
+        mutationState: "uncertain",
         mutationKind: "apply",
         mutationMessage: definitive
-          ? "The outcome request was definitively rejected. Recover from the authoritative saved quote before starting a new simulation."
+          ? "The outcome request was rejected. The original apply identity is retained; retry its exact outcome before starting a new simulation."
           : "The outcome lookup is still uncertain. Retry this same apply request identity; do not submit the quote edit again."
       }));
     }
   };
 
   const handleRecoverCommercialChangeApply = () => {
+    if (commercialApplyRecovery.blocked || changeImpactPreview.applyOutcome?.state !== "not_committed") return;
     if (changeImpactPreview.applyOutcome?.sourceChanged) {
       setHistoryTarget({ quoteId: editingQuote.id, reason: "updated" });
       navigateWorkspace(buildQuotePath(editingQuote.id));
@@ -2283,6 +3013,7 @@ function LegacyAppCore({
       applyRequestId: "",
       applyResult: null,
       applyOutcome: null,
+      appliedQuote: null,
       mutationState: "recovery",
       mutationKind: "simulation",
       mutationMessage: "Starting a fresh simulation after the prior apply request was safely fenced."
@@ -2291,39 +3022,61 @@ function LegacyAppCore({
   };
 
   const handleApplyCommercialChange = async () => {
-    if (!changeImpactScopeIsCurrent() || !changeImpactPreview.authorizationReceiptId) return;
+    if (commercialApplyRecovery.blocked) {
+      if (commercialApplyRecovery.pending) await handleReconcileCommercialChangeApplyOutcome();
+      return;
+    }
+    const requiresAuthorization = changeImpactPreview.authorityState === "enforced"
+      && changeImpactPreview.authorizationRequired;
+    if (
+      !changeImpactScopeIsCurrent()
+      || (requiresAuthorization && !changeImpactPreview.authorizationReceiptId)
+    ) return;
     if (changeImpactPreview.applyRequestId) {
       await handleReconcileCommercialChangeApplyOutcome();
       return;
     }
     const {
-      buildCommercialChangeRequestId,
       isDefinitiveCommercialChangeError
     } = await import("./lib/commercialChangeAuthorityClient");
-    const applyRequestId = changeImpactPreview.applyRequestId
-      || buildCommercialChangeRequestId("apply");
     setChangeImpactPreview((current) => ({
       ...current,
-      applyRequestId,
       error: "",
       mutationState: "applying",
       mutationKind: "apply",
-      mutationMessage: "Applying the authorized edit atomically with its immutable invalidation receipts."
+      mutationMessage: requiresAuthorization
+        ? "Applying the authorized edit atomically with its immutable invalidation receipts."
+        : "Applying the reviewed edit through the existing quote authority."
     }));
     try {
       const result = await handleSubmitQuote({
         commercialChangeAuthority: {
           simulationReceiptId: changeImpactPreview.simulationReceiptId,
-          authorizationReceiptId: changeImpactPreview.authorizationReceiptId,
-          applyRequestId
+          authorizationReceiptId: requiresAuthorization
+            ? changeImpactPreview.authorizationReceiptId
+            : "",
+          applyRequestId: ""
         },
-        propagateError: true
+        propagateError: true,
+        navigateAfterSave: false
       });
-      if (!result) return;
+      if (!commercialApplyRecovery.isCurrent()) return;
+      if (!result) {
+        await handleReconcileCommercialChangeApplyOutcome();
+        return;
+      }
       setChangeImpactPreview((current) => ({
         ...current,
         applyResult: result.commercialChange,
-        applyOutcome: null,
+        applyOutcome: result.commercialApplyOutcome?.outcomeReceipt || null,
+        appliedQuote: {
+          quoteId: result.id,
+          quoteNumber: result.quoteNumber,
+          previousRevisionId: changeImpactPreview.model?.identity?.beforeRevisionId || editingQuote.activeVersionId,
+          activeVersionId: result.activeVersionId,
+          latestVersionNumber: result.latestVersionNumber,
+          status: result.status || "draft"
+        },
         mutationState: "receipt",
         mutationKind: "apply",
         mutationMessage: result.commercialChange?.authorityState === "enforced"
@@ -2331,24 +3084,41 @@ function LegacyAppCore({
           : "The quote edit was saved while commercial-change enforcement remained dormant."
       }));
     } catch (error) {
+      if (!commercialApplyRecovery.isCurrent()) return;
+      if (error.commercialApplyOutcome?.outcomeReceipt) {
+        setChangeImpactPreview(current => ({ ...current, applyOutcome: error.commercialApplyOutcome.outcomeReceipt,
+          applyResult: null, appliedQuote: null, error: "", mutationState: "recovery", mutationKind: "apply", mutationMessage: error.message }));
+        return;
+      }
       const definitive = isDefinitiveCommercialChangeError(error);
       setChangeImpactPreview((current) => ({
         ...current,
         applyOutcome: null,
+        appliedQuote: null,
         error: error?.message || "The commercial change apply did not return a receipt.",
-        mutationState: definitive ? "error" : "uncertain",
+        mutationState: "uncertain",
         mutationKind: "apply",
         mutationMessage: definitive
-          ? "The server definitively rejected this apply. Correct the source or authorization, then re-simulate."
-          : "The apply outcome is uncertain. This screen will not submit it again; refresh the authoritative quote record before taking another action."
+          ? "The apply was rejected. Check the retained request's exact server outcome before starting a fresh simulation."
+          : "The apply outcome is uncertain. Check the retained request's exact server outcome; the edit will not be submitted again."
       }));
     }
   };
 
   const handleSubmitQuote = async ({
     commercialChangeAuthority = null,
-    propagateError = false
+    propagateError = false,
+    navigateAfterSave = true
   } = {}) => {
+    if (commercialChangeAuthority && isEditingQuote && commercialApplyRecovery.getPending(editingQuote.id)) {
+      throw Object.assign(new Error("The previous apply outcome is unresolved. Reconcile its retained request in the quote editor before applying another edit."), { code: "apply-outcome-unresolved" });
+    }
+    if (!commercialChangeAuthority && isEditingQuote
+      && (commercialApplyRecovery.pending || (changeImpactPreviewAvailable && commercialApplyRecovery.blocked))) {
+      setSubmitState((current) => ({ ...current, saving: false, message: "Check the previous apply outcome before saving another edit." }));
+      if (commercialApplyRecovery.pending) await handleReconcileCommercialChangeApplyOutcome();
+      return null;
+    }
     if (quoteEditRouteId && !quoteEditReady) {
       setSubmitState((current) => ({
         ...current,
@@ -2370,6 +3140,7 @@ function LegacyAppCore({
       if (
         changeImpactPreview.authorityState === "enforced"
         && changeImpactPreview.authorizationRequired
+        && !changeImpactPreview.authorizationReceiptId
       ) {
         setStep(5);
         setSubmitState((current) => ({
@@ -2379,6 +3150,16 @@ function LegacyAppCore({
         }));
         return null;
       }
+      if (changeImpactPreview.applyResult || changeImpactPreview.applyOutcome?.state === "committed") {
+        setStep(5);
+        setSubmitState((current) => ({
+          ...current,
+          saving: false,
+          message: "This governed amendment already produced a new revision. Review that exact quote before making another change."
+        }));
+        return null;
+      }
+      return handleApplyCommercialChange();
     }
     if (selectedMenuItemCount < 1) {
       showMissingMenuSelection({ moveToMenuStep: true });
@@ -2505,7 +3286,23 @@ function LegacyAppCore({
         }
       }
 
-      const result = await withTimeout(
+      if (commercialChangeAuthority && isEditingQuote) {
+        if (editingQuote.organizationId && editingQuote.organizationId !== authSession.organizationId) {
+          throw Object.assign(new Error("The saved quote belongs to another workspace."), { code: "permission-denied" });
+        }
+        const { buildCommercialChangeRequestId } = await import("./lib/commercialChangeAuthorityClient");
+        const retainedIdentity = commercialApplyRecovery.begin({
+          quoteId: editingQuote.id,
+          simulationReceiptId: commercialChangeAuthority.simulationReceiptId,
+          authorizationReceiptId: commercialChangeAuthority.authorizationReceiptId || "",
+          applyRequestId: commercialChangeAuthority.applyRequestId || "",
+          expectedBaseRevisionId: editingQuote.activeVersionId
+        }, () => buildCommercialChangeRequestId("apply"));
+        if (!retainedIdentity) throw Object.assign(new Error("The apply identity could not be retained. No edit was submitted; reconcile any previous request before trying again."), { code: "apply-outcome-unresolved" });
+        commercialChangeAuthority = { ...commercialChangeAuthority, applyRequestId: retainedIdentity.applyRequestId };
+        setChangeImpactPreview(current => ({ ...current, applyRequestId: retainedIdentity.applyRequestId }));
+      }
+      let result = await withTimeout(
         isEditingQuote
           ? updateQuote({
             quoteId: editingQuote.id,
@@ -2518,6 +3315,7 @@ function LegacyAppCore({
             ownerUid: authSession.user?.uid || "",
             ownerEmail: authSession.user?.email || "",
             organizationId: authSession.organizationId,
+            expectedActiveVersionId: editingQuote.activeVersionId || undefined,
             ...(commercialChangeAuthority ? { commercialChangeAuthority } : {})
           })
           : submitQuote({
@@ -2534,6 +3332,23 @@ function LegacyAppCore({
         SAVE_FLOW_TIMEOUT_MS,
         isEditingQuote ? "updateQuote" : "submitQuote"
       );
+      if (commercialChangeAuthority && isEditingQuote) {
+        if (!commercialApplyRecovery.isCurrent()) return null;
+        const { reconcileCommercialQuoteChangeApplyOutcome } = await import("./lib/commercialChangeAuthorityClient");
+        if (!commercialApplyRecovery.isCurrent()) return null;
+        const terminal = await commercialApplyRecovery.reconcileQuote(editingQuote.id, reconcileCommercialQuoteChangeApplyOutcome);
+        if (!commercialApplyRecovery.isCurrent()) return null;
+        const receipt = terminal?.outcomeReceipt;
+        if (receipt?.state !== "committed" || !receipt.appliedRevisionIsActive || receipt.newRevisionId !== result.activeVersionId) {
+          const error = new Error(receipt?.state === "not_committed"
+            ? "The server proved this request did not commit. Start a fresh preview before applying again."
+            : "The exact apply outcome is unresolved or its revision is no longer current. Review the saved quote and history.");
+          error.code = receipt?.state === "not_committed" ? "apply-not-committed" : "apply-outcome-unresolved";
+          error.commercialApplyOutcome = terminal;
+          throw error;
+        }
+        result = { ...result, commercialChange: terminal.commercialChange, commercialApplyOutcome: terminal };
+      }
       if (isEditingQuote) {
         setQuoteDirty(false);
         recordProductAnalyticsEvent("quote_saved");
@@ -2565,7 +3380,7 @@ function LegacyAppCore({
           setPendingResolutionLink(null);
         }
         setHistoryTarget({ quoteId: result.id, reason: "updated" });
-        navigateWorkspace(buildQuotePath(result.id));
+        if (navigateAfterSave) navigateWorkspace(buildQuotePath(result.id));
         return result;
       }
 
@@ -2619,6 +3434,7 @@ function LegacyAppCore({
           });
       }
     } catch (err) {
+      if (commercialChangeAuthority && commercialApplyRecovery.isCurrent()) commercialApplyRecovery.markUncertain?.(editingQuote.id);
       recordDiagnosticError(err, {
         surface: "app",
         action: "submit-quote",
@@ -2626,6 +3442,10 @@ function LegacyAppCore({
         venue: form.venue,
         guests: totals.guests
       });
+      if (commercialChangeAuthority && !commercialApplyRecovery.isCurrent()) {
+        if (propagateError) throw err;
+        return null;
+      }
       pushToast(err?.message || "Failed to save quote.", "error");
       setSubmitState((prev) => ({
         ...prev,
@@ -2637,7 +3457,11 @@ function LegacyAppCore({
     }
   };
 
-  const handleEditQuote = (quote, { navigateToRoute = true } = {}) => {
+  const handleEditQuote = async (quote, {
+    navigateToRoute = true,
+    quoteCompletionDestination = null
+  } = {}) => {
+    setQuoteEditFocusRequest(null);
     if (!quote?.id) return;
     if (
       navigateToRoute
@@ -2646,6 +3470,16 @@ function LegacyAppCore({
       && !window.confirm("Edit this saved quote? Your unsaved quote changes will be discarded.")
     ) {
       return;
+    }
+    const { buildCommercialAmendmentContext } = await loadCommercialAmendmentContext();
+    const commercialAmendment = buildCommercialAmendmentContext(quote);
+    if (!commercialAmendment.editable) {
+      return {
+        status: "recovery",
+        reason: `${commercialAmendment.protocol.label}. ${commercialAmendment.protocol.explanation}`,
+        consequence: "No editable draft was opened, and the saved commitment and its historical evidence remain unchanged.",
+        nextResolution: commercialAmendment.protocol.nextAction
+      };
     }
 
     const selection = quote.selection || {};
@@ -2742,6 +3576,9 @@ function LegacyAppCore({
       id: quote.id,
       quoteNumber: quote.quoteNumber || quote.id,
       activeVersionId: quote.activeVersionId || quote.versionMeta?.versionId || "",
+      status: quote.status,
+      portalExpiresAtISO: quote.portalExpiresAtISO || quote.expiresAtISO || "",
+      workflow: quote.workflow && typeof quote.workflow === "object" ? quote.workflow : {},
       customerId: quote.customerId || "",
       organizationId: quote.organizationId || authSession.organizationId || "",
       rebooking: quote.rebooking && typeof quote.rebooking === "object"
@@ -2753,7 +3590,8 @@ function LegacyAppCore({
       // remains the sole versioning authority.
       portalDecision: quote.portalDecision && typeof quote.portalDecision === "object"
         ? quote.portalDecision
-        : null
+        : null,
+      commercialAmendment
     });
     setQuoteDirty(false);
     setTouchedFields({});
@@ -2762,7 +3600,6 @@ function LegacyAppCore({
     setAvailabilityBlock(null);
     setAvailabilityNotice("");
     setHistoryTarget({ quoteId: "", reason: "" });
-    setStep(1);
     if (navigateToRoute) navigateWorkspace(buildQuoteEditPath(quote.id));
     beginWizardAnalyticsSession({
       organizationId: authSession.organizationId,
@@ -2776,7 +3613,18 @@ function LegacyAppCore({
         ? `Rebook review required for ${quote.quoteNumber || quote.id}: choose a current-or-future event date, review the copied scope, then save. Delivery remains blocked until that trusted edit succeeds.`
         : `Editing ${quote.quoteNumber || quote.id}. Save will update this quote and keep a version snapshot.`
     });
+    setQuoteEditFocusRequest({ quoteId: String(quote.id) });
     wizardRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    if (QUOTE_COMPLETION_BUILD_ENABLED) {
+      const quoteCompletionFocus = scheduleQuoteCompletionDestinationFocus(quoteCompletionDestination, {
+        editorMode: proposalComposerActive ? "composer" : "guided",
+        root: wizardRef,
+        setStep: proposalComposerActive ? null : setStep
+      });
+      if (!proposalComposerActive && quoteCompletionFocus.step === null) setStep(1);
+    } else {
+      setStep(1);
+    }
     window.requestAnimationFrame(() => wizardRef.current?.focus({ preventScroll: true }));
   };
 
@@ -2855,9 +3703,13 @@ function LegacyAppCore({
     setQuoteEditLoadState({ quoteId, loading: true, error: "" });
     setSubmitState((current) => ({ ...current, message: "Loading the saved quote for editing..." }));
     getQuoteById(quoteId)
-      .then((quote) => {
+      .then(async (quote) => {
         if (directEditLoadRef.current.generation !== generation) return;
-        handleEditQuote(quote, { navigateToRoute: false });
+        const editResult = await handleEditQuote(quote, { navigateToRoute: false });
+        if (directEditLoadRef.current.generation !== generation) return;
+        if (editResult?.status === "recovery") {
+          throw new Error(editResult.reason || "Unable to prepare this saved quote for editing.");
+        }
         setQuoteEditLoadState({ quoteId, loading: false, error: "" });
       })
       .catch((error) => {
@@ -3051,6 +3903,7 @@ function LegacyAppCore({
   useEffect(() => {
     if (typeof window === "undefined" || !catalogSetupBypassKey) {
       setSkipCatalogSetup(false);
+      setSkipCatalogSetupKey("");
       return;
     }
     try {
@@ -3058,10 +3911,12 @@ function LegacyAppCore({
     } catch {
       setSkipCatalogSetup(false);
     }
+    setSkipCatalogSetupKey(catalogSetupBypassKey);
   }, [catalogSetupBypassKey]);
   const setCatalogBypassState = useCallback((bypass) => {
     const nextBypass = Boolean(bypass);
     setSkipCatalogSetup(nextBypass);
+    setSkipCatalogSetupKey(catalogSetupBypassKey);
     if (typeof window === "undefined" || !catalogSetupBypassKey) return;
     try {
       if (nextBypass) {
@@ -3266,6 +4121,7 @@ function LegacyAppCore({
             canContinue={false}
             loading={catalog.loading}
             onRetry={catalog.reload}
+            technicalDetail={catalog.error}
             headingLevel={1}
             titleId="catalog-blocked-title"
           />
@@ -3278,7 +4134,9 @@ function LegacyAppCore({
     );
   }
 
-  const shouldSuppressSetupGate = skipCatalogSetup || importStudioOpen;
+  const shouldSuppressSetupGate = (
+    skipCatalogSetupKey === catalogSetupBypassKey && skipCatalogSetup
+  ) || importStudioOpen;
   if (!catalogSetupComplete && !shouldSuppressSetupGate) {
     return (
       <div className="app-shell app-shell-neutral" style={appThemeVars}>
@@ -3457,6 +4315,7 @@ function LegacyAppCore({
       canContinue
       loading={catalog.loading}
       onRetry={catalog.reload}
+      technicalDetail={catalog.error}
       headingLevel={2}
       titleId="quote-builder-catalog-read-title"
     />
@@ -3466,43 +4325,70 @@ function LegacyAppCore({
   // saved quote being edited. Shared so it renders identically in the
   // Proposal Composer document and the Guided-mode wizard's save step.
   const changeImpactSurface = isEditingQuote ? (
-    <section
-      className="quote-change-impact-preview"
-      data-capability-id="cwf-15b-commercial-change-impact-preview"
-    >
-      <div className="quote-change-impact-preview-head">
-        <div>
-          <p className="eyebrow">Saved quote</p>
-          <h3>What will this change affect?</h3>
-          <p className="source-note">
-            A server-checked comparison of the saved quote against your current edits. Previewing changes nothing; when a governed item is affected, applying asks for an exact authorization first.
-          </p>
-        </div>
-        <button
-          type="button"
-          className="ghost compact"
-          onClick={() => handlePreviewChangeImpact({
+    <>
+      {eventIngredientProjection.access.readEnabled && (
+        <details className="commercial-twin-evidence-disclosure">
+          <summary>Ingredient quantity, cost, and allocation evidence</summary>
+          <div data-capability-id="inventory-event-ingredient-consequence" id="commercial-twin-inventory-evidence">
+          <EventIngredientProjectionPanel
+            selectedMenuItems={eventIngredientSelections}
+            read={eventIngredientProjection.read}
+            preview={eventIngredientProjection.preview}
+            operation={eventIngredientProjection.operation}
+            allocationOperation={eventIngredientProjection.allocationOperation}
+            quoteDirty={quoteDirty}
+            canPreview={eventIngredientProjection.canPreview}
+            canRecord={eventIngredientProjection.canRecord}
+            controlsLocked={eventIngredientProjection.controlsLocked}
+            allocationControlsLocked={eventIngredientProjection.allocationControlsLocked}
+            canManageAllocation={eventIngredientProjection.canManageAllocation}
+            canAllocate={eventIngredientProjection.canAllocate}
+            canRelease={eventIngredientProjection.canRelease}
+            canReconcilePlan={eventIngredientProjection.canReconcilePlan}
+            allocationBlockedReason={eventIngredientProjection.allocationBlockedReason}
+            recordBlockedReason={eventIngredientProjection.recordBlockedReason}
+            onPreview={eventIngredientProjection.previewCurrent}
+            onRecord={authSession.isAdmin ? eventIngredientProjection.recordCurrentPreview : undefined}
+            onReconcile={eventIngredientProjection.reconcile}
+            onReset={eventIngredientProjection.reset}
+            onAllocate={eventIngredientProjection.allocate}
+            onRelease={eventIngredientProjection.release}
+            onReconcilePlan={eventIngredientProjection.reconcileStaleAllocation}
+            onReconcileAllocation={eventIngredientProjection.reconcileAllocation}
+            onResetAllocation={eventIngredientProjection.resetAllocation}
+            onPreviewInputChange={setEventIngredientPreviewInput}
+            showPreviewAction={!livingCommercialTwinProjection.scenario.proposalChanged}
+          />
+          </div>
+        </details>
+      )}
+    <div data-capability-id="cwf-15b-commercial-change-impact-preview">
+      <Suspense fallback={<p className="source-note" role="status">Loading governed amendment context…</p>}>
+        <CommercialAmendmentWorkspace
+          commitment={editingQuote.commercialAmendment}
+          dirty={quoteDirty}
+          previewAvailable={changeImpactPreviewAvailable}
+          previewRequested={changeImpactPreview.requested}
+          previewLoading={changeImpactPreview.loading}
+          previewRecovering={changeImpactPreview.recovering}
+          previewError={changeImpactPresentationError}
+          previewActionVisible={!proposalComposerActive}
+          onPreview={() => handlePreviewChangeImpact({
             recovery: Boolean(changeImpactPresentationError)
           })}
-          disabled={!changeImpactPreviewAvailable || changeImpactPreview.loading}
-          title={changeImpactPreviewAvailable
-            ? "Create an immutable server simulation receipt for the current form and saved revision."
-            : "Change impact requires a Firebase-backed canonical quote and trusted pricing."}
         >
-          {changeImpactPreview.recovering
-            ? "Retrying preview…"
-            : changeImpactPreview.loading
-              ? "Building preview…"
-            : changeImpactPreview.model
-              ? "Refresh impact preview"
-              : "Preview change impact"}
-        </button>
-      </div>
-      {!changeImpactPreviewAvailable && (
-        <p className="warning-note">
-          Authoritative change impact is unavailable in browser-local mode. No client-calculated substitute is shown.
-        </p>
-      )}
+      {(commercialApplyRecovery.restored || commercialApplyRecovery.error || commercialApplyRecovery.outcome || !changeImpactPreview.model) && <CommercialApplyRecoveryNotice
+        pending={commercialApplyRecovery.pending}
+        busy={commercialApplyRecovery.busy}
+        error={commercialApplyRecovery.error}
+        outcome={commercialApplyRecovery.outcome}
+        onReconcile={handleReconcileCommercialChangeApplyOutcome}
+        onRecover={handleRecoverCommercialChangeApply}
+        onOpenQuote={() => {
+          setHistoryTarget({ quoteId: editingQuote.id, reason: "updated" });
+          navigateWorkspace(buildQuotePath(editingQuote.id));
+        }}
+      />}
       {changeImpactPreview.requested && (
         <RecoverableErrorBoundary
           active
@@ -3515,6 +4401,7 @@ function LegacyAppCore({
           <Suspense fallback={<p className="source-note" role="status">Loading change-impact presentation…</p>}>
             <CommercialChangeImpactPanel
               model={changeImpactPreview.model}
+              commitment={editingQuote.commercialAmendment}
               loading={changeImpactPreview.loading}
               recovering={changeImpactPreview.recovering}
               error={changeImpactPresentationError}
@@ -3529,14 +4416,26 @@ function LegacyAppCore({
               mutationMessage={changeImpactPreview.mutationMessage}
               applyResult={changeImpactPreview.applyResult}
               applyOutcome={changeImpactPreview.applyOutcome}
+              appliedQuote={changeImpactPreview.appliedQuote}
+              inventoryConsequences={eventIngredientProjection.access.readEnabled
+                ? commercialInventoryConsequences
+                : null}
               scopeCurrent={!changeImpactPresentationError}
-              onRetry={() => handlePreviewChangeImpact({ recovery: true })}
+              onRetry={proposalComposerActive
+                ? undefined
+                : () => handlePreviewChangeImpact({ recovery: true })}
               onRequestAuthorization={handleRequestChangeAuthorization}
               onRefreshAuthorization={handleRefreshChangeAuthorization}
               onAuthorize={handleAuthorizeChange}
               onApply={handleApplyCommercialChange}
               onReconcileApplyOutcome={handleReconcileCommercialChangeApplyOutcome}
               onRecoverApply={handleRecoverCommercialChangeApply}
+              onOpenAffectedArtifact={openCommercialConsequence}
+              onOpenAppliedQuote={() => {
+                const quoteId = changeImpactPreview.appliedQuote?.quoteId || editingQuote.id;
+                setHistoryTarget({ quoteId, reason: "updated" });
+                navigateWorkspace(buildQuotePath(quoteId));
+              }}
               onReturnToEdit={() => {
                 if (!proposalComposerActive) setStep(1);
                 window.requestAnimationFrame(() => {
@@ -3547,7 +4446,10 @@ function LegacyAppCore({
           </Suspense>
         </RecoverableErrorBoundary>
       )}
-    </section>
+        </CommercialAmendmentWorkspace>
+      </Suspense>
+    </div>
+    </>
   ) : null;
 
   const proposalComposerChangeImpactScopeCurrent = !(
@@ -3602,6 +4504,11 @@ function LegacyAppCore({
         : ""}
       saveBlockers={proposalComposerSaveBlockers}
       saveMessage={submitState.message}
+      {...(QUOTE_COMPLETION_BUILD_ENABLED ? {
+        quoteCompletionCommandPathEnabled,
+        quoteCompletionConfiguredActions: proposalComposerQuoteActionController?.actionState || null,
+        onQuoteCompletionNavigate: navigateProposalQuoteCompletion
+      } : {})}
       compareEnabled={quoteCompareEnabled}
       catalogLoading={catalog.loading}
       onFieldChange={handleStep1FieldChange}
@@ -3609,12 +4516,55 @@ function LegacyAppCore({
       onPatchForm={handleComposerPatch}
       onTemplateChange={applyEventTemplate}
       onEventTypeChange={handleEventTypeChange}
-      onSaveQuote={() => void handleSubmitQuote()}
+      onSaveQuote={() => handleSubmitQuote()}
+      {...(QUOTE_COMPLETION_BUILD_ENABLED ? {
+        onQuoteCompletionSave: () => handleSubmitQuote({ propagateError: true })
+      } : {})}
       onOpenCompare={() => openWorkspaceTool(setCompareOpen)}
       onGuidedMode={() => setBuilderMode("guided")}
       reviewSurfaces={draftReviewSurfaces}
       statusNotes={builderStatusNotes}
       changeImpactSurface={changeImpactSurface}
+      livingCommercialTwin={isEditingQuote ? {
+        ...(DECISION_PACKET_BUILD_ENABLED ? { decisionPacketEnabled } : {}),
+        projection: livingCommercialTwinProjection,
+        scopeKey: livingTwinScopeKey,
+        baseQuoteRevisionId: livingTwinBaseQuoteRevisionId,
+        currentGuestCount: livingCommercialTwinProjection.scenario.currentGuestCount,
+        proposedGuestCount: form.guests,
+        eventName: editingQuote.commercialAmendment?.event?.name
+          || editingQuote.baseForm?.eventName
+          || "",
+        eventDate: editingQuote.commercialAmendment?.event?.date
+          || editingQuote.baseForm?.date
+          || "",
+        eventTime: editingQuote.commercialAmendment?.event?.time
+          || editingQuote.baseForm?.time
+          || "",
+        venue: editingQuote.commercialAmendment?.event?.venue
+          || editingQuote.baseForm?.venue
+          || "",
+        proposedEventName: form.eventName,
+        proposedEventDate: form.date,
+        proposedEventTime: form.time,
+        proposedVenue: form.venue,
+        onGuestCountChange: handleLivingTwinGuestCountChange,
+        onRequestConsequences: handleLivingTwinConsequenceRequest,
+        onRetryConsequences: (request) => handlePreviewChangeImpact({
+          recovery: true,
+          workbenchRequest: request
+        }),
+        onReviewForCommitment: focusLivingTwinCommitmentReview,
+        onPreview: (request) => handlePreviewChangeImpact({
+          recovery: Boolean(changeImpactPresentationError),
+          workbenchRequest: request
+        }),
+        onRevertGuestCount: handleRevertLivingTwinGuestCount,
+        inventoryEvidenceAvailable: eventIngredientProjection.access.readEnabled,
+        onRefreshStaffing: fulfillmentStaffingActive
+          ? () => void fulfillmentStaffing.refresh().catch(() => {})
+          : undefined
+      } : null}
       impactWatch={isEditingQuote
         ? {
             available: changeImpactPreviewAvailable,
@@ -3633,6 +4583,49 @@ function LegacyAppCore({
 
   return (
     <div className={`app-shell${CUSTOMER_CENTERED_WORKSPACE_ENABLED ? " app-shell-neutral" : ""}`} style={appThemeVars}>
+      {!isEditingQuote && <CommercialApplyRecoveryNotice
+        recoveryLabel="Open saved quote for a fresh preview"
+        pending={commercialApplyRecovery.pending}
+        busy={commercialApplyRecovery.busy}
+        error={commercialApplyRecovery.error}
+        outcome={commercialApplyRecovery.outcome}
+        onReconcile={handleReconcileCommercialChangeApplyOutcome}
+        onRecover={() => navigateWorkspace(buildQuotePath(commercialApplyRecovery.recoveryQuoteId))}
+        onOpenQuote={() => {
+          setHistoryTarget({ quoteId: commercialApplyRecovery.recoveryQuoteId, reason: "updated" });
+          navigateWorkspace(buildQuotePath(commercialApplyRecovery.recoveryQuoteId));
+        }}
+      />}
+      {commercialArrivalContext && (
+        <section
+          className="workspace-arrival-context source-note"
+          aria-label="Commercial consequence navigation"
+          data-commercial-consequence-return="true"
+          data-arrival-state={commercialArrivalResolution?.status || "pending"}
+        >
+          <strong>Reviewing one affected artifact</strong>
+          <span>
+            {commercialArrivalResolution?.status === "recovery"
+              ? commercialArrivalResolution.reason
+              : "No commercial or operational record changes until you use an authorized action."}
+          </span>
+          <button
+            type="button"
+            className="ghost compact"
+            onClick={() => returnToWorkspaceOrigin(
+              buildQuoteEditPath(commercialArrivalContext.focus.quoteId),
+              { targetRouteId: WORKSPACE_ROUTE_IDS.QUOTE_EDIT }
+            )}
+          >
+            Return to commercial change
+          </button>
+        </section>
+      )}
+      {returnContextStatus && (
+        <div className="sr-only" role="status" aria-live="polite">
+          {returnContextStatus.message || "Restoring your previous commercial change control."}
+        </div>
+      )}
       <header className="site-header">
         <div className="container nav">
           <div className="workspace-header-identity">
@@ -3777,6 +4770,7 @@ function LegacyAppCore({
               {openHeaderMenu === "operations" && (
                 <div className="header-menu-popover" role="menu" aria-label="Operations">
                   {CUSTOMER_CENTERED_WORKSPACE_ENABLED && authSession.isAdmin && OPERATIONAL_STAFFING_UI_ENABLED && <button type="button" role="menuitem" onClick={() => { setOpenHeaderMenu(""); navigateWorkspace(WORKSPACE_PATHS.staff); }}>Staff</button>}
+                  {inventoryWorkspaceEnabled && <button type="button" role="menuitem" onClick={() => { setOpenHeaderMenu(""); navigateWorkspace(WORKSPACE_PATHS.inventory); }}>Inventory</button>}
                   {eventScheduleEnabled && <button type="button" role="menuitem" onClick={() => openRoutedWorkspaceTool(WORKSPACE_PATHS.schedule, setScheduleOpen, { menuTriggerRef: operationsMenuTriggerRef })}>Event Schedule</button>}
                   {dashboardEnabled && <button type="button" role="menuitem" onClick={() => openRoutedWorkspaceTool(WORKSPACE_PATHS.reporting, setDashboardOpen, { menuTriggerRef: operationsMenuTriggerRef })}>Reporting Dashboard</button>}
                   {integrationsEnabled && <button type="button" role="menuitem" onClick={() => openRoutedWorkspaceTool(WORKSPACE_PATHS.integrations, setIntegrationsOpen, { menuTriggerRef: operationsMenuTriggerRef })}>Integrations Ops</button>}
@@ -3829,6 +4823,7 @@ function LegacyAppCore({
               {openHeaderMenu === "more" && (
                 <div className="header-menu-popover mobile-more-popover" role="menu" aria-label="More">
                   {CUSTOMER_CENTERED_WORKSPACE_ENABLED && authSession.isAdmin && OPERATIONAL_STAFFING_UI_ENABLED && <button type="button" role="menuitem" onClick={() => { setOpenHeaderMenu(""); navigateWorkspace(WORKSPACE_PATHS.staff); }}>Staff</button>}
+                  {inventoryWorkspaceEnabled && <button type="button" role="menuitem" onClick={() => { setOpenHeaderMenu(""); navigateWorkspace(WORKSPACE_PATHS.inventory); }}>Inventory</button>}
                   {eventScheduleEnabled && <button type="button" role="menuitem" onClick={() => openRoutedWorkspaceTool(WORKSPACE_PATHS.schedule, setScheduleOpen, { menuTriggerRef: moreMenuTriggerRef })}>Event Schedule</button>}
                   {dashboardEnabled && <button type="button" role="menuitem" onClick={() => openRoutedWorkspaceTool(WORKSPACE_PATHS.reporting, setDashboardOpen, { menuTriggerRef: moreMenuTriggerRef })}>Reporting Dashboard</button>}
                   {integrationsEnabled && <button type="button" role="menuitem" onClick={() => openRoutedWorkspaceTool(WORKSPACE_PATHS.integrations, setIntegrationsOpen, { menuTriggerRef: moreMenuTriggerRef })}>Integrations Ops</button>}
@@ -3981,6 +4976,32 @@ function LegacyAppCore({
         </WorkspaceLazyRoute>
       )}
 
+      {CUSTOMER_CENTERED_WORKSPACE_ENABLED
+        && inventoryWorkspaceEnabled
+        && resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.INVENTORY && (
+        <WorkspaceLazyRoute
+          surfaceName="Inventory"
+          component={InventoryWorkspace}
+          onClose={() => navigateWorkspace(WORKSPACE_PATHS.home)}
+        >
+          <InventoryWorkspace
+            organizationId={authSession.organizationId}
+            userId={currentUserUid}
+            role={authSession.role}
+            browserEnabled={INVENTORY_AUTHORITY_UI_ENABLED}
+            tenantEnabled={inventoryTenantEnabled}
+            events={commercialSnapshot.quotes}
+            exceptionWorkspaceEnabled={import.meta.env.VITE_INVENTORY_EXCEPTION_WORKSPACE_ENABLED === "true" && featureFlags.inventoryExceptionWorkspace === true}
+            eventSupplyActionPlanEnabled={import.meta.env.VITE_EVENT_SUPPLY_ACTION_PLAN_ENABLED === "true" && featureFlags.eventSupplyActionPlan === true}
+            inventoryMobileCaptureEnabled={import.meta.env.VITE_INVENTORY_MOBILE_CAPTURE_ENABLED === "true" && featureFlags.inventoryMobileCapture === true}
+            arrivalContext={commercialArrivalContext?.surfaceId === "inventory"
+              ? commercialArrivalContext
+              : null}
+            onArrivalResolution={setCommercialArrivalResolution}
+          />
+        </WorkspaceLazyRoute>
+      )}
+
       {authSession.isAdmin && catalogRouteMounted && (
         <WorkspaceLazyRoute
           active={catalogRouteOpen}
@@ -4003,6 +5024,7 @@ function LegacyAppCore({
             onEventTypeChange={setGlobalEventTypeId}
             onToast={pushToast}
             onInteractionStateChange={setCatalogInteraction}
+            inventoryRecipeExtension={inventoryRecipeExtension}
           />
         </WorkspaceLazyRoute>
       )}
@@ -4045,10 +5067,22 @@ function LegacyAppCore({
           <EventScheduleView
             open={scheduleRouteOpen}
             onClose={() => navigateWorkspace(WORKSPACE_PATHS.home)}
+            surfaceTitle={resolvedWorkspaceRouteId === WORKSPACE_ROUTE_IDS.OPERATIONS
+              ? "Operations"
+              : "Event Schedule"}
             organizationId={authSession.organizationId}
+            role={authSession.role}
             staffLeads={scheduleStaffLeads}
             capacityLimit={scheduleCapacityLimit}
             currentUserEmail={authSession.user?.email || ""}
+            principalId={authSession.user?.uid || ""}
+            arrivalContext={commercialArrivalContext?.surfaceId === "schedule"
+              ? commercialArrivalContext
+              : null}
+            onArrivalResolution={setCommercialArrivalResolution}
+            onOpenIntegrations={integrationsEnabled
+              ? () => navigateWorkspace(WORKSPACE_PATHS.integrations)
+              : undefined}
           />
         </WorkspaceLazyRoute>
       )}
@@ -4107,6 +5141,7 @@ function LegacyAppCore({
         || browserRoute.routeId === WORKSPACE_ROUTE_IDS.OUTSIDE
         || ([
           WORKSPACE_ROUTE_IDS.STAFF,
+          WORKSPACE_ROUTE_IDS.INVENTORY,
           WORKSPACE_ROUTE_IDS.SCHEDULE,
           WORKSPACE_ROUTE_IDS.REPORTING,
           WORKSPACE_ROUTE_IDS.CATALOG,
@@ -4116,6 +5151,7 @@ function LegacyAppCore({
         ].includes(resolvedWorkspaceRouteId) && !routedToolAuthorized)
         || (!CUSTOMER_CENTERED_WORKSPACE_ENABLED && [
           WORKSPACE_ROUTE_IDS.STAFF,
+          WORKSPACE_ROUTE_IDS.INVENTORY,
           WORKSPACE_ROUTE_IDS.CUSTOMER_LIST,
           WORKSPACE_ROUTE_IDS.CUSTOMER_DETAIL,
           WORKSPACE_ROUTE_IDS.MESSAGING
@@ -4164,9 +5200,14 @@ function LegacyAppCore({
       )}
 
       {quoteBuilderMounted && (
+      <RecoverableErrorBoundary surfaceName="Quote builder" surfaceKind="route" onRetry={retryQuoteBuilder} onClose={returnWorkspaceHome}
+        onReload={() => {
+          if (!quoteDirty || window.confirm(UNSAVED_QUOTE_RELOAD_PROMPT)) window.location.reload();
+        }}>
+      <Suspense fallback={<div className="qp-route-loading" role="status">Loading quote builder...</div>}>
       <main
         className={proposalComposerActive ? "container pc-shell" : "container wizard-grid"}
-        ref={wizardRef}
+        ref={attachWizardRef}
         tabIndex={-1}
         hidden={!quoteBuilderActive || Boolean(quoteEditRouteId && !quoteEditReady)}
         aria-hidden={!quoteBuilderActive || Boolean(quoteEditRouteId && !quoteEditReady)}
@@ -4192,7 +5233,7 @@ function LegacyAppCore({
             styles={Object.keys(STAFF_RULES)}
             onApplyDraft={applyIntentDraft}
             organizationId={authSession.organizationId}
-            onModelParse={parseIntentDraftWithModel}
+            onModelParse={PILOT_MODEL_ENABLED ? parseIntentDraftWithModel : undefined}
           />
         )}
         {PILOT_CHANGE_REQUESTS_ENABLED
@@ -4234,8 +5275,10 @@ function LegacyAppCore({
           />
         )}
         {catalogReadNotice}
-        {proposalComposerSurface}
-        {!proposalComposerActive && (
+        <QuoteEditorModeSurface
+          composerActive={proposalComposerActive}
+          composerSurface={proposalComposerSurface}
+        >
         <>
         <section className="panel wizard-panel">
           {draftReviewSurfaces}
@@ -4246,7 +5289,12 @@ function LegacyAppCore({
             </div>
             <p>{completedStepCount} of {stepperModel.length} decisions complete</p>
           </div>
-          <ol className="stepper" ref={stepperRef}>
+          <ol
+            aria-label="Quote creation steps"
+            className="stepper"
+            ref={attachStepperRef}
+            tabIndex={0}
+          >
             {stepperModel.map((stepMeta) => {
               const stepOneMissing = stepMeta.stepNumber === 1 && !step1Validation.valid;
               const stepContents = (
@@ -4345,6 +5393,15 @@ function LegacyAppCore({
                     catalog.packages.find((item) => item.id === form.pkg)?.includedMenuItemIds || []
                   }
                 />
+                {inventoryRecipeExtension.enabled && inventoryRecipeExtension.menuCostProjections.length > 0 && (
+                  <Suspense fallback={<p role="status">Loading ingredient cost intelligence…</p>}>
+                    <InventoryMenuCostSummary
+                      projections={inventoryRecipeExtension.menuCostProjections}
+                      sourceState={inventoryRecipeExtension.menuCostProjectionSourceState}
+                      title="Menu ingredient cost"
+                    />
+                  </Suspense>
+                )}
                 {menuSelectionValidationMessage && (
                   <p
                     className="warning-note step-guidance"
@@ -4382,6 +5439,22 @@ function LegacyAppCore({
                 totals={totals}
                 settings={effectiveSettings}
                 readiness={proposalReadiness}
+                {...(QUOTE_COMPLETION_BUILD_ENABLED ? {
+                quoteCompletionCommandPathEnabled,
+                quoteCompletionSaveBlockers: proposalComposerSaveBlockers,
+                onQuoteCompletionAction: (action) => {
+                  const focusResult = scheduleQuoteCompletionDestinationFocus(
+                    resolveQuoteWizardCompletionDestination(action?.destination), {
+                      root: wizardRef,
+                      setStep
+                    }
+                  );
+                  if (focusResult.step !== null || focusResult.scheduled) {
+                    return { state: "success", message: "Opened the exact quote destination." };
+                  }
+                  return { state: "recovery", message: action?.reason };
+                }
+                } : {})}
               />
             )}
             {!catalog.loading && step === 5 && (
@@ -4473,8 +5546,10 @@ function LegacyAppCore({
           guestBand={guestBand}
         />
         </>
-        )}
+        </QuoteEditorModeSurface>
       </main>
+      </Suspense>
+      </RecoverableErrorBoundary>
       )}
 
       {toasts.length > 0 && (
@@ -4510,6 +5585,7 @@ function LegacyAppCore({
             initialTab={adminInitialTab}
             onToast={pushToast}
             onInteractionStateChange={setCatalogInteraction}
+            inventoryRecipeExtension={inventoryRecipeExtension}
           />
         </WorkspaceLazyTool>
       )}
@@ -4566,9 +5642,15 @@ function LegacyAppCore({
             currentUserEmail={authSession.user?.email || ""}
             currentUserRole={authSession.role}
             tenantTimeZone={tenantTimeZone}
-            focusQuoteId={browserRoute.params?.quoteId || historyTarget.quoteId}
-            focusAction={historyTarget.action}
-            focusReason={historyTarget.reason}
+            focusQuoteId={historyFocusQuoteId || browserRoute.params?.quoteId || historyTarget.quoteId}
+            focusAction={commercialHistoryFocusAction || historyTarget.action}
+            focusDestinationAction={historyTarget.destinationAction}
+            focusReason={commercialArrivalContext?.reasonId || historyTarget.reason}
+            arrivalContext={commercialArrivalContext?.surfaceId === "living-opportunity"
+              || commercialArrivalContext?.surfaceId === "quote-administration"
+              ? commercialArrivalContext
+              : null}
+            onArrivalResolution={setCommercialArrivalResolution}
             onEditQuote={(quote) => {
               requestWorkflowAttentionRefresh({ force: true });
               handleEditQuote(quote);
@@ -4654,9 +5736,18 @@ function LegacyAppCore({
             onClose={() => closeWorkspaceToolRoute(WORKSPACE_ROUTE_IDS.SCHEDULE, setScheduleOpen)}
             returnFocusRef={workspaceToolReturnFocusRef}
             organizationId={authSession.organizationId}
+            role={authSession.role}
             staffLeads={scheduleStaffLeads}
             capacityLimit={scheduleCapacityLimit}
             currentUserEmail={authSession.user?.email || ""}
+            principalId={authSession.user?.uid || ""}
+            onOpenIntegrations={integrationsEnabled
+              ? () => openRoutedWorkspaceTool(
+                  WORKSPACE_PATHS.integrations,
+                  setIntegrationsOpen,
+                  { menuTriggerRef: operationsMenuTriggerRef }
+                )
+              : undefined}
           />
         </WorkspaceLazyTool>
       )}

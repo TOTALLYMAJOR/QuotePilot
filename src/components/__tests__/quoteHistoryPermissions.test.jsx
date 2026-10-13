@@ -415,7 +415,7 @@ describe("quote history Kitchen BEO authority routing", () => {
       onOpenAuthoritative,
       onExportLocal
     });
-    element.props.onClick();
+    element.props.children.props.onClick();
 
     expect(onOpenAuthoritative).toHaveBeenCalledWith(quote);
     expect(onExportLocal).not.toHaveBeenCalled();
@@ -441,7 +441,7 @@ describe("quote history Kitchen BEO authority routing", () => {
       onOpenAuthoritative,
       onExportLocal
     });
-    element.props.onClick();
+    element.props.children.props.onClick();
 
     expect(onExportLocal).toHaveBeenCalledWith(quote);
     expect(onOpenAuthoritative).not.toHaveBeenCalled();
@@ -462,13 +462,16 @@ describe("quote history Kitchen BEO authority routing", () => {
       onOpenAuthoritative,
       onExportLocal
     });
-    element.props.onClick();
+    element.props.children.props.onClick();
 
     expect(onOpenAuthoritative).not.toHaveBeenCalled();
     expect(onExportLocal).not.toHaveBeenCalled();
     const markup = renderToStaticMarkup(element);
     expect(markup).toContain('data-beo-authority="unavailable"');
     expect(markup).toContain("disabled");
+    expect(markup).toContain('aria-describedby="quote-quote-42-kitchen-beo-disabled-reason"');
+    expect(markup).toContain('id="quote-quote-42-kitchen-beo-disabled-reason"');
+    expect(markup).not.toContain("title=");
     expect(markup).toContain("Refresh Quotes before generating an artifact");
   });
 });

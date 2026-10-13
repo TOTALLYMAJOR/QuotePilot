@@ -4,8 +4,18 @@ import {
   getFinalBalanceDisplayStatus
 } from "./statusSemantics";
 import { hasWorkspaceNumber } from "./workspacePresentation";
+import { readCommercialEvidencePresence } from "./commercialEvidencePresence";
 
 export const UPCOMING_WINDOW_DAYS = 7;
+const RECORDED_FINAL_BALANCE_STATES = new Set([
+  "unpaid",
+  "sent",
+  "paid",
+  "prepared",
+  "processing",
+  "failed",
+  "expired"
+]);
 
 function localDateIso(value = new Date()) {
   const year = value.getFullYear();
@@ -36,8 +46,13 @@ export function selectUpcomingEvents(
 export function buildMoneyRows(quotes = []) {
   const rows = [];
   (Array.isArray(quotes) ? quotes : []).forEach((quote) => {
-    const depositStatus = String(quote?.payment?.depositStatus || "unpaid").toLowerCase();
-    if (["accepted", "booked"].includes(quote?.status) && ["unpaid", "sent"].includes(depositStatus)) {
+    const evidencePresence = readCommercialEvidencePresence(quote);
+    const depositStatus = String(evidencePresence.depositStatusValue || "").trim().toLowerCase();
+    if (
+      evidencePresence.depositStatus
+      && ["accepted", "booked"].includes(quote?.status)
+      && ["unpaid", "sent"].includes(depositStatus)
+    ) {
       rows.push({
         quoteId: quote.id,
         quoteNumber: quote.quoteNumber,
@@ -49,9 +64,26 @@ export function buildMoneyRows(quotes = []) {
     }
     if (quote?.status !== "booked" || !quote.booking?.contractNumber) return;
 
-    const displayStatus = getFinalBalanceDisplayStatus(quote.payment?.finalBalance);
+    const sourceFinalBalance = {
+      status: evidencePresence.finalBalanceStatusValue,
+      stripeCheckoutState: evidencePresence.finalBalanceCheckoutStateValue
+    };
+    const displayStatus = getFinalBalanceDisplayStatus(sourceFinalBalance);
+    const recognizedFinalBalanceStatus = RECORDED_FINAL_BALANCE_STATES.has(
+      sourceFinalBalance.status === "paid"
+        ? "paid"
+        : sourceFinalBalance.stripeCheckoutState || sourceFinalBalance.status
+    );
     const amountCents = Number(quote.payment?.finalBalance?.amountCents || 0);
-    const eligibleToShow = displayStatus !== "unpaid" || depositStatus === "paid";
+    const derivedFinalBalanceObligation = evidencePresence.depositStatus
+      && depositStatus === "paid"
+      && evidencePresence.booking
+      && Boolean(String(quote.booking?.contractNumber || "").trim())
+      && amountCents > 0;
+    const eligibleToShow = (
+      (evidencePresence.finalBalanceStatus && recognizedFinalBalanceStatus)
+      || derivedFinalBalanceObligation
+    ) && (displayStatus !== "unpaid" || depositStatus === "paid");
     if (amountCents > 0 && eligibleToShow && ["unpaid", "sent", "prepared", "processing"].includes(displayStatus)) {
       rows.push({
         quoteId: quote.id,

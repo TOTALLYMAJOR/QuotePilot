@@ -248,7 +248,7 @@ describe("evidence reader: end to end into the reconciler bundle", () => {
     // And the three that structurally cannot.
     expect(evidence.payouts.availability).toBe(AVAILABILITY.BLOCKED_BY_INTEGRATION);
     expect(evidence.processorFeeSchedule.availability).toBe(AVAILABILITY.MISSING);
-    expect(evidence.actualConsumption.availability).toBe(AVAILABILITY.NOT_APPLICABLE);
+    expect(evidence.actualConsumption.availability).toBe(AVAILABILITY.NOT_YET_AVAILABLE);
   });
 
   it("stamps provenance at the real Firestore paths", async () => {

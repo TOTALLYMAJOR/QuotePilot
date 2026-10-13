@@ -1,3 +1,5 @@
+import { compileConfiguredQuoteActions } from "./quoteActionState";
+
 export const QUOTE_HISTORY_CONTROLLER_MODEL = "quote-history-controller-v1";
 
 const STAFF_ROLES = new Set(["admin", "sales"]);
@@ -20,6 +22,39 @@ function immutable(value, seen = new WeakSet()) {
   return Object.freeze(value);
 }
 
+function resolveActionRevisionId(quote) {
+  const explicit = text(quote?.activeVersionId || quote?.versionMeta?.versionId, 80);
+  const versionNumber = Number(quote?.latestVersionNumber || quote?.versionMeta?.versionNumber);
+  const contentRevisionId = explicit || (
+    Number.isSafeInteger(versionNumber) && versionNumber > 0
+      ? `v${String(versionNumber).padStart(4, "0")}`
+      : ""
+  );
+  if (!contentRevisionId) return "";
+  const issuedAt = text(quote?.portalIssuedAtISO);
+  const parsed = issuedAt ? new Date(issuedAt) : null;
+  const portalIdentity = parsed && !Number.isNaN(parsed.getTime())
+    ? parsed.toISOString()
+    : text(quote?.portalKey, 64);
+  return portalIdentity ? `${contentRevisionId}@${portalIdentity}` : contentRevisionId;
+}
+
+function quoteWithCurrentDeliveryOnly(quote) {
+  if (!quote || typeof quote !== "object") return quote;
+  const delivery = quote?.workflow?.quoteDelivery;
+  if (!delivery || typeof delivery !== "object") return quote;
+  const expectedRevisionId = resolveActionRevisionId(quote);
+  const recordedRevisionId = text(delivery.revisionId);
+  if (!expectedRevisionId || recordedRevisionId === expectedRevisionId) return quote;
+  return {
+    ...quote,
+    workflow: {
+      ...(quote.workflow || {}),
+      quoteDelivery: {}
+    }
+  };
+}
+
 export function getQuoteActionPermissions(value) {
   const normalizedRole = role(value);
   const isAdmin = normalizedRole === "admin";
@@ -32,7 +67,7 @@ export function getQuoteActionPermissions(value) {
     canDuplicateQuote: isStaff,
     canExportProposal: isStaff,
     canExportBeo: isStaff,
-    canReviewDelivery: isStaff,
+    canReviewDelivery: isAdmin,
     canOpenConversation: isStaff,
     canSendQuoteEmail: isAdmin,
     canOpenIntegrationRecovery: isAdmin,
@@ -56,11 +91,14 @@ const ACTION_DEFINITIONS = Object.freeze([
   ["edit", "Edit quote", "canEditQuote", "trusted_quote_editor", "draft_mutation"],
   ["duplicate", "Duplicate quote", "canDuplicateQuote", "quote_version_service", "trusted_mutation"],
   ["export_proposal", "Download proposal", "canExportProposal", "proposal_export", "read_artifact"],
+  ["print_proposal", "Print proposal", "canExportProposal", "proposal_export", "read_artifact"],
   ["review_beo", "Review Kitchen BEO", "canExportBeo", "kitchen_beo_authority", "read_artifact"],
-  ["review_delivery", "Review delivery evidence", "canReviewDelivery", "delivery_evidence_review", "read_artifact"],
+  ["review_delivery", "Resolve delivery outcome", "canReviewDelivery", "delivery_evidence_review", "trusted_mutation"],
+  ["review_delivery_evidence", "Review delivery evidence", "canReviewDelivery", "delivery_evidence_review", "read_artifact"],
   ["open_conversation", "Open event conversation", "canOpenConversation", "quote_conversation", "navigation"],
   ["send_quote", "Send quote", "canSendQuoteEmail", "quote_delivery_callable", "communication"],
   ["copy_artifacts", "Copy customer details", "canCopyArtifacts", "browser_clipboard", "read_artifact"],
+  ["manual_email", "Open email app", "canCopyArtifacts", "browser_email_client", "navigation"],
   ["copy_email", "Copy email draft", "canCopyArtifacts", "browser_clipboard", "read_artifact"],
   ["copy_portal", "Copy customer portal link", "canCopyArtifacts", "browser_clipboard", "read_artifact"],
   ["copy_payment_link", "Copy deposit link", "canCopyPaymentLink", "browser_clipboard", "read_artifact"],
@@ -72,13 +110,19 @@ const ACTION_DEFINITIONS = Object.freeze([
   ["reconcile_balance", "Check balance outcome", "canReconcileFinalBalance", "stripe_reconciliation_callable", "trusted_mutation"],
   ["change_status", "Change lifecycle status", "canManageQuoteStatus", "quote_store", "trusted_mutation"],
   ["convert_contract", "Convert to contract", "canConvertToContract", "contract_conversion_callable", "trusted_mutation"],
+  ["convert_contract_refresh", "Refresh contract status", "canConvertToContract", "contract_conversion_callable", "navigation"],
   ["manage_confirmation", "Record booking confirmation", "canManageConfirmation", "quote_store", "trusted_mutation"],
   ["reopen", "Reopen quote", "canReopenQuote", "quote_store", "trusted_mutation"],
   ["rotate_portal", "Rotate portal access", "canRotatePortalLink", "portal_rotation_callable", "trusted_mutation"],
   ["delete", "Delete quote", "canDeleteQuote", "quote_store", "destructive"]
 ]);
 
-export function buildRoleSafeQuoteActionController({ quote = null, currentUserRole = "customer", source = "" } = {}) {
+export function buildRoleSafeQuoteActionController({
+  quote = null,
+  currentUserRole = "customer",
+  source = "",
+  runtimeActions = {}
+} = {}) {
   const permissions = getQuoteActionPermissions(currentUserRole);
   const quoteId = text(quote?.id || quote?.quoteId);
   const quoteStatus = text(quote?.status, 32).toLowerCase() || "draft";
@@ -94,12 +138,14 @@ export function buildRoleSafeQuoteActionController({ quote = null, currentUserRo
     const sourceAllowed = ![
       "send_quote",
       "review_delivery",
+      "review_delivery_evidence",
       "open_integration_recovery",
       "request_deposit",
       "request_balance",
       "reconcile_deposit",
       "reconcile_balance",
       "convert_contract",
+      "convert_contract_refresh",
       "rotate_portal"
     ].includes(id) || sourceMode === "firebase";
     return [id, immutable({
@@ -110,6 +156,7 @@ export function buildRoleSafeQuoteActionController({ quote = null, currentUserRo
       role: permissions.role,
       authorityLevel,
       executionTarget,
+      visible: Boolean(quoteId && roleAllowed),
       enabled: Boolean(quoteId && roleAllowed && sourceAllowed),
       disabledReason: !quoteId
         ? "Select an exact opportunity first."
@@ -120,13 +167,20 @@ export function buildRoleSafeQuoteActionController({ quote = null, currentUserRo
             : ""
     })];
   }));
+  const actionState = compileConfiguredQuoteActions({
+    quote: quoteWithCurrentDeliveryOnly(quote),
+    baseActions: actions,
+    runtimeActions,
+    source: sourceMode
+  });
   return immutable({
     modelId: "role-safe-quote-action-controller-v1",
     quoteId: quoteId || null,
     quoteStatus,
     source: sourceMode,
     permissions,
-    actions
+    actions,
+    actionState
   });
 }
 

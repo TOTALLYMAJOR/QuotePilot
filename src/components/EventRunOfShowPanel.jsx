@@ -151,7 +151,7 @@ function resolvePanelState({ events, loading, error, truncated, derivationFailed
   return "success";
 }
 
-function RunOfShowEvent({ event, open = false }) {
+function RunOfShowEvent({ event }) {
   const presentations = milestonePresentations(event);
   const commercialEvidence = commercialEvidenceLines(event);
   const knownCheckpointCount = event.timeline.filter((checkpoint) => (
@@ -162,7 +162,6 @@ function RunOfShowEvent({ event, open = false }) {
   return (
     <details
       className={`customer-version-history schedule-event-card ${event.quoteStatus}`}
-      open={open}
       data-capability-state={unknowns.length > 0 ? "partial" : "success"}
     >
       <summary>
@@ -366,7 +365,6 @@ export function EventRunOfShowPanel({
             <RunOfShowEvent
               key={event.quoteId || `${event.quoteNumber}-${index}`}
               event={event}
-              open={index === 0}
             />
           ))}
         </div>

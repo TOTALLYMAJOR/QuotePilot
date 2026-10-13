@@ -1,6 +1,75 @@
 # Launch Runbook
 
-Last updated: 2026-09-03 13:49:00 CDT
+Last updated: 2026-09-13 19:09:08 CDT
+
+## Coordinated all-qualified founder-tenant release
+
+Use `all-qualified-features` only for an explicitly authorized coordinated
+promotion to exact organization `mm05366-sandbox`. Dispatch Firebase with
+`firebase_scope=all`, then dispatch Vercel with the same tagged current-main
+SHA and release profile. Each target still needs its own last-known-good
+rollback ancestor and provider receipt; this profile does not create an
+ambiguous cross-provider rollback artifact.
+
+Before either dispatch:
+
+1. Create and review the dedicated managed **QuotePilot Inquiry** Turnstile
+   widget for `quotepilot.mbmapps.com` and `tonicatering.web.app`. Put only its
+   browser-visible site key in `VITE_INQUIRY_TURNSTILE_SITE_KEY`, put only its
+   secret in Firebase Secret Manager as `INQUIRY_TURNSTILE_SECRET`, and verify
+   the distinct Inquiry action and hostname rejection. Never reuse Buyer
+   Access credentials.
+2. Confirm enabled Secret Manager metadata for `INQUIRY_TURNSTILE_SECRET`,
+   `INQUIRY_RATE_LIMIT_SECRET`, `INTENT_PARSER_OPENAI_KEY`, and
+   `RESEND_API_KEY` without reading or logging secret values.
+3. Confirm the exact Functions runtime service account has
+   `roles/secretmanager.secretAccessor` on every secret bound by a Function.
+   The GitHub deploy identity should not receive secret-policy mutation
+   authority; pre-bind the runtime account narrowly so Firebase does not need
+   to grant access during a production batch.
+4. Probe the configured OpenAI account with the pinned `gpt-5-mini` model. A
+   `credit_balance_exhausted` response blocks promotion even when the key has
+   an enabled secret version; restore capacity and rerun the probe.
+5. Publish the integrated source head, require new exact-head PR checks, merge
+   through protected `main`, wait for the successful exact-main push CI, and
+   tag that same SHA. Do not reuse checks from a superseded PR head.
+
+The profile enables the qualified staff workspace and Resend-backed explicit
+email actions plus Commercial Change, Event Spine, Staffing, Inventory,
+Guided Inquiry, and review-only Model Assist for `mm05366-sandbox`. Public $1
+Buyer Access, owner SMS, Revenue Autopilot sends, local/test bypasses, and hard
+App Check enforcement stay off. Model suggestions remain confirm-before-apply
+and non-authoritative. Deployment does not publish an Inquiry Showcase: after
+both provider readbacks pass, an administrator must still curate, preview, and
+publish an immutable customer-safe version before sharing a slug.
+
+## RagnaKoK complete-operations activation
+
+For the exact `mm05366-sandbox` founder-pilot tenant, deploy Firebase with the
+`ragnakok-operations` profile and `firebase_scope=backend` or `all`, and deploy
+the Event Spine-enabled browser through the protected safe-off Vercel profile.
+That Firebase profile is the sole production profile that couples
+`COMMERCIAL_CHANGE_AUTHORITY_ENABLED=true` and
+`EVENT_OPERATING_SPINE_ENABLED=true` with the existing Staffing and Inventory
+server gates. The materializer rejects either gate on its own, either gate
+without the exact tenant runtime fence, or Event Spine without both operational
+authorities. Every other production profile keeps these server gates false.
+After those workflows prove the tagged releases, exact-main CI, runtime
+configuration, complete Function inventory, public browser gate, and provider
+state, dispatch these protected workflows against the exact Firebase and
+Vercel release SHAs and run IDs:
+
+1. **Set Event and Commercial Tenant** with the exact true-state confirmation.
+2. **Set Operational Staffing Tenant** with the exact true-state confirmation.
+3. **Set Inventory Tenant** with the exact true-state confirmation.
+
+Each operator uses the tenant-operator workload identity, requires the settings
+document to exist, changes only its named field or coupled Event/Commercial
+fields, and verifies readback. Browser presentation, server runtime, and tenant
+settings are independent gates. The shared deployment scope also fences every
+Inventory callable and invalidation trigger to `mm05366-sandbox`; the global
+Inventory environment value alone cannot admit another organization. Do not activate another tenant, buyer access,
+Revenue Autopilot sends, SMS, or Stripe Connect as part of this sequence.
 
 ## Goal
 Deploy and verify QuotePilot safely through exact-SHA manual workflows, scoped
@@ -57,9 +126,17 @@ exact-main sequence in section 6, manually dispatch one of these workflows from
 
 Both workflows require the full semantically tagged release SHA, the matching
 successful main-push `CI Quality` run id, a target-specific rollback ancestor,
-the exact `safe-off` release profile, and an exact typed confirmation. Firebase
-additionally requires an explicit `hosting`, `backend`, or `all` scope and the
-fixed `none` / `not-applicable` SMS selection. Before installing dependencies,
+an allowed release profile, and an exact typed confirmation. `safe-off` and
+`all-qualified-features` are the only profiles accepted by Vercel; the latter
+also requires its paired Firebase-all release and may not be used for a
+Hosting-only or backend-only deployment. Firebase
+backend/all may select the tenant-restricted `ragnakok-workflows` profile described
+below, or `email-active`, which changes only
+`NOTIFICATIONS_EMAIL_PROVIDER` from `none` to `resend`; SMS, buyer access,
+Commercial Change, operational staffing authority, and both Revenue Autopilot
+gates remain off. Firebase additionally requires an explicit `hosting`,
+`backend`, or `all` scope and the fixed `none` / `not-applicable` SMS selection.
+Before installing dependencies,
 the workflow validates the canonical repository and workflow, remotely
 published tagged `main`, all eight CI jobs, protected environment, allowlisted
 human dispatcher, release-profile-bound run title, and rollback ancestry. It
@@ -82,9 +159,11 @@ deployment was quota-rejected. Do not replace this with one
 `functions:default` mutation. Firebase
 CLI may print a create/update failure and still exit zero, so the deployer also
 parses the provider result and then requires `functions:list --json` to prove
-the exact active inventory, `us-central1` location, and safe-off runtime profile
-for every function. A Hosting-origin probe without that readback is not a
-successful backend or all-scope deployment.
+the exact active inventory, `us-central1` location, and selected runtime profile
+for every function. `email-active` readback must prove `resend` on every active
+Function while every other protected authority remains identical to
+`safe-off`. A Hosting-origin probe without that readback is not a successful
+backend or all-scope deployment.
 
 Both production deploy workflows bind `VITE_AMBIENT_UI_ENABLED: "true"` and
 `VITE_OPERATIONAL_STAFFING_ENABLED: "true"` into the frontend build
@@ -149,6 +228,11 @@ scheduled functions. Cloud Functions administration alone does not grant
 `iam.serviceAccounts.actAs` or `cloudscheduler.jobs.update`. Verify both
 bindings by provider readback; never grant them to the GitHub principal or a
 general human identity as a deployment workaround.
+Every Secret Manager value declared by `runWith({ secrets: [...] })` must also
+grant `roles/secretmanager.secretAccessor` to that exact runtime service
+account before dispatch. Keep `secretmanager.secrets.setIamPolicy` away from the
+CI deployer; a missing runtime binding otherwise produces a partial multi-batch
+release when Firebase attempts to repair secret IAM during deployment.
 
 The Firebase deploy workflow prepares the official Linux v15.24.0 standalone
 CLI before authentication and verifies SHA-256
@@ -187,7 +271,7 @@ values in the approved GitHub variable and Firebase Secret Manager channels:
     restricted sender; provider acceptance, delivery/bounce, and recipient
     evidence still require an exact controlled attempt
   - `EMAIL_FROM_NAME=QuotePilot by MBMApps`
-  - `EMAIL_FROM_EMAIL=quotepilot@leaguepilot.us`
+  - `EMAIL_FROM_EMAIL=quotepilot@quietpilot.us`
   - `NOTIFICATIONS_SMS_PROVIDER=none` until one owner-SMS provider is
     explicitly promoted; the only valid choices are `none`, `twilio`, and
     `pingram`, and current production remains `none`
@@ -260,6 +344,7 @@ validation environment. It is not the current QuotePilot production snapshot:
 NOTIFICATIONS_SMS_PROVIDER=none
 NOTIFICATIONS_EMAIL_PROVIDER=none
 COMMERCIAL_CHANGE_AUTHORITY_ENABLED=false
+EVENT_OPERATING_SPINE_ENABLED=false
 REVENUE_AUTOPILOT_ENABLED=false
 REVENUE_AUTOPILOT_SENDS_ENABLED=false
 STRIPE_MODE=live
@@ -283,11 +368,13 @@ archive/delete operations.
 
 ### Resend activation gate
 
-The approved interim sender is
-`QuotePilot by MBMApps <quotepilot@leaguepilot.us>`. It deliberately reuses the
-existing verified `leaguepilot.us` Resend domain while the account has a
-single-domain limit. The restricted production key and exact Functions release
-are now deployed. Do not represent an exact delivery attempt as complete until
+The approved sender is
+`QuotePilot by MBMApps <quotepilot@quietpilot.us>`. It uses the verified
+`quietpilot.us` domain owned by the configured Resend account. The restricted production key is installed in Firebase
+Secret Manager, but a new key version does not become active in bound Functions
+until an exact tagged release is deployed with
+`release_profile=email-active`. Do not represent an exact delivery attempt as
+complete until
 provider acceptance, delivered/bounced event, and recipient-inbox proof are
 captured. Replacing
 the shared sender with a dedicated QuotePilot domain remains a later migration,
@@ -298,7 +385,7 @@ Only after verification, set the trusted runtime configuration to:
 ```dotenv
 NOTIFICATIONS_EMAIL_PROVIDER=resend
 EMAIL_FROM_NAME=QuotePilot by MBMApps
-EMAIL_FROM_EMAIL=quotepilot@leaguepilot.us
+EMAIL_FROM_EMAIL=quotepilot@quietpilot.us
 APP_BASE_URL=https://quotepilot.mbmapps.com/app
 ```
 
@@ -314,24 +401,137 @@ dashboard sandbox test; it is not an allowed QuotePilot Functions sender
 configuration, customer-ready sender-domain proof, or recipient-inbox proof.
 
 Deploy the Firebase backend only by dispatching `Deploy Firebase Production`
-with `firebase_scope=backend` and the exact tagged-main CI evidence. This scope
-deploys `firestore,functions:default` together. Use `firebase_scope=all` only
+with `firebase_scope=backend`, `release_profile=email-active`,
+`sms_provider=none`, `sms_configuration_generation=not-applicable`, and the
+exact tagged-main CI evidence. This scope deploys
+`firestore,functions:default` together. Use `firebase_scope=all` only
 for an explicitly coordinated Hosting, rules, and default-codebase Functions
 release. The typed confirmations now name `functions:default`; the generic
 `functions` selector is forbidden because it could include the separately
 gated Connect codebase. No current production workflow deploys
 `functions:connect`.
 
-After a controlled Resend deployment, send exactly one onboarding test to a
-controlled recipient and capture all three proof layers:
-1. QuotePilot reports that Resend accepted the request and records the provider
-   message id in the provisioning audit.
-2. The Resend dashboard records a `delivered` event for that message.
-3. The recipient confirms the message arrived with the expected sender name,
-   sender address, and `/app` sign-in link.
+The production email activation is accepted only when all of these criteria
+hold; a partial result stops the rollout and leaves the prior `safe-off`
+deployment as the last-known-good rollback authority:
+
+1. The release is a clean, reviewed, annotated semantic tag on current remote
+   `main`, and the exact main-push CI run passes every required job.
+2. `RESEND_API_KEY` has an enabled production Secret Manager version; its value
+   never enters source, dotenv, logs, workflow inputs, artifacts, or receipts.
+3. Repository variables exactly identify
+   `QuotePilot by MBMApps <quotepilot@quietpilot.us>` and the canonical app URL.
+4. The manual run uses `firebase_scope=backend`,
+   `release_profile=email-active`, `sms_provider=none`, the exact rollback SHA,
+   and the exact typed confirmation; Hosting-only and Vercel runs reject this
+   profile.
+5. The workflow materializes `NOTIFICATIONS_EMAIL_PROVIDER=resend` from the
+   immutable profile, not from an unbound mutable provider variable.
+6. Provider readback proves the complete expected Functions inventory is
+   active in `us-central1` and every Function reports the `email-active` runtime
+   profile; any missing, extra, failed, or mismatched Function fails the run.
+7. Readback simultaneously proves SMS, buyer access, Commercial Change,
+   staffing authority, Revenue Autopilot, and Revenue Autopilot sends remain
+   off, with no disabled-provider residue.
+8. Public `/`, `/app`, and `/system` probes remain healthy after deployment;
+   authenticated application acceptance remains a separate human check.
+9. Exactly one separately authorized controlled email is used for provider
+   acceptance. QuotePilot acceptance, Resend delivery/bounce, inbox receipt,
+   and human review are recorded as distinct evidence and never inferred from
+   deployment success.
+10. Only after the controlled message succeeds is the new deployment eligible
+    to replace the prior backend last-known-good receipt or an older secret
+    version eligible for revocation. Otherwise execute the recorded rollback
+    and verify the restored `safe-off` profile.
+
+After the frontend and Firebase backend containing the dedicated acceptance
+surface are deployed from the same clean tagged-main revision, use
+**Integrations Ops → Email provider acceptance test**. Do not use Customer
+Provisioning, a quote, a customer record, or custom message text for transport
+acceptance.
+
+The controlled acceptance is complete only when every criterion below has an
+exact receipt. Any partial or contradictory result stops the test; an ambiguous
+provider outcome must never be retried with a new request merely to obtain a
+green result.
+
+1. Exact-main CI and both governed frontend and Firebase backend deployments
+   pass for one annotated tag; production source readback matches that tag.
+2. A verified platform administrator can see the panel. A same-tenant admin
+   without platform authority cannot see it, and a direct callable attempt is
+   denied before any provider contact.
+3. **Check Setup** reports provider `resend`, approved sender `configured`, and
+   the masked `quotepilot@quietpilot.us` identity without exposing the API key.
+4. The named recipient is a controlled inbox on the exact `quietpilot.us`
+   domain. The operator confirms access to that inbox before sending.
+5. The operator types the displayed `SEND RESEND TEST TO <exact-address>` token
+   exactly. The server rejects any foreign domain, altered token, custom
+   subject/body, attachment, URL, or unsupported request field.
+6. One cryptographically generated `email_test_…` request ID is used. Network
+   evidence shows one callable mutation and at most one Resend POST for that
+   request; refresh, double-click, timeout, and browser navigation cannot create
+   a second send.
+7. A private organization-scoped receipt exists before provider contact and
+   contains the request, actor, recipient, and `dispatching` state. Browser
+   principals cannot read, create, update, or delete that record directly.
+8. QuotePilot returns `provider_accepted`, `provider=resend`, the exact request
+   and recipient, an acceptance timestamp, and a non-empty provider message ID.
+   No secret, API key, bearer value, customer data, quote data, or raw provider
+   error appears in UI, logs, or the callable response.
+9. The visible controls lock after acceptance. Reusing the same request ID
+   returns the stored receipt or refuses the attempt without provider contact;
+   an ambiguous outcome remains locked and offers evidence review only.
+10. Operations Audit shows one `resend_acceptance_test` immutable-receipt row
+    for the exact actor and recipient while omitting the provider message ID,
+    principal UID, secret fields, and raw receipt data.
+11. Resend provider evidence for the exact message ID reaches `delivered` (or a
+    terminal bounce/failure is recorded explicitly). Provider acceptance alone
+    is never promoted to delivery.
+12. The recipient confirms one message arrived with sender
+    `QuotePilot by MBMApps <quotepilot@quietpilot.us>`, subject
+    `QuotePilot Resend acceptance test`, and the server-owned non-customer body.
+13. The quote count, customer records, proposal/portal state, payment state,
+    staffing state, SMS state, and Revenue Autopilot state are unchanged by the
+    test.
+14. Only after criteria 1–13 pass may the run be called controlled production
+    email acceptance. That label still does not prove every customer mailbox,
+    ordinary quote content, onboarding content, spam placement, or human
+    acceptance of those workflows.
+
+#### September 3, 2026 v0.16.5 production receipt
+
+- Criterion 1 passed for exact tag `v0.16.5`, commit
+  `ad3517b39109b91dd735ee3700e8c79a4e2ca956`: CI run `33818617920`, Firebase
+  production run `33820173249`, and Vercel production run `33822596844`
+  completed, with production source/readback tied to that release.
+- The platform-admin positive UI path and same-tenant non-platform-admin
+  negative visibility path were observed. **Check Setup** reported provider
+  `resend`, approved sender `configured`, and the masked sender. The production
+  platform-admin allowlist was not changed.
+- One exact-confirmation submission was made to the controlled
+  `flightcontrol@quietpilot.us` address. QuotePilot returned
+  `provider_accepted` at `2026-09-04T01:16:03.496Z`, supplied a non-empty
+  provider message ID in the direct private receipt, locked the accepted
+  control, and added one bounded `resend_acceptance_test` Operations Audit row
+  without the provider ID. No retry was performed.
+- Independent Resend readback for that exact message reported
+  `last_event=delivered`. This satisfies the provider-delivery portion of
+  criterion 11 for this single non-customer message; it is not inbox evidence.
+- Criterion 12 remains open pending recipient confirmation of one inbox message
+  and review of the exact sender, subject, and body. Criterion 13 remains open
+  because a complete before/after proof across every named business-state
+  surface was not captured. Live network chronology for criteria 6–7 was not
+  independently packet-captured; the source contract, focused tests, locked UI,
+  direct receipt, and durable audit row are retained as supporting evidence
+  without promoting them beyond what was observed.
+- Because criteria 1–13 are not all closed, criterion 14 is **not satisfied**.
+  This run may be described only as one controlled production Resend transport
+  with QuotePilot provider acceptance and a Resend `delivered` event.
 
 Configuration presence or an accepted API response alone is not delivery
-proof. Keep production customer email disabled if any layer fails.
+proof. If provider or inbox evidence fails, retain the exact receipt, do not
+repeat an ambiguous request, and keep the prior last-known-good rollback
+authority available while the failure is investigated.
 
 ### Commercial Change Authority and trusted Kitchen BEO activation gate
 
@@ -976,11 +1176,19 @@ npm run release:candidate:deploy -- \
 
 The Firebase candidate requires a git-ignored, mode-`0600`
 `functions/.env.quotepilot-staging-20260804` whose provider/send/buyer gates are
-off, `STRIPE_MODE=test`, and Commercial Change, Revenue Autopilot preparation,
-and Revenue Autopilot send authority gates explicitly set to `false`.
+off and `STRIPE_MODE=test`. Revenue Autopilot preparation and send authority
+remain explicitly `false`; Commercial Change remains `false` except in the
+exact `staging-event-operating-spine` profile described below.
 `OPERATIONAL_STAFFING_AUTHORITY_ENABLED` must exactly match the selected
 candidate profile: `false` for `staging-safe-off`, `true` for
-`staging-staffing-authority` and `staging-provider-acceptance`.
+`staging-staffing-authority`, `staging-provider-acceptance`, and
+`staging-event-operating-spine`. The Event Spine profile is the exact
+RagnaKoK operational envelope: it additionally requires
+`INVENTORY_AUTHORITY_ENABLED=true`,
+`COMMERCIAL_CHANGE_AUTHORITY_ENABLED=true`,
+`EVENT_OPERATING_SPINE_ENABLED=true`, and
+`TENANT_WORKFLOW_ORGANIZATION_ID=mm05366-sandbox`. This preserves Staffing and
+Inventory while constraining all workflow authority to that organization.
 `staging-provider-acceptance` additionally requires
 `NOTIFICATIONS_EMAIL_PROVIDER=resend`, `STRIPE_MODE=test`,
 `BUYER_ACCESS_ENABLED=true`,
@@ -1341,6 +1549,11 @@ After the reviewed PR merges:
    - `ci_run_id`: the exact successful main-push CI run id,
    - `rollback_sha`: the full target-specific last-known-good ancestor,
    - `firebase_scope`: `hosting`, `backend`, or `all` when applicable,
+   - `release_profile`: `safe-off`; `email-active` only for an explicitly
+     authorized Firebase `backend`/`all` Resend activation; or
+     `all-qualified-features` only for the coordinated Firebase `all` plus
+     Vercel founder-tenant release after its Turnstile and OpenAI prerequisites
+     pass,
    - `sms_provider`: the exact deployment-owned `none`, `twilio`, or `pingram`
      profile for the release,
    - `sms_configuration_generation`: the exact Pingram generation, or
@@ -1479,3 +1692,38 @@ Signed provider-specific last-known-good receipts remain a follow-up hardening
 item. Until they are automated, retain the exact provider deployment id, source
 SHA, target, timestamp, and post-launch result manually. Local `npx` commands
 are not an approved break-glass substitute.
+
+## RagnaKoK tenant workflow release
+
+The owner-approved `ragnakok-workflows` backend/all profile preserves Resend and
+keeps both global workflow/Commercial Change flags false. It sets only
+`TENANT_WORKFLOW_ORGANIZATION_ID=mm05366-sandbox`. The shared runtime guard
+admits this exact organization and rejects other organizations even if their
+tenant setting or a global flag is enabled. Production environment materialization
+rejects any other scoped organization or globally enabled workflow runtime.
+Provider readback must prove this scope on every active Function; safe-off and
+email-active readback reject a residual tenant override.
+
+Both frontend builds include the workflow presentation flag; the Studio remains
+restricted to a connected administrator whose tenant workflow setting is enabled.
+After the exact tagged release passes main CI and backend deployment/readback,
+update only the existing `organizations/mm05366-sandbox/settings/config` fields
+`eventOperatingSpineEnabled`, `commercialChangeAuthorityEnabled`, and
+`operationalStaffingAuthorityEnabled` to true.
+First verify `brandName=RagnaKoK Inc`, capture prior field presence/value and
+updateTime, use an updateTime precondition plus an explicit three-field update
+mask, then read back all three fields. A concurrent change requires a fresh review;
+never create a missing config document. Retain the activation receipt outside
+source control. Rollback restores those three prior values/presence with the same
+concurrency protection, then uses each target's last-known-good release.
+This activation does not publish workflow policies, migrate existing events,
+perform provider sends, or establish operator acceptance.
+
+
+RagnaKoK test access also admits operational staffing and Revenue Autopilot
+preparation through the same exact-tenant runtime guard. The staffing tenant
+setting remains required. Revenue policy configuration remains explicit; no
+outreach policy is invented or published during activation. The global scheduler
+receives no tenant scope and stays disabled, and the outbound-send gate stays
+off. Other tenants cannot use these scoped authorities. Existing explicit
+operator email actions retain their normal authorization and confirmations.

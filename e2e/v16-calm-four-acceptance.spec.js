@@ -489,15 +489,16 @@ test.describe("QuotePilot v0.16 Calm Four release acceptance", () => {
     await seedWorkspace(page, quotes);
   });
 
-  test("1. Calm Four remains the only primary navigation and secondary utilities stay reachable", async ({ page }) => {
+  test("1. the Calm Four baseline promotes Operations as the fifth primary destination while secondary utilities stay reachable", async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 1000 });
     await gotoWorkspace(page, "/app");
 
     const primary = page.getByRole("navigation", { name: "Primary workspace" });
-    await expect(primary.getByRole("button")).toHaveCount(4);
+    await expect(primary.getByRole("button")).toHaveCount(5);
     await expect(primary.getByRole("button").allTextContents()).resolves.toEqual([
       "Now",
       "Opportunities",
+      "Operations",
       "Clients",
       "Library"
     ]);
@@ -505,8 +506,10 @@ test.describe("QuotePilot v0.16 Calm Four release acceptance", () => {
       .toHaveAttribute("aria-current", "page");
     const now = page.locator(".ambient-now");
     await expect(now).toBeVisible({ timeout: 30_000 });
-    await expect(now.locator(".ambient-now__attention-label--desktop"))
-      .toHaveText("One thing deserves attention");
+    await expect(now.getByTestId("now-daily-brief"))
+      .toContainText(/follow-up .*needs you today/iu);
+    await expect(now.locator('[data-now-urgency-count="1"]')).toBeVisible();
+    await expect(now.getByTestId("now-temporal-horizon")).toBeVisible();
     await expect(now.getByRole("list", { name: "Upcoming events" }))
       .toContainText("Autumn Benefit Dinner");
     await captureV16Proof(page, "01-desktop-now.png");
@@ -521,6 +524,12 @@ test.describe("QuotePilot v0.16 Calm Four release acceptance", () => {
     await expect(page).toHaveURL(/\/app\/quotes$/u);
     await expect(primary.getByRole("button", { name: "Opportunities", exact: true }))
       .toHaveAttribute("aria-current", "page");
+    await expectNewQuoteVisualIntegrity(page);
+    await primary.getByRole("button", { name: "Operations", exact: true }).click();
+    await expect(page).toHaveURL(/\/app\/operations$/u);
+    await expect(primary.getByRole("button", { name: "Operations", exact: true }))
+      .toHaveAttribute("aria-current", "page");
+    await expect(page.getByTestId("operations-calendar")).toBeVisible();
     await expectNewQuoteVisualIntegrity(page);
     await primary.getByRole("button", { name: "Clients", exact: true }).click();
     await expect(page).toHaveURL(/\/app\/customers$/u);
@@ -538,10 +547,8 @@ test.describe("QuotePilot v0.16 Calm Four release acceptance", () => {
 
     const header = page.locator(".site-header");
     await expect(header.getByRole("button", { name: "Search", exact: true })).toBeVisible();
-    await expect(header.getByRole("button", { name: "Operations", exact: true })).toBeVisible();
-    await header.getByRole("button", { name: "Operations", exact: true }).click();
-    await expect(page.getByRole("menu", { name: "Operations" })).toContainText("Operations");
-    await header.getByRole("button", { name: "Operations", exact: true }).click();
+    await expect(header.getByRole("button", { name: "Operations", exact: true })).toHaveCount(1);
+    await expect(page.getByRole("menu", { name: "Operations", exact: true })).toHaveCount(0);
     const desktopToolsTrigger = header.getByRole("button", {
       name: "Workspace and tools",
       exact: true
@@ -556,6 +563,17 @@ test.describe("QuotePilot v0.16 Calm Four release acceptance", () => {
     await expect(desktopTools.getByRole("heading", { name: "Operations" })).toBeVisible();
     await expect(desktopTools.getByRole("heading", { name: "Administration" })).toBeVisible();
     await expect(desktopTools.getByRole("heading", { name: "Account" })).toBeVisible();
+    const desktopFrequentTools = desktopTools.locator('[data-workspace-tools-group="frequent"]');
+    await expect(desktopFrequentTools.getByRole("button")).toHaveCount(4);
+    await expect(desktopFrequentTools.getByRole("button", {
+      name: "Search customers and opportunities",
+      exact: true
+    })).toBeVisible();
+    await expect(desktopFrequentTools.getByRole("button", { name: /^Workflow,/u })).toBeVisible();
+    await expect(desktopFrequentTools.getByRole("button", { name: "Messages", exact: true })).toBeVisible();
+    await expect(desktopFrequentTools.getByRole("button", { name: "Pilot", exact: true })).toBeVisible();
+    await expect(desktopTools.locator('[data-workspace-tools-group="operations"]').getByRole("button"))
+      .toHaveText(["Operations", "Clear the Deck", "Staff"]);
     const desktopAdministrationToggle = desktopTools.getByRole("button", {
       name: "Show administration tools"
     });
@@ -566,6 +584,8 @@ test.describe("QuotePilot v0.16 Calm Four release acceptance", () => {
     await expect(desktopTools.getByRole("button", { name: "Integrations Ops" })).toBeVisible();
     await expect(desktopTools.getByRole("button", { name: "Import Studio" })).toBeVisible();
     await expect(desktopTools.getByRole("button", { name: "Session Diagnostics" })).toBeVisible();
+    await expect(desktopTools.locator("#workspace-tools-administration-actions").getByRole("button"))
+      .toHaveText(["Reporting Dashboard", "Integrations Ops", "Import Studio", "Session Diagnostics"]);
     await desktopTools.getByRole("button", { name: "Hide administration tools" }).click();
     await expect(desktopTools.getByRole("button", { name: "Reporting Dashboard" })).toHaveCount(0);
     await expect(desktopTools.getByRole("button", { name: "Sign Out" })).toBeVisible();
@@ -591,12 +611,13 @@ test.describe("QuotePilot v0.16 Calm Four release acceptance", () => {
     await primary.getByRole("button", { name: "Now", exact: true }).click();
     await expect(page).toHaveURL(/\/app$/u);
     await expect(page.locator(".ambient-now")).toBeVisible({ timeout: 30_000 });
-    await expect(primary.getByRole("button")).toHaveCount(4);
+    await expect(primary.getByRole("button")).toHaveCount(5);
     await expectNoHorizontalOverflow(page);
     await captureV16Proof(page, "13-mobile-now.png");
     const mobileDestinations = [
       ["Now", /\/app$/u],
       ["Opportunities", /\/app\/quotes$/u],
+      ["Operations", /\/app\/operations$/u],
       ["Clients", /\/app\/customers$/u],
       ["Library", /\/app\/catalog$/u]
     ];
@@ -625,7 +646,17 @@ test.describe("QuotePilot v0.16 Calm Four release acceptance", () => {
     await expect(tools.getByRole("heading", { name: "Frequent tools" })).toBeVisible();
     await expect(tools.getByRole("heading", { name: "Operations" })).toBeVisible();
     await expect(tools.getByRole("heading", { name: "Administration" })).toBeVisible();
-    await expect(tools.getByRole("button", { name: "Operations", exact: true })).toBeVisible();
+    const mobileFrequentTools = tools.locator('[data-workspace-tools-group="frequent"]');
+    await expect(mobileFrequentTools.getByRole("button")).toHaveCount(4);
+    await expect(mobileFrequentTools.getByRole("button", {
+      name: "Search customers and opportunities",
+      exact: true
+    })).toBeVisible();
+    await expect(mobileFrequentTools.getByRole("button", { name: /^Workflow,/u })).toBeVisible();
+    await expect(mobileFrequentTools.getByRole("button", { name: "Messages", exact: true })).toBeVisible();
+    await expect(mobileFrequentTools.getByRole("button", { name: "Pilot", exact: true })).toBeVisible();
+    await expect(tools.locator('[data-workspace-tools-group="operations"]').getByRole("button"))
+      .toHaveText(["Operations", "Clear the Deck", "Staff"]);
     const mobileAdministrationToggle = tools.locator(
       '[data-workspace-tools-administration-toggle="true"]'
     );
@@ -634,7 +665,8 @@ test.describe("QuotePilot v0.16 Calm Four release acceptance", () => {
     expect(await mobileAdministrationToggle.evaluate((button) => button.getBoundingClientRect().height))
       .toBeGreaterThanOrEqual(44);
     await mobileAdministrationToggle.click();
-    await expect(tools.getByRole("button", { name: "Reporting Dashboard" })).toBeVisible();
+    await expect(tools.locator("#workspace-tools-administration-actions").getByRole("button"))
+      .toHaveText(["Reporting Dashboard", "Integrations Ops", "Import Studio", "Session Diagnostics"]);
     await tools.getByRole("button", { name: "Hide administration tools" }).click();
     await expect(tools.getByRole("button", { name: "Reporting Dashboard" })).toHaveCount(0);
     await expect(tools.getByRole("button", { name: "Account settings" })).toBeVisible();
@@ -1048,7 +1080,7 @@ test.describe("QuotePilot v0.16 Calm Four release acceptance", () => {
     await expect(library).toBeVisible({ timeout: 30_000 });
     await expect(library).toHaveAttribute("data-library-context", "standalone");
     await expect(library).not.toContainText("Rivera Wedding");
-    await expect(library.locator('[data-library-record-kind="catalog-section"]')).toHaveCount(6);
+    await expect(library.locator('[data-library-record-kind="catalog-section"]')).toHaveCount(7);
     const standaloneCatalogRows = await library.locator('[data-library-record-kind="catalog-section"]')
       .evaluateAll((rows) => rows.map((row) => ({
         id: row.dataset.libraryRecordId,
@@ -1058,7 +1090,7 @@ test.describe("QuotePilot v0.16 Calm Four release acceptance", () => {
     await page.setViewportSize({ width: 390, height: 844 });
     await captureV16Proof(page, "18-mobile-library-standalone.png");
     await page.setViewportSize({ width: 1440, height: 1000 });
-    for (const sectionId of ["packages", "menu", "addons", "rentals", "templates", "pricing"]) {
+    for (const sectionId of ["packages", "menu", "addons", "rentals", "templates", "pricing", "rules"]) {
       await expect(library.locator(`[data-library-record-id="${sectionId}"]`)).toBeVisible();
     }
 
@@ -1128,7 +1160,8 @@ test.describe("QuotePilot v0.16 Calm Four release acceptance", () => {
     const clients = page.locator(".ambient-clients");
     await expect(clients).toBeVisible({ timeout: 30_000 });
     await expect(clients).toHaveAttribute("data-ambient-clients-state", /success|ready/u);
-    await expect(clients).toContainText("Relationships, in context.");
+    await expect(clients.getByText("Client relationships", { exact: true })).toBeVisible();
+    await expect(clients.getByRole("heading", { name: "Clients", exact: true })).toBeVisible();
     await expect(clients).toContainText("Recorded contact details");
     await expect(clients).toContainText("Avery & Jordan Rivera");
     await expect(clients).toContainText("rivera@example.test");
@@ -1232,7 +1265,7 @@ test.describe("QuotePilot v0.16 Calm Four release acceptance", () => {
 
     const salesPort = Number(process.env.PLAYWRIGHT_SALES_PORT || 4176);
     await page.goto(`http://127.0.0.1:${salesPort}/app/catalog`);
-    await expect(page.getByText("Business Setup Center", { exact: true })).toBeVisible();
+    await expect(page.locator("[data-library-readonly]")).toContainText("An administrator manages changes and publishing");
     await expect(page.locator("main")).toHaveCount(1);
     await expect(page.locator("#catalog-admin-title")).toHaveCount(0);
 

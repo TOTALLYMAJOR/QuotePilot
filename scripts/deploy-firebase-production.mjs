@@ -5,7 +5,10 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { validateFirebaseToolsBinary } from "./firebase-tools-binary.mjs";
-import { verifyDirectProductionReleaseEvidence } from "./production-release-evidence.mjs";
+import {
+  validateProductionReleaseProfileTarget,
+  verifyDirectProductionReleaseEvidence
+} from "./production-release-evidence.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const PROJECT_ID = "tonicatering";
@@ -13,25 +16,86 @@ const FUNCTIONS_ENV_PATH = path.join(ROOT, "functions", `.env.${PROJECT_ID}`);
 export const FUNCTIONS_DEPLOY_BATCH_SIZE = 35;
 export const FUNCTIONS_DEPLOY_PAUSE_MS = 65_000;
 
-const SAFE_OFF_RUNTIME_EXPECTED = Object.freeze({
-  NOTIFICATIONS_EMAIL_PROVIDER: "none",
+const PRODUCTION_RUNTIME_BASE = Object.freeze({
   NOTIFICATIONS_SMS_PROVIDER: "none",
   STRIPE_MODE: "live",
   COMMERCIAL_CHANGE_AUTHORITY_ENABLED: "false",
+  EVENT_OPERATING_SPINE_ENABLED: "false",
+  TENANT_WORKFLOW_ORGANIZATION_ID: "",
   OPERATIONAL_STAFFING_AUTHORITY_ENABLED: "false",
+  INVENTORY_AUTHORITY_ENABLED: "false",
   REVENUE_AUTOPILOT_ENABLED: "false",
   REVENUE_AUTOPILOT_SENDS_ENABLED: "false",
   BUYER_ACCESS_ENABLED: "false",
-  BUYER_ACCESS_STRIPE_MODE: "test"
+  BUYER_ACCESS_STRIPE_MODE: "test",
+  INQUIRY_SHOWCASE_ENABLED: "false",
+  INTENT_PARSER_ENABLED: "false",
+  INTENT_PARSER_PROVIDER: "none",
+  INTENT_PARSER_MODEL: ""
 });
 
-const SAFE_OFF_RUNTIME_FORBIDDEN = Object.freeze([
+const PRODUCTION_RUNTIME_EXPECTED = Object.freeze({
+  "safe-off": Object.freeze({
+    ...PRODUCTION_RUNTIME_BASE,
+    NOTIFICATIONS_EMAIL_PROVIDER: "none"
+  }),
+  "email-active": Object.freeze({
+    ...PRODUCTION_RUNTIME_BASE,
+    NOTIFICATIONS_EMAIL_PROVIDER: "resend"
+  }),
+  "ragnakok-workflows": Object.freeze({
+    ...PRODUCTION_RUNTIME_BASE,
+    NOTIFICATIONS_EMAIL_PROVIDER: "resend",
+    TENANT_WORKFLOW_ORGANIZATION_ID: "mm05366-sandbox"
+  }),
+  "ragnakok-operations": Object.freeze({
+    ...PRODUCTION_RUNTIME_BASE,
+    NOTIFICATIONS_EMAIL_PROVIDER: "resend",
+    TENANT_WORKFLOW_ORGANIZATION_ID: "mm05366-sandbox",
+    COMMERCIAL_CHANGE_AUTHORITY_ENABLED: "true",
+    EVENT_OPERATING_SPINE_ENABLED: "true",
+    OPERATIONAL_STAFFING_AUTHORITY_ENABLED: "true",
+    INVENTORY_AUTHORITY_ENABLED: "true"
+  }),
+  "all-qualified-features": Object.freeze({
+    ...PRODUCTION_RUNTIME_BASE,
+    NOTIFICATIONS_EMAIL_PROVIDER: "resend",
+    TENANT_WORKFLOW_ORGANIZATION_ID: "mm05366-sandbox",
+    COMMERCIAL_CHANGE_AUTHORITY_ENABLED: "true",
+    EVENT_OPERATING_SPINE_ENABLED: "true",
+    OPERATIONAL_STAFFING_AUTHORITY_ENABLED: "true",
+    INVENTORY_AUTHORITY_ENABLED: "true",
+    INQUIRY_SHOWCASE_ENABLED: "true",
+    INQUIRY_TURNSTILE_HOSTNAMES: "quotepilot.mbmapps.com,tonicatering.web.app",
+    INTENT_PARSER_ENABLED: "true",
+    INTENT_PARSER_PROVIDER: "openai",
+    INTENT_PARSER_MODEL: "gpt-5-mini",
+    INTENT_PARSER_ORGANIZATION_ID: "mm05366-sandbox"
+  })
+});
+
+const ALWAYS_FORBIDDEN_RUNTIME = Object.freeze([
   "TWILIO_ACCOUNT_SID",
   "TWILIO_MESSAGING_SERVICE_SID",
   "NOTIFICATIONS_OWNER_PHONE",
   "NOTIFICATIONS_OWNER_SMS_CONSENT",
   "BUYER_ACCESS_ALLOWED_EMAILS",
-  "BUYER_ACCESS_TURNSTILE_HOSTNAMES"
+  "BUYER_ACCESS_TURNSTILE_HOSTNAMES",
+  "INQUIRY_TURNSTILE_SECRET",
+  "INQUIRY_RATE_LIMIT_SECRET",
+  "INTENT_PARSER_OPENAI_KEY",
+  "INTENT_PARSER_ANTHROPIC_KEY",
+  "INTENT_PARSER_AUTO_ROUTE"
+]);
+const PROFILE_DISABLED_RUNTIME = Object.freeze([
+  "INQUIRY_TURNSTILE_HOSTNAMES",
+  "INTENT_PARSER_ORGANIZATION_ID"
+]);
+const ALL_QUALIFIED_REQUIRED_SECRET_METADATA = Object.freeze([
+  "INQUIRY_TURNSTILE_SECRET",
+  "INQUIRY_RATE_LIMIT_SECRET",
+  "INTENT_PARSER_OPENAI_KEY",
+  "RESEND_API_KEY"
 ]);
 
 export function listExpectedFunctionIds(source) {
@@ -67,7 +131,16 @@ export function functionsDeployOutputHasFailure(output) {
     || /functions deploy had errors/iu.test(value);
 }
 
-export function validateProductionFunctionsReadback(response, expectedFunctionIds) {
+export function validateProductionFunctionsReadback(
+  response,
+  expectedFunctionIds,
+  releaseProfileValue = "safe-off"
+) {
+  const releaseProfile = validateProductionReleaseProfileTarget(
+    releaseProfileValue,
+    releaseProfileValue === "all-qualified-features" ? "firebase-all" : "firebase-backend"
+  );
+  const expectedRuntime = PRODUCTION_RUNTIME_EXPECTED[releaseProfile];
   if (response?.status !== "success" || !Array.isArray(response?.result)) {
     throw new Error("Firebase production Functions provider readback is missing or malformed.");
   }
@@ -94,18 +167,27 @@ export function validateProductionFunctionsReadback(response, expectedFunctionId
       throw new Error(`Firebase production Functions provider state is invalid for ${id || "an unknown function"}.`);
     }
     const runtime = entry.environmentVariables || {};
-    for (const [name, expectedValue] of Object.entries(SAFE_OFF_RUNTIME_EXPECTED)) {
+    for (const [name, expectedValue] of Object.entries(expectedRuntime)) {
       if (String(runtime[name] ?? "").trim() !== expectedValue) {
-        throw new Error(`Firebase production Functions readback does not prove safe-off ${name} for ${id}.`);
+        throw new Error(
+          `Firebase production Functions readback does not prove ${releaseProfile} ${name} for ${id}.`
+        );
       }
     }
-    for (const name of SAFE_OFF_RUNTIME_FORBIDDEN) {
+    for (const name of ALWAYS_FORBIDDEN_RUNTIME) {
       if (String(runtime[name] ?? "").trim()) {
         throw new Error(`Firebase production Functions readback retains disabled runtime residue ${name} for ${id}.`);
       }
     }
+    if (releaseProfile !== "all-qualified-features") {
+      for (const name of PROFILE_DISABLED_RUNTIME) {
+        if (String(runtime[name] ?? "").trim()) {
+          throw new Error(`Firebase production Functions readback retains disabled runtime residue ${name} for ${id}.`);
+        }
+      }
+    }
   }
-  return Object.freeze({ functionCount: entries.length, profile: "safe-off" });
+  return Object.freeze({ functionCount: entries.length, profile: releaseProfile });
 }
 
 function readArg(name) {
@@ -189,20 +271,57 @@ function parseJsonOutput(value, label) {
   }
 }
 
+export function isEnabledProductionSecretVersion(version, expectedName) {
+  const secret = version?.secret;
+  const observedName = typeof secret === "string"
+    ? secret.split("/").at(-1)
+    : secret?.name;
+  return observedName === expectedName && version?.state === "ENABLED";
+}
+
+export function validateProductionSecretMetadata(response, expectedName) {
+  const versions = response?.status === "success" && Array.isArray(response?.result?.secrets)
+    ? response.result.secrets
+    : [];
+  if (!versions.some((version) => isEnabledProductionSecretVersion(version, expectedName))) {
+    throw new Error(
+      `Firebase production Secret Manager metadata has no enabled version for ${expectedName}.`
+    );
+  }
+  return Object.freeze({ name: expectedName, state: "ENABLED" });
+}
+
+function validateAllQualifiedSecretPrerequisites(firebaseCliPath) {
+  return ALL_QUALIFIED_REQUIRED_SECRET_METADATA.map((name) => {
+    const response = parseJsonOutput(capture(firebaseCliPath, [
+      "functions:secrets:get",
+      name,
+      "--project",
+      PROJECT_ID,
+      "--json"
+    ]), `Firebase production Secret Manager metadata for ${name}`);
+    return validateProductionSecretMetadata(response, name);
+  });
+}
+
 function readExpectedFunctionIds() {
   return listExpectedFunctionIds(
     fs.readFileSync(path.join(ROOT, "functions", "index.js"), "utf8")
   );
 }
 
-function verifyProductionFunctions(firebaseCliPath, expectedFunctionIds) {
+function verifyProductionFunctions(firebaseCliPath, expectedFunctionIds, releaseProfile) {
   const response = parseJsonOutput(capture(firebaseCliPath, [
     "functions:list",
     "--project",
     PROJECT_ID,
     "--json"
   ]), "Firebase production Functions provider readback");
-  const verified = validateProductionFunctionsReadback(response, expectedFunctionIds);
+  const verified = validateProductionFunctionsReadback(
+    response,
+    expectedFunctionIds,
+    releaseProfile
+  );
   console.log(`Verified ${verified.functionCount} active Firebase Functions on the ${verified.profile} profile.`);
 }
 
@@ -315,12 +434,13 @@ const scopes = {
 };
 export async function main() {
   validateArgs();
-  if (readArg("--release-profile") !== "safe-off") {
-    throw new Error('Firebase production deployment requires --release-profile "safe-off".');
-  }
   const scope = readArg("--scope");
   const selected = scopes[scope];
   if (!selected) throw new Error("--scope must be one of: hosting, backend, all.");
+  const releaseProfile = validateProductionReleaseProfileTarget(
+    readArg("--release-profile"),
+    `firebase-${scope}`
+  );
   if (readArg("--confirm") !== selected.confirmation) {
     throw new Error(`Production deployment requires --confirm "${selected.confirmation}".`);
   }
@@ -338,12 +458,15 @@ export async function main() {
     deploymentRunId: process.env.GITHUB_RUN_ID,
     token: process.env.GITHUB_TOKEN || process.env.GH_TOKEN,
     approvalMode: process.env.RELEASE_APPROVAL_MODE,
-    releaseProfile: readArg("--release-profile"),
+    releaseProfile,
     soloOperatorIds: process.env.RELEASE_SOLO_OPERATOR_IDS,
     root: ROOT
   });
 
   await verify(validateWorkflowContext());
+  if (releaseProfile === "all-qualified-features") {
+    validateAllQualifiedSecretPrerequisites(firebaseCliPath);
+  }
   run("npm", ["run", "check:env"]);
   if (selected.functions) validateFunctionsEnvironment();
   if (selected.build) run("npm", ["run", "build"]);
@@ -387,7 +510,7 @@ export async function main() {
   ]);
   const expectedFunctionIds = readExpectedFunctionIds();
   await deployFunctionBatches(firebaseCliPath, expectedFunctionIds, readArg("--release-sha"));
-  verifyProductionFunctions(firebaseCliPath, expectedFunctionIds);
+  verifyProductionFunctions(firebaseCliPath, expectedFunctionIds, releaseProfile);
 }
 
 if (

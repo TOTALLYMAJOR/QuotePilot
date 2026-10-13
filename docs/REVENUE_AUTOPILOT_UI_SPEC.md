@@ -1,5 +1,7 @@
 # Revenue Autopilot UI Specification
 
+Last updated: 2026-09-10 15:09:08 CDT
+
 Status: Accepted for source implementation; runtime and sends remain gated
 Date: August 9, 2026
 Owners: QuotePilot maintainers
