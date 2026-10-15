@@ -11,6 +11,8 @@
     "plan:task": "node ./scripts/task-orchestration-plan.mjs",
     "evidence:task": "node ./scripts/record-development-evidence.mjs",
     "evidence:index": "node ./scripts/summarize-development-evidence.mjs",
+    "evidence:visual": "node ./scripts/build-visual-evidence-bundle.mjs",
+    "test:visual-evidence": "node --test scripts/__tests__/build-visual-evidence-bundle.test.mjs",
     "status:product": "node ./scripts/product-truth-observability.mjs --mode status",
     "check:product-drift": "node ./scripts/product-truth-observability.mjs --mode gate",
     "check:product-intelligence": "node ./scripts/check-product-intelligence.mjs",

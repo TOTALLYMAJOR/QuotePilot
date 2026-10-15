@@ -1,6 +1,23 @@
 # Version Control Playbook
 
-Last updated: 2026-10-12 03:41:06 CDT
+Last updated: 2026-10-15 15:40:00 CDT
+
+## Successful visual evidence retention (PR 154 replacement)
+
+The existing browser lane captures the synthetic staff-action-feedback cohort
+at 390, 768, and 1440 pixels into a new `.cache/playwright-evidence/` directory.
+No earlier screenshots are deleted or reused. `npm run test:visual-evidence`
+tests the bundler; `npm run evidence:visual` binds its PNG bytes and Playwright
+JSON report to the clean checkout SHA, with SHA-256 hashes and run identity.
+Skipped, flaky, failed, empty, stale, dirty-checkout, mismatched-SHA, symlink,
+and overwrite inputs fail closed. Partial output after an I/O failure is not a
+valid bundle and must not be published; choose a fresh output for recovery.
+
+Successful CI retains `quotepilot-visual-evidence-<checkout SHA>-<attempt>` for
+90 days. The PR merge checkout SHA is distinct from the recorded head/base
+SHAs. Existing failure reports remain available. This is synthetic CI evidence,
+not deployed pixels, provider confirmation, human acceptance, or business value.
+The old PR stays open pending an explicit owner closure instruction.
 
 ## Goals
 - Keep `main` stable and deployable.

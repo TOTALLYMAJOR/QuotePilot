@@ -285,6 +285,36 @@ jobs:
           VITE_PILOT_MARGINS_ENABLED: "true"
           VITE_PILOT_DECISION_ROOM_ENABLED: "true"
 
+      - name: Test visual evidence retention
+        run: npm run test:visual-evidence
+
+      - name: Capture isolated visual evidence cohort
+        run: |
+          test ! -e .cache/playwright-evidence
+          mkdir -p .cache/playwright-evidence
+          npm run test:e2e -- e2e/staff-app-action-feedback.spec.js --project=chromium-admin --retries=0 --reporter=line,json
+        env:
+          PLAYWRIGHT_JSON_OUTPUT_NAME: .cache/playwright-evidence/results.json
+          PLAYWRIGHT_VISUAL_EVIDENCE_DIR: .cache/playwright-evidence/captures
+          VITE_CUSTOMER_CENTERED_WORKSPACE_ENABLED: "true"
+          VITE_AMBIENT_UI_ENABLED: "true"
+          VITE_PILOT_NOW_ENABLED: "true"
+
+      - name: Build exact-checkout visual evidence bundle
+        run: npm run evidence:visual
+        env:
+          VISUAL_EVIDENCE_PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || '' }}
+          VISUAL_EVIDENCE_PR_BASE_SHA: ${{ github.event.pull_request.base.sha || '' }}
+
+      - name: Retain successful visual evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: quotepilot-visual-evidence-${{ github.sha }}-${{ github.run_attempt }}
+          path: .cache/visual-evidence/
+          include-hidden-files: true
+          retention-days: 90
+          if-no-files-found: error
+
       - name: Upload Playwright report (failure)
         if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

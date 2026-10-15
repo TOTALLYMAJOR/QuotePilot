@@ -1,10 +1,15 @@
 # Changelog
 
-Last updated: 2026-10-12 03:41:06 CDT
+Last updated: 2026-10-15 15:40:00 CDT
 
 All notable project changes are documented in this file.
 
 ## Unreleased — Current candidate refinements
+
+- Prepare the narrow PR #154 replacement: retain successful synthetic visual
+  evidence for the exact clean CI checkout, with hashed captures and reporter
+  bytes. Reject incomplete cohorts and preserve prior evidence. No hosted,
+  production, human-acceptance, or outcome proof is implied.
 
 - Make Firebase candidate closeout tolerate bounded provider convergence
   without weakening readback. Exact SHA
