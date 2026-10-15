@@ -35,6 +35,7 @@ vi.mock("../QuoteDecisionDebtPanel", () => ({
 }));
 
 import { QuoteHistoryView } from "../QuoteHistoryModal";
+import { QuoteHistoryView as LegacyQuoteHistoryView } from "../LegacyQuoteHistoryModal";
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -131,6 +132,22 @@ afterEach(() => {
 });
 
 describe("Quote History Commercial Dependency integration", () => {
+  test.each([QuoteHistoryView, LegacyQuoteHistoryView])("refreshes an open history on focus without persisting expiry", async (View) => {
+    mocks.getQuoteHistory.mockResolvedValue({ source: "local", quotes: [QUOTE] });
+    act(() => root.render(<View open presentation="embedded" organizationId="org-one" currentUserRole="admin" focusQuoteId="quote-42" />));
+    await settle();
+    expect(mocks.getQuoteHistory).toHaveBeenLastCalledWith(expect.objectContaining({ persistExpiredStatuses: true }));
+    mocks.getQuoteHistory.mockResolvedValue({ source: "local", quotes: [{ ...QUOTE, event: { ...QUOTE.event, name: "Updated picnic" } }] });
+    await act(async () => window.dispatchEvent(new Event("focus")));
+    await settle();
+    expect(mocks.getQuoteHistory).toHaveBeenLastCalledWith({ organizationId: "org-one", persistExpiredStatuses: false });
+    expect(container.textContent).toContain("Updated picnic");
+    const reads = mocks.getQuoteHistory.mock.calls.length;
+    act(() => root.render(<View open={false} organizationId="org-one" currentUserRole="admin" />));
+    await act(async () => window.dispatchEvent(new Event("focus")));
+    expect(mocks.getQuoteHistory).toHaveBeenCalledTimes(reads);
+  });
+
   test("preserves the exact accepted revision and receipt in the administration handoff", async () => {
     const onOpenQuoteAdministration = vi.fn();
     const acceptedQuote = {

@@ -1,6 +1,6 @@
 # Release and Experiment Ledger
 
-Last updated: 2026-10-11 22:57:06 CDT
+Last updated: 2026-10-15 15:40:00 CDT
 
 ## LED-022 — Quote-to-Confidence local candidate
 
@@ -93,6 +93,7 @@ do not own.
 | `LED-022` | Quote-to-Confidence isolated local candidate; flags off | Clear next actions, exact handoffs and operator-reviewed learning reduce repeated work without transferring authority. | `MET-19`, `MET-20`, `MET-21` | `GRD-01`, `GRD-04`, `GRD-07`, `GRD-09`, `GRD-16` | Local evidence only. Release integration now defers closeout actuals until supporting detail is opened and keeps the enabled learning review as the single actuals consumer; focused tests also preserve deterministic Inventory draft expiry and App/Legacy margin-comparison parity. The 14-day `BASE-09` remains uncollected; fewer than 50 eligible observations are informational. No hosted, human, or outcome evidence is established. | `no_outcome_claim` |
 | `EXP-001` | Proposed owner-operator baseline and governed workflow comparison | QuotePilot reduces time from intent to reviewable quote and operating plan by 30% without increasing material corrections. | `MET-03`, `MET-07`, `MET-12`, `MET-16` | `GRD-03`, `GRD-04`, `GRD-07`, `GRD-16` | Protocol exists in Delivery Planning; baseline collection has not occurred. | `planned` |
 | `EXP-002` | Proposed accepted-to-operational-handoff observation | Domain-specific currentness evidence exposes stale consumers early enough to reduce late operational discovery. | `MET-11`, `MET-12` | `GRD-06`, `GRD-07`, `GRD-15` | Required signal `SIG-011` is specified but not implemented. | `planned` |
+| `LED-023` | Unreleased PR 90 replacement; local candidate only | Returning staff can see refreshed Quote History and Reporting data with less manual refresh work, without changing commercial facts. | `MET-04` | `GRD-01`, `GRD-04`, `GRD-06`, `GRD-07` | Local focus/visibility, exact-quote, closed-view and read-only expiry regressions. No hosted, human, baseline, or outcome evidence. | `no_outcome_claim` |
 
 Historical entries above are reconstruction aids, not retroactive experiments.
 They do not assert that exposure was randomized, fully bound to users, or caused

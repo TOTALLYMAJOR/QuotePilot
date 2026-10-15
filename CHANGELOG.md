@@ -1,10 +1,16 @@
 # Changelog
 
-Last updated: 2026-10-12 03:41:06 CDT
+Last updated: 2026-10-15 15:40:00 CDT
 
 All notable project changes are documented in this file.
 
 ## Unreleased — Current candidate refinements
+
+- Prepare the narrow PR #90 replacement: open Quote History and Reporting views
+  refresh when the visible window regains focus. Paired browser events are
+  deduplicated; active loads and guarded conversations/conversions are left
+  alone. Automatic History reads do not persist expired statuses. Existing
+  quote identity, filters, commercial actions, and visual design are unchanged.
 
 - Make Firebase candidate closeout tolerate bounded provider convergence
   without weakening readback. Exact SHA
