@@ -19,7 +19,8 @@ const HISTORY_KEY = "quoteWizard.quoteHistory";
 const CATALOG_KEYS = ["quoteWizard.catalog", `quoteWizard.catalog.${ORGANIZATION_ID}`];
 const TASK_STORAGE_PREFIX = "quotepilot.workspace-task-journey.v1:";
 const SEED_MARKER = "quotepilot.e2e.action-feedback-seeded";
-const PROOF_DIRECTORY = "output/playwright/staff-app-action-feedback";
+const PROOF_DIRECTORY = process.env.PLAYWRIGHT_VISUAL_EVIDENCE_DIR
+  || "output/playwright/staff-app-action-feedback";
 const SAFE_REQUEST_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 
 const WORKFLOW_FOCUS = Object.freeze({

@@ -1,10 +1,20 @@
 # Changelog
 
-Last updated: 2026-10-15 15:40:00 CDT
+Last updated: 2026-10-16 05:26:28 CDT
 
 All notable project changes are documented in this file.
 
 ## Unreleased — Current candidate refinements
+
+- Isolate Product Intelligence test subprocesses from the enclosing PR's
+  declaration. Synthetic analytics fixtures no longer inherit an unrelated
+  `not_applicable` or malformed body. Explicit declaration tests and the real
+  CI enforcement remain unchanged; regression tests also preserve parent inputs.
+
+- Prepare the narrow PR #154 replacement: retain successful synthetic visual
+  evidence for the exact clean CI checkout, with hashed captures and reporter
+  bytes. Reject incomplete cohorts and preserve prior evidence. No hosted,
+  production, human-acceptance, or outcome proof is implied.
 
 - Prepare the narrow PR #90 replacement: open Quote History and Reporting views
   refresh when the visible window regains focus. Paired browser events are

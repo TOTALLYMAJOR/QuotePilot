@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test } from "vitest";
+import { afterEach, describe, expect, test, vi } from "vitest";
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
@@ -23,6 +23,7 @@ const PRODUCT_FILES = [
 const fixtures = [];
 
 afterEach(() => {
+  vi.unstubAllEnvs();
   for (const fixture of fixtures.splice(0)) {
     fs.rmSync(fixture, { recursive: true, force: true });
   }
@@ -58,7 +59,13 @@ function runCheck(root, { changedFiles = [], env = {}, staticOnly = true } = {})
   return spawnSync(process.execPath, args, {
     cwd: REPOSITORY_ROOT,
     encoding: "utf8",
-    env: { ...process.env, ...env }
+    env: {
+      ...process.env,
+      // Synthetic changes use their own PR declaration, not the enclosing CI PR.
+      PRODUCT_INTELLIGENCE_PR_ENFORCE: "false",
+      PRODUCT_INTELLIGENCE_PR_BODY: "",
+      ...env
+    }
   });
 }
 
@@ -70,6 +77,29 @@ function replaceInFixture(root, relativePath, from, to) {
 }
 
 describe("product intelligence governance", () => {
+  test.each([
+    ["not_applicable", "- disposition: not_applicable\n- If `not_applicable`, rationale: CI evidence retention only."],
+    ["malformed", "Unrelated parent PR description"]
+  ])("isolates analytics fixtures from inherited %s PR metadata", (_label, body) => {
+    vi.stubEnv("PRODUCT_INTELLIGENCE_PR_ENFORCE", "true");
+    vi.stubEnv("PRODUCT_INTELLIGENCE_PR_BODY", body);
+
+    const result = runCheck(makeFixture(), {
+      staticOnly: false,
+      changedFiles: [
+        "src/lib/productAnalyticsCore.js",
+        "docs/PRODUCT_INTELLIGENCE.md",
+        "docs/product-intelligence/event-schema.json",
+        "docs/product-intelligence/SUCCESS_METRICS.md",
+        "docs/product-intelligence/RELEASE_EXPERIMENT_LEDGER.md"
+      ]
+    });
+
+    expect(result.status, result.stderr).toBe(0);
+    expect(process.env.PRODUCT_INTELLIGENCE_PR_ENFORCE).toBe("true");
+    expect(process.env.PRODUCT_INTELLIGENCE_PR_BODY).toBe(body);
+  });
+
   test("accepts the current canonical product-intelligence corpus", () => {
     const result = runCheck(REPOSITORY_ROOT);
 
