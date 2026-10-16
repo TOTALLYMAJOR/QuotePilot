@@ -1,6 +1,6 @@
 # Version Control Playbook
 
-Last updated: 2026-10-15 15:40:00 CDT
+Last updated: 2026-10-15 20:30:29 CDT
 
 ## Successful visual evidence retention (PR 154 replacement)
 
@@ -18,6 +18,12 @@ Successful CI retains `quotepilot-visual-evidence-<checkout SHA>-<attempt>` for
 SHAs. Existing failure reports remain available. This is synthetic CI evidence,
 not deployed pixels, provider confirmation, human acceptance, or business value.
 The old PR stays open pending an explicit owner closure instruction.
+
+Product Intelligence test subprocesses isolate their synthetic changes from
+the enclosing CI PR's `PRODUCT_INTELLIGENCE_PR_ENFORCE` and
+`PRODUCT_INTELLIGENCE_PR_BODY` values. Declaration-specific tests explicitly
+provide both inputs, and regression tests preserve the parent environment.
+The actual `lane:core` governance check still enforces the real PR description.
 
 ## Goals
 - Keep `main` stable and deployable.
