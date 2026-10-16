@@ -79,7 +79,7 @@ describe("Ambient Opportunities host integration", () => {
   test("clears cross-organization quote and read evidence before starting the requested read", () => {
     const loadSource = sourceBetween(
       quoteHistorySource,
-      "const load = async () => {",
+      "const load = async ({ persistExpiry = true } = {}) => {",
       "useEffect(() => {\n    if (!open) return;\n    let alive = true;"
     );
     const resetIndex = loadSource.indexOf("setState((prev) => (");

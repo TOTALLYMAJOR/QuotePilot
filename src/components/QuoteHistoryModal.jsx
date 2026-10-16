@@ -35,6 +35,7 @@ import {
   updateQuoteStatus
 } from "../lib/quoteStore";
 import { useWorkspaceRouteHeadingFocus } from "../hooks/useWorkspaceRouteHeadingFocus";
+import { useRefreshOnWindowFocus } from "./useRefreshOnWindowFocus";
 import { navigateBrowser } from "../hooks/useBrowserLocation";
 import {
   useOptionalWorkspaceNavigation,
@@ -1102,6 +1103,11 @@ export function QuoteHistoryView({
   const onCloseRef = useRef(onClose);
   const onCloseBlockedRef = useRef(onCloseBlocked);
   const quoteHistoryCloseGuardRef = useRef(buildQuoteHistoryCloseGuard());
+  const quickUpdatesGuardRef = useRef(null);
+  const handleQuickUpdatesGuardChange = useCallback((guard) => {
+    quickUpdatesGuardRef.current = guard;
+    onQuickUpdatesGuardChange?.(guard);
+  }, [onQuickUpdatesGuardChange]);
   const reportedPerformanceStagesRef = useRef(new Set());
 
   const quoteHistoryCloseGuard = buildQuoteHistoryCloseGuard({
@@ -1343,7 +1349,7 @@ export function QuoteHistoryView({
     allowInProgressRecovery
   });
 
-  const load = async () => {
+  const load = async ({ persistExpiry = true } = {}) => {
     const generation = loadGenerationRef.current + 1;
     loadGenerationRef.current = generation;
     const requestedFocusQuoteId = String(focusQuoteId || "").trim();
@@ -1376,7 +1382,7 @@ export function QuoteHistoryView({
     try {
       const result = await getQuoteHistory({
         organizationId: requestedOrganizationId,
-        persistExpiredStatuses: getQuoteActionPermissions(currentUserRole).role === "admin"
+        persistExpiredStatuses: persistExpiry && getQuoteActionPermissions(currentUserRole).role === "admin"
       });
       if (generation !== loadGenerationRef.current) return null;
       const targetFound = targetingSavedQuote
@@ -1424,6 +1430,15 @@ export function QuoteHistoryView({
       return null;
     }
   };
+
+  useRefreshOnWindowFocus({
+    enabled: open && !state.loading && !quoteHistoryCloseGuard.blocked,
+    onRefresh: () => {
+      const guard = quickUpdatesGuardRef.current;
+      if (guard?.blocked || guard?.dirty || guard?.busy) return;
+      return load({ persistExpiry: false });
+    }
+  });
 
   useEffect(() => {
     if (!open) return;
@@ -3167,7 +3182,7 @@ export function QuoteHistoryView({
                 onOpenQuickUpdatesLibrary={String(currentUserRole || "").trim().toLowerCase() === "admin"
                   ? onOpenQuickUpdatesLibrary
                   : undefined}
-                onQuickUpdatesGuardChange={onQuickUpdatesGuardChange}
+                onQuickUpdatesGuardChange={handleQuickUpdatesGuardChange}
                 onOpenWorkflow={onOpenWorkflow}
                 onOpenCalendar={scheduleAvailable && typeof onOpenSchedule === "function"
                   ? () => onOpenSchedule(focusedQuote.id)

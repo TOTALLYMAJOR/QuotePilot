@@ -1,6 +1,16 @@
 # QuotePilot Product Intelligence System
 
-Last updated: 2026-10-11 23:14:06 CDT
+Last updated: 2026-10-15 15:40:00 CDT
+
+## Focus-return freshness candidate
+
+`LED-023` records the bounded PR #90 replacement for existing Quote History and
+Reporting views. Staff returning from another tab get a fresh read without a
+new commercial action or automatic expiry persistence. The intended benefit is
+less manual refresh work (`OUT-04`, closest diagnostic `MET-04`); neither is
+measured here. Tenant scope, historical truth and evidence honesty remain
+governed by `GRD-01`, `GRD-04`, `GRD-06`, and `GRD-07`. Local regression tests
+are not hosted, human-comprehension, or catering-outcome evidence.
 
 ## Quote-to-Confidence measurement extension
 
