@@ -1,0 +1,69 @@
+SOURCE-AVAILABLE NON-COMMERCIAL & PROPRIETARY LICENSE
+
+Copyright (c) 2026 Michael Major (MBMapps) / QuotePilot. All rights reserved.
+
+1. PERMISSION AND GRANT OF RIGHTS
+Subject to the terms and conditions of this License, the Copyright Holder hereby grants you a personal, non-exclusive, non-transferable, and non-sublicensable license to view, download, modify, and execute the Software solely forHere is a custom, strict **Source-Available Non-Commercial & Anti-Competition License**. It gives users free access to view, download, run, and self-host the tool for personal or internal evaluation, but legally locks down all commercial, resale, and competitive rights strictly for you.
+
+Replace all text in your GitHub editor with the following:
+
+```text
+SOURCE-AVAILABLE NON-COMMERCIAL & PROPRIETARY LICENSE
+
+Copyright (c) 2026 Michael Major / QuotePilot. All rights reserved.
+
+1. PERMISSION AND GRANT OF RIGHTS
+Subject to the terms and conditions of this License, the Copyright Holder hereby grants you a personal, non-exclusive, non-transferable, and non-sublicensable license to view, download, modify, and execute the Software solely for:
+  (a) Personal, non-commercial use;
+  (b) Educational, testing, or evaluation purposes; or
+  (c) Non-profit or internal administrative execution without financial gain.
+
+2. COMMERCIAL RESTRICTIONS & RESERVATION OF RIGHTS
+The Copyright Holder strictly retains all commercial, financial, and monetization rights to the Software. You are EXPLICITLY PROHIBITED from doing any of the following without a separate, written commercial agreement signed by the Copyright Holder:
+  (a) Selling, reselling, renting, leasing, sublicensing, or distributing the Software or any portion thereof;
+  (b) Offering or operating the Software as a paid service, hosted solution, Software-as-a-Service (SaaS), Managed Service Provider (MSP) offering, or cloud deployment for third parties;
+  (c) Integrating the Software into any proprietary or commercial product, service, or commercial offering;
+  (d) Utilizing the Software, its source code, or derivative works to train, fine-tune, or build competing software products or commercial AI models.
+
+3. DERIVATIVE WORKS AND CONTRIBUTIONS
+Any modifications, derivatives, or enhancements created by you remain subject to the commercial restrictions of this License. You may not distribute modified versions of the Software under any other terms or open-source licenses.
+
+4. TRADEMARKS & BRANDING
+This License does not grant any rights to use the trade names, trademarks, service marks, logos, or product names of the Copyright Holder or "QuotePilot."
+
+5. COMMERCIAL INQUIRIES
+For commercial licensing options, enterprise deployment permissions, SaaS integration rights, or resale permissions, contact the Copyright Holder directly.
+
+6. NO WARRANTY & LIMITATION OF LIABILITY
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT, OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+```
+
+### Why this text provides maximum protection:
+
+* **Bans SaaS/Hosting:** Prevents competitors or cloud providers from taking your code and running it as a hosted service.
+* **Bans AI Training:** Explicitly stops companies from scraping your repository to train commercial models or build clone products.
+* **Covers Modifications:** Closes loopholes by ensuring modified versions created by users still cannot be monetized.
+* **Protects Branding:** Prevents anyone from using the "QuotePilot" name or logo commercially.
+  (a) Personal, non-commercial use;
+  (b) Educational, testing, or evaluation purposes; or
+  (c) Non-profit or internal administrative execution without financial gain.
+
+2. COMMERCIAL RESTRICTIONS & RESERVATION OF RIGHTS
+The Copyright Holder strictly retains all commercial, financial, and monetization rights to the Software. You are EXPLICITLY PROHIBITED from doing any of the following without a separate, written commercial agreement signed by the Copyright Holder:
+  (a) Selling, reselling, renting, leasing, sublicensing, or distributing the Software or any portion thereof;
+  (b) Offering or operating the Software as a paid service, hosted solution, Software-as-a-Service (SaaS), Managed Service Provider (MSP) offering, or cloud deployment for third parties;
+  (c) Integrating the Software into any proprietary or commercial product, service, or commercial offering;
+  (d) Utilizing the Software, its source code, or derivative works to train, fine-tune, or build competing software products or commercial AI models.
+
+3. DERIVATIVE WORKS AND CONTRIBUTIONS
+Any modifications, derivatives, or enhancements created by you remain subject to the commercial restrictions of this License. You may not distribute modified versions of the Software under any other terms or open-source licenses.
+
+4. TRADEMARKS & BRANDING
+This License does not grant any rights to use the trade names, trademarks, service marks, logos, or product names of the Copyright Holder or "QuotePilot."
+
+5. COMMERCIAL INQUIRIES
+For commercial licensing options, enterprise deployment permissions, SaaS integration rights, or resale permissions, contact the Copyright Holder directly.
+
+6. NO WARRANTY & LIMITATION OF LIABILITY
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT, OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
