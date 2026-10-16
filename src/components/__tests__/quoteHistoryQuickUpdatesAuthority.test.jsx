@@ -137,11 +137,23 @@ describe("QuoteHistory Quick Updates authority host", () => {
     return props;
   }
 
+  test("does not refresh over an unsaved Quick Updates draft", async () => {
+    await render();
+    const reads = mocks.getQuoteHistory.mock.calls.length;
+    mocks.routeProps.onQuickUpdatesGuardChange({ blocked: true, dirty: true, busy: false });
+    await act(async () => window.dispatchEvent(new Event("focus")));
+    await settle();
+    expect(mocks.getQuoteHistory).toHaveBeenCalledTimes(reads);
+  });
+
   test("threads host options and callbacks, then verifies the authoritative list reread before saved", async () => {
     const props = await render();
     expect(mocks.routeProps.serviceStyles).toEqual(props.serviceStyles);
     expect(mocks.routeProps.onOpenQuickUpdatesLibrary).toBe(props.onOpenQuickUpdatesLibrary);
-    expect(mocks.routeProps.onQuickUpdatesGuardChange).toBe(props.onQuickUpdatesGuardChange);
+    const guard = { blocked: true, dirty: true, busy: false };
+    mocks.routeProps.onQuickUpdatesGuardChange(guard);
+    expect(props.onQuickUpdatesGuardChange).toHaveBeenCalledWith(guard);
+    mocks.routeProps.onQuickUpdatesGuardChange(null);
 
     const preview = await mocks.routeProps.onPreviewQuickUpdate(REQUEST);
     expect(preview).toEqual({ status: "ready", delta: REQUEST.delta });

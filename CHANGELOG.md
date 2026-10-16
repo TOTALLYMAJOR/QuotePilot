@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-10-15 20:30:29 CDT
+Last updated: 2026-10-16 05:26:28 CDT
 
 All notable project changes are documented in this file.
 
@@ -15,6 +15,12 @@ All notable project changes are documented in this file.
   evidence for the exact clean CI checkout, with hashed captures and reporter
   bytes. Reject incomplete cohorts and preserve prior evidence. No hosted,
   production, human-acceptance, or outcome proof is implied.
+
+- Prepare the narrow PR #90 replacement: open Quote History and Reporting views
+  refresh when the visible window regains focus. Paired browser events are
+  deduplicated; active loads and guarded conversations/conversions are left
+  alone. Automatic History reads do not persist expired statuses. Existing
+  quote identity, filters, commercial actions, and visual design are unchanged.
 
 - Make Firebase candidate closeout tolerate bounded provider convergence
   without weakening readback. Exact SHA

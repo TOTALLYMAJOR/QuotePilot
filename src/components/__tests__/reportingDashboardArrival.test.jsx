@@ -233,6 +233,21 @@ describe("ReportingDashboardView exact arrival", () => {
     vi.unstubAllGlobals();
   });
 
+  test("refreshes the same opportunity when the visible window regains focus", async () => {
+    await act(async () => root.render(<ReportingDashboardView open organizationId={ORGANIZATION_ID} arrivalContext={OPPORTUNITY_CONTEXT} />));
+    await settle();
+    await settle();
+    const initialReads = mocks.getQuoteById.mock.calls.length;
+    mocks.getQuoteById.mockResolvedValue({ id: QUOTE_ID, organizationId: ORGANIZATION_ID, status: "accepted", event: { name: "Updated dinner" }, totals: { total: 2400 } });
+    await act(async () => window.dispatchEvent(new Event("focus")));
+    await settle();
+    await settle();
+    expect(mocks.getQuoteById.mock.calls.length).toBe(initialReads + 1);
+    const target = container.querySelector("#reporting-opportunity-summary");
+    expect(target.getAttribute("data-report-quote-id")).toBe(QUOTE_ID);
+    expect(target.textContent).toContain("Updated dinner");
+  });
+
   test("uses a targeted quote read, focuses its exact summary, and leaves the aggregate denominator unchanged", async () => {
     const onArrivalResolution = vi.fn();
     await act(async () => {

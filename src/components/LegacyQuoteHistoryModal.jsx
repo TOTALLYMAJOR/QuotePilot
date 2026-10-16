@@ -35,6 +35,7 @@ import {
   updateQuoteStatus
 } from "../lib/quoteStore";
 import { useWorkspaceRouteHeadingFocus } from "../hooks/useWorkspaceRouteHeadingFocus";
+import { useRefreshOnWindowFocus } from "./useRefreshOnWindowFocus";
 import {
   formatWorkspaceDate,
   formatWorkspaceInteger,
@@ -983,7 +984,7 @@ export function QuoteHistoryView({
     allowInProgressRecovery
   });
 
-  const load = async () => {
+  const load = async ({ persistExpiry = true } = {}) => {
     const generation = loadGenerationRef.current + 1;
     loadGenerationRef.current = generation;
     const requestedFocusQuoteId = String(focusQuoteId || "").trim();
@@ -995,7 +996,7 @@ export function QuoteHistoryView({
     try {
       const result = await getQuoteHistory({
         organizationId: requestedOrganizationId,
-        persistExpiredStatuses: normalizeHistoryRole(currentUserRole) === "admin"
+        persistExpiredStatuses: persistExpiry && normalizeHistoryRole(currentUserRole) === "admin"
       });
       if (generation !== loadGenerationRef.current) return null;
       const targetFound = targetingSavedQuote
@@ -1029,6 +1030,11 @@ export function QuoteHistoryView({
       return null;
     }
   };
+
+  useRefreshOnWindowFocus({
+    enabled: open && !state.loading && !quoteHistoryCloseGuard.blocked,
+    onRefresh: () => load({ persistExpiry: false })
+  });
 
   useEffect(() => {
     if (!open) return;

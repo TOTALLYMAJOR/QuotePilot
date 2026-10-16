@@ -1,5 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useModalDialog } from "../hooks/useModalDialog";
+import { useRefreshOnWindowFocus } from "./useRefreshOnWindowFocus";
 import { currency } from "../lib/quoteCalculator";
 import { getQuoteById, getQuoteHistory } from "../lib/quoteStore";
 import { getProductAnalyticsSummary } from "../lib/productAnalyticsAmbient";
@@ -849,6 +850,11 @@ export function ReportingDashboardView({
     }
     return load(state.error ? "quotes" : "all");
   }, [arrivalReportScope, exactArrivalActive, load, state.error]);
+
+  useRefreshOnWindowFocus({
+    enabled: open && !state.loading && !state.analyticsLoading && !targetState.loading,
+    onRefresh: retryReporting
+  });
 
   const arrivalTargetAttributes = (reportSignal) => (
     exactArrivalActive && arrivalReportSignal === reportSignal
